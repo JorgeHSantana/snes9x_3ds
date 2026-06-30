@@ -195,6 +195,8 @@ typedef struct {
                                                 // texture. Default false; opt-in because it
                                                 // changes the characteristic Mode 7 look.
 
+    bool                HiRes;                  // opt-in due to the extra render cost on hi-res scenes
+
     int                 Volume;                 // 0: 100%, 1: 125%, 2: 150%, 3: 175%, 4: 200%
     int                 GlobalVolume;
 

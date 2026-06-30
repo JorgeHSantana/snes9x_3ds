@@ -886,6 +886,9 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuCheckbox(items, "  Mode 7 Smoothing"_s, settings3DS.Mode7BilinearFilter,
         []( int val ) { CheckAndUpdateToggle( settings3DS.Mode7BilinearFilter, val ); });
 
+    AddMenuCheckbox(items, "  HiRes Enabled"_s, settings3DS.HiRes,
+        []( int val ) { CheckAndUpdateToggle( settings3DS.HiRes, val ); });
+
     AddMenuDisabledOption(items, ""_s);
 
     AddMenuHeader2(items, "Audio"_s);
@@ -1178,6 +1181,10 @@ bool settingsReadWriteFullListByGame(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "FrameSync=%d\n", &settings3DS.FrameSync, 0, 1);
         config3dsReadWriteEnum(stream, writeMode, "Mode7BilinearFilter=%d\n", &settings3DS.Mode7BilinearFilter, 0, 1);
         config3dsReadWriteInt32(stream, writeMode, "AudioBuffer=%d\n", &settings3DS.AudioBuffer, 0, 2);
+    }
+
+    if (writeMode || detectedConfigVersion >= 1.5f) {
+        config3dsReadWriteEnum(stream, writeMode, "HiRes=%d\n", &settings3DS.HiRes, 0, 1);
     }
     
     config3dsReadWriteInt32(stream, writeMode, "Frameskips=%d\n", &settings3DS.MaxFrameSkips, 0, 4);
