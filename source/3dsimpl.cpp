@@ -173,12 +173,12 @@ bool impl3dsInitialize()
 	u32 mode7Tile0TextureParams = GPU_TEXTURE_MAG_FILTER(GPU_NEAREST) | GPU_TEXTURE_MIN_FILTER(GPU_NEAREST) | GPU_TEXTURE_WRAP_S(GPU_REPEAT) | GPU_TEXTURE_WRAP_T(GPU_REPEAT);
 	
 	const SGPUTextureConfig vramTexConfig[] = {
-		{ defaultTextureParams, SNES_SUB, GPU_RGBA8, 256, 256 }, // VRAM Bank A
+		{ defaultTextureParams, SNES_SUB, GPU_RGBA8, 512, 256 }, // VRAM Bank A
 		{ mode7Tile0TextureParams, SNES_MODE7_TILE_0, GPU_RGBA5551, 16, 16 },
 
 		{ defaultTextureParams, SNES_MODE7_FULL, GPU_RGBA5551, 1024, 1024 }, // VRAM Bank A is full now -> VRAM Bank B
-		{ defaultTextureParams, SNES_MAIN, GPU_RGBA8, 256, 256 },
-		{ defaultTextureParams, SNES_DEPTH, GPU_RGBA8, 256, 256 }
+		{ defaultTextureParams, SNES_MAIN, GPU_RGBA8, 512, 256 },
+		{ defaultTextureParams, SNES_DEPTH, GPU_RGBA8, 512, 256 }
 	};
 
     const int totalVramTextures = static_cast<int>(sizeof(vramTexConfig) / sizeof(vramTexConfig[0]));
