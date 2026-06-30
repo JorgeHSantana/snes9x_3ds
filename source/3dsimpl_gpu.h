@@ -175,9 +175,15 @@ typedef struct
 
 typedef struct
 {
+    bool            enabled;
+    bool            active;
+} SHiResState;
+
+typedef struct
+{
     u16             vramCacheHashToTexturePosition[MAX_HASH + 1]; // 262146 bytes
     int             vramCacheTexturePositionToHash[MAX_TEXTURE_HASH_POSITIONS]; // 4*MAX_TEXTURE_HASH_POSITIONS bytes
-    
+
     SLayerList      layerList;
 
     u32             newCacheTexturePosition;
@@ -187,6 +193,9 @@ typedef struct
     GPU_TEXCOLOR    mode7TextureFormat;
     bool            mode7SectionsModified[4];
     bool            mode7TilesModified;
+
+    SHiResState     hires;
+    int             renderWidth;  // 512 when hires.active, else 256
 } SGPU3DSExtended;
 
 extern SGPU3DSExtended GPU3DSExt;

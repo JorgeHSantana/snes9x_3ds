@@ -317,7 +317,7 @@ void S9xCommitBackdropSections() {
 		{
 			DrawableVerticalSection *section = &drawableVerticalSections[i][j];
 
-			gpu3dsAddRectangleVertexes(0, section->startY + (int)section->value.v2, 256, section->endY + 1 + (int)section->value.v2, section->value.color);
+			gpu3dsAddRectangleVertexes(0, section->startY + (int)section->value.v2, GPU3DSExt.renderWidth, section->endY + 1 + (int)section->value.v2, section->value.color);
 		}
 
 		gpu3dsCommitLayerSection(VBO_SCENE_RECT, LAYER_BACKDROP, &renderState, sub);
@@ -887,15 +887,16 @@ inline void __attribute__((always_inline)) S9xDrawHiresBGFullTileHardwareInline 
         cache3dsCacheSnesTileToTexturePosition(pCache, screenColors, texturePos);
     }
 
-	int x0 = screenX >> 1;
+	bool fullWidth = GPU3DSExt.hires.active;
+	int x0 = fullWidth ? screenX : (screenX >> 1);
 	int y0 = screenY + (prio == 0 ? depth0 : depth1);
-	
-	int x1 = x0 + 4;
+
+	int x1 = x0 + (fullWidth ? 8 : 4);
 	int y1 = y0 + height;
 
 	int tx0 = 0;
 	int ty0 = startLine >> 3;
-	int tx1 = 7;
+	int tx1 = fullWidth ? 8 : 7;
 	int ty1 = stretchedTy ? (ty0 + 1) : (ty0 + height);
 
 	if (IPPU.Interlace && !stretchedTy)
@@ -2120,10 +2121,11 @@ void S9xDrawBackgroundMosaicHardware(
 
             int blockW = (X + outBlockW > 256) ? (256 - X) : outBlockW;
 
+            int hiShift = GPU3DSExt.hires.active ? 1 : 0;
             int yDepth = (tpriority == 0 ? depth0 : depth1);
-            int x0 = X;
+            int x0 = X << hiShift;
             int y0 = Y + yDepth;
-            int x1 = X + blockW;
+            int x1 = (X + blockW) << hiShift;
             int y1 = Y + blockH + yDepth;
 
             gpu3dsAddTileVertexes(
@@ -2572,12 +2574,15 @@ inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
 	// Remove the test for sub screen (fixed Mickey mouse transparency problem when Mickey's
 	// talking to the wizard)
 	//
-	if (pal < 4)					
+	if (pal < 4)
 		depth = depth & 0xfff;		// remove the alpha.
-	int x0 = screenX;
+
+	// at full 512px, texels are stretched 1->2px via nearest
+	int hiShift = GPU3DSExt.hires.active ? 1 : 0;
+	int x0 = screenX << hiShift;
 	int y0 = screenY + depth;
-		
-	int x1 = x0 + 8;
+
+	int x1 = x0 + (8 << hiShift);
 	int y1 = y0 + height;
 
 	int tx0 = 0;
@@ -3304,10 +3309,12 @@ void S9xRenderScreenHardware (bool8 sub)
             break;
         case 5:
 		{
-			// Keeping the +1 main-screen texture offset would introduce 
-			// horizontal subpixel artifacts in hires mosaic blocks
 			bool hiresMosaicActive = MOSAIC_GATE_HIRES(0) || MOSAIC_GATE_HIRES(1);
-			renderState.textureOffset = (!sub && !hiresMosaicActive)
+
+			// renderState.textureOffset = 1 interleaves main/sub into a 512->256 box downsample;
+			// at full 512px it instead samples into the next tile (black striping),
+			// so we disable it for hires.active too.
+			renderState.textureOffset = (!sub && !hiresMosaicActive && !GPU3DSExt.hires.active)
 				? SGPU_STATE_ENABLED
 				: SGPU_STATE_DISABLED;
 			DRAW_16COLOR_HIRES_BG_INLINE(0, 0, 5, 11);
@@ -3550,7 +3557,7 @@ void S9xCommitClipToBlackAndColorMathSections() {
 					batchAlphaBlending = (SGPU_ALPHA_BLENDINGMODE)section->state.alphaBlending;
 				}
 			
-				gpu3dsAddRectangleVertexes(0, section->startY, 256, section->endY + 1, section->value.color);
+				gpu3dsAddRectangleVertexes(0, section->startY, GPU3DSExt.renderWidth, section->endY + 1, section->value.color);
 
 				// commit last batch
 				bool isLastBatch = j >= drawableSectionCount[i] - 1
@@ -3589,7 +3596,7 @@ void S9xCommitBrightnessSection(VerticalSections *verticalSections)
 
 		gpu3dsAddRectangleVertexes(
 			0, verticalSections->Section[i].StartY,
-			256, verticalSections->Section[i].EndY + 1, alpha);
+			GPU3DSExt.renderWidth, verticalSections->Section[i].EndY + 1, alpha);
 		hasVertexes = true;
 	}
 
@@ -3631,13 +3638,14 @@ void S9xCommitWindowLRSection(VerticalSections *verticalSections)
 
 		ComputeClipWindowsForStenciling (w1Left, w1Right, w2Left, w2Right, stencilEndX, stencilMask);
 
+		int hiShift = GPU3DSExt.hires.active ? 1 : 0;
 		int startX = 0;
 		for (int s = 0; s < 10; s++)
 		{
 			int endX = stencilEndX[s];
 			int mask = stencilMask[s];
-			gpu3dsAddRectangleVertexes(startX, startY, endX, endY + 1, (mask << 29));	
-			
+			gpu3dsAddRectangleVertexes(startX << hiShift, startY, endX << hiShift, endY + 1, (mask << 29));
+
 			startX = endX;
 			if (startX >= 256)
 				break;
@@ -3782,6 +3790,11 @@ void S9xUpdateScreenHardware ()
     GFX.r2130 = Memory.FillRAM [0x2130];
 	
     GFX.Pseudo = (Memory.FillRAM [0x2133] & 8);
+
+	// Full 512px hi-res rendering, opt-in. Mode 5 only
+	// Mode 6 (hi-res + offset-per-tile) still uses the non-hi-res offset path and stays at 256.
+	GPU3DSExt.hires.active = GPU3DSExt.hires.enabled && (PPU.BGMode == 5);
+	GPU3DSExt.renderWidth = GPU3DSExt.hires.active ? 512 : 256;
 
 	GFX.StartY = IPPU.PreviousLine;
 	GFX.EndY = IPPU.CurrentLine - 1;

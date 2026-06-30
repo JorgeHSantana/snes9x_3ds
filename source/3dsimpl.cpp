@@ -745,7 +745,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
         gameScreenViewport.sy1 = gameScreenViewport.sy0 + gameScreenViewport.cHeight;
         gameScreenViewport.tx0 = 0.0f;
         gameScreenViewport.ty0 = 0.0f;
-        gameScreenViewport.tx1 = static_cast<float>(SNES_WIDTH);
+        gameScreenViewport.tx1 = static_cast<float>(GPU3DSExt.renderWidth);
         gameScreenViewport.ty1 = static_cast<float>(PPU.ScreenHeight);
 
         GPU3DS.activeSide = GFX_LEFT;
@@ -806,7 +806,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
     gameScreenViewport.sy1 = gameScreenViewport.sy0 + gameScreenViewport.cHeight;
     gameScreenViewport.tx0 = 0.0f;
     gameScreenViewport.ty0 = static_cast<float>(cropTopSource);
-    gameScreenViewport.tx1 = static_cast<float>(SNES_WIDTH);
+    gameScreenViewport.tx1 = static_cast<float>(GPU3DSExt.renderWidth);
     gameScreenViewport.ty1 = static_cast<float>(PPU.ScreenHeight - cropBottomSource);
 
 	bool isFullScreen = gameScreenViewport.sWidth >= settings3DS.GameScreenWidth && gameScreenViewport.cHeight >= SCREEN_HEIGHT;
@@ -844,6 +844,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	notif3dsSync();
 
 	IPPU.RenderThisFrame = !skipDrawingFrame;
+	GPU3DSExt.hires.enabled = settings3DS.HiRes;
 
 	if (firstFrame)
 		Memory.ApplySpeedHackPatches();
