@@ -431,11 +431,13 @@ static inline void gpu3dsSetAttributeBuffers(SVertexList *list)
 void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from = -1);
 bool gpu3dsFrameBegin(u8 flags = 0, bool ingame = false, bool isSecondScreen = false);
 void gpu3dsFrameEnd(u8 flags = 0);
+bool gpu3dsSetWideMode(bool wide);
 bool gpu3dsClearScreen(gfxScreen_t screen, bool isTopStereo = false);
 
 float gpu3dsGetIOD();
 float gpu3dsGetIODBase();
 bool gpu3dsIs3DAvailable();
+bool gpu3dsIsWideAvailable();
 bool gpu3dsIs3DEnabled();
 
 

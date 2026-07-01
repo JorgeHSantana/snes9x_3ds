@@ -61,6 +61,11 @@ bool gpu3dsIs3DAvailable()
         && GPU3DS.model != CFG_MODEL_N2DSXL;
 }
 
+bool gpu3dsIsWideAvailable()
+{
+    return GPU3DS.model != CFG_MODEL_2DS;
+}
+
 bool gpu3dsIs3DEnabled()
 {
     return
@@ -405,6 +410,19 @@ void gpu3dsFrameEnd(u8 flags)
     t3dsStopTimer(TIMER_FLUSH);
 }
 
+bool gpu3dsSetWideMode(bool wide)
+{
+    if (wide && (settings3DS.GameScreen != GFX_TOP || !gpu3dsIsWideAvailable()))
+        return false;
+
+    if (gfxIsWide() == wide)
+        return false;
+
+    gfxSetWide(wide);
+    GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.height = wide ? SCREEN_TOP_WIDTH * 2 : SCREEN_TOP_WIDTH;
+    return true;
+}
+
 bool gpu3dsClearScreen(gfxScreen_t screen, bool isTopStereo) {
 	SCREEN_TARGET targetId = screen == GFX_TOP ? SCREEN_TARGET_LEFT : SCREEN_TARGET_BOTTOM;
 
@@ -444,7 +462,10 @@ bool gpu3dsInitialize()
     GPU_COLORBUF colorBufFmt = (GPU_COLORBUF)gpu3dsGetTransferFmt((GPU_TEXCOLOR)DISPLAY_TRANSFER_FMT);
 
     // no depth buffer needed for screen targets
-    GPU3DS.screenTargets[SCREEN_TARGET_LEFT] = C3D_RenderTargetCreate(SCREEN_HEIGHT, SCREEN_TOP_WIDTH, colorBufFmt, -1);
+    // Allocate the top-left target at the full 800px wide-mode height
+    GPU3DS.screenTargets[SCREEN_TARGET_LEFT] = C3D_RenderTargetCreate(SCREEN_HEIGHT, SCREEN_TOP_WIDTH * 2, colorBufFmt, -1);
+    // initial viewport height is 400 (non-wide)
+    GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.height = SCREEN_TOP_WIDTH;
     C3D_RenderTargetSetOutput(GPU3DS.screenTargets[SCREEN_TARGET_LEFT], GFX_TOP, GFX_LEFT, DISPLAY_TRANSFER_FLAGS);
 
     GPU3DS.screenTargets[SCREEN_TARGET_RIGHT] = C3D_RenderTargetCreate(SCREEN_HEIGHT, SCREEN_TOP_WIDTH, colorBufFmt, -1);

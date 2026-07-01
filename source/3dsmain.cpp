@@ -2085,6 +2085,14 @@ void emulatorLoop()
 
     gpu3dsResetState();
 
+    // render one frame before lcd3dsSetEmulationRate below,
+    // otherwise game screen glitches and real hardware freezes.
+    if (gpu3dsSetWideMode(settings3DS.HiRes)) {
+        gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, false);
+            impl3dsSceneRender(true);
+        gpu3dsFrameEnd();
+    }
+
     if (GPU3DS.profilingMode == PROFILING_OFF) {
         for (int pass = 0; pass < 2; pass++) {
             gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, false, true);

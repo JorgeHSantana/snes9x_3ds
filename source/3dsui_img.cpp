@@ -178,7 +178,7 @@ bool img3dsAllocVramTextures() {
         FILE *file = fopen("romfs:/gfx/splash.t3x", "rb");
         if (!file) return false;
 
-        textureInfo[idx] = Tex3DS_TextureImportStdio(file, &texture->tex, NULL, true);
+        textureInfo[idx] = Tex3DS_TextureImportStdio(file, &texture->tex, NULL, false);
         fclose(file);
 
         if (!textureInfo[idx]) return false;

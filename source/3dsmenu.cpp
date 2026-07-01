@@ -1100,11 +1100,16 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
             secondScreenDirty = true;
         }
 
-        const bool set3DEnabled =
-            gpu3dsIs3DAvailable()
-            && !settings3DS.Disable3DSlider
-            && settings3DS.GameScreen == GFX_TOP;
-        gfxSet3D(set3DEnabled);
+        bool set3DEnabled = false;
+
+        if (!gfxIsWide()) {
+            set3DEnabled =
+                gpu3dsIs3DAvailable()
+                && !settings3DS.Disable3DSlider
+                && settings3DS.GameScreen == GFX_TOP;
+            gfxSet3D(set3DEnabled);
+        }
+        
         float iod = set3DEnabled ? gpu3dsGetIOD() : 0.0f;
 
         if (!isDialog && iod != prevIOD) {
