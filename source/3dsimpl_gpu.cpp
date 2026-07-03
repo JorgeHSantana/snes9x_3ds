@@ -445,6 +445,13 @@ void gpu3dsPrepareSnesScreenForNextFrame() {
 	gpu3dsPrepareListForNextFrame(&GPU3DS.vertices[VBO_SCENE_RECT], true);
 	gpu3dsPrepareListForNextFrame(&GPU3DS.vertices[VBO_SCENE_TILE], true);
 	gpu3dsPrepareListForNextFrame(&GPU3DS.vertices[VBO_SCENE_MODE7_LINE], true);
+
+    if (GPU3DSExt.render2x.dirty) {
+        gpu3dsClearTexture(&GPU3DS.textures[SNES_MAIN], 0);
+        gpu3dsClearTexture(&GPU3DS.textures[SNES_SUB], 0);
+        gpu3dsClearTexture(&GPU3DS.textures[SNES_DEPTH], 0);
+        GPU3DSExt.render2x.dirty = false;
+    }
 }
 
 void gpu3dsDrawSnesScreen() {

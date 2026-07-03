@@ -177,7 +177,10 @@ typedef struct
 {
     bool            enabled;
     bool            active;
-} SHiResState;
+    int             lastUpdateFrame;
+    bool            has2xMode;
+    bool            dirty;
+} SRender2xState;
 
 typedef struct
 {
@@ -194,8 +197,8 @@ typedef struct
     bool            mode7SectionsModified[4];
     bool            mode7TilesModified;
 
-    SHiResState     hires;
-    int             renderWidth;  // 512 when hires.active, else 256
+    SRender2xState  render2x;
+    int             renderWidth;  // 512 when render2x.active, else 256
 } SGPU3DSExtended;
 
 extern SGPU3DSExtended GPU3DSExt;

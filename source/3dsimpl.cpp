@@ -844,7 +844,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	notif3dsSync();
 
 	IPPU.RenderThisFrame = !skipDrawingFrame;
-	GPU3DSExt.hires.enabled = settings3DS.HiRes;
+	GPU3DSExt.render2x.enabled = settings3DS.EnhancedResolution;
 
 	if (firstFrame)
 		Memory.ApplySpeedHackPatches();

@@ -63,7 +63,7 @@ bool gpu3dsIs3DAvailable()
 
 bool gpu3dsIsWideAvailable()
 {
-    return GPU3DS.model != CFG_MODEL_2DS;
+    return GPU3DS.isReal3DS && GPU3DS.model != CFG_MODEL_2DS;
 }
 
 bool gpu3dsIs3DEnabled()
@@ -71,6 +71,7 @@ bool gpu3dsIs3DEnabled()
     return
         !settings3DS.Disable3DSlider
         && settings3DS.GameScreen == GFX_TOP
+        && !gfxIsWide()
         && gfxIs3D();
 }
 

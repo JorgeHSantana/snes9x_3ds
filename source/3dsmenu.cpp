@@ -1100,6 +1100,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
             secondScreenDirty = true;
         }
 
+        gpu3dsSetWideMode(settings3DS.EnhancedResolution);
         bool set3DEnabled = false;
 
         if (!gfxIsWide()) {

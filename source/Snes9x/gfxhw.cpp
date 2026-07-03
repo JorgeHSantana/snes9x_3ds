@@ -780,9 +780,10 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
 
 	// Render tile
 	//
-	int x0 = screenX;
+	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
+	int x0 = screenX << hiShift;
 	int y0 = screenY + (prio == 0 ? depth0 : depth1);
-	int x1 = x0 + 8;
+	int x1 = x0 + (8 << hiShift);
 	int y1 = y0 + height;
 
 	int tx0 = 0;
@@ -887,7 +888,7 @@ inline void __attribute__((always_inline)) S9xDrawHiresBGFullTileHardwareInline 
         cache3dsCacheSnesTileToTexturePosition(pCache, screenColors, texturePos);
     }
 
-	bool fullWidth = GPU3DSExt.hires.active;
+	bool fullWidth = GPU3DSExt.render2x.active;
 	int x0 = fullWidth ? screenX : (screenX >> 1);
 	int y0 = screenY + (prio == 0 ? depth0 : depth1);
 
@@ -1994,6 +1995,7 @@ void S9xDrawBackgroundMosaicHardware(
     int YEnd   = (int)GFX.EndY + 1;
     int MosaicOffset = YStart % S;
     int FirstBlockH = S - MosaicOffset;
+	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
 
     for (int Y = YStart; Y < YEnd; )
     {
@@ -2121,7 +2123,6 @@ void S9xDrawBackgroundMosaicHardware(
 
             int blockW = (X + outBlockW > 256) ? (256 - X) : outBlockW;
 
-            int hiShift = GPU3DSExt.hires.active ? 1 : 0;
             int yDepth = (tpriority == 0 ? depth0 : depth1);
             int x0 = X << hiShift;
             int y0 = Y + yDepth;
@@ -2578,7 +2579,7 @@ inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
 		depth = depth & 0xfff;		// remove the alpha.
 
 	// at full 512px, texels are stretched 1->2px via nearest
-	int hiShift = GPU3DSExt.hires.active ? 1 : 0;
+	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
 	int x0 = screenX << hiShift;
 	int y0 = screenY + depth;
 
@@ -3078,6 +3079,7 @@ void S9xDrawBackgroundMode7Hardware(int bg, bool8 sub, int depth, int alphaTestA
 	else
 		alphaTest = GFX.r2131 & 0x40 ? ALPHA_TEST_GTE_0_5 : ALPHA_TEST_GTE_1_0;
 	
+	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
 
 	for (int Y = (int)LayerRender.startY[bg]; Y <= (int)GFX.EndY; Y++)
 	{
@@ -3125,7 +3127,7 @@ void S9xDrawBackgroundMode7Hardware(int bg, bool8 sub, int depth, int alphaTestA
 		float ty1 = (float)(CC1 + DD) * INV_M7_SCALE;
 
 		// using -16384 for the geometry shader to detect mode 7
-		gpu3dsAddMode7LineVertexes(Left, Y+depth, Right, -16384, tx0, ty0, tx1, ty1);
+		gpu3dsAddMode7LineVertexes(Left << hiShift, Y+depth, Right << hiShift, -16384, tx0, ty0, tx1, ty1);
 	}
 
 	layerVerticesCount[bg] = GPU3DS.vertices[VBO_SCENE_MODE7_LINE].count;
@@ -3140,6 +3142,7 @@ void S9xDrawBackgroundMode7Hardware(int bg, bool8 sub, int depth, int alphaTestA
 void S9xDrawBackgroundMode7HardwareRepeatTile0(int bg, bool8 sub, int depth)
 {
 	bool verticesUpdated = false;
+	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
 	
 	for (int Y = (int)LayerRender.startY[bg]; Y <= (int)GFX.EndY; Y++)
 	{
@@ -3189,7 +3192,7 @@ void S9xDrawBackgroundMode7HardwareRepeatTile0(int bg, bool8 sub, int depth)
 		if (!withinTexture)
 		{
 			// using -16384 for the geometry shader to detect mode 7
-			gpu3dsAddMode7LineVertexes(Left, Y+depth, Right, -16384, tx0, ty0, tx1, ty1);
+			gpu3dsAddMode7LineVertexes(Left << hiShift, Y+depth, Right << hiShift, -16384, tx0, ty0, tx1, ty1);
 
 			verticesUpdated = true;
 		}
@@ -3313,8 +3316,8 @@ void S9xRenderScreenHardware (bool8 sub)
 
 			// renderState.textureOffset = 1 interleaves main/sub into a 512->256 box downsample;
 			// at full 512px it instead samples into the next tile (black striping),
-			// so we disable it for hires.active too.
-			renderState.textureOffset = (!sub && !hiresMosaicActive && !GPU3DSExt.hires.active)
+			// so we disable it for render2x.active too.
+			renderState.textureOffset = (!sub && !hiresMosaicActive && !GPU3DSExt.render2x.active)
 				? SGPU_STATE_ENABLED
 				: SGPU_STATE_DISABLED;
 			DRAW_16COLOR_HIRES_BG_INLINE(0, 0, 5, 11);
@@ -3514,7 +3517,8 @@ inline void S9xUpdateColorMathSections()
 void S9xCommitClipToBlackAndColorMathSections() {
 	u32 batchStencilTest;
 	SGPU_ALPHA_BLENDINGMODE batchAlphaBlending;
-
+	int renderWidth = GPU3DSExt.renderWidth;
+	
 	for (int i = VS_CLIP_TO_BLACK; i <= VS_COLOR_MATH; i++) {
 		if (!drawableSectionCount[i])
 			continue;
@@ -3528,8 +3532,8 @@ void S9xCommitClipToBlackAndColorMathSections() {
 			
 			// hires/sub color math
 			if (renderState.textureEnv == TEX_ENV_REPLACE_TEXTURE0) {
-				gpu3dsAddTileVertexes(0, section->startY, 256, section->endY + 1,
-					0, section->startY, 256, section->endY + 1, 0);
+				gpu3dsAddTileVertexes(0, section->startY, renderWidth, section->endY + 1,
+					0, section->startY, renderWidth, section->endY + 1, 0);
 
 				renderState.textureBind = SNES_SUB;
 				renderState.stencilTest = section->value.v2;
@@ -3618,6 +3622,7 @@ void S9xCommitWindowLRSection(VerticalSections *verticalSections)
 	int stencilMask[10];
 
 	bool windowingEverEnabled = false;
+	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
 	
 	for (int i = 0; i < verticalSections->Count; i++)
 	{
@@ -3638,7 +3643,6 @@ void S9xCommitWindowLRSection(VerticalSections *verticalSections)
 
 		ComputeClipWindowsForStenciling (w1Left, w1Right, w2Left, w2Right, stencilEndX, stencilMask);
 
-		int hiShift = GPU3DSExt.hires.active ? 1 : 0;
 		int startX = 0;
 		for (int s = 0; s < 10; s++)
 		{
@@ -3791,10 +3795,18 @@ void S9xUpdateScreenHardware ()
 	
     GFX.Pseudo = (Memory.FillRAM [0x2133] & 8);
 
-	// Full 512px hi-res rendering, opt-in. Mode 5 only
-	// Mode 6 (hi-res + offset-per-tile) still uses the non-hi-res offset path and stays at 256.
-	GPU3DSExt.hires.active = GPU3DSExt.hires.enabled && (PPU.BGMode == 5);
-	GPU3DSExt.renderWidth = GPU3DSExt.hires.active ? 512 : 256;
+	// Enhanced Resolution: 
+	// a frame renders at 512px if any section uses Mode 5 or 7.
+	// Decided once per frame, constant across its sections.
+	if (GPU3DSExt.render2x.lastUpdateFrame != (int)ICPU.Frame) {
+		GPU3DSExt.render2x.lastUpdateFrame = (int)ICPU.Frame;
+		GPU3DSExt.render2x.active = GPU3DSExt.render2x.enabled && GPU3DSExt.render2x.has2xMode;
+		GPU3DSExt.render2x.has2xMode = false;
+	}
+	if (PPU.BGMode == 5 || PPU.BGMode == 7)
+		GPU3DSExt.render2x.has2xMode = true;
+
+	GPU3DSExt.renderWidth = GPU3DSExt.render2x.active ? 512 : 256;
 
 	GFX.StartY = IPPU.PreviousLine;
 	GFX.EndY = IPPU.CurrentLine - 1;

@@ -886,8 +886,14 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuCheckbox(items, "  Mode 7 Smoothing"_s, settings3DS.Mode7BilinearFilter,
         []( int val ) { CheckAndUpdateToggle( settings3DS.Mode7BilinearFilter, val ); });
 
-    AddMenuCheckbox(items, "  HiRes Enabled"_s, settings3DS.HiRes,
-        []( int val ) { CheckAndUpdateToggle( settings3DS.HiRes, val ); });
+    AddMenuCheckbox(items, "  Enhanced Resolution"_s, settings3DS.EnhancedResolution,
+        []( int val ) { 
+            if (CheckAndUpdateToggle( settings3DS.EnhancedResolution, val )) {
+                GPU3DSExt.render2x.dirty = true;
+                menu3dsSetScreenDirty();
+            } 
+        });
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  Sharper, more detailed picture (slower)"_s, ""_s);
 
     AddMenuDisabledOption(items, ""_s);
 
@@ -1184,7 +1190,7 @@ bool settingsReadWriteFullListByGame(bool writeMode)
     }
 
     if (writeMode || detectedConfigVersion >= 1.5f) {
-        config3dsReadWriteEnum(stream, writeMode, "HiRes=%d\n", &settings3DS.HiRes, 0, 1);
+        config3dsReadWriteEnum(stream, writeMode, "EnhancedResolution=%d\n", &settings3DS.EnhancedResolution, 0, 1);
     }
     
     config3dsReadWriteInt32(stream, writeMode, "Frameskips=%d\n", &settings3DS.MaxFrameSkips, 0, 4);
@@ -1439,6 +1445,7 @@ bool emulatorLoadRom()
 
     // clear stale data
     gpu3dsClearTexture(&GPU3DS.textures[SNES_MAIN], 0);
+    gpu3dsClearTexture(&GPU3DS.textures[SNES_SUB], 0);
     gpu3dsClearTexture(&GPU3DS.textures[SNES_DEPTH], 0);
 
     // update global config
@@ -2087,7 +2094,7 @@ void emulatorLoop()
 
     // render one frame before lcd3dsSetEmulationRate below,
     // otherwise game screen glitches and real hardware freezes.
-    if (gpu3dsSetWideMode(settings3DS.HiRes)) {
+    if (gpu3dsSetWideMode(settings3DS.EnhancedResolution)) {
         gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, false);
             impl3dsSceneRender(true);
         gpu3dsFrameEnd();
