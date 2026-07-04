@@ -164,21 +164,18 @@ bool impl3dsInitialize()
 	// Main screen requires 8-bit alpha, otherwise alpha blending will not work well
 	// Mode7 texture requires 16x16 as a minimum
 	//
-	// Depth texture for the sub / main screens improves performance 
-	// -> Games like Axelay, F-Zero now run close to full speed!
-	//
 	log3dsWrite("allocate textures:");
 
 	u32 defaultTextureParams = GPU_TEXTURE_MAG_FILTER(GPU_NEAREST) | GPU_TEXTURE_MIN_FILTER(GPU_NEAREST) | GPU_TEXTURE_WRAP_S(GPU_CLAMP_TO_BORDER) | GPU_TEXTURE_WRAP_T(GPU_CLAMP_TO_BORDER);
 	u32 mode7Tile0TextureParams = GPU_TEXTURE_MAG_FILTER(GPU_NEAREST) | GPU_TEXTURE_MIN_FILTER(GPU_NEAREST) | GPU_TEXTURE_WRAP_S(GPU_REPEAT) | GPU_TEXTURE_WRAP_T(GPU_REPEAT);
 	
+	// Reorder with care (see libctru's vramAlloc bank load-balancing)
 	const SGPUTextureConfig vramTexConfig[] = {
-		{ defaultTextureParams, SNES_SUB, GPU_RGBA8, 512, 256 }, // VRAM Bank A
+		{ defaultTextureParams, SNES_DEPTH, GPU_RGBA8, 512, 256 },
 		{ mode7Tile0TextureParams, SNES_MODE7_TILE_0, GPU_RGBA5551, 16, 16 },
-
-		{ defaultTextureParams, SNES_MODE7_FULL, GPU_RGBA5551, 1024, 1024 }, // VRAM Bank A is full now -> VRAM Bank B
+		{ defaultTextureParams, SNES_MODE7_FULL, GPU_RGBA5551, 1024, 1024 },
 		{ defaultTextureParams, SNES_MAIN, GPU_RGBA8, 512, 256 },
-		{ defaultTextureParams, SNES_DEPTH, GPU_RGBA8, 512, 256 }
+		{ defaultTextureParams, SNES_SUB, GPU_RGBA8, 512, 256 }
 	};
 
     const int totalVramTextures = static_cast<int>(sizeof(vramTexConfig) / sizeof(vramTexConfig[0]));
@@ -194,11 +191,6 @@ bool impl3dsInitialize()
         	return false;
 		}
 
-		if (id == SNES_DEPTH) {
-			setDepthBufferByTex(GPU3DS.textures[SNES_MAIN].target, &texture->tex);
-			setDepthBufferByTex(GPU3DS.textures[SNES_SUB].target, &texture->tex);
-		}
-
 		log3dsWrite("ingame vram texture \"%s\" dim: %dx%d, size:%.2fkb, format: %s",
 			utils3dsTextureIDToString(texture->id),
 			texture->tex.width, texture->tex.height,
@@ -206,6 +198,11 @@ bool impl3dsInitialize()
 			utils3dsTexColorToString(texture->tex.fmt)
 		);
 	}
+
+	// Share one depth/stencil buffer across the main + sub screen targets.
+	// Improves performance in games like Axelay and F-Zero
+	setDepthBufferByTex(GPU3DS.textures[SNES_MAIN].target, &GPU3DS.textures[SNES_DEPTH].tex);
+	setDepthBufferByTex(GPU3DS.textures[SNES_SUB].target, &GPU3DS.textures[SNES_DEPTH].tex);
 
 	const SGPUTextureConfig lramTexConfig[] = {
 		{ defaultTextureParams, SNES_TILE_CACHE, GPU_RGBA5551, 1024, 1024 },

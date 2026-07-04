@@ -486,6 +486,19 @@ bool gpu3dsInitialize()
     C3D_RenderTargetSetOutput(GPU3DS.screenTargets[SCREEN_TARGET_LEFT], GFX_TOP, GFX_LEFT, DISPLAY_TRANSFER_FLAGS);
 
     GPU3DS.screenTargets[SCREEN_TARGET_RIGHT] = C3D_RenderTargetCreate(SCREEN_HEIGHT, SCREEN_TOP_WIDTH, colorBufFmt, -1);
+    // Save ~281KB of VRAM (240x400 RGB8):
+    // 3D mode and wide mode never run together, so the right eye can reuse the second half
+    // of LEFT's 800px buffer (which only wide mode uses) instead of getting its own.
+    // Free RIGHT's buffer and clear ownsColor so it isn't freed twice on delete
+    {
+        C3D_RenderTarget *right = GPU3DS.screenTargets[SCREEN_TARGET_RIGHT];
+        if (right->ownsColor && right->frameBuf.colorBuf) {
+            vramFree(right->frameBuf.colorBuf);
+        }
+        right->ownsColor = false;
+        u32 offset = C3D_CalcColorBufSize(SCREEN_HEIGHT, SCREEN_TOP_WIDTH, colorBufFmt);
+        right->frameBuf.colorBuf = (u8 *)GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.colorBuf + offset;
+    }
     C3D_RenderTargetSetOutput(GPU3DS.screenTargets[SCREEN_TARGET_RIGHT], GFX_TOP, GFX_RIGHT, DISPLAY_TRANSFER_FLAGS);
 
     GPU3DS.screenTargets[SCREEN_TARGET_BOTTOM] = C3D_RenderTargetCreate(SCREEN_HEIGHT, SCREEN_BOTTOM_WIDTH, colorBufFmt, -1);
