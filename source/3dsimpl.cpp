@@ -1139,9 +1139,11 @@ bool impl3dsTakeScreenshot(char *path, size_t bufferSize, bool renderFrame) {
     // Undo the buffer swap that C3D_FrameEnd performed internally
     // so gfxGetFramebuffer returns the buffer the GPU just wrote to.
     gfxScreenSwapBuffers(settings3DS.GameScreen, false);
-    impl3dsInvalidateScreen(settings3DS.GameScreen);
 
-    bool success = img3dsSaveScreenRegion(path, screenshot.width, screenshot.height, screenshot.x, screenshot.y, settings3DS.GameScreen);
+    bool isWide = gfxIsWide();
+    impl3dsInvalidateScreen(settings3DS.GameScreen, false, isWide);
+
+    bool success = img3dsSaveScreenRegion(path, screenshot.width, screenshot.height, screenshot.x, screenshot.y, settings3DS.GameScreen, false, isWide);
 	log3dsWrite("screenshot saved %s: %s", path, success ? "v" : "x");
 
 	if (success && isSavestate) {

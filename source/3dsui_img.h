@@ -29,7 +29,7 @@ void img3dsDrawThumb(int offsetRight, int offsetBottom);
 int img3dsGetThumbHeight();
 int img3dsGetThumbWidth();
 
-bool img3dsSaveScreenRegion(const char* path, int width, int height, int x0, int y0, gfxScreen_t screen, bool isTopStereo = false);
+bool img3dsSaveScreenRegion(const char* path, int width, int height, int x0, int y0, gfxScreen_t screen, bool isTopStereo = false, bool isWide = false);
 
 bool img3dsInitialize();
 void img3dsFinalize();
