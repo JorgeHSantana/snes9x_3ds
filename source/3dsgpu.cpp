@@ -32,6 +32,21 @@ static bool isReal3DS() {
     return true;
 }
 
+static SGPU_TOP_MODE gpu3dsGetTopMode()
+{
+    if (settings3DS.GameScreen != GFX_TOP)
+        return TOP_MODE_2D;
+
+    if (settings3DS.EnhancedResolution && gpu3dsIsWideAvailable())
+        return TOP_MODE_WIDE;
+
+    if (!settings3DS.Disable3DSlider && gpu3dsIs3DAvailable())
+        return TOP_MODE_3D;
+
+    return TOP_MODE_2D;
+}
+
+
 //---------------------------------------------------------
 // Returns the inter-ocular distance in pixels based on
 // the 3D slider position. Returns 0 when slider is off.
@@ -64,15 +79,6 @@ bool gpu3dsIs3DAvailable()
 bool gpu3dsIsWideAvailable()
 {
     return GPU3DS.isReal3DS && GPU3DS.model != CFG_MODEL_2DS;
-}
-
-bool gpu3dsIs3DEnabled()
-{
-    return
-        !settings3DS.Disable3DSlider
-        && settings3DS.GameScreen == GFX_TOP
-        && !gfxIsWide()
-        && gfxIs3D();
 }
 
 void gpu3dsEnableDepthTest()
@@ -411,17 +417,27 @@ void gpu3dsFrameEnd(u8 flags)
     t3dsStopTimer(TIMER_FLUSH);
 }
 
-bool gpu3dsSetWideMode(bool wide)
+bool gpu3dsSetTopMode()
 {
-    if (wide && (settings3DS.GameScreen != GFX_TOP || !gpu3dsIsWideAvailable()))
-        return false;
+    GPU3DS.topMode = gpu3dsGetTopMode();
+    bool changed = false;
 
-    if (gfxIsWide() == wide)
-        return false;
+    bool isWideMode = (GPU3DS.topMode == TOP_MODE_WIDE);
+    if (gfxIsWide() != isWideMode) {
+        gfxSetWide(isWideMode);
+        GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.height = isWideMode ? SCREEN_TOP_WIDTH * 2 : SCREEN_TOP_WIDTH;
+        changed = true;
+    }
 
-    gfxSetWide(wide);
-    GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.height = wide ? SCREEN_TOP_WIDTH * 2 : SCREEN_TOP_WIDTH;
-    return true;
+    if (!isWideMode) {
+        bool is3DMode = (GPU3DS.topMode == TOP_MODE_3D);
+        if (gfxIs3D() != is3DMode) {
+            gfxSet3D(is3DMode);
+            changed = true;
+        }
+    }
+
+    return changed;
 }
 
 bool gpu3dsClearScreen(gfxScreen_t screen, bool isTopStereo) {

@@ -811,7 +811,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 
 	bool isFullScreen = gameScreenViewport.sWidth >= settings3DS.GameScreenWidth && gameScreenViewport.cHeight >= SCREEN_HEIGHT;
 	bool drawBackground = !isFullScreen;
-	bool isTopStereo = gpu3dsIs3DEnabled();
+	bool isTopStereo = GPU3DS.topMode == TOP_MODE_3D;
 	float xOffset = isTopStereo ? gpu3dsGetIOD() : 0.0f;
 	bool balancedFilterEnabled =
 		settings3DS.ScreenFilter == Setting::ScreenFilter::Balanced && !screenshot.dirty &&

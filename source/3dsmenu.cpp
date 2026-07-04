@@ -102,7 +102,7 @@ void menu3dsDrawSplash(float fade = 1.0f)
     if (settings3DS.isRomLoaded)
         return;
 
-    bool isTopStereo = gpu3dsIs3DEnabled();
+    bool isTopStereo = GPU3DS.topMode == TOP_MODE_3D;
     float iod = isTopStereo ? gpu3dsGetIOD() : 0;
 
     GSPGPU_FramebufferFormat gpuBufFmt = (GSPGPU_FramebufferFormat)DISPLAY_TRANSFER_FMT;
@@ -948,7 +948,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
                 item.SetValue(item.Value);
                 secondScreenDirty = true;
 
-                if (menu3dsTabIsDirty(currentMenuTab, menuTabs)) {
+                if (menu3dsHasDirtyTabs()) {
                     returnResult = -1;
                     break;
                 }
@@ -968,7 +968,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
 
                 secondScreenDirty = true;
 
-                if (menu3dsTabIsDirty(currentMenuTab, menuTabs)) {
+                if (menu3dsHasDirtyTabs()) {
                     returnResult = -1;
                     break;
                 }
@@ -1014,7 +1014,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
 
                 secondScreenDirty = true;
 
-                if (menu3dsTabIsDirty(currentMenuTab, menuTabs)) {
+                if (menu3dsHasDirtyTabs()) {
                     returnResult = -1;
                     break;
                 }
@@ -1100,18 +1100,9 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
             secondScreenDirty = true;
         }
 
-        gpu3dsSetWideMode(settings3DS.EnhancedResolution);
-        bool set3DEnabled = false;
+        gpu3dsSetTopMode();
 
-        if (!gfxIsWide()) {
-            set3DEnabled =
-                gpu3dsIs3DAvailable()
-                && !settings3DS.Disable3DSlider
-                && settings3DS.GameScreen == GFX_TOP;
-            gfxSet3D(set3DEnabled);
-        }
-        
-        float iod = set3DEnabled ? gpu3dsGetIOD() : 0.0f;
+        float iod = GPU3DS.topMode == TOP_MODE_3D ? gpu3dsGetIOD() : 0.0f;
 
         if (!isDialog && iod != prevIOD) {
             gameScreenDirty = true;
@@ -1138,7 +1129,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
                         impl3dsSceneRender(true, true);
                         notif3dsHide();
                     } else {
-                        bool isTopStereo = gpu3dsIs3DEnabled();
+                        bool isTopStereo = GPU3DS.topMode == TOP_MODE_3D;
                         gpu3dsClearScreen(settings3DS.GameScreen, isTopStereo);
                         img3dsDrawSplash(UI_SPLASH, isTopStereo, iod);
                     }
@@ -1239,13 +1230,7 @@ void menu3dsMarkTabDirty(int tab) {
         settings3DS.menuTabDirty[tab] = true;
 }
 
-bool menu3dsTabIsDirty(int tab, const std::vector<SMenuTab>& menuTabs) {
-    // Load-Game tab is never dirty-tracked, so bound by menuTabs.size() - 1
-    return tab >= 0 && tab < static_cast<int>(menuTabs.size()) - 1
-        && settings3DS.menuTabDirty[tab];
-}
-
-bool menu3dsAnyTabDirty() {
+bool menu3dsHasDirtyTabs() {
     for (int i = 0; i < TAB_DIRTY_COUNT; i++)
         if (settings3DS.menuTabDirty[i])
             return true;

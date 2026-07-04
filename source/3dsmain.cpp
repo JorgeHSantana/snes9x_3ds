@@ -502,10 +502,14 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             menu3dsSetScreenDirty(true, true);
             ui3dsSetScreenLayout();
             menu3dsMarkTabDirty(TAB_EMULATOR);
+            if (settings3DS.isRomLoaded) {
+                menu3dsMarkTabDirty(TAB_SETTINGS);
+            }
+
             log3dsWrite("screen swapped");
         });
 
-    if (gpu3dsIs3DAvailable() && settings3DS.GameScreen == GFX_TOP) {
+    if (gpu3dsIs3DAvailable() && settings3DS.GameScreen == GFX_TOP && !settings3DS.EnhancedResolution) {
         AddMenuCheckbox(items, "  3D Enabled"_s, !settings3DS.Disable3DSlider,
             []( int val ) {
                 if (!CheckAndUpdateToggle(settings3DS.Disable3DSlider, !val)) {
@@ -886,14 +890,18 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuCheckbox(items, "  Mode 7 Smoothing"_s, settings3DS.Mode7BilinearFilter,
         []( int val ) { CheckAndUpdateToggle( settings3DS.Mode7BilinearFilter, val ); });
 
-    AddMenuCheckbox(items, "  Enhanced Resolution"_s, settings3DS.EnhancedResolution,
-        []( int val ) { 
-            if (CheckAndUpdateToggle( settings3DS.EnhancedResolution, val )) {
-                GPU3DSExt.render2x.dirty = true;
-                menu3dsSetScreenDirty();
-            } 
-        });
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  Sharper, more detailed picture (slower)"_s, ""_s);
+    if (gpu3dsIsWideAvailable() && settings3DS.GameScreen == GFX_TOP) {
+        AddMenuCheckbox(items, "  Enhanced Resolution"_s, settings3DS.EnhancedResolution,
+            []( int val ) { 
+                if (CheckAndUpdateToggle( settings3DS.EnhancedResolution, val )) {
+                    GPU3DSExt.render2x.dirty = true;
+                    // wide takes over from 3D; rebuild so the 3D row shows/hides
+                    menu3dsMarkTabDirty(TAB_EMULATOR);
+                    menu3dsSetScreenDirty(true, true);
+                }
+            });
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Sharper, more detailed picture (slower).\n  Takes over from 3D while enabled."_s, ""_s);
+    }
 
     AddMenuDisabledOption(items, ""_s);
 
@@ -1863,7 +1871,7 @@ void showMenu() {
 
     // 1. first boot
     // 2. new game loaded
-    if (menuTabs.empty() || Memory.ROMCRC32 != lastLoadedRomCRC || menu3dsAnyTabDirty())
+    if (menuTabs.empty() || Memory.ROMCRC32 != lastLoadedRomCRC || menu3dsHasDirtyTabs())
     {
         setupMenu(currentMenuTab);
         lastLoadedRomCRC = Memory.ROMCRC32;
@@ -1878,7 +1886,7 @@ void showMenu() {
     while (aptMainLoop() && GPU3DS.emulatorState == EMUSTATE_PAUSEMENU) {
         int result = menu3dsMenuSelectItem(dialogTab, isDialog, currentMenuTab, menuTabs);
 
-        if (menu3dsAnyTabDirty())
+        if (menu3dsHasDirtyTabs())
         {
             setupMenu(currentMenuTab);
         }
@@ -2094,7 +2102,7 @@ void emulatorLoop()
 
     // render one frame before lcd3dsSetEmulationRate below,
     // otherwise game screen glitches and real hardware freezes.
-    if (gpu3dsSetWideMode(settings3DS.EnhancedResolution)) {
+    if (gpu3dsSetTopMode()) {
         gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, false);
             impl3dsSceneRender(true);
         gpu3dsFrameEnd();
