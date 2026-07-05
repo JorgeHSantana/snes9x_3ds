@@ -73,6 +73,7 @@ void settings3dsResetGameDefaults() {
     settings3DS.FrameSync = Setting::FrameSync::VBlank;
     settings3DS.PaletteFix = 0;
     settings3DS.Mode7BilinearFilter = false;
+    settings3DS.EnhancedResolution = Setting::EnhancedResolution::Off;
     settings3DS.CropEnabled = false;
     settings3DS.CropTop = 0;
     settings3DS.CropBottom = 0;

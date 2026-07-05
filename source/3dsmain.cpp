@@ -502,10 +502,14 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             menu3dsSetScreenDirty(true, true);
             ui3dsSetScreenLayout();
             menu3dsMarkTabDirty(TAB_EMULATOR);
+            if (settings3DS.isRomLoaded) {
+                menu3dsMarkTabDirty(TAB_SETTINGS);
+            }
+
             log3dsWrite("screen swapped");
         });
 
-    if (gpu3dsIs3DAvailable() && settings3DS.GameScreen == GFX_TOP) {
+    if (gpu3dsIs3DAvailable() && settings3DS.GameScreen == GFX_TOP && settings3DS.EnhancedResolution != Setting::EnhancedResolution::Wide) {
         AddMenuCheckbox(items, "  3D Enabled"_s, !settings3DS.Disable3DSlider,
             []( int val ) {
                 if (!CheckAndUpdateToggle(settings3DS.Disable3DSlider, !val)) {
@@ -623,7 +627,24 @@ std::vector<SMenuItem> makeOptionsForStretch() {
     if (settings3DS.GameScreen == GFX_TOP) {
         AddMenuDialogOption(items, static_cast<int>(Setting::ScreenStretch::Full), "Fullscreen"_s,               "Stretch to 400x240");
     }
-    
+
+    return items;
+}
+
+std::vector<SMenuItem> makeOptionsForEnhancedResolution() {
+    std::vector<SMenuItem> items;
+    items.reserve(3);
+
+    // "2x Screen" (wide 800px panel) only exists on a wide-capable device's top screen.
+    if (gpu3dsIsWideAvailable() && settings3DS.GameScreen == GFX_TOP) {
+        AddMenuDialogOption(items, static_cast<int>(Setting::EnhancedResolution::Off),        "Off"_s);
+        AddMenuDialogOption(items, static_cast<int>(Setting::EnhancedResolution::Standard),   "Standard"_s,   "Slightly sharper, keeps 3D"_s);
+        AddMenuDialogOption(items, static_cast<int>(Setting::EnhancedResolution::Wide), "2x Screen"_s,  "Most detail, disables 3D"_s);
+    } else {
+        AddMenuDialogOption(items, static_cast<int>(Setting::EnhancedResolution::Off),      "Off"_s);
+        AddMenuDialogOption(items, static_cast<int>(Setting::EnhancedResolution::Standard), "On"_s);
+    }
+
     return items;
 }
 
@@ -742,7 +763,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     AddMenuHeader1(items, "GENERAL SETTINGS"_s);
     AddMenuHeader2(items, "Video"_s);
-    AddMenuPicker(items, "  Scaling"_s, "Change video scaling settings"_s, makeOptionsForStretch(), static_cast<int>(settings3DS.ScreenStretch), DIALOG_TYPE_INFO, true,
+    AddMenuPicker(items, "  Scaling"_s, "Sets how the picture fills the screen. Stretched modes\npair well with Enhanced Resolution for a sharper look."_s, makeOptionsForStretch(), static_cast<int>(settings3DS.ScreenStretch), DIALOG_TYPE_INFO, true,
                   []( int val ) { 
                     if (CheckAndUpdate( settings3DS.ScreenStretch, static_cast<Setting::ScreenStretch>(val) )) { 
                         settings3dsApplyScreenStretch(); 
@@ -750,11 +771,33 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                     } 
                 });
     
-    AddMenuPicker(items, "  Scale Filter"_s, "Used only when image is scaled.\nScaling = \"No Stretch\" always stays pixel-perfect.\nFilter = \"Balanced\" may reduce performance slightly."_s,
+    AddMenuPicker(items, "  Scale Filter"_s, "Applies when the game screen is stretched/zoomed in.\n\"Sharp\" may distort details,\n\"Balanced\" has minor performance impact."_s,
         makeOptionsForScreenFilter(), static_cast<int>(settings3DS.ScreenFilter), DIALOG_TYPE_INFO, true,
         []( int val ) {
             if (CheckAndUpdate(settings3DS.ScreenFilter, static_cast<Setting::ScreenFilter>(val))) {
                 menu3dsSetScreenDirty();
+            }
+        });
+
+
+    bool wideOptionAvailable = gpu3dsIsWideAvailable() && settings3DS.GameScreen == GFX_TOP;
+    // preserve wide setting when switching game screen to bottom screen,
+    // show it as Standard/On in picker
+    int enhancedResolutionValue = static_cast<int>(settings3DS.EnhancedResolution);
+    if (!wideOptionAvailable && settings3DS.EnhancedResolution == Setting::EnhancedResolution::Wide)
+        enhancedResolutionValue = static_cast<int>(Setting::EnhancedResolution::Standard);
+
+    AddMenuPicker(items, "  Enhanced Resolution"_s,
+        wideOptionAvailable
+            ? "Renders at higher resolution for a sharper, more\ndetailed picture. Recommended when stretched modes\nare used. 2x Screen has most performance impact."_s
+            : "Sharpens the picture slightly, when stretched modes are used.\nLittle effect at \"No Stretch\"."_s,
+        makeOptionsForEnhancedResolution(), enhancedResolutionValue, DIALOG_TYPE_INFO, true,
+        []( int val ) {
+            if (CheckAndUpdate( settings3DS.EnhancedResolution, static_cast<Setting::EnhancedResolution>(val) )) {
+                GPU3DSExt.render2x.dirty = true;
+                // 2x Screen takes over from 3D; rebuild so the 3D row shows/hides
+                menu3dsMarkTabDirty(TAB_EMULATOR);
+                menu3dsSetScreenDirty(true, true);
             }
         });
 
@@ -887,7 +930,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         []( int val ) { CheckAndUpdateToggle( settings3DS.Mode7BilinearFilter, val ); });
 
     AddMenuDisabledOption(items, ""_s);
-
+    
     AddMenuHeader2(items, "Audio"_s);
     AddMenuPicker(items, "  Volume Amplification"_s, "Boosts the game's volume. 100% = unamplified.\nHigh values may reduce audio quality on loud games."_s, makePickerOptions({"100%", "125%", "150%", "175%", "200%"}),
                 settings3DS.UseGlobalVolume ? settings3DS.GlobalVolume : settings3DS.Volume, DIALOG_TYPE_INFO, true,
@@ -1179,6 +1222,10 @@ bool settingsReadWriteFullListByGame(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "Mode7BilinearFilter=%d\n", &settings3DS.Mode7BilinearFilter, 0, 1);
         config3dsReadWriteInt32(stream, writeMode, "AudioBuffer=%d\n", &settings3DS.AudioBuffer, 0, 2);
     }
+
+    if (writeMode || detectedConfigVersion >= 1.5f) {
+        config3dsReadWriteEnum(stream, writeMode, "EnhancedResolution=%d\n", &settings3DS.EnhancedResolution, 0, 2);
+    }
     
     config3dsReadWriteInt32(stream, writeMode, "Frameskips=%d\n", &settings3DS.MaxFrameSkips, 0, 4);
     config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.Volume, 0, SND3DS_VOLUME_MAX);
@@ -1432,6 +1479,7 @@ bool emulatorLoadRom()
 
     // clear stale data
     gpu3dsClearTexture(&GPU3DS.textures[SNES_MAIN], 0);
+    gpu3dsClearTexture(&GPU3DS.textures[SNES_SUB], 0);
     gpu3dsClearTexture(&GPU3DS.textures[SNES_DEPTH], 0);
 
     // update global config
@@ -1849,7 +1897,7 @@ void showMenu() {
 
     // 1. first boot
     // 2. new game loaded
-    if (menuTabs.empty() || Memory.ROMCRC32 != lastLoadedRomCRC || menu3dsAnyTabDirty())
+    if (menuTabs.empty() || Memory.ROMCRC32 != lastLoadedRomCRC || menu3dsHasDirtyTabs())
     {
         setupMenu(currentMenuTab);
         lastLoadedRomCRC = Memory.ROMCRC32;
@@ -1864,7 +1912,7 @@ void showMenu() {
     while (aptMainLoop() && GPU3DS.emulatorState == EMUSTATE_PAUSEMENU) {
         int result = menu3dsMenuSelectItem(dialogTab, isDialog, currentMenuTab, menuTabs);
 
-        if (menu3dsAnyTabDirty())
+        if (menu3dsHasDirtyTabs())
         {
             setupMenu(currentMenuTab);
         }
@@ -2077,6 +2125,16 @@ void emulatorLoop()
     }
 
     gpu3dsResetState();
+
+    GPU3DSExt.render2x.enabled = settings3DS.EnhancedResolution != Setting::EnhancedResolution::Off;
+
+    // render one frame before lcd3dsSetEmulationRate below,
+    // otherwise game screen glitches and real hardware freezes.
+    if (gpu3dsSetTopMode()) {
+        gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, false);
+            impl3dsSceneRender(true);
+        gpu3dsFrameEnd();
+    }
 
     if (GPU3DS.profilingMode == PROFILING_OFF) {
         for (int pass = 0; pass < 2; pass++) {

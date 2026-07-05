@@ -176,8 +176,7 @@ void menu3dsSelectRandomGameIndex(SMenuTab& currentTab, int min, int max, int la
 void menu3dsSetScreenDirty(bool gameScreen = true, bool secondScreen = false);
 
 void menu3dsMarkTabDirty(int tab);
-bool menu3dsTabIsDirty(int tab, const std::vector<SMenuTab>& menuTabs);
-bool menu3dsAnyTabDirty();
+bool menu3dsHasDirtyTabs();
 
 std::string menu3dsGetRomInfo();
 void menu3dsSetHotkeysData(const char* hotkeysData[HOTKEYS_COUNT][3]);

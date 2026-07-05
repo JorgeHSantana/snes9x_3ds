@@ -19,7 +19,7 @@ static u32 computeVtotal(double targetFps, u32 defaultVtotalBottom) {
 }
 
 static void writeVtotal(u32 vtotal2D) {
-    u32 vtop = gpu3dsIs3DEnabled() ? vtotal2D * 2 + 1 : vtotal2D;
+    u32 vtop = (GPU3DS.topMode != TOP_MODE_2D) ? vtotal2D * 2 + 1 : vtotal2D;
     u32 vbot = vtotal2D;
     GSPGPU_WriteHWRegs(PDC_VTOTAL_TOP, &vtop, 4);
     GSPGPU_WriteHWRegs(PDC_VTOTAL_BOTTOM, &vbot, 4);
@@ -47,9 +47,10 @@ void lcd3dsRestoreDefaultRate() {
 
     vtotalActive = false;
     gspWaitForVBlank();
-    // Top VTotal depends on 3D mode: restoring a stale 3D value while in 2D
-    // can leave the top screen in a broken timing state after menu toggles.
-    u32 vtotalTop = gpu3dsIs3DEnabled() ? savedVtotalBottom * 2 + 1 : savedVtotalBottom;
+    // Top VTotal depends on top-screen mode (2D, 3D, WIDE): 
+    // restoring a stale 3D/Wide value while in 2D can leave the top screen
+    // in a broken timing state after menu toggles.
+    u32 vtotalTop = (GPU3DS.topMode != TOP_MODE_2D) ? savedVtotalBottom * 2 + 1 : savedVtotalBottom;
     GSPGPU_WriteHWRegs(PDC_VTOTAL_TOP, &vtotalTop, 4);
     GSPGPU_WriteHWRegs(PDC_VTOTAL_BOTTOM, &savedVtotalBottom, 4);
 }

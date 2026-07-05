@@ -32,6 +32,21 @@ static bool isReal3DS() {
     return true;
 }
 
+static SGPU_TOP_MODE gpu3dsGetTopMode()
+{
+    if (settings3DS.GameScreen != GFX_TOP)
+        return TOP_MODE_2D;
+
+    if (settings3DS.EnhancedResolution == Setting::EnhancedResolution::Wide && gpu3dsIsWideAvailable())
+        return TOP_MODE_WIDE;
+
+    if (!settings3DS.Disable3DSlider && gpu3dsIs3DAvailable())
+        return TOP_MODE_3D;
+
+    return TOP_MODE_2D;
+}
+
+
 //---------------------------------------------------------
 // Returns the inter-ocular distance in pixels based on
 // the 3D slider position. Returns 0 when slider is off.
@@ -61,12 +76,9 @@ bool gpu3dsIs3DAvailable()
         && GPU3DS.model != CFG_MODEL_N2DSXL;
 }
 
-bool gpu3dsIs3DEnabled()
+bool gpu3dsIsWideAvailable()
 {
-    return
-        !settings3DS.Disable3DSlider
-        && settings3DS.GameScreen == GFX_TOP
-        && gfxIs3D();
+    return GPU3DS.isReal3DS && GPU3DS.model != CFG_MODEL_2DS;
 }
 
 void gpu3dsEnableDepthTest()
@@ -405,6 +417,29 @@ void gpu3dsFrameEnd(u8 flags)
     t3dsStopTimer(TIMER_FLUSH);
 }
 
+bool gpu3dsSetTopMode()
+{
+    GPU3DS.topMode = gpu3dsGetTopMode();
+    bool changed = false;
+
+    bool isWideMode = (GPU3DS.topMode == TOP_MODE_WIDE);
+    if (gfxIsWide() != isWideMode) {
+        gfxSetWide(isWideMode);
+        GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.height = isWideMode ? SCREEN_TOP_WIDTH * 2 : SCREEN_TOP_WIDTH;
+        changed = true;
+    }
+
+    if (!isWideMode) {
+        bool is3DMode = (GPU3DS.topMode == TOP_MODE_3D);
+        if (gfxIs3D() != is3DMode) {
+            gfxSet3D(is3DMode);
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
 bool gpu3dsClearScreen(gfxScreen_t screen, bool isTopStereo) {
 	SCREEN_TARGET targetId = screen == GFX_TOP ? SCREEN_TARGET_LEFT : SCREEN_TARGET_BOTTOM;
 
@@ -444,10 +479,26 @@ bool gpu3dsInitialize()
     GPU_COLORBUF colorBufFmt = (GPU_COLORBUF)gpu3dsGetTransferFmt((GPU_TEXCOLOR)DISPLAY_TRANSFER_FMT);
 
     // no depth buffer needed for screen targets
-    GPU3DS.screenTargets[SCREEN_TARGET_LEFT] = C3D_RenderTargetCreate(SCREEN_HEIGHT, SCREEN_TOP_WIDTH, colorBufFmt, -1);
+    // Allocate the top-left target at the full 800px wide-mode height
+    GPU3DS.screenTargets[SCREEN_TARGET_LEFT] = C3D_RenderTargetCreate(SCREEN_HEIGHT, SCREEN_TOP_WIDTH * 2, colorBufFmt, -1);
+    // initial viewport height is 400 (non-wide)
+    GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.height = SCREEN_TOP_WIDTH;
     C3D_RenderTargetSetOutput(GPU3DS.screenTargets[SCREEN_TARGET_LEFT], GFX_TOP, GFX_LEFT, DISPLAY_TRANSFER_FLAGS);
 
     GPU3DS.screenTargets[SCREEN_TARGET_RIGHT] = C3D_RenderTargetCreate(SCREEN_HEIGHT, SCREEN_TOP_WIDTH, colorBufFmt, -1);
+    // Save ~281KB of VRAM (240x400 RGB8):
+    // 3D mode and wide mode never run together, so the right eye can reuse the second half
+    // of LEFT's 800px buffer (which only wide mode uses) instead of getting its own.
+    // Free RIGHT's buffer and clear ownsColor so it isn't freed twice on delete
+    {
+        C3D_RenderTarget *right = GPU3DS.screenTargets[SCREEN_TARGET_RIGHT];
+        if (right->ownsColor && right->frameBuf.colorBuf) {
+            vramFree(right->frameBuf.colorBuf);
+        }
+        right->ownsColor = false;
+        u32 offset = C3D_CalcColorBufSize(SCREEN_HEIGHT, SCREEN_TOP_WIDTH, colorBufFmt);
+        right->frameBuf.colorBuf = (u8 *)GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.colorBuf + offset;
+    }
     C3D_RenderTargetSetOutput(GPU3DS.screenTargets[SCREEN_TARGET_RIGHT], GFX_TOP, GFX_RIGHT, DISPLAY_TRANSFER_FLAGS);
 
     GPU3DS.screenTargets[SCREEN_TARGET_BOTTOM] = C3D_RenderTargetCreate(SCREEN_HEIGHT, SCREEN_BOTTOM_WIDTH, colorBufFmt, -1);

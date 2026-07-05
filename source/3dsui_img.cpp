@@ -178,7 +178,7 @@ bool img3dsAllocVramTextures() {
         FILE *file = fopen("romfs:/gfx/splash.t3x", "rb");
         if (!file) return false;
 
-        textureInfo[idx] = Tex3DS_TextureImportStdio(file, &texture->tex, NULL, true);
+        textureInfo[idx] = Tex3DS_TextureImportStdio(file, &texture->tex, NULL, false);
         fclose(file);
 
         if (!textureInfo[idx]) return false;
@@ -842,7 +842,7 @@ void img3dsInvalidateStateScreenshot() {
 }
 
 bool img3dsSaveScreenRegion(const char* path,
-    int width, int height, int x0, int y0, gfxScreen_t screen, bool isTopStereo) {
+    int width, int height, int x0, int y0, gfxScreen_t screen, bool isTopStereo, bool isWide) {
     if (!g_fileBuffer) return false;
 
     u8* fb = (u8*)gfxGetFramebuffer(screen, GFX_LEFT, NULL, NULL);
@@ -851,20 +851,32 @@ bool img3dsSaveScreenRegion(const char* path,
     const int bpp = gpu3dsGetPixelSize(GPU_RGB8);
     const int stride = SCREEN_HEIGHT * bpp;
 
+    // In wide mode the physical top framebuffer is 800px.
+    // Read the doubled region and average column pairs back down,
+    // so the saved image keeps its normal dimensions
+    const int xStep = isWide ? 2 : 1;
+
     for (int y = 0; y < height; y++) {
         int img_y = y0 + y;
         int col = SCREEN_HEIGHT - 1 - img_y;
-        u8* src = fb + (x0 * stride) + (col * bpp);
-        
+        u8* src = fb + (x0 * xStep * stride) + (col * bpp);
+
         u8* dstRow = dst + (y * width * bpp);
 
         for (int x = 0; x < width; x++) {
-            dstRow[0] = src[2];
-            dstRow[1] = src[1];
-            dstRow[2] = src[0];
+            if (xStep == 2) {
+                u8* src2 = src + stride;
+                dstRow[0] = (src[2] + src2[2]) >> 1;
+                dstRow[1] = (src[1] + src2[1]) >> 1;
+                dstRow[2] = (src[0] + src2[0]) >> 1;
+            } else {
+                dstRow[0] = src[2];
+                dstRow[1] = src[1];
+                dstRow[2] = src[0];
+            }
 
             dstRow += bpp;
-            src += stride;
+            src += stride * xStep;
         }
     }
 
