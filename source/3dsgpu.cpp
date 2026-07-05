@@ -37,7 +37,7 @@ static SGPU_TOP_MODE gpu3dsGetTopMode()
     if (settings3DS.GameScreen != GFX_TOP)
         return TOP_MODE_2D;
 
-    if (settings3DS.EnhancedResolution && gpu3dsIsWideAvailable())
+    if (settings3DS.EnhancedResolution == Setting::EnhancedResolution::Wide && gpu3dsIsWideAvailable())
         return TOP_MODE_WIDE;
 
     if (!settings3DS.Disable3DSlider && gpu3dsIs3DAvailable())

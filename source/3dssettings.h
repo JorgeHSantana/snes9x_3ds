@@ -98,6 +98,12 @@ namespace Setting {
         Medium,
         High,
     };
+
+    enum class EnhancedResolution {
+        Off,         // native 256px render
+        Standard,    // 512px internal render (keeps 3D)
+        Wide,        // 512px internal render + wide 800px screen (disables 3D)
+    };
 }
 
 template <int Count>
@@ -195,7 +201,7 @@ typedef struct {
                                                 // texture. Default false; opt-in because it
                                                 // changes the characteristic Mode 7 look.
 
-    bool                EnhancedResolution;     // true hi-res Mode 5 at 512px and 2x horizontal Mode 7
+    Setting::EnhancedResolution EnhancedResolution;  // Off / Standard (512px render) / 2x Screen (512px + wide)
 
     int                 Volume;                 // 0: 100%, 1: 125%, 2: 150%, 3: 175%, 4: 200%
     int                 GlobalVolume;

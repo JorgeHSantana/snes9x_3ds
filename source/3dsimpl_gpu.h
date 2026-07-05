@@ -176,9 +176,6 @@ typedef struct
 typedef struct
 {
     bool            enabled;
-    bool            active;
-    int             lastUpdateFrame;
-    bool            has2xMode;
     bool            dirty;
 } SRender2xState;
 
@@ -197,8 +194,9 @@ typedef struct
     bool            mode7SectionsModified[4];
     bool            mode7TilesModified;
 
-    SRender2xState  render2x;
-    int             renderWidth;  // 512 when render2x.active, else 256
+    SRender2xState  render2x;       // 512px internal SNES render path:
+                                    // true hires for Mode 5, finer Mode 7 sampling, doubled geometry elsewhere
+    int             renderWidth;    // 512 when render2x.enabled, else 256
 } SGPU3DSExtended;
 
 extern SGPU3DSExtended GPU3DSExt;

@@ -780,7 +780,7 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
 
 	// Render tile
 	//
-	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
+	int hiShift = GPU3DSExt.render2x.enabled ? 1 : 0;
 	int x0 = screenX << hiShift;
 	int y0 = screenY + (prio == 0 ? depth0 : depth1);
 	int x1 = x0 + (8 << hiShift);
@@ -888,7 +888,7 @@ inline void __attribute__((always_inline)) S9xDrawHiresBGFullTileHardwareInline 
         cache3dsCacheSnesTileToTexturePosition(pCache, screenColors, texturePos);
     }
 
-	bool fullWidth = GPU3DSExt.render2x.active;
+	bool fullWidth = GPU3DSExt.render2x.enabled;
 	int x0 = fullWidth ? screenX : (screenX >> 1);
 	int y0 = screenY + (prio == 0 ? depth0 : depth1);
 
@@ -1995,7 +1995,7 @@ void S9xDrawBackgroundMosaicHardware(
     int YEnd   = (int)GFX.EndY + 1;
     int MosaicOffset = YStart % S;
     int FirstBlockH = S - MosaicOffset;
-	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
+	int hiShift = GPU3DSExt.render2x.enabled ? 1 : 0;
 
     for (int Y = YStart; Y < YEnd; )
     {
@@ -2579,7 +2579,7 @@ inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
 		depth = depth & 0xfff;		// remove the alpha.
 
 	// at full 512px, texels are stretched 1->2px via nearest
-	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
+	int hiShift = GPU3DSExt.render2x.enabled ? 1 : 0;
 	int x0 = screenX << hiShift;
 	int y0 = screenY + depth;
 
@@ -3079,7 +3079,7 @@ void S9xDrawBackgroundMode7Hardware(int bg, bool8 sub, int depth, int alphaTestA
 	else
 		alphaTest = GFX.r2131 & 0x40 ? ALPHA_TEST_GTE_0_5 : ALPHA_TEST_GTE_1_0;
 	
-	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
+	int hiShift = GPU3DSExt.render2x.enabled ? 1 : 0;
 
 	for (int Y = (int)LayerRender.startY[bg]; Y <= (int)GFX.EndY; Y++)
 	{
@@ -3142,7 +3142,7 @@ void S9xDrawBackgroundMode7Hardware(int bg, bool8 sub, int depth, int alphaTestA
 void S9xDrawBackgroundMode7HardwareRepeatTile0(int bg, bool8 sub, int depth)
 {
 	bool verticesUpdated = false;
-	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
+	int hiShift = GPU3DSExt.render2x.enabled ? 1 : 0;
 	
 	for (int Y = (int)LayerRender.startY[bg]; Y <= (int)GFX.EndY; Y++)
 	{
@@ -3316,8 +3316,8 @@ void S9xRenderScreenHardware (bool8 sub)
 
 			// renderState.textureOffset = 1 interleaves main/sub into a 512->256 box downsample;
 			// at full 512px it instead samples into the next tile (black striping),
-			// so we disable it for render2x.active too.
-			renderState.textureOffset = (!sub && !hiresMosaicActive && !GPU3DSExt.render2x.active)
+			// so we disable it for render2x.enabled too.
+			renderState.textureOffset = (!sub && !hiresMosaicActive && !GPU3DSExt.render2x.enabled)
 				? SGPU_STATE_ENABLED
 				: SGPU_STATE_DISABLED;
 			DRAW_16COLOR_HIRES_BG_INLINE(0, 0, 5, 11);
@@ -3622,7 +3622,7 @@ void S9xCommitWindowLRSection(VerticalSections *verticalSections)
 	int stencilMask[10];
 
 	bool windowingEverEnabled = false;
-	int hiShift = GPU3DSExt.render2x.active ? 1 : 0;
+	int hiShift = GPU3DSExt.render2x.enabled ? 1 : 0;
 	
 	for (int i = 0; i < verticalSections->Count; i++)
 	{
@@ -3795,18 +3795,7 @@ void S9xUpdateScreenHardware ()
 	
     GFX.Pseudo = (Memory.FillRAM [0x2133] & 8);
 
-	// Enhanced Resolution: 
-	// a frame renders at 512px if any section uses Mode 5 or 7.
-	// Decided once per frame, constant across its sections.
-	if (GPU3DSExt.render2x.lastUpdateFrame != (int)ICPU.Frame) {
-		GPU3DSExt.render2x.lastUpdateFrame = (int)ICPU.Frame;
-		GPU3DSExt.render2x.active = GPU3DSExt.render2x.enabled && GPU3DSExt.render2x.has2xMode;
-		GPU3DSExt.render2x.has2xMode = false;
-	}
-	if (PPU.BGMode == 5 || PPU.BGMode == 7)
-		GPU3DSExt.render2x.has2xMode = true;
-
-	GPU3DSExt.renderWidth = GPU3DSExt.render2x.active ? 512 : 256;
+	GPU3DSExt.renderWidth = GPU3DSExt.render2x.enabled ? 512 : 256;
 
 	GFX.StartY = IPPU.PreviousLine;
 	GFX.EndY = IPPU.CurrentLine - 1;
