@@ -53,6 +53,8 @@ static SGPU_TOP_MODE gpu3dsGetTopMode()
 //---------------------------------------------------------
 float gpu3dsGetIOD()
 {
+    if (GPU3DS.topMode != TOP_MODE_3D)
+        return 0.0f;
 
     return osGet3DSliderState() * gpu3dsGetIODBase();
 }

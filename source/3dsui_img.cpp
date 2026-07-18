@@ -479,7 +479,7 @@ static void img3dsDrawSplashEye(SGPU_TEXTURE_ID textureId,
     }
 }
 
-void img3dsDrawSplash(SGPU_TEXTURE_ID textureId, bool isTopStereo, float xOffset, float fade) {
+void img3dsDrawSplash(SGPU_TEXTURE_ID textureId, bool renderRightEye, float xOffset, float fade) {
     const Tex3DS_Texture info = textureInfo[textureId - UI_TEXTURE_START];
 
     static float bg2Y = 0;
@@ -527,7 +527,7 @@ void img3dsDrawSplash(SGPU_TEXTURE_ID textureId, bool isTopStereo, float xOffset
     GPU3DS.activeSide = GFX_LEFT;
     img3dsDrawSplashEye(textureId, bg2Left, bg2Right, bg1Center, logo, xOffset, sliderT, bg2Y, bg1Y, logoPhase, fade);
 
-    if (isTopStereo) {
+    if (renderRightEye) {
         GPU3DS.activeSide = GFX_RIGHT;
         GPU3DS.appliedRenderState.target = TARGET_UNSET;
 
@@ -842,7 +842,7 @@ void img3dsInvalidateStateScreenshot() {
 }
 
 bool img3dsSaveScreenRegion(const char* path,
-    int width, int height, int x0, int y0, gfxScreen_t screen, bool isTopStereo, bool isWide) {
+    int width, int height, int x0, int y0, gfxScreen_t screen, bool isWide) {
     if (!g_fileBuffer) return false;
 
     u8* fb = (u8*)gfxGetFramebuffer(screen, GFX_LEFT, NULL, NULL);

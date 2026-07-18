@@ -651,7 +651,7 @@ void impl3dsFlushScreen(gfxScreen_t screen, bool isTopStereo, bool isWide)
     impl3dsApplyCacheOp(screen, isTopStereo, isWide, GSPGPU_FlushDataCache);
 }
 
-void impl3dsInvalidateScreen(gfxScreen_t screen, bool isTopStereo, bool isWide) 
+void impl3dsInvalidateScreen(gfxScreen_t screen, bool isTopStereo, bool isWide)
 {
     impl3dsApplyCacheOp(screen, isTopStereo, isWide, GSPGPU_InvalidateDataCache);
 }
@@ -838,24 +838,25 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 
 	bool isFullScreen = gameScreenViewport.sWidth >= settings3DS.GameScreenWidth && gameScreenViewport.cHeight >= SCREEN_HEIGHT;
 	bool drawBackground = !isFullScreen;
-	bool isTopStereo = GPU3DS.topMode == TOP_MODE_3D;
-	float xOffset = isTopStereo ? gpu3dsGetIOD() : 0.0f;
+	float iod = gpu3dsGetIOD();
+	bool renderRightEye = iod != 0.0f;
+
 	bool balancedFilterEnabled =
 		settings3DS.ScreenFilter == Setting::ScreenFilter::Balanced && !screenshot.dirty &&
 		(settings3DS.ScreenStretch != Setting::ScreenStretch::None || settings3DS.Overscan);
-	
+
 	if (drawBackground) {
-		gpu3dsClearScreen(settings3DS.GameScreen, isTopStereo);
+		gpu3dsClearScreen(settings3DS.GameScreen, renderRightEye);
 	}
 
 	GPU3DS.activeSide = GFX_LEFT;
-	impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, -xOffset);
+	impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, -iod);
 
-	if (isTopStereo) {
+	if (renderRightEye) {
 		GPU3DS.activeSide = GFX_RIGHT;
 		GPU3DS.appliedRenderState.target = TARGET_UNSET;
 
-		impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, xOffset);
+		impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, iod);
 
 		GPU3DS.activeSide = GFX_LEFT;
 	}
@@ -1169,7 +1170,7 @@ bool impl3dsTakeScreenshot(char *path, size_t bufferSize, bool renderFrame) {
     bool isWide = gfxIsWide();
     impl3dsInvalidateScreen(settings3DS.GameScreen, false, isWide);
 
-    bool success = img3dsSaveScreenRegion(path, screenshot.width, screenshot.height, screenshot.x, screenshot.y, settings3DS.GameScreen, false, isWide);
+    bool success = img3dsSaveScreenRegion(path, screenshot.width, screenshot.height, screenshot.x, screenshot.y, settings3DS.GameScreen, isWide);
 	log3dsWrite("screenshot saved %s: %s", path, success ? "v" : "x");
 
 	if (success && isSavestate) {
