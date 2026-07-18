@@ -419,22 +419,31 @@ void gpu3dsFrameEnd(u8 flags)
 
 bool gpu3dsSetTopMode()
 {
+    bool fromWide = gfxIsWide();
+    bool from3D = gfxIs3D();
+
     GPU3DS.topMode = gpu3dsGetTopMode();
     bool changed = false;
 
-    bool isWideMode = (GPU3DS.topMode == TOP_MODE_WIDE);
-    if (gfxIsWide() != isWideMode) {
-        gfxSetWide(isWideMode);
-        GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.height = isWideMode ? SCREEN_TOP_WIDTH * 2 : SCREEN_TOP_WIDTH;
+    bool toWide = (GPU3DS.topMode == TOP_MODE_WIDE);
+    if (gfxIsWide() != toWide) {
+        gfxSetWide(toWide);
+        GPU3DS.screenTargets[SCREEN_TARGET_LEFT]->frameBuf.height = toWide ? SCREEN_TOP_WIDTH * 2 : SCREEN_TOP_WIDTH;
         changed = true;
     }
 
-    if (!isWideMode) {
-        bool is3DMode = (GPU3DS.topMode == TOP_MODE_3D);
-        if (gfxIs3D() != is3DMode) {
-            gfxSet3D(is3DMode);
+    if (!toWide) {
+        bool to3D = (GPU3DS.topMode == TOP_MODE_3D);
+        if (gfxIs3D() != to3D) {
+            gfxSet3D(to3D);
             changed = true;
         }
+    }
+
+    // Clear the old frame so it can't flash under the new mode.
+    // Only needed when leaving wide, or going 3D -> 2D
+    if (changed && ((fromWide && !toWide) || (from3D && GPU3DS.topMode == TOP_MODE_2D))) {
+        impl3dsClearTopFramebuffers();
     }
 
     return changed;

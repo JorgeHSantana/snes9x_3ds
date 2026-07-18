@@ -656,6 +656,34 @@ void impl3dsInvalidateScreen(gfxScreen_t screen, bool isTopStereo, bool isWide)
     impl3dsApplyCacheOp(screen, isTopStereo, isWide, GSPGPU_InvalidateDataCache);
 }
 
+// Fill both top-screen framebuffers with black.
+// Clears the full 800px on wide/3D-capable models.
+void impl3dsClearTopFramebuffers()
+{
+    u32 bpp = 0;
+    switch (gfxGetScreenFormat(GFX_TOP))
+    {
+        case GSP_RGBA8_OES:   bpp = 4; break;
+        case GSP_BGR8_OES:    bpp = 3; break;
+        default:              bpp = 2; break;
+    }
+
+    // O2DS has no wide/3D, so only 400px is used
+    bool hasSecondHalf = gpu3dsIsWideAvailable() || gpu3dsIs3DAvailable();
+    u32 height = hasSecondHalf ? (SCREEN_TOP_WIDTH * 2) : SCREEN_TOP_WIDTH;
+    u32 dataSize = SCREEN_HEIGHT * height * bpp;
+
+    // clear both double-buffered pages
+    for (int page = 0; page < 2; page++) {
+        u8 *fb = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
+        if (fb) {
+            memset(fb, 0, dataSize);
+            GSPGPU_FlushDataCache(fb, dataSize);
+        }
+        gfxScreenSwapBuffers(GFX_TOP, false);
+    }
+}
+
 static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *list,
 	const GameScreenViewport &gameScreenViewport, bool drawBackground, bool balancedFilterEnabled, float xOffset) {
 
