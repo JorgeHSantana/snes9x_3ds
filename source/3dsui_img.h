@@ -8,7 +8,7 @@ bool img3dsAllocVramTextures();
 void img3dsDrawSubTexture(SGPU_TEXTURE_ID textureId, const Tex3DS_SubTexture* subTexture, float sx0, float sy0, u16 width, u16 height, u32 overlayColor = 0, float scaleX = 1.0f, float scaleY = 1.0f);
 bool img3dsLoadAsset(SGPU_TEXTURE_ID textureId, const char* path = NULL);
 
-void img3dsDrawSplash(SGPU_TEXTURE_ID textureId, bool isTopStereo, float xOffset, float fade = 1.0f);
+void img3dsDrawSplash(SGPU_TEXTURE_ID textureId, bool renderRightEye, float xOffset, float fade = 1.0f);
 void img3dsDrawBackground(SGPU_TEXTURE_ID textureId, bool paused = false, float xOffset = 0.0f);
 void img3dsDrawGameOverlay(SGPU_TEXTURE_ID textureId, int sWidth, int sHeight);
 void img3dsDrawScanlines(float sx0, float sy0, float sx1, float sy1, int sWidth, int cHeight);
@@ -29,7 +29,7 @@ void img3dsDrawThumb(int offsetRight, int offsetBottom);
 int img3dsGetThumbHeight();
 int img3dsGetThumbWidth();
 
-bool img3dsSaveScreenRegion(const char* path, int width, int height, int x0, int y0, gfxScreen_t screen, bool isTopStereo = false);
+bool img3dsSaveScreenRegion(const char* path, int width, int height, int x0, int y0, gfxScreen_t screen, bool isWide = false);
 
 bool img3dsInitialize();
 void img3dsFinalize();

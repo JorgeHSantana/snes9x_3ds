@@ -164,21 +164,18 @@ bool impl3dsInitialize()
 	// Main screen requires 8-bit alpha, otherwise alpha blending will not work well
 	// Mode7 texture requires 16x16 as a minimum
 	//
-	// Depth texture for the sub / main screens improves performance 
-	// -> Games like Axelay, F-Zero now run close to full speed!
-	//
 	log3dsWrite("allocate textures:");
 
 	u32 defaultTextureParams = GPU_TEXTURE_MAG_FILTER(GPU_NEAREST) | GPU_TEXTURE_MIN_FILTER(GPU_NEAREST) | GPU_TEXTURE_WRAP_S(GPU_CLAMP_TO_BORDER) | GPU_TEXTURE_WRAP_T(GPU_CLAMP_TO_BORDER);
 	u32 mode7Tile0TextureParams = GPU_TEXTURE_MAG_FILTER(GPU_NEAREST) | GPU_TEXTURE_MIN_FILTER(GPU_NEAREST) | GPU_TEXTURE_WRAP_S(GPU_REPEAT) | GPU_TEXTURE_WRAP_T(GPU_REPEAT);
 	
+	// Reorder with care (see libctru's vramAlloc bank load-balancing)
 	const SGPUTextureConfig vramTexConfig[] = {
-		{ defaultTextureParams, SNES_SUB, GPU_RGBA8, 256, 256 }, // VRAM Bank A
+		{ defaultTextureParams, SNES_DEPTH, GPU_RGBA8, 512, 256 },
 		{ mode7Tile0TextureParams, SNES_MODE7_TILE_0, GPU_RGBA5551, 16, 16 },
-
-		{ defaultTextureParams, SNES_MODE7_FULL, GPU_RGBA5551, 1024, 1024 }, // VRAM Bank A is full now -> VRAM Bank B
-		{ defaultTextureParams, SNES_MAIN, GPU_RGBA8, 256, 256 },
-		{ defaultTextureParams, SNES_DEPTH, GPU_RGBA8, 256, 256 }
+		{ defaultTextureParams, SNES_MODE7_FULL, GPU_RGBA5551, 1024, 1024 },
+		{ defaultTextureParams, SNES_MAIN, GPU_RGBA8, 512, 256 },
+		{ defaultTextureParams, SNES_SUB, GPU_RGBA8, 512, 256 }
 	};
 
     const int totalVramTextures = static_cast<int>(sizeof(vramTexConfig) / sizeof(vramTexConfig[0]));
@@ -194,11 +191,6 @@ bool impl3dsInitialize()
         	return false;
 		}
 
-		if (id == SNES_DEPTH) {
-			setDepthBufferByTex(GPU3DS.textures[SNES_MAIN].target, &texture->tex);
-			setDepthBufferByTex(GPU3DS.textures[SNES_SUB].target, &texture->tex);
-		}
-
 		log3dsWrite("ingame vram texture \"%s\" dim: %dx%d, size:%.2fkb, format: %s",
 			utils3dsTextureIDToString(texture->id),
 			texture->tex.width, texture->tex.height,
@@ -206,6 +198,11 @@ bool impl3dsInitialize()
 			utils3dsTexColorToString(texture->tex.fmt)
 		);
 	}
+
+	// Share one depth/stencil buffer across the main + sub screen targets.
+	// Improves performance in games like Axelay and F-Zero
+	setDepthBufferByTex(GPU3DS.textures[SNES_MAIN].target, &GPU3DS.textures[SNES_DEPTH].tex);
+	setDepthBufferByTex(GPU3DS.textures[SNES_SUB].target, &GPU3DS.textures[SNES_DEPTH].tex);
 
 	const SGPUTextureConfig lramTexConfig[] = {
 		{ defaultTextureParams, SNES_TILE_CACHE, GPU_RGBA5551, 1024, 1024 },
@@ -654,9 +651,37 @@ void impl3dsFlushScreen(gfxScreen_t screen, bool isTopStereo, bool isWide)
     impl3dsApplyCacheOp(screen, isTopStereo, isWide, GSPGPU_FlushDataCache);
 }
 
-void impl3dsInvalidateScreen(gfxScreen_t screen, bool isTopStereo, bool isWide) 
+void impl3dsInvalidateScreen(gfxScreen_t screen, bool isTopStereo, bool isWide)
 {
     impl3dsApplyCacheOp(screen, isTopStereo, isWide, GSPGPU_InvalidateDataCache);
+}
+
+// Fill both top-screen framebuffers with black.
+// Clears the full 800px on wide/3D-capable models.
+void impl3dsClearTopFramebuffers()
+{
+    u32 bpp = 0;
+    switch (gfxGetScreenFormat(GFX_TOP))
+    {
+        case GSP_RGBA8_OES:   bpp = 4; break;
+        case GSP_BGR8_OES:    bpp = 3; break;
+        default:              bpp = 2; break;
+    }
+
+    // O2DS has no wide/3D, so only 400px is used
+    bool hasSecondHalf = gpu3dsIsWideAvailable() || gpu3dsIs3DAvailable();
+    u32 height = hasSecondHalf ? (SCREEN_TOP_WIDTH * 2) : SCREEN_TOP_WIDTH;
+    u32 dataSize = SCREEN_HEIGHT * height * bpp;
+
+    // clear both double-buffered pages
+    for (int page = 0; page < 2; page++) {
+        u8 *fb = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
+        if (fb) {
+            memset(fb, 0, dataSize);
+            GSPGPU_FlushDataCache(fb, dataSize);
+        }
+        gfxScreenSwapBuffers(GFX_TOP, false);
+    }
 }
 
 static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *list,
@@ -745,7 +770,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
         gameScreenViewport.sy1 = gameScreenViewport.sy0 + gameScreenViewport.cHeight;
         gameScreenViewport.tx0 = 0.0f;
         gameScreenViewport.ty0 = 0.0f;
-        gameScreenViewport.tx1 = static_cast<float>(SNES_WIDTH);
+        gameScreenViewport.tx1 = static_cast<float>(GPU3DSExt.renderWidth);
         gameScreenViewport.ty1 = static_cast<float>(PPU.ScreenHeight);
 
         GPU3DS.activeSide = GFX_LEFT;
@@ -804,31 +829,34 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
     gameScreenViewport.sy0 = (SCREEN_HEIGHT - gameScreenViewport.cHeight) / 2;
     gameScreenViewport.sx1 = gameScreenViewport.sx0 + gameScreenViewport.sWidth;
     gameScreenViewport.sy1 = gameScreenViewport.sy0 + gameScreenViewport.cHeight;
-    gameScreenViewport.tx0 = 0.0f;
-    gameScreenViewport.ty0 = static_cast<float>(cropTopSource);
-    gameScreenViewport.tx1 = static_cast<float>(SNES_WIDTH);
-    gameScreenViewport.ty1 = static_cast<float>(PPU.ScreenHeight - cropBottomSource);
+	
+    // Start half a pixel in from the edges so linear filtering can't leave a thin line
+    gameScreenViewport.tx0 = 0.5f;
+    gameScreenViewport.tx1 = static_cast<float>(GPU3DSExt.renderWidth) - 0.5f;
+    gameScreenViewport.ty0 = static_cast<float>(cropTopSource) + (cropTopSource == 0 ? 0.5f : 0.0f);
+    gameScreenViewport.ty1 = static_cast<float>(PPU.ScreenHeight - cropBottomSource) - (cropBottomSource == 0 ? 0.5f : 0.0f);
 
 	bool isFullScreen = gameScreenViewport.sWidth >= settings3DS.GameScreenWidth && gameScreenViewport.cHeight >= SCREEN_HEIGHT;
 	bool drawBackground = !isFullScreen;
-	bool isTopStereo = gpu3dsIs3DEnabled();
-	float xOffset = isTopStereo ? gpu3dsGetIOD() : 0.0f;
+	float iod = gpu3dsGetIOD();
+	bool renderRightEye = iod != 0.0f;
+
 	bool balancedFilterEnabled =
 		settings3DS.ScreenFilter == Setting::ScreenFilter::Balanced && !screenshot.dirty &&
 		(settings3DS.ScreenStretch != Setting::ScreenStretch::None || settings3DS.Overscan);
-	
+
 	if (drawBackground) {
-		gpu3dsClearScreen(settings3DS.GameScreen, isTopStereo);
+		gpu3dsClearScreen(settings3DS.GameScreen, renderRightEye);
 	}
 
 	GPU3DS.activeSide = GFX_LEFT;
-	impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, -xOffset);
+	impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, -iod);
 
-	if (isTopStereo) {
+	if (renderRightEye) {
 		GPU3DS.activeSide = GFX_RIGHT;
 		GPU3DS.appliedRenderState.target = TARGET_UNSET;
 
-		impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, xOffset);
+		impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, iod);
 
 		GPU3DS.activeSide = GFX_LEFT;
 	}
@@ -1138,9 +1166,11 @@ bool impl3dsTakeScreenshot(char *path, size_t bufferSize, bool renderFrame) {
     // Undo the buffer swap that C3D_FrameEnd performed internally
     // so gfxGetFramebuffer returns the buffer the GPU just wrote to.
     gfxScreenSwapBuffers(settings3DS.GameScreen, false);
-    impl3dsInvalidateScreen(settings3DS.GameScreen);
 
-    bool success = img3dsSaveScreenRegion(path, screenshot.width, screenshot.height, screenshot.x, screenshot.y, settings3DS.GameScreen);
+    bool isWide = gfxIsWide();
+    impl3dsInvalidateScreen(settings3DS.GameScreen, false, isWide);
+
+    bool success = img3dsSaveScreenRegion(path, screenshot.width, screenshot.height, screenshot.x, screenshot.y, settings3DS.GameScreen, isWide);
 	log3dsWrite("screenshot saved %s: %s", path, success ? "v" : "x");
 
 	if (success && isSavestate) {

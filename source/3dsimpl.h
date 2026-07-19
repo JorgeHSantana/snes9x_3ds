@@ -180,6 +180,7 @@ void impl3dsUpdateUiAssets();
 
 void impl3dsFlushScreen(gfxScreen_t screen, bool isTopStereo = false, bool isWide = false);
 void impl3dsInvalidateScreen(gfxScreen_t screen, bool isTopStereo = false, bool isWide = false);
+void impl3dsClearTopFramebuffers();
 
 void impl3dsSceneRender(bool firstFrame, bool paused = false);
 

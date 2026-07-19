@@ -155,6 +155,12 @@ typedef enum {
     SGPU_STATE_UNSET,
 } SGPU_STATE;
 
+typedef enum {
+    TOP_MODE_2D   = 0,
+    TOP_MODE_3D   = 1,
+    TOP_MODE_WIDE = 2,
+} SGPU_TOP_MODE;
+
 typedef enum
 {
     VBO_SCENE_RECT,
@@ -277,6 +283,7 @@ typedef struct
 
     bool                        isReal3DS;
     CFG_SystemModel             model;
+    SGPU_TOP_MODE               topMode;
     gfx3dSide_t                 activeSide;
     bool                        gameScreenBufferDesync;
 } SGPU3DS;
@@ -436,7 +443,8 @@ bool gpu3dsClearScreen(gfxScreen_t screen, bool isTopStereo = false);
 float gpu3dsGetIOD();
 float gpu3dsGetIODBase();
 bool gpu3dsIs3DAvailable();
-bool gpu3dsIs3DEnabled();
+bool gpu3dsIsWideAvailable();
+bool gpu3dsSetTopMode(); // Returns true if the applied gfx state changed
 
 
 #endif

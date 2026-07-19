@@ -175,9 +175,15 @@ typedef struct
 
 typedef struct
 {
+    bool            enabled;
+    bool            dirty;
+} SRender2xState;
+
+typedef struct
+{
     u16             vramCacheHashToTexturePosition[MAX_HASH + 1]; // 262146 bytes
     int             vramCacheTexturePositionToHash[MAX_TEXTURE_HASH_POSITIONS]; // 4*MAX_TEXTURE_HASH_POSITIONS bytes
-    
+
     SLayerList      layerList;
 
     u32             newCacheTexturePosition;
@@ -187,6 +193,10 @@ typedef struct
     GPU_TEXCOLOR    mode7TextureFormat;
     bool            mode7SectionsModified[4];
     bool            mode7TilesModified;
+
+    SRender2xState  render2x;       // 512px internal SNES render path:
+                                    // true hires for Mode 5, finer Mode 7 sampling, doubled geometry elsewhere
+    int             renderWidth;    // 512 when render2x.enabled, else 256
 } SGPU3DSExtended;
 
 extern SGPU3DSExtended GPU3DSExt;

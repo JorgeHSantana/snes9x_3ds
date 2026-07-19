@@ -98,6 +98,12 @@ namespace Setting {
         Medium,
         High,
     };
+
+    enum class EnhancedResolution {
+        Off,         // native 256px render
+        Standard,    // 512px internal render (keeps 3D)
+        Wide,        // 512px internal render + wide 800px screen (disables 3D)
+    };
 }
 
 template <int Count>
@@ -191,9 +197,14 @@ typedef struct {
                                                 //   2 - Disabled - Style 1.
                                                 //   3 - Disabled - Style 2.
 
+    u8                  PaletteDeferBgMask;     // Advanced: skip re-rendering these BG layers on mid-frame
+                                                // palette changes (bit i = LAYER_BGi). 0 - render all.
+
     bool                Mode7BilinearFilter;    // Bilinear filter for the Mode 7 background
                                                 // texture. Default false; opt-in because it
                                                 // changes the characteristic Mode 7 look.
+
+    Setting::EnhancedResolution EnhancedResolution;  // Off / Standard (512px render) / 2x Screen (512px + wide)
 
     int                 Volume;                 // 0: 100%, 1: 125%, 2: 150%, 3: 175%, 4: 200%
     int                 GlobalVolume;
@@ -245,7 +256,11 @@ typedef struct {
     long                TicksPerFrame;
 
     bool                TurboMode;             // Effective fast-forward state (toggle and/or hold hotkeys)
-    
+
+    bool                LayerEnabled[8];       // Debug: per-layer enable toggle, index = LAYER_ID
+                                               // (BG0-3, OBJ, Backdrop, Color Math, Brightness).
+                                               // All true by default.
+
     bool                isNew3DS;
     bool                isRomFsLoaded;
     bool                isRomLoaded;
