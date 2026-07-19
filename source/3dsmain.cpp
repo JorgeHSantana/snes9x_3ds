@@ -967,6 +967,28 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                     []( int val ) { CheckAndUpdateToggle( settings3DS.ForceSRAMWriteOnPause, val ); });
 
     items.emplace_back(nullptr, MenuItemType::Textarea, "  (some games like Yoshi's Island require this)"_s, ""_s);
+
+    // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
+    if (settings3DS.PaletteFix == 1)
+    {
+        AddMenuDisabledOption(items, ""_s);
+
+        AddMenuHeader1(items, "ADVANCED SETTINGS"_s);
+        AddMenuHeader2(items, "Reduce Layer Draws on Palette Changes"_s);
+
+        static const char *deferBgNames[3] = { "  BG1", "  BG2", "  BG3" };
+        for (int bg = LAYER_BG0; bg <= LAYER_BG2; bg++) {
+            AddMenuCheckbox(items, deferBgNames[bg], (settings3DS.PaletteDeferBgMask >> bg) & 1,
+                [bg]( int val ) {
+                    u8 newMask = val
+                        ? (settings3DS.PaletteDeferBgMask | (1 << bg))
+                        : (settings3DS.PaletteDeferBgMask & ~(1 << bg));
+                    CheckAndUpdate( settings3DS.PaletteDeferBgMask, newMask );
+                });
+        }
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Can speed up games like Top Gear that change colors"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  mid-frame by drawing a layer fewer times."_s, ""_s);
+    }
 };
 
 void makeControlsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
@@ -1225,8 +1247,9 @@ bool settingsReadWriteFullListByGame(bool writeMode)
 
     if (writeMode || detectedConfigVersion >= 1.5f) {
         config3dsReadWriteEnum(stream, writeMode, "EnhancedResolution=%d\n", &settings3DS.EnhancedResolution, 0, 2);
+        config3dsReadWriteEnum(stream, writeMode, "PaletteDeferBgMask=%d\n", &settings3DS.PaletteDeferBgMask, 0, 7);
     }
-    
+
     config3dsReadWriteInt32(stream, writeMode, "Frameskips=%d\n", &settings3DS.MaxFrameSkips, 0, 4);
     config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.Volume, 0, SND3DS_VOLUME_MAX);
     config3dsReadWriteInt32(stream, writeMode, "PalFix=%d\n", &settings3DS.PaletteFix, 0, 3);

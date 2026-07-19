@@ -16,6 +16,7 @@
 #include "3dsgpu.h"
 #include "3dsimpl_tilecache.h"
 #include "3dsimpl_gpu.h"
+#include "3dssettings.h"
 
 
 extern uint8 Depths[8][4];
@@ -3833,6 +3834,14 @@ void S9xUpdateScreenHardware ()
 		} else {
 			const uint16 used = (i == LAYER_OBJ) ? 0xff00u : S9xComputeBgPalette16UsedMask(i);
 			LayerRender.shouldRenderThisSegment[i] = (changedMask & used) != 0;
+
+			// The used-mask is a conservative over-estimate: it keeps rendering a
+			// BG segment for CGRAM entries the layer never actually samples, so the
+			// draw cannot be deferred. Detecting per-BG which segments are genuinely
+			// safe to defer has not proven cheap and reliable enough to use here, so
+			// this is a manual per-game override of the deferral gate.
+			if (settings3DS.PaletteDeferBgMask & (1 << i))
+				LayerRender.shouldRenderThisSegment[i] = false;
 		}
 
     	if (LayerRender.startY[i] < preTrimStartY)

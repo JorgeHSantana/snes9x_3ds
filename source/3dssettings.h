@@ -197,6 +197,9 @@ typedef struct {
                                                 //   2 - Disabled - Style 1.
                                                 //   3 - Disabled - Style 2.
 
+    u8                  PaletteDeferBgMask;     // Advanced: skip re-rendering these BG layers on mid-frame
+                                                // palette changes (bit i = LAYER_BGi). 0 - render all.
+
     bool                Mode7BilinearFilter;    // Bilinear filter for the Mode 7 background
                                                 // texture. Default false; opt-in because it
                                                 // changes the characteristic Mode 7 look.
