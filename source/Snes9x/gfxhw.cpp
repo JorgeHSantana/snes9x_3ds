@@ -308,6 +308,18 @@ inline void S9xUpdateBackdropSections(bool fixedColor, bool onSub, int depth) {
 }
 
 void S9xCommitBackdropSections() {
+	// when the backdrop layer is toggled off, repaint the whole target black.
+	// A full-screen fill guarantees no stale pixels remain.
+	if (!settings3DS.LayerEnabled[LAYER_BACKDROP]) {
+		for (int i = VS_BACKDROP_SUB; i <= VS_BACKDROP_MAIN; i++) {
+			bool sub = i == VS_BACKDROP_SUB;
+			gpu3dsAddRectangleVertexes(0, 0, GPU3DSExt.renderWidth, PPU.ScreenHeight, 0xFF);
+			gpu3dsCommitLayerSection(VBO_SCENE_RECT, LAYER_BACKDROP, &renderState, sub);
+			drawableSectionCount[i] = 0;
+		}
+		return;
+	}
+
 	for (int i = VS_BACKDROP_SUB; i <= VS_BACKDROP_MAIN; i++) {
 		if (!drawableSectionCount[i])
 			continue;
@@ -3232,16 +3244,16 @@ void S9xRenderScreenHardware (bool8 sub)
     if (!sub) {
         for (int i = 0; i < 5; i++) {
 			// also set bgEnabled[i] to false if the previous subscreen call resulted in zero tiles
-            bgEnabled[i] = ON_MAIN(i) && layerVerticesCount[i] != 0;
+            bgEnabled[i] = ON_MAIN(i) && layerVerticesCount[i] != 0 && settings3DS.LayerEnabled[i];
         }
     } else {
         if (!isMode5or6) {
             for (int i = 0; i < 5; i++) {
-                bgEnabled[i] = GFX.Pseudo ? ON_SUB_PSEUDO(i) : ON_SUB(i);
+                bgEnabled[i] = (GFX.Pseudo ? ON_SUB_PSEUDO(i) : ON_SUB(i)) && settings3DS.LayerEnabled[i];
             }
         } else {
             for (int i = 0; i < 5; i++) {
-                bgEnabled[i] = ON_SUB_HIRES(i);
+                bgEnabled[i] = ON_SUB_HIRES(i) && settings3DS.LayerEnabled[i];
             }
         }
     }
@@ -3278,7 +3290,8 @@ void S9xRenderScreenHardware (bool8 sub)
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 			S9xDrawHiresBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); \
 
-	S9xUpdateBackdropSections(!isMode5or6 && sub, sub, bgAlpha[LAYER_BACKDROP]);
+	if (settings3DS.LayerEnabled[LAYER_BACKDROP])
+		S9xUpdateBackdropSections(!isMode5or6 && sub, sub, bgAlpha[LAYER_BACKDROP]);
 	renderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
 
 	if (bgEnabled[LAYER_OBJ] && LayerRender.shouldRenderThisSegment[LAYER_OBJ]) {
@@ -3519,7 +3532,7 @@ void S9xCommitClipToBlackAndColorMathSections() {
 	u32 batchStencilTest;
 	SGPU_ALPHA_BLENDINGMODE batchAlphaBlending;
 	int renderWidth = GPU3DSExt.renderWidth;
-	
+
 	for (int i = VS_CLIP_TO_BLACK; i <= VS_COLOR_MATH; i++) {
 		if (!drawableSectionCount[i])
 			continue;
@@ -3587,7 +3600,7 @@ void S9xCommitClipToBlackAndColorMathSections() {
 //-----------------------------------------------------------
 void S9xCommitBrightnessSection(VerticalSections *verticalSections)
 {
-	if (!verticalSections->Count) 
+	if (!verticalSections->Count || !settings3DS.LayerEnabled[LAYER_BRIGHTNESS])
 		return;
 	
 	bool hasVertexes = false;
@@ -3926,8 +3939,10 @@ void S9xUpdateScreenHardware ()
 		//
 		S9xRenderScreenHardware (FALSE);
 
-		S9xUpdateClipToBlackSections();
-		S9xUpdateColorMathSections();
+		if (settings3DS.LayerEnabled[LAYER_COLOR_MATH]) {
+			S9xUpdateClipToBlackSections();
+			S9xUpdateColorMathSections();
+		}
 	}
 
 	S9xResetVerticalSection(&IPPU.BackdropColorSections);

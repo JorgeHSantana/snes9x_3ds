@@ -256,7 +256,11 @@ typedef struct {
     long                TicksPerFrame;
 
     bool                TurboMode;             // Effective fast-forward state (toggle and/or hold hotkeys)
-    
+
+    bool                LayerEnabled[8];       // Debug: per-layer enable toggle, index = LAYER_ID
+                                               // (BG0-3, OBJ, Backdrop, Color Math, Brightness).
+                                               // All true by default.
+
     bool                isNew3DS;
     bool                isRomFsLoaded;
     bool                isRomLoaded;

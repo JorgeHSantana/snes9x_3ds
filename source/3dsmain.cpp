@@ -968,12 +968,13 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     items.emplace_back(nullptr, MenuItemType::Textarea, "  (some games like Yoshi's Island require this)"_s, ""_s);
 
+    AddMenuDisabledOption(items, ""_s);
+
+    AddMenuHeader1(items, "ADVANCED SETTINGS"_s);
+
     // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
     if (settings3DS.PaletteFix == 1)
     {
-        AddMenuDisabledOption(items, ""_s);
-
-        AddMenuHeader1(items, "ADVANCED SETTINGS"_s);
         AddMenuHeader2(items, "Reduce Layer Draws on Palette Changes"_s);
 
         static const char *deferBgNames[3] = { "  BG1", "  BG2", "  BG3" };
@@ -988,7 +989,19 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         }
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Can speed up games like Top Gear that change colors"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  mid-frame by drawing a layer fewer times."_s, ""_s);
+
+        AddMenuDisabledOption(items, ""_s);
     }
+
+    AddMenuHeader2(items, "Enable / Disable Layers"_s);
+
+    static const char *layerNames[LAYER_BRIGHTNESS + 1] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites", "  Backdrop", "  Color Math", "  Brightness" };
+    for (int layer = LAYER_BG0; layer <= LAYER_BRIGHTNESS; layer++) {
+        AddMenuCheckbox(items, layerNames[layer], settings3DS.LayerEnabled[layer],
+            [layer]( int val ) { CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val ); });
+    }
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
+        AddMenuDisabledOption(items, ""_s);
 };
 
 void makeControlsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
