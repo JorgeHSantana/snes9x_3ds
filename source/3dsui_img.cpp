@@ -39,16 +39,23 @@ typedef struct {
     Setting::AssetMode displayMode;
 } AssetDrawContext;
 
+// cache formats:
+// "IMGZ"   - every image shares the header dimensions; index entries are 8 bytes
+//            {gameID, offset}. Used by uniform sets (gameplay, title, boxart/pal-style).
+// "IMG2"   - per-entry dimensions; index entries are 12 bytes 
+//            {gameID, offset, width, height}. Used by boxart/1g1r
 typedef struct {
-    char magic[4]; // "IMGZ"
+    char magic[4]; // "IMGZ" or "IMG2"
     u32 count;
-    u16 width;     // all images in cache file have the same dimensions
+    u16 width;     // IMGZ: shared dimensions; IMG2: max dimensions
     u16 height;
 } ThumbCacheHeader;
 
 typedef struct {
     u32 gameID;    // DJB2 Hash of trimmed filename
     u32 offset;    // offset in bytes to the pixel data
+    u16 width;
+    u16 height;
 } ThumbIndex;
 
 Tex3DS_Texture textureInfo[UI_TEX_COUNT];
@@ -714,22 +721,23 @@ void img3dsSetThumbMode() {
         fclose(thumbCacheFile); thumbCacheFile = NULL; return;
     }
 
-    if (memcmp(header.magic, "IMGZ", 4) != 0) {
+    bool hasUniformDimensions;
+    if      (memcmp(header.magic, "IMGZ", 4) == 0) hasUniformDimensions = true;
+    else if (memcmp(header.magic, "IMG2", 4) == 0) hasUniformDimensions = false;
+    else {
         // invalid Format
-        fclose(thumbCacheFile); 
-        
-        thumbCacheFile = NULL; 
-        
+        fclose(thumbCacheFile);
+        thumbCacheFile = NULL;
         return;
     }
 
     if (header.width > thumbMaxWidth || header.height > thumbMaxHeight) {
         log3dsWrite("Invalid cache dimensions: %dx%d (max %dx%d)", header.width, header.height, thumbMaxWidth, thumbMaxHeight);
-        fclose(thumbCacheFile); 
-        thumbCacheFile = NULL; 
+        fclose(thumbCacheFile);
+        thumbCacheFile = NULL;
         return;
     }
-    
+
     u32 requiredSize = header.width * header.height * gpu3dsGetPixelSize(GPU_RGB565);
     if (requiredSize > thumbPixelBufferSize) {
         fclose(thumbCacheFile); thumbCacheFile = NULL; return;
@@ -747,10 +755,24 @@ void img3dsSetThumbMode() {
     thumbTotalCount = header.count;
 
     if (thumbIndexTable) {
-        fread(thumbIndexTable, sizeof(ThumbIndex), thumbTotalCount, thumbCacheFile);
+        if (hasUniformDimensions) {
+            // 8-byte entries; every image uses the header dimensions
+            for (u32 i = 0; i < thumbTotalCount; i++) {
+                u32 pair[2];
+                if (fread(pair, sizeof(u32), 2, thumbCacheFile) != 2) break;
+                thumbIndexTable[i].gameID = pair[0];
+                thumbIndexTable[i].offset = pair[1];
+                thumbIndexTable[i].width  = header.width;
+                thumbIndexTable[i].height = header.height;
+            }
+        } else {
+            // 12-byte entries; dimensions stored per entry
+            fread(thumbIndexTable, sizeof(ThumbIndex), thumbTotalCount, thumbCacheFile);
+        }
     }
 
-    log3dsWrite("thumbnail cache prepared (%d thumbnails, %dx%dpx)", thumbTotalCount, currentThumbWidth, currentThumbHeight);
+    log3dsWrite("thumbnail cache prepared (%d thumbnails, %s, max %dx%dpx)",
+                thumbTotalCount, hasUniformDimensions ? "IMGZ" : "IMG2", header.width, header.height);
 }
 
 bool img3dsLoadThumb(const char* romName) {
@@ -767,25 +789,26 @@ bool img3dsLoadThumb(const char* romName) {
         return true;
     }
 
-    // restore thumb dimensions from cache file
-    currentThumbWidth = cacheThumbWidth;
-    currentThumbHeight = cacheThumbHeight;
-
     u32 fileOffset = 0;
+    u16 w = 0, h = 0;
     bool thumbFound = false;
 
     // linear search is fine for < 2000 items.
     for (u32 i = 0; i < thumbTotalCount; i++) {
         if (thumbIndexTable[i].gameID == id) {
             fileOffset = thumbIndexTable[i].offset;
+            w = thumbIndexTable[i].width;
+            h = thumbIndexTable[i].height;
             thumbFound = true;
             break;
         }
     }
 
-    size_t sizeToRead = currentThumbWidth * currentThumbHeight * sizeof(u16);
+    size_t sizeToRead = (size_t)w * h * sizeof(u16);
 
-    if (thumbFound) {
+    if (thumbFound && sizeToRead > 0 && sizeToRead <= thumbPixelBufferSize) {
+        currentThumbWidth = w;
+        currentThumbHeight = h;
         fseek(thumbCacheFile, fileOffset, SEEK_SET);
         fread(thumbPixelBuffer, sizeToRead, 1, thumbCacheFile);
 
@@ -793,8 +816,11 @@ bool img3dsLoadThumb(const char* romName) {
 
     } else {
         // clear thumb pixel buffer
-        memset(thumbPixelBuffer, 0, sizeToRead);
+        currentThumbWidth = cacheThumbWidth;
+        currentThumbHeight = cacheThumbHeight;
+        memset(thumbPixelBuffer, 0, thumbPixelBufferSize);
         currentThumbID = 0;
+        thumbFound = false;
     }
 
     return thumbFound;
