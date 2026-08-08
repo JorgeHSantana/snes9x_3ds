@@ -46,7 +46,7 @@ Reference implementations: snes9x upstream `msu1.cpp` (same license family) and 
 |---|---|
 | `source/Snes9x/ppu.cpp` | `S9xGetPPU`/`S9xSetPPU`: dispatch `$2000-$2007` → MSU-1 when `Settings.MSU1` (currently open bus at `ppu.cpp:1095`). |
 | `source/Snes9x/memmap.cpp` | Detection at ROM load: `<romdir>/<rombase>.msu` exists ⇒ `Settings.MSU1 = true` (flag already stubbed at `memmap.cpp:2783`). Reset flag on every load. |
-| `source/Snes9x/dma.cpp` | B-bus `$01` reads from the MSU data port during DMA. Correct in wave 1, fast path in wave 2. |
+| `source/Snes9x/dma.cpp` | DMA with a fixed **A-bus** source of `$2000-$2007` (how FMV hacks blast `$2001` data into WRAM via B-bus `$80`). Correct byte-loop path in wave 1, fast path in wave 2. |
 | `source/Snes9x/snapshot.cpp` | New optional `MSU` block: current track, data seek offset, audio file position, status bits, volume, repeat/resume state. Absent block ⇒ MSU idle (back-compat both directions). |
 | `source/Snes9x/snes9x.h` | `Settings.MSU1` flag (bool8, next to the other chip flags). |
 | `source/3dssound.cpp` | Existing fences/start/stop also drive channel 1 via the `3dsmsu` API (calls only — no MSU logic here). |
