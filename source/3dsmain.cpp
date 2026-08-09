@@ -976,11 +976,23 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         snprintf(msu1StatusLine, sizeof(msu1StatusLine), "  %s", msu1RawLine);
         items.emplace_back(nullptr, MenuItemType::Textarea, msu1StatusLine, ""_s);
 
+        // Always add the subtitle item, even when empty, so the Settings
+        // tab's item COUNT stays constant across rebuilds. A conditional
+        // item made setupMenu()'s "preserve selection by numeric index"
+        // logic rebind the cursor to the wrong control the moment underruns
+        // first crossed the warning threshold mid-session (the list grew by
+        // one and every later index shifted). An empty Textarea renders
+        // nothing (ui3dsDrawStringWithWrapping on a zero-length string
+        // produces zero line segments, so no draw call happens) — a clean
+        // blank row, the same effect as the AddMenuDisabledOption(items,
+        // ""_s) spacer idiom used elsewhere in this function.
+        char msu1StatusSubtitle[80];
         if (msu1RawSubtitle[0] != '\0') {
-            char msu1StatusSubtitle[80];
             snprintf(msu1StatusSubtitle, sizeof(msu1StatusSubtitle), "  %s", msu1RawSubtitle);
-            items.emplace_back(nullptr, MenuItemType::Textarea, msu1StatusSubtitle, ""_s);
+        } else {
+            msu1StatusSubtitle[0] = '\0';
         }
+        items.emplace_back(nullptr, MenuItemType::Textarea, msu1StatusSubtitle, ""_s);
     }
 
     AddMenuCheckbox(items, "  Enable MSU-1"_s, settings3DS.Msu1Enabled,
@@ -2340,7 +2352,11 @@ void emulatorLoop()
     // MSU-1 status line (Settings tab) is a snapshot taken at menu-build
     // time; force a rebuild so it reflects this session's underrun count
     // and playing/idle state instead of whatever was shown last time.
-    menu3dsMarkTabDirty(TAB_SETTINGS);
+    // Gated on Settings.MSU1: non-MSU games always show the same static
+    // "not detected" line, so there's nothing to refresh and no need to
+    // pay for rebuilding the whole Settings tab on every menu entry.
+    if (Settings.MSU1)
+        menu3dsMarkTabDirty(TAB_SETTINGS);
     snd3dsStopPlaying();
     snd3dsResumeMixing();
     lcd3dsRestoreDefaultRate();
