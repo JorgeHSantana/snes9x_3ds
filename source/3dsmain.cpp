@@ -2273,6 +2273,10 @@ void emulatorLoop()
         firstFrame = false;
     }
 
+    // underrun visibility for Old-3DS SD-latency diagnosis (docs/msu1.md checklist)
+    if (Settings.MSU1)
+        log3dsWrite("MSU-1 underruns: %u", (unsigned)msu3dsGetUnderrunCount());
+
     msu3dsOnEvent(Msu1Event::MenuEnter);
     snd3dsStopPlaying();
     snd3dsResumeMixing();

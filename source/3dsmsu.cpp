@@ -1,4 +1,5 @@
 #include "3dsmsu.h"
+#include <atomic>
 #include <cstring>
 
 namespace {
@@ -8,14 +9,33 @@ struct BridgeState {
     int16_t*         staging;
     uint32_t         staging_samples;
     float            global_volume;
-    bool             menu_muted;
-    bool             turbo_muted;
-    bool             apt_muted;
-    bool             drain_active;
-    bool             queued_since_clear;   // a PCM buffer was queued since the last clear_queue
+    // mute/drain flags: written by the emu/main thread (msu3dsOnEvent),
+    // read by the mixing thread (msu3dsFillAudio) — atomic per coding
+    // standard section 7, matching snd3DS.generateSilence
+    std::atomic<bool> menu_muted;
+    std::atomic<bool> turbo_muted;
+    std::atomic<bool> apt_muted;
+    std::atomic<bool> drain_active;
+    bool             queued_since_clear;   // mixing-thread-only (set in fill, cleared under drain)
     uint32_t         underruns;
 };
 BridgeState g_bridge = {};
+
+// atomics make BridgeState non-copyable: reset member-wise instead of {}-assign
+void reset_bridge(void)
+{
+    g_bridge.initialized        = false;
+    g_bridge.backend            = Msu1AudioBackend{};
+    g_bridge.staging            = nullptr;
+    g_bridge.staging_samples    = 0;
+    g_bridge.global_volume      = 0.0f;
+    g_bridge.menu_muted         = false;
+    g_bridge.turbo_muted        = false;
+    g_bridge.apt_muted          = false;
+    g_bridge.drain_active       = false;
+    g_bridge.queued_since_clear = false;
+    g_bridge.underruns          = 0;
+}
 
 void bridge_volume_cb(void) { msu3dsOnEvent(Msu1Event::VolumeChanged); }
 
@@ -42,7 +62,7 @@ bool msu3dsInitialize(const Msu1AudioBackend& backend,
     if (staging == nullptr) { return false; }
     if (staging_samples < backend.buffer_capacity_samples()) { return false; }
     if (!backend.init_channel(MSU1_SAMPLE_RATE)) { return false; }
-    g_bridge = BridgeState{};
+    reset_bridge();
     g_bridge.initialized     = true;
     g_bridge.backend         = backend;
     g_bridge.staging         = staging;
@@ -59,11 +79,15 @@ void msu3dsFinalize(void)
     g_bridge.backend.clear_queue();
     g_bridge.backend.shutdown_channel();
     MSU1.volume_changed_cb = nullptr;
-    g_bridge = BridgeState{};
+    reset_bridge();
 }
 
 void msu3dsSetGlobalVolume(float factor)
 {
+    // Callers may run before install (snd3dsInitialize applies the volume
+    // before msu3dsNdspInstall); settings3dsUpdate re-applies it after
+    // install on every ROM load/resume, so dropping this call is safe.
+    if (!g_bridge.initialized) { return; }
     if (factor < 0.0f) { factor = 0.0f; }
     if (factor > 2.0f) { factor = 2.0f; }
     g_bridge.global_volume = factor;
