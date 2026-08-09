@@ -190,13 +190,16 @@ bool msu3dsFormatStatus(bool msu_present, const Msu1State& state,
     if (line == nullptr || subtitle == nullptr) { return false; }
     if (line_size == 0 || subtitle_size == 0) { return false; }
 
+    // Compute playing state once (single source of truth)
+    const bool playing = msu_present && ((state.status & MSU1_FLAG_AUDIO_PLAYING) != 0);
+
     // Determine the line string
     const char* line_fmt = nullptr;
     uint32_t track_arg = 0;
 
     if (!msu_present) {
         line_fmt = "MSU-1: not detected";
-    } else if ((state.status & MSU1_FLAG_AUDIO_PLAYING) != 0) {
+    } else if (playing) {
         line_fmt = "MSU-1: playing track %u";
         track_arg = state.current_track;
     } else {
@@ -205,13 +208,13 @@ bool msu3dsFormatStatus(bool msu_present, const Msu1State& state,
 
     // Format the line
     int result = 0;
-    if ((state.status & MSU1_FLAG_AUDIO_PLAYING) != 0) {
+    if (playing) {
         result = snprintf(line, line_size, line_fmt, track_arg);
     } else {
         result = snprintf(line, line_size, "%s", line_fmt);
     }
 
-    // Check for snprintf overflow (docs/CODING_STANDARD.md section 7)
+    // Check for snprintf overflow (docs/CODING_STANDARD.md sections 3, 6)
     if (result < 0 || (size_t)result >= line_size) { return false; }
 
     // Determine subtitle string

@@ -289,7 +289,7 @@ TEST_CASE("msu3dsFormatStatus: large track number (65535)")
     bool result = msu3dsFormatStatus(true, state, 0, line, sizeof(line), subtitle, sizeof(subtitle));
 
     CHECK(result == true);
-    CHECK(strstr(line, "65535") != nullptr);
+    CHECK(strcmp(line, "MSU-1: playing track 65535") == 0);
 }
 
 TEST_CASE("msu3dsFormatStatus: exact buffer sizes (no extra room)")
