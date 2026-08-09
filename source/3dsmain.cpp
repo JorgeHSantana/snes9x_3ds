@@ -1599,8 +1599,17 @@ bool emulatorLoadRom()
     // if not, stay on defaults
     cfgFileAvailable[1] = settingsReadWriteFullListByGame(false);
 
-    if (!settings3DS.Msu1Enabled)
-        impl3dsApplyMsu1Enable(false);
+    // Load-time gate: apply the per-game Msu1Enabled=false setting directly,
+    // NOT via impl3dsApplyMsu1Enable() — that helper lifts the mixer drain
+    // fence internally (snd3dsResumeMixing()) before returning, which here
+    // would let SavestateLoaded's clear_queue (below, at impl3dsLoadStateAuto)
+    // run outside the drain window this function already holds open
+    // (snd3dsDrainMixing() above .. snd3dsResumeMixing() below). Doing the
+    // teardown inline keeps everything inside the single outer fence.
+    if (!settings3DS.Msu1Enabled && Settings.MSU1) {
+        msu3dsOnEvent(Msu1Event::RomUnload);
+        Settings.MSU1 = FALSE;
+    }
 
     settings3dsUpdate(true);
 
