@@ -237,6 +237,48 @@ uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
     return written;
 }
 
+void msu1_capture(const Msu1State& state, Msu1Snapshot& out)
+{
+    out.status         = state.status;
+    out.volume         = state.volume;
+    out.current_track  = state.current_track;
+    out.resume_track   = state.resume_track;
+    out.data_pos       = state.data_pos;
+    out.audio_play_pos = state.audio_play_pos;
+    out.resume_pos     = state.resume_pos;
+}
+
+Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap)
+{
+    if (!state.enabled) { return Msu1Result::InvalidParam; }   // init first
+    state.volume       = snap.volume;
+    state.resume_track = snap.resume_track;
+    state.resume_pos   = snap.resume_pos;
+
+    // data stream
+    uint32_t dpos = snap.data_pos;
+    if (dpos > state.data_size) { dpos = state.data_size; }
+    if (state.data_file != nullptr && fseek(state.data_file, (long)dpos, SEEK_SET) == 0) {
+        state.data_pos = dpos;
+    }
+
+    // audio stream: reload the saved track from disk
+    msu1_load_track(state, snap.current_track);
+    if ((state.status & MSU1_FLAG_AUDIO_ERROR) != 0) {
+        return Msu1Result::FileMissing;
+    }
+    if (snap.audio_play_pos <= state.audio_size
+        && fseek(state.audio_file,
+                 (long)(MSU1_PCM_HEADER_SIZE + snap.audio_play_pos), SEEK_SET) == 0) {
+        state.audio_play_pos = snap.audio_play_pos;
+        state.status |= (uint8_t)(snap.status
+                        & (MSU1_FLAG_AUDIO_PLAYING | MSU1_FLAG_AUDIO_REPEAT));
+    }
+    // invalid position: track stays loaded but stopped (defensive)
+    if (state.volume_changed_cb != nullptr) { state.volume_changed_cb(); }
+    return Msu1Result::Ok;
+}
+
 uint8_t S9xMSU1ReadPort(uint8_t port)               { return msu1_read_port(MSU1, port); }
 void    S9xMSU1WritePort(uint8_t port, uint8_t value) { msu1_write_port(MSU1, port, value); }
 

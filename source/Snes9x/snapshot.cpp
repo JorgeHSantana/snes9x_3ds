@@ -28,6 +28,7 @@
 #include "sdd1.h"
 #include "spc7110.h"
 #include "bufferedfilewriter.h"
+#include "msu1.h"
 
 #include "3dsimpl.h"
 
@@ -436,6 +437,19 @@ static FreezeData SnapS7RTC [] = {
 	{OFFSET (last_used),4,INT_V}
 };
 
+#undef OFFSET
+#define OFFSET(f) Offset(f,struct Msu1Snapshot *)
+
+static FreezeData SnapMSU1 [] = {
+    {OFFSET (status), sizeof (Msu1Snapshot::status), INT_V},
+    {OFFSET (volume), sizeof (Msu1Snapshot::volume), INT_V},
+    {OFFSET (current_track), sizeof (Msu1Snapshot::current_track), INT_V},
+    {OFFSET (resume_track), sizeof (Msu1Snapshot::resume_track), INT_V},
+    {OFFSET (data_pos), sizeof (Msu1Snapshot::data_pos), INT_V},
+    {OFFSET (audio_play_pos), sizeof (Msu1Snapshot::audio_play_pos), INT_V},
+    {OFFSET (resume_pos), sizeof (Msu1Snapshot::resume_pos), INT_V}
+};
+
 static char ROMFilename [_MAX_PATH];
 
 void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, FreezeData *fields,
@@ -594,6 +608,13 @@ void S9xFreezeToStream (BufferedFileWriter& stream)
 		FreezeStruct (stream, "RTC", &rtc_f9, SnapS7RTC, COUNT (SnapS7RTC));
 	}
 
+	if (Settings.MSU1)
+	{
+		Msu1Snapshot msu_snap;
+		msu1_capture (MSU1, msu_snap);
+		FreezeStruct (stream, "MSU", &msu_snap, SnapMSU1, COUNT (SnapMSU1));
+	}
+
 	S9xSetSoundMute (prevMute);
 }
 
@@ -653,7 +674,8 @@ int S9xUnfreezeFromStream (STREAM stream)
     S9xSetSoundMute (TRUE);
 
     // track if APU data was successfully loaded
-    bool apuLoaded = false; 
+    bool apuLoaded = false;
+    Msu1Snapshot msu_snap = {};
 
     do
     {
@@ -702,6 +724,21 @@ int S9xUnfreezeFromStream (STREAM stream)
         }
 
         if (Settings.SPC7110RTC) S9xUpdateRTC();
+
+        // MSU1 is optional: absent block just means the block predates MSU1
+        // support (or MSU1 wasn't active when the state was saved).
+        if (UnfreezeStruct (stream, "MSU", &msu_snap, SnapMSU1, COUNT (SnapMSU1)) == SUCCESS)
+        {
+            if (Settings.MSU1)
+                msu1_restore (MSU1, msu_snap);
+            // !Settings.MSU1: block already consumed from the stream; nothing else to do
+        }
+        else if (Settings.MSU1)
+        {
+            // no MSU block in this snapshot: return the chip to idle-enabled
+            S9xMSU1Shutdown ();
+            msu1_init (MSU1, Memory.ROMFilename);
+        }
 
         result = SUCCESS;
 
