@@ -31,6 +31,11 @@ sd:/3ds/snes9x_3ds/roms/Zelda MSU-1 Edition-3.pcm
 * If the `.msu` file is missing, the game runs exactly as a normal ROM (silent APU-only audio) — nothing crashes or errors out.
 * If individual `.pcm` track files are missing while `.msu` is present, that track plays silent when selected; the game continues running normally.
 
+## Known limitations (wave 1)
+
+* **DMA transfer mode 0 only.** DMA from the MSU-1 data port honors transfer mode 0 (single B-bus address) — the pattern audio hacks use. Multi-address transfer modes 1-4 (the patterns FMV hacks use to blast data into VRAM/WRAM) are not yet wired to the MSU-1 source; they come in wave 2 together with the data-throughput work.
+* Fast-forward keeps consuming PCM while muted, so the track position drifts during turbo — inherent to fast-forwarding streamed audio.
+
 ## Hardware validation checklist (run on BOTH Old 3DS and New 3DS)
 Game: Zelda ALttP MSU (or Chrono Trigger MSU)
 - [ ] Boot: title music plays (CD quality, no stutter)

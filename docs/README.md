@@ -18,6 +18,7 @@ Generated 2026-08-08 from source analysis of the codebase at version **v1.61** (
 | [Save States and Cheats](saves-and-cheats.md) | Savestate format, SRAM autosave, screenshots, cheat formats and engine |
 | [Special Chips](special-chips.md) | SuperFX, SA-1, DSP-1..4, C4, S-DD1, SPC7110, OBC1, SETA, S-RTC, BS-X |
 | [Menu and UI](menu-ui.md) | Second-screen menu system, themes, thumbnails, notifications, splash |
+| [MSU-1 Support](msu1.md) | Usage, file naming, wave-1 limitations, hardware validation checklist |
 | [Project Meta](project-meta.md) | CI workflows, release process, contribution policy, known issues, licensing |
 | [Developer Gotchas](developer-gotchas.md) | Cross-cutting invariants and traps to know before changing code |
 
