@@ -22,6 +22,7 @@
 #include "3dsfiles.h"
 #include "3dsgpu.h"
 #include "3dssound.h"
+#include "3dsmsu.h"
 #include "3dsmenu.h"
 #include "3dsui.h"
 #include "3dsui_notif.h"
@@ -1012,6 +1013,7 @@ bool impl3dsLoadState(const char* filename)
 	if (success)
 	{
 		gpu3dsInitializeMode7Vertexes();
+		msu3dsOnEvent(Msu1Event::SavestateLoaded);
 	}
 	return success;
 }

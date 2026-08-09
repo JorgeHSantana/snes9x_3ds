@@ -24,6 +24,8 @@
 #include "3dsfiles.h"
 #include "3dsinput.h"
 #include "3dssound.h"
+#include "3dsmsu.h"
+#include "3dsmsu_ndsp.h"
 #include "3dsgpu.h"
 #include "3dsimpl.h"
 #include "3dsui.h"
@@ -1499,6 +1501,7 @@ bool emulatorLoadRom()
     // when impl3dsLoadROM fails, our previous game (if any) is also unusable
     // therefore we always set ROMCRC32 to 0
     Memory.ROMCRC32 = 0;
+    msu3dsOnEvent(Msu1Event::RomUnload);
     settings3DS.isRomLoaded = impl3dsLoadROM(romFileNameFullPath) && Memory.ROMCRC32;
 
     if (!settings3DS.isRomLoaded) {
@@ -2039,6 +2042,8 @@ bool emulatorInitialize()
     if (!img3dsInitialize()) return false;
     if (!snd3dsInitialize()) return false;
 
+    if (snd3DS.audioType == 2) msu3dsNdspInstall();
+
     enableAptHooks();
 
     #ifndef PROFILING_DISABLED
@@ -2061,6 +2066,9 @@ int emulatorFinalize()
 	log3dsWrite("---- emulatorFinalize ----");
     consoleClear();
     disableAptHooks();
+
+    msu3dsOnEvent(Msu1Event::AppExit);
+    msu3dsNdspUninstall();
 
     snd3dsFinalize();
     impl3dsFinalize();
@@ -2195,6 +2203,7 @@ void emulatorLoop()
 
     snd3dsResumeMixing();
     snd3dsStartPlaying();
+    msu3dsOnEvent(Msu1Event::MenuExit);
 
     lcd3dsSetEmulationRate(settings3DS.TicksPerFrame);
 
@@ -2255,6 +2264,7 @@ void emulatorLoop()
         firstFrame = false;
     }
 
+    msu3dsOnEvent(Msu1Event::MenuEnter);
     snd3dsStopPlaying();
     snd3dsResumeMixing();
     lcd3dsRestoreDefaultRate();

@@ -12,6 +12,7 @@
 #include "3dstimer.h"
 #include "3dsimpl.h"
 #include "3dslog.h"
+#include "3dsmsu.h"
 
 
 SSND3DS snd3DS;
@@ -44,6 +45,7 @@ void snd3dsApplyOutputVolume()
     // and resampling a clipped signal produces aliasing artifacts.
     // 25% per step: v=0 -> 1.0x ... v=4 -> 2.0x
     float gain = 1.0f + (v * 0.25f);
+    msu3dsSetGlobalVolume(gain);
 
     float mix[12] = { gain, gain, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     ndspChnSetMix(0, mix);
@@ -120,6 +122,8 @@ void snd3dsMixSamples()
 
         snd3DS.fillBlock = (snd3DS.fillBlock + 1) % snd3DS.waveBufCount;
     }
+
+    msu3dsFillAudio();
 
     LightLock_Unlock(&snd3DS.snesAccessLock);
 }
@@ -222,6 +226,7 @@ void snd3dsStopPlaying()
 //---------------------------------------------------------
 void snd3dsDrainMixing()
 {
+    msu3dsOnEvent(Msu1Event::MixerDrain);
     snd3DS.generateSilence = true;
 
     // Barrier: ensures the mixer is not currently reading SNES state.
@@ -233,6 +238,7 @@ void snd3dsDrainMixing()
 void snd3dsResumeMixing()
 {
     snd3DS.generateSilence = false;
+    msu3dsOnEvent(Msu1Event::MixerResume);
 }
 
 

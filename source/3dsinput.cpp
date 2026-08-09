@@ -9,6 +9,7 @@
 #include "3dsutils.h"
 #include "memmap.h"
 #include "3dssound.h"
+#include "3dsmsu.h"
 
 static u32 currKeysHeld = 0;
 static u32 lastKeysHeld = 0;
@@ -38,7 +39,11 @@ static void input3dsSetTurboMode(bool turboModeActive, bool showNotification)
 void input3dsRefreshTurboMode(bool isInGame)
 {
     bool fastForwardHeld = isInGame && input3dsIsFastForwardHoldPressed();
+    bool wasTurboMode = settings3DS.TurboMode;
     input3dsSetTurboMode(turboModeToggle || fastForwardHeld, isInGame);
+    if (settings3DS.TurboMode != wasTurboMode) {
+        msu3dsOnEvent(settings3DS.TurboMode ? Msu1Event::TurboOn : Msu1Event::TurboOff);
+    }
 }
 
 #ifndef PROFILING_DISABLED

@@ -6,6 +6,7 @@
 #include "3dsinput.h"
 #include "3dsmenu.h"
 #include "3dsexit.h"
+#include "3dsmsu.h"
 
 aptHookCookie hookCookie;
 
@@ -18,6 +19,7 @@ void handleAptHook(APT_HookType hook, void* param)
             break;
         case APTHOOK_ONSUSPEND:
         case APTHOOK_ONSLEEP:
+            msu3dsOnEvent(Msu1Event::AptSuspend);
             snd3dsRestoreCpuLimit();
             if (GPU3DS.emulatorState == EMUSTATE_EMULATE) {
                 snd3dsStopPlaying(); // avoid hanging looped sample while HOME menu is open
@@ -33,6 +35,7 @@ void handleAptHook(APT_HookType hook, void* param)
             break;
         case APTHOOK_ONRESTORE:
         case APTHOOK_ONWAKEUP:
+            msu3dsOnEvent(Msu1Event::AptResume);
             snd3dsApplyCpuLimit();
             GPU3DS.gameScreenBufferDesync = true;
             menu3dsSetScreenDirty(true, true);
