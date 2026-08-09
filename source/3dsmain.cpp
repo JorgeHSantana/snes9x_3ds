@@ -1668,6 +1668,26 @@ bool emulatorLoadRom()
 
     settings3dsUpdate(true);
 
+    // Diagnostic dump of the effective per-game state that governs layer
+    // rendering — one line per ROM load so field reports can compare a
+    // working boot against a broken one without guesswork.
+    {
+        int layerMask = 0;
+        for (int i = 0; i < 8; ++i)
+            if (settings3DS.LayerEnabled[i])
+                layerMask |= (1 << i);
+        log3dsWrite("Game state: PalFix=%d CommitLine=%d DeferMask=%d Layers=%02X "
+                    "Skips=%d EnhRes=%d Vol=%d MSU(det=%d en=%d vol=%d gvol=%d useG=%d) AutoSt=%d",
+                    settings3DS.PaletteFix, SNESGameFixes.PaletteCommitLine,
+                    settings3DS.PaletteDeferBgMask, layerMask,
+                    settings3DS.MaxFrameSkips, (int)settings3DS.EnhancedResolution,
+                    settings3DS.Volume,
+                    Settings.MSU1 ? 1 : 0, settings3DS.Msu1Enabled ? 1 : 0,
+                    settings3DS.Msu1Volume, settings3DS.GlobalMsu1Volume,
+                    settings3DS.UseGlobalVolume ? 1 : 0,
+                    settings3DS.AutoSavestate ? 1 : 0);
+    }
+
     // reset hotkeys that conflict with the active circle pad binding
     bool cpadBound = settings3DS.UseGlobalButtonMappings ? settings3DS.GlobalBindCirclePad : settings3DS.BindCirclePad;
     for (int i = 0; i < HOTKEYS_COUNT; ++i)
