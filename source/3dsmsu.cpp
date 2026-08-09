@@ -9,6 +9,7 @@ struct BridgeState {
     int16_t*         staging;
     uint32_t         staging_samples;
     float            global_volume;
+    float            user_volume;
     // mute/drain flags: written by the emu/main thread (msu3dsOnEvent),
     // read by the mixing thread (msu3dsFillAudio) — atomic per coding
     // standard section 7, matching snd3DS.generateSilence
@@ -29,6 +30,7 @@ void reset_bridge(void)
     g_bridge.staging            = nullptr;
     g_bridge.staging_samples    = 0;
     g_bridge.global_volume      = 0.0f;
+    g_bridge.user_volume        = 0.0f;
     g_bridge.menu_muted         = false;
     g_bridge.turbo_muted        = false;
     g_bridge.apt_muted          = false;
@@ -44,7 +46,7 @@ void apply_mix(void)
     if (!g_bridge.initialized) { return; }
     float mix = 0.0f;
     if (!g_bridge.menu_muted && !g_bridge.turbo_muted && !g_bridge.apt_muted) {
-        mix = g_bridge.global_volume * ((float)MSU1.volume / 255.0f);
+        mix = g_bridge.global_volume * g_bridge.user_volume * ((float)MSU1.volume / 255.0f);
     }
     g_bridge.backend.set_mix(mix);
 }
@@ -68,6 +70,7 @@ bool msu3dsInitialize(const Msu1AudioBackend& backend,
     g_bridge.staging         = staging;
     g_bridge.staging_samples = staging_samples;
     g_bridge.global_volume   = 1.0f;
+    g_bridge.user_volume     = 1.0f;
     MSU1.volume_changed_cb   = bridge_volume_cb;
     apply_mix();
     return true;
@@ -91,6 +94,17 @@ void msu3dsSetGlobalVolume(float factor)
     if (factor < 0.0f) { factor = 0.0f; }
     if (factor > 2.0f) { factor = 2.0f; }
     g_bridge.global_volume = factor;
+    apply_mix();
+}
+
+void msu3dsSetUserVolume(float factor)
+{
+    // User volume multiplier can be set at any time; if not yet initialized,
+    // the value is safely ignored (next initialize will use 1.0f default).
+    if (!g_bridge.initialized) { return; }
+    if (factor < 0.0f) { factor = 0.0f; }
+    if (factor > 2.0f) { factor = 2.0f; }
+    g_bridge.user_volume = factor;
     apply_mix();
 }
 
