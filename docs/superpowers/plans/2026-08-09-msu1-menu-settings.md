@@ -204,3 +204,13 @@ All edits are anchor-directed, file-local style, no host tests (delegating patte
 
 - Tasks 1-3 are pure host-side TDD; Tasks 4-5 are anchor-directed legacy edits (read first, mirror style); Task 6 is the compile gate for everything the host build can't see.
 - Menu visual check on real hardware rides along with the wave-1 hardware validation the maintainer is already running (add: open the Options tab in all 3 themes).
+
+---
+
+## Completion Notes (2026-08-09)
+
+Executed via subagent-driven development: 5 tasks + final review + fix wave (12 commits, c7bf100..HEAD). Host suite: 82 cases / 480 assertions. Target build clean under -Werror (Docker devkitARM).
+
+Final-review fixes landed: load-time enable gate moved inside the outer drain fence; Reset Config re-applies enable state; underrun counter resets on ROM unload; distinct "MSU-1: disabled" status row (spec §6 addendum); polish (comment, buffer zero-init, test assertions).
+
+Pending: on-device visual check of the MSU-1 section in all 3 themes (rides along with the wave-1 hardware checklist).
