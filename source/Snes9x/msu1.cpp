@@ -199,6 +199,40 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
     }
 }
 
+uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
+{
+    if (out == nullptr || max_bytes == 0) { return 0; }
+    if (!state.enabled || state.audio_file == nullptr) { return 0; }
+    if ((state.status & MSU1_FLAG_AUDIO_PLAYING) == 0) { return 0; }
+
+    uint32_t written = 0;
+    while (written < max_bytes) {
+        uint32_t remaining_in_track = state.audio_size - state.audio_play_pos;
+        if (remaining_in_track == 0) {
+            if ((state.status & MSU1_FLAG_AUDIO_REPEAT) != 0) {
+                uint32_t loop_bytes = state.audio_loop_point * MSU1_BYTES_PER_SAMPLE;
+                if (loop_bytes >= state.audio_size) { loop_bytes = 0; }   // defensive clamp
+                if (fseek(state.audio_file,
+                          (long)(MSU1_PCM_HEADER_SIZE + loop_bytes), SEEK_SET) != 0) {
+                    state.status &= (uint8_t)~MSU1_FLAG_AUDIO_PLAYING;
+                    break;
+                }
+                state.audio_play_pos = loop_bytes;
+                continue;
+            }
+            state.status &= (uint8_t)~MSU1_FLAG_AUDIO_PLAYING;
+            break;
+        }
+        uint32_t chunk = max_bytes - written;
+        if (chunk > remaining_in_track) { chunk = remaining_in_track; }
+        size_t got = fread(out + written, 1, chunk, state.audio_file);
+        if (got == 0) { state.status &= (uint8_t)~MSU1_FLAG_AUDIO_PLAYING; break; }
+        state.audio_play_pos += (uint32_t)got;
+        written += (uint32_t)got;
+    }
+    return written;
+}
+
 uint8_t S9xMSU1ReadPort(uint8_t port)               { return msu1_read_port(MSU1, port); }
 void    S9xMSU1WritePort(uint8_t port, uint8_t value) { msu1_write_port(MSU1, port, value); }
 
