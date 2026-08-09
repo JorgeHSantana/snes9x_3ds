@@ -526,35 +526,6 @@ void impl3dsResetConsole()
 	snd3dsResumeMixing();
 }
 
-//---------------------------------------------------------
-// Applies a live change of the per-game Msu1Enabled setting to the running
-// chip. Mirrors impl3dsResetConsole's drain-fence pattern: everything that
-// touches chip/mixer state happens between snd3dsDrainMixing() and
-// snd3dsResumeMixing() so the mixing thread never observes a half-applied
-// change. TearDown reuses the existing RomUnload teardown (queue clear +
-// S9xMSU1Shutdown + apply_mix) via msu3dsOnEvent rather than duplicating it.
-// Detect mirrors CMemory::LoadROM's detect+init idiom (memmap.cpp).
-//---------------------------------------------------------
-void impl3dsApplyMsu1Enable(bool enabled)
-{
-	Msu1EnableAction action = msu3dsDecideEnableAction(enabled, Settings.MSU1 != FALSE);
-	if (action == Msu1EnableAction::None)
-		return;
-
-	snd3dsDrainMixing();
-
-	if (action == Msu1EnableAction::TearDown) {
-		msu3dsOnEvent(Msu1Event::RomUnload);
-		Settings.MSU1 = FALSE;
-	} else if (action == Msu1EnableAction::Detect) {
-		if (msu1_detect(Memory.ROMFilename) && msu1_init(MSU1, Memory.ROMFilename) == Msu1Result::Ok)
-			Settings.MSU1 = TRUE;
-		msu3dsOnEvent(Msu1Event::VolumeChanged);
-	}
-
-	snd3dsResumeMixing();
-}
-
 // Based on broken savestate samples:
 // SPC left IPL, DSP still in reset shape, 
 // no keyed channels -> loads with broken audio.

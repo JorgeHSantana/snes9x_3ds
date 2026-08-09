@@ -592,14 +592,6 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
 
             settings3dsUpdate(resetGame);
 
-            // Reset Config can flip Msu1Enabled back to its default (on)
-            // without touching the live chip; re-apply it here so the menu
-            // checkbox and the running chip stay in sync. Menu context, so
-            // the helper's self-contained drain fence is safe to use as-is;
-            // msu3dsDecideEnableAction() no-ops via None when nothing
-            // actually changed.
-            impl3dsApplyMsu1Enable(settings3DS.Msu1Enabled != false);
-
             settings3DS.isDirty = true;
 
             // mark all tabs dirty
@@ -1013,7 +1005,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuCheckbox(items, "  Enable MSU-1"_s, settings3DS.Msu1Enabled,
         []( int val ) {
             if (CheckAndUpdateToggle(settings3DS.Msu1Enabled, val)) {
-                impl3dsApplyMsu1Enable(val != 0);
                 menu3dsMarkTabDirty(TAB_SETTINGS);
             }
         });
@@ -1618,12 +1609,12 @@ bool emulatorLoadRom()
     cfgFileAvailable[1] = settingsReadWriteFullListByGame(false);
 
     // Load-time gate: apply the per-game Msu1Enabled=false setting directly,
-    // NOT via impl3dsApplyMsu1Enable() — that helper lifts the mixer drain
-    // fence internally (snd3dsResumeMixing()) before returning, which here
-    // would let SavestateLoaded's clear_queue (below, at impl3dsLoadStateAuto)
-    // run outside the drain window this function already holds open
-    // (snd3dsDrainMixing() above .. snd3dsResumeMixing() below). Doing the
-    // teardown inline keeps everything inside the single outer fence.
+    // inline, rather than via a self-contained drain-fenced helper (which
+    // would lift the mixer drain fence internally before returning). Doing
+    // the teardown inline keeps it inside the single outer fence this
+    // function already holds open (snd3dsDrainMixing() above ..
+    // snd3dsResumeMixing() below), so SavestateLoaded's clear_queue (below,
+    // at impl3dsLoadStateAuto) still runs inside that same drain window.
     if (!settings3DS.Msu1Enabled && Settings.MSU1) {
         msu3dsOnEvent(Msu1Event::RomUnload);
         Settings.MSU1 = FALSE;

@@ -182,12 +182,6 @@ void msu3dsOnEvent(Msu1Event event)
     }
 }
 
-Msu1EnableAction msu3dsDecideEnableAction(bool setting_enabled, bool chip_active)
-{
-    if (setting_enabled == chip_active) { return Msu1EnableAction::None; }
-    return setting_enabled ? Msu1EnableAction::Detect : Msu1EnableAction::TearDown;
-}
-
 bool msu3dsFormatStatus(bool msu_present, bool setting_enabled, const Msu1State& state,
                         uint32_t underruns,
                         char* line, size_t line_size,
