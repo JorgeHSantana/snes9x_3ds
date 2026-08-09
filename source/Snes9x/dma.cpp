@@ -17,6 +17,7 @@
 #include "sa1.h"
 #include "spc7110.h"
 #include "sdd1emu.h"
+#include "msu1.h"
 
 
 
@@ -116,7 +117,23 @@ void S9xDoDMA (uint8 Channel)
 			FLUSH_REDRAW ();
 		break;
     }
-	
+
+	// MSU-1: DMA with a fixed A-bus source in $2000-$2007 (e.g. $2001 -> WRAM $2180).
+	// The generic path below resolves the A-address through memory-map base pointers,
+	// which do not exist for register space; route each byte through the register layer.
+	if (Settings.MSU1 && !d->TransferDirection &&
+		msu1_is_dma_source ((uint8_t) d->ABank, (uint16_t) d->AAddress, (bool) d->AAddressFixed))
+	{
+		for (int i = 0; i < count; i++)
+		{
+			Work = S9xMSU1ReadPort ((uint8) (d->AAddress & 0x7));
+			S9xSetPPU (Work, 0x2100 + d->BAddress);
+		}
+		CPU.Cycles += (count + 1) * SLOW_ONE_CYCLE;
+		S9xUpdateAPUTimer();
+		goto update_address;
+	}
+
     if (Settings.SDD1)
     {
 		if (d->AAddressFixed && Memory.FillRAM [0x4801] > 0)
