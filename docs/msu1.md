@@ -31,6 +31,20 @@ sd:/3ds/snes9x_3ds/roms/Zelda MSU-1 Edition-3.pcm
 * If the `.msu` file is missing, the game runs exactly as a normal ROM (silent APU-only audio) — nothing crashes or errors out.
 * If individual `.pcm` track files are missing while `.msu` is present, that track plays silent when selected; the game continues running normally.
 
+## Settings
+
+The pause menu's **Settings** tab has an **MSU-1** section (next to Audio) with:
+
+* **Status line** — a snapshot taken each time you open the menu:
+  * `MSU-1: not detected` — this game has no `.msu` file (or it wasn't found).
+  * `MSU-1: detected` — the chip is active but not currently playing a track.
+  * `MSU-1: playing track N` — a track is streaming right now.
+  * `Minor audio stutter detected` (subtitle) — a few audio underruns happened this session; usually not noticeable.
+  * `Audio is stuttering - a faster SD card may help` (subtitle) — underruns are frequent enough to be audible, most likely on Old 3DS with a slow SD card.
+* **Enable MSU-1** (checkbox, per-game) — turns MSU-1 playback on/off for the current game, applied immediately without reloading. When off, the game falls back to its normal SNES audio.
+* **MSU-1 Volume** (gauge 0-8, per-game) — balances MSU-1 track volume against the game's own audio; 4 is neutral (1.0x), 0 mutes MSU-1, 8 doubles it. Applies immediately.
+* **MSU-1 Default Volume** (gauge 0-8, global) — the starting "MSU-1 Volume" for games that don't have a saved per-game config yet.
+
 ## Known limitations (wave 1)
 
 * **DMA transfer mode 0 only.** DMA from the MSU-1 data port honors transfer mode 0 (single B-bus address) — the pattern audio hacks use. Multi-address transfer modes 1-4 (the patterns FMV hacks use to blast data into VRAM/WRAM) are not yet wired to the MSU-1 source; they come in wave 2 together with the data-throughput work.

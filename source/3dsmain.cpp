@@ -962,6 +962,47 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     AddMenuDisabledOption(items, ""_s);
 
+    AddMenuHeader2(items, "MSU-1"_s);
+    {
+        // Snapshot taken at menu-build time; the tab is marked dirty on every
+        // menu entry (see msu3dsOnEvent(Msu1Event::MenuEnter) call site) so
+        // this reflects the just-finished play session, not a stale one.
+        char msu1RawLine[64];
+        char msu1RawSubtitle[64];
+        msu3dsFormatStatus(Settings.MSU1 != FALSE, MSU1, msu3dsGetUnderrunCount(),
+                            msu1RawLine, sizeof(msu1RawLine), msu1RawSubtitle, sizeof(msu1RawSubtitle));
+
+        char msu1StatusLine[80];
+        snprintf(msu1StatusLine, sizeof(msu1StatusLine), "  %s", msu1RawLine);
+        items.emplace_back(nullptr, MenuItemType::Textarea, msu1StatusLine, ""_s);
+
+        if (msu1RawSubtitle[0] != '\0') {
+            char msu1StatusSubtitle[80];
+            snprintf(msu1StatusSubtitle, sizeof(msu1StatusSubtitle), "  %s", msu1RawSubtitle);
+            items.emplace_back(nullptr, MenuItemType::Textarea, msu1StatusSubtitle, ""_s);
+        }
+    }
+
+    AddMenuCheckbox(items, "  Enable MSU-1"_s, settings3DS.Msu1Enabled,
+        []( int val ) {
+            if (CheckAndUpdateToggle(settings3DS.Msu1Enabled, val)) {
+                impl3dsApplyMsu1Enable(val != 0);
+                menu3dsMarkTabDirty(TAB_SETTINGS);
+            }
+        });
+
+    AddMenuGauge(items, "  MSU-1 Volume"_s, 0, 8, settings3DS.Msu1Volume,
+        []( int val ) {
+            if (CheckAndUpdate(settings3DS.Msu1Volume, val)) {
+                msu3dsSetUserVolume(val * 0.25f);
+            }
+        }, true);
+
+    AddMenuGauge(items, "  MSU-1 Default Volume"_s, 0, 8, settings3DS.Msu1VolumeDefault,
+        []( int val ) { CheckAndUpdate( settings3DS.Msu1VolumeDefault, val ); }, true);
+
+    AddMenuDisabledOption(items, ""_s);
+
     AddMenuHeader2(items, "Save Data"_s);
 
     AddMenuCheckbox(items, "  Automatically save state on exit, load state on start"_s, settings3DS.AutoSavestate,
@@ -2296,6 +2337,10 @@ void emulatorLoop()
         log3dsWrite("MSU-1 underruns: %u", (unsigned)msu3dsGetUnderrunCount());
 
     msu3dsOnEvent(Msu1Event::MenuEnter);
+    // MSU-1 status line (Settings tab) is a snapshot taken at menu-build
+    // time; force a rebuild so it reflects this session's underrun count
+    // and playing/idle state instead of whatever was shown last time.
+    menu3dsMarkTabDirty(TAB_SETTINGS);
     snd3dsStopPlaying();
     snd3dsResumeMixing();
     lcd3dsRestoreDefaultRate();
