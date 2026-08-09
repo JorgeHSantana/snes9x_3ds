@@ -58,7 +58,9 @@ TEST_CASE("fill queues silence when not playing, PCM when playing")
     fake::reset();
     msu3dsFillAudio();
     CHECK(fake::queued > 0);
-    CHECK(fake::last_samples[0] == 0);   // first PCM sample L == 0 per fixture
+    CHECK(fake::last_samples[0] == 0);   // frame 0: L == 0 per fixture
+    CHECK(fake::last_samples[2] == 1);   // frame 1: L == 1 (discriminates PCM from silence)
+    CHECK(fake::last_samples[3] == -1);  // frame 1: R == -1 per fixture
 
     msu1_shutdown(MSU1);
 }
@@ -115,5 +117,7 @@ TEST_CASE("uninitialized bridge: all entry points are safe no-ops")
     msu3dsFinalize();
     msu3dsFillAudio();
     msu3dsOnEvent(Msu1Event::MenuEnter);
+    msu3dsSetGlobalVolume(1.5f);
     CHECK(msu3dsGetUnderrunCount() == 0);
+    CHECK_FALSE(msu3dsIsMuted());
 }
