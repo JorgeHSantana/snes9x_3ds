@@ -210,6 +210,10 @@ uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
         uint32_t remaining_in_track = state.audio_size - state.audio_play_pos;
         if (remaining_in_track == 0) {
             if ((state.status & MSU1_FLAG_AUDIO_REPEAT) != 0) {
+                if (state.audio_size == 0) {
+                    state.status &= (uint8_t)~MSU1_FLAG_AUDIO_PLAYING;
+                    break;
+                }
                 uint32_t loop_bytes = state.audio_loop_point * MSU1_BYTES_PER_SAMPLE;
                 if (loop_bytes >= state.audio_size) { loop_bytes = 0; }   // defensive clamp
                 if (fseek(state.audio_file,

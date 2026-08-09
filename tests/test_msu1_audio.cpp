@@ -118,3 +118,36 @@ TEST_CASE("read_audio validates parameters")
 
     msu1_shutdown(st);
 }
+
+TEST_CASE("zero-length pcm with repeat does not hang; read returns 0 and clears PLAYING")
+{
+    std::string dir = make_tmpdir();
+    REQUIRE_FALSE(dir.empty());
+    std::string rom = put_file(dir, "Game.sfc", "", 0);
+    REQUIRE_FALSE(rom.empty());
+    put_file(dir, "Game.msu", "", 0);
+
+    // Create Game-1.pcm: loop_point=0, 0 samples (8-byte file, zero audio data)
+    std::string pcm1 = dir + "/Game-1.pcm";
+    REQUIRE(write_pcm_at(pcm1.c_str(), 0, 0));
+
+    Msu1State st = {};
+    REQUIRE(msu1_init(st, rom.c_str()) == Msu1Result::Ok);
+
+    // Load track 1 (must NOT set AUDIO_ERROR on 8-byte PCM with valid magic)
+    msu1_write_port(st, 4, 1);
+    msu1_write_port(st, 5, 0);
+    CHECK((st.status & MSU1_FLAG_AUDIO_ERROR) == 0);
+    CHECK(st.audio_file != nullptr);
+
+    // Play with repeat
+    msu1_write_port(st, 7, 0x03);
+
+    // Read should return 0 and clear PLAYING (not spin)
+    uint8_t buf[16] = {};
+    uint32_t got = msu1_read_audio(st, buf, 16);
+    CHECK(got == 0);
+    CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) == 0);
+
+    msu1_shutdown(st);
+}
