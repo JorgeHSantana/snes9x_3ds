@@ -90,7 +90,11 @@ Msu1Result msu1_init(Msu1State& state, const char* rom_path)
         return Msu1Result::IoError;
     }
     long size = ftell(state.data_file);
-    state.data_size = (size > 0) ? (uint32_t)size : 0;
+    if (size < 0) {
+        msu1_shutdown(state);
+        return Msu1Result::IoError;
+    }
+    state.data_size = (uint32_t)size;
     fseek(state.data_file, 0, SEEK_SET);
     state.enabled = true;
     state.status  = MSU1_REVISION;
