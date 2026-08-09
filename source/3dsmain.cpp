@@ -2076,6 +2076,12 @@ int emulatorFinalize()
     consoleClear();
     disableAptHooks();
 
+    // Park the mixer before tearing down channel 1: under drain the fill
+    // queues nothing, so AppExit's clear_queue/shutdown cannot race it.
+    // Guarded: the mixing thread (and the initialized lock) only exist
+    // when NDSP came up.
+    if (snd3DS.audioType == 2) snd3dsDrainMixing();
+
     msu3dsOnEvent(Msu1Event::AppExit);
     msu3dsNdspUninstall();
 
