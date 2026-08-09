@@ -12,6 +12,7 @@ struct BridgeState {
     bool             turbo_muted;
     bool             apt_muted;
     bool             drain_active;
+    bool             queued_since_clear;   // a PCM buffer was queued since the last clear_queue
     uint32_t         underruns;
 };
 BridgeState g_bridge = {};
@@ -81,9 +82,13 @@ void msu3dsFillAudio(void)
     // (RomUnload / SavestateLoaded) execute inside drain windows, so never
     // concurrently with a backend queue_buffer call.
     if (g_bridge.drain_active) { return; }
-    const bool playing = MSU1.enabled
-        && (MSU1.status & MSU1_FLAG_AUDIO_PLAYING) != 0;
-    if (playing
+    if (!MSU1.enabled) { return; }        // zero-cost path when no MSU-1 game is loaded
+    const bool playing = (MSU1.status & MSU1_FLAG_AUDIO_PLAYING) != 0;
+    // Menu/APT pause must FREEZE the track position (spec section 6 row 1):
+    // keep the channel fed with silence but consume no PCM. Turbo only mutes
+    // the mix and keeps consuming (fast-forward drift is inherent).
+    const bool frozen = g_bridge.menu_muted || g_bridge.apt_muted;
+    if (playing && !frozen && g_bridge.queued_since_clear
         && g_bridge.backend.free_buffer_count() == g_bridge.backend.total_buffer_count()) {
         g_bridge.underruns++;
     }
@@ -91,13 +96,14 @@ void msu3dsFillAudio(void)
         uint32_t cap_samples = g_bridge.backend.buffer_capacity_samples();
         uint32_t cap_bytes   = cap_samples * MSU1_BYTES_PER_SAMPLE;
         uint32_t got = 0;
-        if (playing) {
+        if (playing && !frozen) {
             got = msu1_read_audio(MSU1, (uint8_t*)g_bridge.staging, cap_bytes);
         }
         if (got < cap_bytes) {
             memset((uint8_t*)g_bridge.staging + got, 0, cap_bytes - got);
         }
         if (!g_bridge.backend.queue_buffer(g_bridge.staging, cap_samples)) { break; }
+        if (got > 0) { g_bridge.queued_since_clear = true; }
     }
 }
 
@@ -115,11 +121,13 @@ void msu3dsOnEvent(Msu1Event event)
         case Msu1Event::AptResume:   g_bridge.apt_muted = false;   apply_mix(); return;
         case Msu1Event::RomUnload:
             g_bridge.backend.clear_queue();
+            g_bridge.queued_since_clear = false;
             S9xMSU1Shutdown();
             apply_mix();
             return;
         case Msu1Event::SavestateLoaded:
             g_bridge.backend.clear_queue();
+            g_bridge.queued_since_clear = false;
             apply_mix();
             return;
         case Msu1Event::VolumeChanged: apply_mix(); return;
