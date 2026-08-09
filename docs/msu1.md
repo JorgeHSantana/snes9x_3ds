@@ -33,18 +33,22 @@ sd:/3ds/snes9x_3ds/roms/Zelda MSU-1 Edition-3.pcm
 
 ## Settings
 
-The pause menu's **Settings** tab has an **MSU-1** section (next to Audio) with:
+MSU-1 doesn't have its own menu section anymore — it's part of the pause menu's **Settings** tab, unified **Audio** section, alongside the SNES volume:
 
-* **Status line** — a snapshot taken each time you open the menu:
+* **SNES Volume** — the existing per-game/global volume amplification picker (unchanged).
+* **Apply volume to all games** — the existing global-vs-per-game switch. It now governs BOTH volumes: when on, the global SNES volume and the global MSU-1 volume apply to every game; when off, each game uses its own saved values.
+* **Audio Buffer** — unchanged.
+* **MSU-1 Volume** (gauge 0-8) — shown only for the currently loaded MSU-1 game. Balances MSU-1 track volume against the game's own audio; 4 is neutral (1.0x), 0 mutes MSU-1, 8 doubles it. Applies live. Whether it reads/writes the global or the per-game value follows the "Apply volume to all games" switch above, exactly like SNES Volume.
+* **Enable MSU-1** (checkbox, per-game) — shown for MSU-1 games, and also shown (so it can be turned back on) for any game where it was previously switched off. **Applies when the game is loaded or reset** — unlike the old wave-1 behavior, toggling this while playing does NOT hot-swap the audio; MSU hacks detect the chip once at boot, and audio-only hacks (e.g. Mega Man X3 MSU) replace the game's own SPC music code entirely, so there is no live fallback to switch to.
+* **Status line + subtitle** — a snapshot taken each time you open the menu, shown at the bottom of the Audio section:
   * `MSU-1: disabled` — the per-game "Enable MSU-1" setting is off; the chip is torn down for this game.
   * `MSU-1: not detected` — this game has no `.msu` file (or it wasn't found), and MSU-1 is enabled.
   * `MSU-1: detected` — the chip is active but not currently playing a track.
   * `MSU-1: playing track N` — a track is streaming right now.
   * `Minor audio stutter detected` (subtitle) — a few audio underruns happened this session; usually not noticeable.
   * `Audio is stuttering - a faster SD card may help` (subtitle) — underruns are frequent enough to be audible, most likely on Old 3DS with a slow SD card.
-* **Enable MSU-1** (checkbox, per-game) — turns MSU-1 playback on/off for the current game, applied immediately without reloading. When off, the game falls back to its normal SNES audio.
-* **MSU-1 Volume** (gauge 0-8, per-game) — balances MSU-1 track volume against the game's own audio; 4 is neutral (1.0x), 0 mutes MSU-1, 8 doubles it. Applies immediately.
-* **MSU-1 Default Volume** (gauge 0-8, global) — the starting "MSU-1 Volume" for games that don't have a saved per-game config yet.
+
+> **Disabling MSU-1 can mean silence, not a fallback.** Some hacks (mostly audio-only ones) removed their original SPC music entirely and rely on MSU-1 for all music. Turning "Enable MSU-1" off for those games doesn't restore the original soundtrack — it just goes quiet where music would play. Only disable MSU-1 on a hack you know still has working non-MSU audio.
 
 ## Known limitations (wave 1)
 

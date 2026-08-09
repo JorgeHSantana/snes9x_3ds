@@ -940,7 +940,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuDisabledOption(items, ""_s);
     
     AddMenuHeader2(items, "Audio"_s);
-    AddMenuPicker(items, "  Volume Amplification"_s, "Boosts the game's volume. 100% = unamplified.\nHigh values may reduce audio quality on loud games."_s, makePickerOptions({"100%", "125%", "150%", "175%", "200%"}),
+    AddMenuPicker(items, "  SNES Volume"_s, "Boosts the game's volume. 100% = unamplified.\nHigh values may reduce audio quality on loud games."_s, makePickerOptions({"100%", "125%", "150%", "175%", "200%"}),
                 settings3DS.UseGlobalVolume ? settings3DS.GlobalVolume : settings3DS.Volume, DIALOG_TYPE_INFO, true,
                 []( int val ) {
                     if (settings3DS.UseGlobalVolume)
@@ -952,18 +952,61 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                 []( int val )
                 {
                     CheckAndUpdateToggle( settings3DS.UseGlobalVolume, val );
-                    if (settings3DS.UseGlobalVolume)
+                    if (settings3DS.UseGlobalVolume) {
                         settings3DS.GlobalVolume = settings3DS.Volume;
-                    else
+                        settings3DS.GlobalMsu1Volume = settings3DS.Msu1Volume;
+                    } else {
                         settings3DS.Volume = settings3DS.GlobalVolume;
+                        settings3DS.Msu1Volume = settings3DS.GlobalMsu1Volume;
+                    }
+                    // Keep MSU-1 live-applied the same way the volume gauge below does;
+                    // SNES volume itself is picked up passively by the next
+                    // settings3dsUpdate() call (unchanged pre-existing behavior).
+                    msu3dsSetUserVolume((float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume) * 0.25f);
                 });
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  Also governs MSU-1 Volume, for games that use it."_s, ""_s);
 
     AddMenuPicker(items, "  Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.AudioBuffer, val ); });
 
-    AddMenuDisabledOption(items, ""_s);
+    // Settings.MSU1 is fixed for the lifetime of the loaded ROM (only a new
+    // ROM load can change it, which rebuilds this menu from scratch), so
+    // gating this gauge on it cannot change the Settings tab's item count
+    // mid-session.
+    if (Settings.MSU1) {
+        AddMenuGauge(items, "  MSU-1 Volume"_s, 0, 8,
+            settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume,
+            []( int val ) {
+                // Mirrors the SNES volume gauge above: write straight into
+                // whichever field (global or per-game) is currently active,
+                // then push the live value the same way the checkbox above does.
+                if (settings3DS.UseGlobalVolume) {
+                    if (CheckAndUpdate( settings3DS.GlobalMsu1Volume, val ))
+                        msu3dsSetUserVolume((float)val * 0.25f);
+                } else {
+                    if (CheckAndUpdate( settings3DS.Msu1Volume, val ))
+                        msu3dsSetUserVolume((float)val * 0.25f);
+                }
+            }, true);
+    }
 
-    AddMenuHeader2(items, "MSU-1"_s);
+    // Shown for MSU-1 games, and also for games the user previously disabled
+    // MSU-1 on (so they can re-enable it) even after Settings.MSU1 no longer
+    // holds for the currently loaded game. The only thing that can flip this
+    // condition mid-session is the checkbox's own callback below, which
+    // explicitly marks the tab dirty to force a synchronous rebuild — the
+    // same "toggle callback marks tab dirty on visibility change" idiom
+    // already used elsewhere in this function (e.g. Crop & Overscan).
+    if (Settings.MSU1 || !settings3DS.Msu1Enabled) {
+        AddMenuCheckbox(items, "  Enable MSU-1"_s, settings3DS.Msu1Enabled,
+            []( int val ) {
+                if (CheckAndUpdateToggle(settings3DS.Msu1Enabled, val)) {
+                    menu3dsMarkTabDirty(TAB_SETTINGS);
+                }
+            });
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Applies when the game is loaded or reset."_s, ""_s);
+    }
+
     {
         // Snapshot taken at menu-build time. The tab is only marked dirty on
         // menu entry when Settings.MSU1 is active for the current game (see
@@ -1001,23 +1044,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         }
         items.emplace_back(nullptr, MenuItemType::Textarea, msu1StatusSubtitle, ""_s);
     }
-
-    AddMenuCheckbox(items, "  Enable MSU-1"_s, settings3DS.Msu1Enabled,
-        []( int val ) {
-            if (CheckAndUpdateToggle(settings3DS.Msu1Enabled, val)) {
-                menu3dsMarkTabDirty(TAB_SETTINGS);
-            }
-        });
-
-    AddMenuGauge(items, "  MSU-1 Volume"_s, 0, 8, settings3DS.Msu1Volume,
-        []( int val ) {
-            if (CheckAndUpdate(settings3DS.Msu1Volume, val)) {
-                msu3dsSetUserVolume(val * 0.25f);
-            }
-        }, true);
-
-    AddMenuGauge(items, "  MSU-1 Default Volume"_s, 0, 8, settings3DS.GlobalMsu1Volume,
-        []( int val ) { CheckAndUpdate( settings3DS.GlobalMsu1Volume, val ); }, true);
 
     AddMenuDisabledOption(items, ""_s);
 
