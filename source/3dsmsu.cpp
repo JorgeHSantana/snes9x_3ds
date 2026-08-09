@@ -100,18 +100,25 @@ void msu3dsOnEvent(Msu1Event event)
 {
     if (!g_bridge.initialized) { return; }
     switch (event) {
-        case Msu1Event::MenuEnter:
-            g_bridge.menu_muted = true;
+        case Msu1Event::MenuEnter:   g_bridge.menu_muted = true;   apply_mix(); return;
+        case Msu1Event::MenuExit:    g_bridge.menu_muted = false;  apply_mix(); return;
+        case Msu1Event::MixerDrain:  g_bridge.drain_active = true;              return;
+        case Msu1Event::MixerResume: g_bridge.drain_active = false;             return;
+        case Msu1Event::TurboOn:     g_bridge.turbo_muted = true;  apply_mix(); return;
+        case Msu1Event::TurboOff:    g_bridge.turbo_muted = false; apply_mix(); return;
+        case Msu1Event::AptSuspend:  g_bridge.apt_muted = true;    apply_mix(); return;
+        case Msu1Event::AptResume:   g_bridge.apt_muted = false;   apply_mix(); return;
+        case Msu1Event::RomUnload:
+            g_bridge.backend.clear_queue();
+            S9xMSU1Shutdown();
             apply_mix();
-            break;
-        case Msu1Event::MenuExit:
-            g_bridge.menu_muted = false;
+            return;
+        case Msu1Event::SavestateLoaded:
+            g_bridge.backend.clear_queue();
             apply_mix();
-            break;
-        case Msu1Event::VolumeChanged:
-            apply_mix();
-            break;
-        default:
-            break;
+            return;
+        case Msu1Event::VolumeChanged: apply_mix(); return;
+        case Msu1Event::AppExit:       msu3dsFinalize(); return;
+        case Msu1Event::Count:         return;
     }
 }
