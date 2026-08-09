@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - develop
+      - feature/**
   pull_request:
     branches:
       - develop
@@ -27,3 +28,11 @@ jobs:
 
       - name: Build project
         run: make release
+
+  host-tests:
+    name: Host unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run unit tests
+        run: make -C tests

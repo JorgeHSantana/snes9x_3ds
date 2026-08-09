@@ -2,12 +2,25 @@
 .SUFFIXES:
 #---------------------------------------------------------------------------------
 
+# Test target (independent of devkitARM)
+.PHONY: test
+test:
+	@$(MAKE) -C tests
+
+# Only require DEVKITARM for non-test targets
+ifeq ($(filter test,$(MAKECMDGOALS)),)
 ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
 endif
-
 TOPDIR ?= $(CURDIR)
 include $(DEVKITARM)/3ds_rules
+else
+# test target only: define minimal needed variables
+TOPDIR ?= $(CURDIR)
+endif
+
+# Build-specific configuration (not needed for test target)
+ifeq ($(filter test,$(MAKECMDGOALS)),)
 3DS_IP		:= 192.168.1.2
 
 #---------------------------------------------------------------------------------
@@ -106,7 +119,7 @@ else
 CITRO3D_LIB       :=
 LIBDIRS := $(PORTLIBS) $(CTRULIB)
 endif
-
+endif
 
 #---------------------------------------------------------------------------------
 # no real need to edit anything past this point unless you need to add additional
