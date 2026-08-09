@@ -209,6 +209,10 @@ typedef struct {
     int                 Volume;                 // 0: 100%, 1: 125%, 2: 150%, 3: 175%, 4: 200%
     int                 GlobalVolume;
 
+    int                 Msu1Volume;             // MSU-1 track volume: 0 - 200% in steps of 25% (same curve as Volume)
+    bool                Msu1Enabled;            // Per-game enable/disable for MSU-1 playback
+    int                 Msu1VolumeDefault;      // Global default seeded into Msu1Volume for games without a saved config
+
     int                 AudioBuffer;            // wavebuf depth: 0=Low(4), 1=Normal(8), 2=High(16)
 
     bool                AutoSavestate;          // Automatically save the the current state when the emulator is closed or the game is changed

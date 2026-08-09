@@ -1270,6 +1270,11 @@ bool settingsReadWriteFullListByGame(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "PaletteDeferBgMask=%d\n", &settings3DS.PaletteDeferBgMask, 0, 7);
     }
 
+    if (writeMode || detectedConfigVersion >= 1.6f) {
+        config3dsReadWriteEnum(stream, writeMode, "Msu1Enabled=%d\n", &settings3DS.Msu1Enabled, 0, 1);
+        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 8);
+    }
+
     config3dsReadWriteInt32(stream, writeMode, "Frameskips=%d\n", &settings3DS.MaxFrameSkips, 0, 4);
     config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.Volume, 0, SND3DS_VOLUME_MAX);
     config3dsReadWriteInt32(stream, writeMode, "PalFix=%d\n", &settings3DS.PaletteFix, 0, 3);
@@ -1382,7 +1387,11 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     if (writeMode || detectedConfigVersion >= 1.6f) {
         config3dsReadWriteEnum(stream, writeMode, "Intensity3D=%d\n", &settings3DS.Intensity3D, 0, 2);
     }
-    
+
+    if (writeMode || detectedConfigVersion >= 1.7f) {
+        config3dsReadWriteInt32(stream, writeMode, "Msu1VolumeDefault=%d\n", &settings3DS.Msu1VolumeDefault, 0, 8);
+    }
+
     config3dsReadWriteEnum(stream, writeMode, "Font=%d\n", &settings3DS.Font, 0, 2);
     config3dsReadWriteEnum(stream, writeMode, "LogFileEnabled=%d\n", &settings3DS.LogFileEnabled, 0, 1);
 
@@ -1536,6 +1545,9 @@ bool emulatorLoadRom()
     // if file exists, overwrite the defaults
     // if not, stay on defaults
     cfgFileAvailable[1] = settingsReadWriteFullListByGame(false);
+
+    if (!settings3DS.Msu1Enabled)
+        impl3dsApplyMsu1Enable(false);
 
     settings3dsUpdate(true);
 
