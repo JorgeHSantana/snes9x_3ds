@@ -1025,8 +1025,8 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             }
         }, true);
 
-    AddMenuGauge(items, "  MSU-1 Default Volume"_s, 0, 8, settings3DS.Msu1VolumeDefault,
-        []( int val ) { CheckAndUpdate( settings3DS.Msu1VolumeDefault, val ); }, true);
+    AddMenuGauge(items, "  MSU-1 Default Volume"_s, 0, 8, settings3DS.GlobalMsu1Volume,
+        []( int val ) { CheckAndUpdate( settings3DS.GlobalMsu1Volume, val ); }, true);
 
     AddMenuDisabledOption(items, ""_s);
 
@@ -1456,8 +1456,11 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "Intensity3D=%d\n", &settings3DS.Intensity3D, 0, 2);
     }
 
-    if (writeMode || detectedConfigVersion >= 1.7f) {
-        config3dsReadWriteInt32(stream, writeMode, "Msu1VolumeDefault=%d\n", &settings3DS.Msu1VolumeDefault, 0, 8);
+    if (writeMode || detectedConfigVersion >= 1.8f) {
+        config3dsReadWriteInt32(stream, writeMode, "GlobalMsu1Volume=%d\n", &settings3DS.GlobalMsu1Volume, 0, 8);
+    } else if (!writeMode && detectedConfigVersion >= 1.7f) {
+        // migrate v1.7's Msu1VolumeDefault (same position in the sequence) into GlobalMsu1Volume
+        config3dsReadWriteInt32(stream, writeMode, "Msu1VolumeDefault=%d\n", &settings3DS.GlobalMsu1Volume, 0, 8);
     }
 
     config3dsReadWriteEnum(stream, writeMode, "Font=%d\n", &settings3DS.Font, 0, 2);
