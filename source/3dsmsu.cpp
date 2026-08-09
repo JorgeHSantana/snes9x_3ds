@@ -1,6 +1,7 @@
 #include "3dsmsu.h"
 #include <atomic>
 #include <cstring>
+#include <cstdio>
 
 namespace {
 struct BridgeState {
@@ -178,4 +179,56 @@ void msu3dsOnEvent(Msu1Event event)
         case Msu1Event::AppExit:       msu3dsFinalize(); return;
         case Msu1Event::Count:         return;
     }
+}
+
+bool msu3dsFormatStatus(bool msu_present, const Msu1State& state,
+                        uint32_t underruns,
+                        char* line, size_t line_size,
+                        char* subtitle, size_t subtitle_size)
+{
+    // Validate parameters
+    if (line == nullptr || subtitle == nullptr) { return false; }
+    if (line_size == 0 || subtitle_size == 0) { return false; }
+
+    // Determine the line string
+    const char* line_fmt = nullptr;
+    uint32_t track_arg = 0;
+
+    if (!msu_present) {
+        line_fmt = "MSU-1: not detected";
+    } else if ((state.status & MSU1_FLAG_AUDIO_PLAYING) != 0) {
+        line_fmt = "MSU-1: playing track %u";
+        track_arg = state.current_track;
+    } else {
+        line_fmt = "MSU-1: detected";
+    }
+
+    // Format the line
+    int result = 0;
+    if ((state.status & MSU1_FLAG_AUDIO_PLAYING) != 0) {
+        result = snprintf(line, line_size, line_fmt, track_arg);
+    } else {
+        result = snprintf(line, line_size, "%s", line_fmt);
+    }
+
+    // Check for snprintf overflow (docs/CODING_STANDARD.md section 7)
+    if (result < 0 || (size_t)result >= line_size) { return false; }
+
+    // Determine subtitle string
+    const char* subtitle_str = "";
+    if (msu_present) {
+        if (underruns >= MSU1_STUTTER_SEVERE_THRESHOLD) {
+            subtitle_str = "Audio is stuttering - a faster SD card may help";
+        } else if (underruns >= MSU1_STUTTER_MINOR_THRESHOLD) {
+            subtitle_str = "Minor audio stutter detected";
+        }
+    }
+
+    // Format subtitle
+    result = snprintf(subtitle, subtitle_size, "%s", subtitle_str);
+
+    // Check for snprintf overflow
+    if (result < 0 || (size_t)result >= subtitle_size) { return false; }
+
+    return true;
 }

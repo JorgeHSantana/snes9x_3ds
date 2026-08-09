@@ -1,6 +1,10 @@
 #pragma once
 #include <cstdint>
+#include <cstddef>
 #include "Snes9x/msu1.h"
+
+inline constexpr uint32_t MSU1_STUTTER_MINOR_THRESHOLD  = 1;
+inline constexpr uint32_t MSU1_STUTTER_SEVERE_THRESHOLD = 6;
 
 enum class Msu1Event : uint8_t {
     MenuEnter, MenuExit, MixerDrain, MixerResume, TurboOn, TurboOff,
@@ -29,3 +33,11 @@ void     msu3dsSetUserVolume(float factor);     // user volume multiplier [0.0, 
 void     msu3dsFillAudio(void);                 // mixing thread, under snesAccessLock
 uint32_t msu3dsGetUnderrunCount(void);
 bool     msu3dsIsMuted(void);                   // exposed for tests/diagnostics
+
+// Formats the menu status line (+ optional warning subtitle) from chip state.
+// line/subtitle are always NUL-terminated on success; subtitle becomes ""
+// when there is no warning. Returns false on invalid args (null/zero sizes).
+bool msu3dsFormatStatus(bool msu_present, const Msu1State& state,
+                        uint32_t underruns,
+                        char* line, size_t line_size,
+                        char* subtitle, size_t subtitle_size);
