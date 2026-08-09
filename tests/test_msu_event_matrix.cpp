@@ -84,12 +84,22 @@ TEST_CASE("drain makes fill queue silence even while playing")
     msu1_write_port(MSU1, 7, 0x03);
 
     fake::reset();  // clear counters from initialization
+
+    // CONTROL: Prove PCM is present when drain is OFF
+    msu3dsFillAudio();
+    CHECK(fake::queued > 0);
+    CHECK(fake::last_samples[2] == 1);   // sample idx 1 L: PCM from fixture
+    CHECK(fake::last_samples[3] == -1);  // sample idx 1 R: PCM from fixture
+    fake::reset();
+
+    // DRAIN: After MixerDrain, fill queue must contain silence, not PCM
     msu3dsOnEvent(Msu1Event::MixerDrain);
     msu3dsFillAudio();
     CHECK(fake::queued > 0);
-    CHECK(fake::last_samples[0] == 0);        // silence, not PCM
-    msu3dsOnEvent(Msu1Event::MixerResume);
+    CHECK(fake::last_samples[2] == 0);   // sample idx 1 L: silence (not 1)
+    CHECK(fake::last_samples[3] == 0);   // sample idx 1 R: silence (not -1)
 
+    msu3dsOnEvent(Msu1Event::MixerResume);
     msu1_shutdown(MSU1);
 }
 
