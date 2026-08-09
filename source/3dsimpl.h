@@ -83,6 +83,14 @@ bool impl3dsLoadROM(char *romFilePath);
 //---------------------------------------------------------
 void impl3dsResetConsole();
 
+//---------------------------------------------------------
+// Applies a live change of the per-game Msu1Enabled setting to the running
+// chip (menu "Settings > Advanced > MSU-1" toggle). Computes the action via
+// msu3dsDecideEnableAction() and, when one is needed, executes it inside a
+// mixer drain fence.
+//---------------------------------------------------------
+void impl3dsApplyMsu1Enable(bool enabled);
+
 
 //---------------------------------------------------------
 //---------------------------------------------------------

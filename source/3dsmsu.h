@@ -34,6 +34,12 @@ void     msu3dsFillAudio(void);                 // mixing thread, under snesAcce
 uint32_t msu3dsGetUnderrunCount(void);
 bool     msu3dsIsMuted(void);                   // exposed for tests/diagnostics
 
+// Decides what a change to the per-game Msu1Enabled setting must do to the
+// live chip, given the current Settings.MSU1 truth. Pure decision table —
+// no I/O, no side effects; the platform layer executes the returned action.
+enum class Msu1EnableAction : uint8_t { None, TearDown, Detect };
+Msu1EnableAction msu3dsDecideEnableAction(bool setting_enabled, bool chip_active);
+
 // Formats the menu status line (+ optional warning subtitle) from chip state.
 // line/subtitle are always NUL-terminated on success; subtitle becomes ""
 // when there is no warning. Returns false on invalid args (null/zero sizes).

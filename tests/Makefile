@@ -9,7 +9,7 @@ BUILDDIR := build
 CORE_CXXFLAGS := $(CXXFLAGS) -fno-rtti -fno-exceptions
 
 # test sources (add new test_*.cpp here)
-TEST_SRCS := test_main.cpp test_msu1_helpers.cpp test_msu1_lifecycle.cpp test_msu1_registers_data.cpp test_msu1_registers_audio.cpp test_msu1_audio.cpp test_msu_bridge.cpp test_msu_event_matrix.cpp test_msu1_snapshot.cpp test_msu1_lock_hooks.cpp test_msu_user_volume.cpp test_msu_status.cpp
+TEST_SRCS := test_main.cpp test_msu1_helpers.cpp test_msu1_lifecycle.cpp test_msu1_registers_data.cpp test_msu1_registers_audio.cpp test_msu1_audio.cpp test_msu_bridge.cpp test_msu_event_matrix.cpp test_msu1_snapshot.cpp test_msu1_lock_hooks.cpp test_msu_user_volume.cpp test_msu_status.cpp test_msu_enable_gate.cpp
 # production sources compiled for host (add msu1.cpp / 3dsmsu.cpp as they appear)
 CORE_SRCS := msu1.cpp 3dsmsu.cpp
 
