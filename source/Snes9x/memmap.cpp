@@ -22,6 +22,7 @@
 #include "spc7110.h"
 #include "seta.h"
 #include "bsx.h"
+#include "msu1.h"
 
 #include "3dsimpl.h"
 #include "bufferedfilewriter.h"
@@ -741,6 +742,11 @@ again:
 		file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".cht", "cheats", true);
 		S9xLoadCheatFile (path);
 	}
+
+	Settings.MSU1 = FALSE;
+	S9xMSU1Shutdown ();
+	if (msu1_detect (Memory.ROMFilename) && msu1_init (MSU1, Memory.ROMFilename) == Msu1Result::Ok)
+		Settings.MSU1 = TRUE;
 
 	S9xInitCheatData ();
 	S9xApplyCheats ();
@@ -2780,8 +2786,8 @@ const char * CMemory::KartContents (void)
 	else
 		strcpy(chip, "");
 
-	//if (Settings.MSU1)
-	//	sprintf(chip + strlen(chip), "+MSU-1");
+	if (Settings.MSU1)
+		sprintf(chip + strlen(chip), "+MSU-1");
 
 	sprintf(str, "%s%s", contents[(ROMType & 0xf) % 3], chip);
 
