@@ -138,3 +138,130 @@ TEST_CASE("pcm with bad magic is rejected as AUDIO_ERROR")
 
     msu1_shutdown(st);
 }
+
+// ---- $2007 bit 2: resume (byuu spec) -------------------------------------
+// Pausing (play=0 while playing) stores resume_track/resume_pos. A later
+// $2007 with play=1 + bit2=1 on the SAME track resumes from the stored
+// position; any other play starts from the beginning of the track.
+
+static Msu1State make_paused_state(std::string& dir_out)
+{
+    dir_out = make_tmpdir();
+    REQUIRE_FALSE(dir_out.empty());
+    std::string rom = put_file(dir_out, "Game.sfc", "", 0);
+    REQUIRE_FALSE(rom.empty());
+    put_file(dir_out, "Game.msu", "", 0);
+    std::string pcm1 = dir_out + "/Game-1.pcm";
+    REQUIRE(write_pcm_at(pcm1.c_str(), 0, 64));
+
+    Msu1State st = {};
+    REQUIRE(msu1_init(st, rom.c_str()) == Msu1Result::Ok);
+    msu1_write_port(st, 4, 1);
+    msu1_write_port(st, 5, 0);
+    msu1_write_port(st, 7, 0x02);            // play
+
+    uint8_t buf[32];
+    REQUIRE(msu1_read_audio(st, buf, 32) == 32);   // frames 0..7 consumed
+    msu1_write_port(st, 7, 0x00);            // pause
+    return st;
+}
+
+TEST_CASE("$2007 pause stores the resume position and track")
+{
+    std::string dir;
+    Msu1State st = make_paused_state(dir);
+
+    CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) == 0);
+    CHECK(st.resume_track == 1);
+    CHECK(st.resume_pos == 32);
+
+    msu1_shutdown(st);
+}
+
+TEST_CASE("$2007 play+resume continues byte-exact; plain play restarts from the top")
+{
+    std::string dir;
+    Msu1State st = make_paused_state(dir);
+
+    // play + resume (bit2): back to byte 32 => next frame is 8
+    msu1_write_port(st, 7, 0x06);
+    CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) != 0);
+    CHECK(st.audio_play_pos == 32);
+    uint8_t frame[4];
+    REQUIRE(msu1_read_audio(st, frame, 4) == 4);
+    int16_t l, r;
+    memcpy(&l, frame, 2); memcpy(&r, frame + 2, 2);
+    CHECK(l == 8);
+    CHECK(r == -8);
+
+    // pause again (stores pos 36), then PLAIN play: restarts from frame 0
+    msu1_write_port(st, 7, 0x00);
+    CHECK(st.resume_pos == 36);
+    msu1_write_port(st, 7, 0x02);
+    CHECK(st.audio_play_pos == 0);
+    REQUIRE(msu1_read_audio(st, frame, 4) == 4);
+    memcpy(&l, frame, 2);
+    CHECK(l == 0);
+
+    msu1_shutdown(st);
+}
+
+TEST_CASE("$2007 resume with a mismatched track plays that track from the start")
+{
+    std::string dir;
+    Msu1State st = make_paused_state(dir);   // resume stored for track 1 @ 32
+
+    std::string pcm2 = dir + "/Game-2.pcm";
+    REQUIRE(write_pcm_at(pcm2.c_str(), 0, 64));
+    msu1_write_port(st, 4, 2);
+    msu1_write_port(st, 5, 0);               // load track 2 (does NOT clear resume)
+    CHECK(st.resume_track == 1);
+    CHECK(st.resume_pos == 32);
+
+    msu1_write_port(st, 7, 0x06);            // resume bit, but track differs
+    CHECK(st.audio_play_pos == 0);           // from the start
+
+    msu1_shutdown(st);
+}
+
+TEST_CASE("$2007 resume with a stored position beyond the track plays from the start")
+{
+    std::string dir;
+    Msu1State st = make_paused_state(dir);
+
+    st.resume_pos = st.audio_size + 4;       // corrupt/oversized stored position
+    msu1_write_port(st, 7, 0x06);
+    CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) != 0);
+    CHECK(st.audio_play_pos == 0);
+
+    msu1_shutdown(st);
+}
+
+TEST_CASE("snapshot round-trip preserves resume fields; resume works after restore")
+{
+    std::string dir;
+    Msu1State st = make_paused_state(dir);   // resume: track 1 @ byte 32
+
+    Msu1Snapshot snap = {};
+    msu1_capture(st, snap);
+    CHECK(snap.resume_track == 1);
+    CHECK(snap.resume_pos == 32);
+
+    std::string rom = dir + "/Game.sfc";
+    Msu1State st2 = {};
+    REQUIRE(msu1_init(st2, rom.c_str()) == Msu1Result::Ok);
+    REQUIRE(msu1_restore(st2, snap) == Msu1Result::Ok);
+    CHECK(st2.resume_track == 1);
+    CHECK(st2.resume_pos == 32);
+
+    msu1_write_port(st2, 7, 0x06);           // resume on the restored state
+    CHECK(st2.audio_play_pos == 32);
+    uint8_t frame[4];
+    REQUIRE(msu1_read_audio(st2, frame, 4) == 4);
+    int16_t l;
+    memcpy(&l, frame, 2);
+    CHECK(l == 8);
+
+    msu1_shutdown(st);
+    msu1_shutdown(st2);
+}

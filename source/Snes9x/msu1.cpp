@@ -220,13 +220,38 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
             state.volume = value;
             if (state.volume_changed_cb != nullptr) { state.volume_changed_cb(); }
             return;
-        case 7:
+        case 7: {
             if ((state.status & (MSU1_FLAG_AUDIO_BUSY | MSU1_FLAG_AUDIO_ERROR)) != 0) { return; }
             if (state.audio_file == nullptr) { return; }
+            bool was_playing = (state.status & MSU1_FLAG_AUDIO_PLAYING) != 0;
             state.status &= (uint8_t)~(MSU1_FLAG_AUDIO_PLAYING | MSU1_FLAG_AUDIO_REPEAT);
             if ((value & 0x01) != 0) { state.status |= MSU1_FLAG_AUDIO_REPEAT; }
-            if ((value & 0x02) != 0) { state.status |= MSU1_FLAG_AUDIO_PLAYING; }
+            if ((value & 0x02) == 0) {
+                // pause: remember where this track stopped. The stored resume
+                // persists until the next pause overwrites it (a track load
+                // does NOT clear it), so pause -> load other -> reload -> resume
+                // still works; a plain play consumes nothing and just ignores it.
+                if (was_playing) {
+                    state.resume_track = state.current_track;
+                    state.resume_pos   = state.audio_play_pos;
+                }
+                return;
+            }
+            // play: bit 2 resumes the stored position when it belongs to this
+            // track and is still inside the file; otherwise play from the start.
+            uint32_t start_pos = 0;
+            if ((value & 0x04) != 0
+                && state.resume_track == state.current_track
+                && state.resume_pos <= state.audio_size) {
+                start_pos = state.resume_pos;
+            }
+            if (fseek(state.audio_file,
+                      (long)(MSU1_PCM_HEADER_SIZE + start_pos), SEEK_SET) == 0) {
+                state.audio_play_pos = start_pos;
+                state.status |= MSU1_FLAG_AUDIO_PLAYING;
+            }
             return;
+        }
         default: return;
     }
 }
