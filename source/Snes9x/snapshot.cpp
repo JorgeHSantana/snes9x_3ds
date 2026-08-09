@@ -838,12 +838,12 @@ void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, Fre
         if (l > len) len = l;
     }
 	
-	uint8 stackBuf[2048];
+	uint8 stackBuf[2048] = {};
     uint8 *block = stackBuf;
     bool allocated = false;
-    
+
     if (len > (int)sizeof(stackBuf)) {
-        block = new uint8[len];
+        block = new uint8[len]();
         allocated = true;
     }
 
@@ -851,7 +851,7 @@ void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, Fre
     uint16 word;
     uint32 dword;
     int64  qword;
-	
+
     // Build the block ready to be streamed out
     for (i = 0; i < num_fields; i++)
     {
@@ -938,15 +938,15 @@ int UnfreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fie
         if (l > len) len = l;
     }
 
-	uint8 stackBuf[2048];
+	uint8 stackBuf[2048] = {};
     uint8 *block = stackBuf;
     bool allocated = false;
-    
+
     if (len > (int)sizeof(stackBuf)) {
-        block = new uint8[len];
+        block = new uint8[len]();
         allocated = true;
     }
-	
+
     uint8 *ptr = block;
     uint16 word;
     uint32 dword;
