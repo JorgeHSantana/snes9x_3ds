@@ -161,6 +161,7 @@ void msu3dsOnEvent(Msu1Event event)
         case Msu1Event::RomUnload:
             g_bridge.backend.clear_queue();
             g_bridge.queued_since_clear = false;
+            g_bridge.underruns = 0;   // per-session stat: don't leak into the next game
             S9xMSU1Shutdown();
             apply_mix();
             return;
