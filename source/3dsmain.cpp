@@ -973,12 +973,18 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     AddMenuHeader2(items, "MSU-1"_s);
     {
-        // Snapshot taken at menu-build time; the tab is marked dirty on every
-        // menu entry (see msu3dsOnEvent(Msu1Event::MenuEnter) call site) so
-        // this reflects the just-finished play session, not a stale one.
-        char msu1RawLine[64];
-        char msu1RawSubtitle[64];
-        msu3dsFormatStatus(Settings.MSU1 != FALSE, MSU1, msu3dsGetUnderrunCount(),
+        // Snapshot taken at menu-build time. The tab is only marked dirty on
+        // menu entry when Settings.MSU1 is active for the current game (see
+        // the msu3dsOnEvent(Msu1Event::MenuEnter) call site), so this
+        // reflects the just-finished play session for MSU-1 games; non-MSU
+        // games always show the same static line and never force a rebuild.
+        char msu1RawLine[64] = {};
+        char msu1RawSubtitle[64] = {};
+        // Return ignored: these buffers are pre-sized for the longest
+        // possible line/subtitle, so failure is unreachable in practice; the
+        // zero-init above means an (unreachable) failure still yields empty
+        // strings rather than uninitialized stack garbage.
+        msu3dsFormatStatus(Settings.MSU1 != FALSE, settings3DS.Msu1Enabled, MSU1, msu3dsGetUnderrunCount(),
                             msu1RawLine, sizeof(msu1RawLine), msu1RawSubtitle, sizeof(msu1RawSubtitle));
 
         char msu1StatusLine[80];

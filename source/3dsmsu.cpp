@@ -188,7 +188,7 @@ Msu1EnableAction msu3dsDecideEnableAction(bool setting_enabled, bool chip_active
     return setting_enabled ? Msu1EnableAction::Detect : Msu1EnableAction::TearDown;
 }
 
-bool msu3dsFormatStatus(bool msu_present, const Msu1State& state,
+bool msu3dsFormatStatus(bool msu_present, bool setting_enabled, const Msu1State& state,
                         uint32_t underruns,
                         char* line, size_t line_size,
                         char* subtitle, size_t subtitle_size)
@@ -204,7 +204,9 @@ bool msu3dsFormatStatus(bool msu_present, const Msu1State& state,
     const char* line_fmt = nullptr;
     uint32_t track_arg = 0;
 
-    if (!msu_present) {
+    if (!msu_present && !setting_enabled) {
+        line_fmt = "MSU-1: disabled";
+    } else if (!msu_present) {
         line_fmt = "MSU-1: not detected";
     } else if (playing) {
         line_fmt = "MSU-1: playing track %u";

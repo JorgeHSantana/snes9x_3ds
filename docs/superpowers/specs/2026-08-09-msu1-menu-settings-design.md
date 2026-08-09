@@ -51,7 +51,8 @@ Content (snapshot taken when the menu tab is (re)built — menu entry marks tabs
 | Detected, idle | `MSU-1: detected` |
 | 1-5 underruns this session | + subtitle `Minor audio stutter detected` |
 | >5 underruns | + subtitle `Audio is stuttering — a faster SD card may help` |
-| No MSU for this game | `MSU-1: not detected` |
+| No MSU for this game, MSU-1 enabled | `MSU-1: not detected` |
+| No MSU for this game, MSU-1 disabled (per-game setting off) | `MSU-1: disabled` (addendum, controller-authorized during final review: distinguishes "no .msu file" from "you turned it off" — see `msu3dsFormatStatus`'s `setting_enabled` parameter) |
 
 Thresholds are named constants (`MSU1_STUTTER_MINOR_THRESHOLD = 1`, `MSU1_STUTTER_SEVERE_THRESHOLD = 6`), expected to be recalibrated after Old 3DS hardware testing. **The raw underrun count never appears in the UI** — it stays in the debug log (already implemented).
 

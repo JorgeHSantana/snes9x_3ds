@@ -36,7 +36,8 @@ sd:/3ds/snes9x_3ds/roms/Zelda MSU-1 Edition-3.pcm
 The pause menu's **Settings** tab has an **MSU-1** section (next to Audio) with:
 
 * **Status line** — a snapshot taken each time you open the menu:
-  * `MSU-1: not detected` — this game has no `.msu` file (or it wasn't found).
+  * `MSU-1: disabled` — the per-game "Enable MSU-1" setting is off; the chip is torn down for this game.
+  * `MSU-1: not detected` — this game has no `.msu` file (or it wasn't found), and MSU-1 is enabled.
   * `MSU-1: detected` — the chip is active but not currently playing a track.
   * `MSU-1: playing track N` — a track is streaming right now.
   * `Minor audio stutter detected` (subtitle) — a few audio underruns happened this session; usually not noticeable.

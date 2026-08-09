@@ -43,7 +43,11 @@ Msu1EnableAction msu3dsDecideEnableAction(bool setting_enabled, bool chip_active
 // Formats the menu status line (+ optional warning subtitle) from chip state.
 // line/subtitle are always NUL-terminated on success; subtitle becomes ""
 // when there is no warning. Returns false on invalid args (null/zero sizes).
-bool msu3dsFormatStatus(bool msu_present, const Msu1State& state,
+// setting_enabled only matters when msu_present is false: it distinguishes
+// "the per-game Msu1Enabled setting is off" ("MSU-1: disabled") from "this
+// game has no .msu file" ("MSU-1: not detected"). A present chip always
+// means enabled, so msu_present rows ignore setting_enabled.
+bool msu3dsFormatStatus(bool msu_present, bool setting_enabled, const Msu1State& state,
                         uint32_t underruns,
                         char* line, size_t line_size,
                         char* subtitle, size_t subtitle_size);
