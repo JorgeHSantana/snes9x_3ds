@@ -66,7 +66,17 @@ The spirit: embedded-systems discipline — deterministic memory, defensive inte
 * Every function that validates parameters has at least one test feeding it garbage (null, out-of-range, truncated).
 * Resource ownership is tested: init→teardown cycles assert every open resource is closed.
 
-## 9. Formatting
+## 9. Build discipline (mandatory)
+
+* **RTTI and exceptions MUST stay disabled** (`-fno-rtti -fno-exceptions`). This applies to the target build (already enforced by the Makefile) **and to production sources when compiled for host tests** — the test harness may enable exceptions for the framework's own use, but production code must never rely on `throw`, `try`, `typeid`, or `dynamic_cast`. In `tests/Makefile`, production objects (`CORE_SRCS`) are compiled with `-fno-rtti -fno-exceptions`; only the `test_*.cpp` files use the framework defaults.
+* New third-party dependencies require explicit maintainer approval.
+
+## 10. Dependencies — decisions on record
+
+* **ETL (Embedded Template Library, etlcpp/etl)** — evaluated 2026-08-08, **deferred (YAGNI)**. Our fixed arrays + parameter validation already provide determinism without heap; ETL adds no performance and one dependency. It is the **pre-approved candidate** if a future feature genuinely needs fixed-capacity container semantics (bounded queues/maps, `etl::state_machine`): header-only, works with `-fno-exceptions`. Prefer a small hand-rolled, tested structure first.
+* **Pure C conversion** — evaluated 2026-08-08, **rejected**: the enforced C++ subset (no exceptions/RTTI/virtuals/heap) compiles to the same machine code as C; converting would lose compile-time safety for zero runtime gain.
+
+## 11. Formatting
 
 * Braces always, even for single-statement `if`s.
 * 4-space indent, no tabs (matches existing platform code).
