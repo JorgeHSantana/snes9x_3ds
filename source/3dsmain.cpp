@@ -599,7 +599,6 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             }
 
             settings3dsUpdate(resetGame);
-
             settings3DS.isDirty = true;
 
             // mark all tabs dirty
@@ -1017,7 +1016,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                     menu3dsMarkTabDirty(TAB_SETTINGS);
                 }
             });
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Applies when the game is loaded or reset."_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Applies the next time the game is loaded."_s, ""_s);
     }
 
     {

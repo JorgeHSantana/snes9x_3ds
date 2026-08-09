@@ -16,10 +16,12 @@ Replace the standalone "MSU-1" section with a Header2 **"Audio"** section:
 
 1. **"SNES Volume"** — the existing per-game volume gauge, relabeled (was "Volume"; wording final: `SNES Volume`).
 2. **"MSU-1 Volume"** (gauge 0-8, ×0.25 curve, live-applied) — **shown ONLY when `Settings.MSU1` is true** (safe: with live-apply gone, `Settings.MSU1` is constant within a session, so item count cannot change mid-session; ROM switches force full menu rebuilds already).
-3. **"Enable MSU-1"** (checkbox) — shown when `Settings.MSU1 || !settings3DS.Msu1Enabled` (visible for MSU games, and for games disabled-by-setting so the user can re-enable). Description text: `Applies when the game is loaded or reset.` **No live-apply**: the callback only stores the setting + marks the tab dirty.
+3. **"Enable MSU-1"** (checkbox) — shown when `Settings.MSU1 || !settings3DS.Msu1Enabled` (visible for MSU games, and for games disabled-by-setting so the user can re-enable). Description text: `Applies the next time the game is loaded.` **No live-apply**: the callback only stores the setting + marks the tab dirty.
 4. **Status line + subtitle at the section bottom** — the existing humanized formatter, muted Textarea styling, constant two-row footprint. Unchanged content rules ("playing track N" / "detected" / "disabled" / "not detected" + stutter subtitles).
 
 The existing **`UseGlobalVolume`** switch (already in the menu) now governs BOTH volumes: when on, the global SNES volume AND the global MSU-1 volume apply; when off, the per-game values apply. Its description is updated to say so.
+
+Addendum (final review): checkbox description reads "Applies the next time the game is loaded." — reset does not re-run detection, so "or reset" was dropped for honesty.
 
 ## 3. Settings model changes
 

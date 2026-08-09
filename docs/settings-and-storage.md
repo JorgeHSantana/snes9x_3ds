@@ -13,7 +13,7 @@
 
 ## Config file format (`3dsconfig.cpp`)
 
-* INI-ish `key=value` text; **versioned**: global file target v1.6, per-game v1.5. The file starts with `# v<x.y>`; readers skip keys newer than the file's version (no spurious parse warnings), writers always write everything.
+* INI-ish `key=value` text; **versioned**: global file target v1.8, per-game v1.6. The file starts with `# v<x.y>`; readers skip keys newer than the file's version (no spurious parse warnings), writers always write everything.
 * Primitives: int (with min/max clamping; comment lines supported), string (empty-value safe), bitmask, and a templated enum round-trip.
 * Writes go through `BufferedFileWriter` (buffering into the shared 512 KB `g_fileBuffer`); reads through buffered stdio.
 
