@@ -113,6 +113,38 @@ void msu1_shutdown(Msu1State& state)
 
 static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
 
+static void msu1_load_track(Msu1State& state, uint16_t track)
+{
+    if (state.audio_file != nullptr) { fclose(state.audio_file); state.audio_file = nullptr; }
+    state.status &= (uint8_t)~(MSU1_FLAG_AUDIO_PLAYING | MSU1_FLAG_AUDIO_REPEAT
+                             | MSU1_FLAG_AUDIO_ERROR);
+    state.current_track   = track;
+    state.audio_play_pos  = 0;
+    state.audio_size      = 0;
+    state.audio_loop_point = 0;
+
+    char path[MSU1_MAX_BASE_PATH + 16];
+    if (!msu1_build_track_path(state.base_path, track, path, sizeof(path))) {
+        state.status |= MSU1_FLAG_AUDIO_ERROR;
+        return;
+    }
+    FILE* f = fopen(path, "rb");
+    if (f == nullptr) { state.status |= MSU1_FLAG_AUDIO_ERROR; return; }
+    Msu1PcmHeader hdr = {};
+    if (!msu1_parse_pcm_header(f, hdr)) {
+        fclose(f);
+        state.status |= MSU1_FLAG_AUDIO_ERROR;
+        return;
+    }
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); state.status |= MSU1_FLAG_AUDIO_ERROR; return; }
+    long end = ftell(f);
+    if (end < (long)MSU1_PCM_HEADER_SIZE) { fclose(f); state.status |= MSU1_FLAG_AUDIO_ERROR; return; }
+    state.audio_size      = (uint32_t)end - MSU1_PCM_HEADER_SIZE;
+    state.audio_loop_point = hdr.loop_point;
+    fseek(f, (long)MSU1_PCM_HEADER_SIZE, SEEK_SET);
+    state.audio_file = f;
+}
+
 uint8_t msu1_read_port(Msu1State& state, uint8_t port)
 {
     if (port > 7) { return 0x00; }
@@ -147,7 +179,22 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
             }
             return;
         }
-        // ports 4-7 implemented in Task 5
+        case 4: state.track_latch = (uint16_t)((state.track_latch & 0xFF00u) | value); return;
+        case 5:
+            state.track_latch = (uint16_t)((state.track_latch & 0x00FFu) | ((uint16_t)value << 8));
+            msu1_load_track(state, state.track_latch);
+            return;
+        case 6:
+            state.volume = value;
+            if (state.volume_changed_cb != nullptr) { state.volume_changed_cb(); }
+            return;
+        case 7:
+            if ((state.status & (MSU1_FLAG_AUDIO_BUSY | MSU1_FLAG_AUDIO_ERROR)) != 0) { return; }
+            if (state.audio_file == nullptr) { return; }
+            state.status &= (uint8_t)~(MSU1_FLAG_AUDIO_PLAYING | MSU1_FLAG_AUDIO_REPEAT);
+            if ((value & 0x01) != 0) { state.status |= MSU1_FLAG_AUDIO_REPEAT; }
+            if ((value & 0x02) != 0) { state.status |= MSU1_FLAG_AUDIO_PLAYING; }
+            return;
         default: return;
     }
 }

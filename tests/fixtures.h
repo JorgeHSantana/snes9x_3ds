@@ -56,4 +56,20 @@ inline std::string make_tmpdir()
     return (d != nullptr) ? std::string(d) : std::string();
 }
 
+// Write a valid PCM file to a specific path with given loop_point and sample_count.
+// Returns true on success, false if the file could not be created.
+inline bool write_pcm_at(const char* path, uint32_t loop_point, uint32_t sample_count)
+{
+    FILE* f = fopen(path, "wb");
+    if (f == nullptr) { return false; }
+    fwrite("MSU1", 1, 4, f);
+    fwrite(&loop_point, 4, 1, f);
+    for (uint32_t i = 0; i < sample_count; i++) {
+        int16_t l = (int16_t)i, r = (int16_t)-(int32_t)i;
+        fwrite(&l, 2, 1, f); fwrite(&r, 2, 1, f);
+    }
+    fclose(f);
+    return true;
+}
+
 } // namespace fixtures
