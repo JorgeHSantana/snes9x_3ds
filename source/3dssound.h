@@ -93,6 +93,17 @@ void snd3dsResumeMixing();
 
 
 //---------------------------------------------------------
+// Take/release snd3DS.snesAccessLock. Installed into the
+// MSU-1 core as lock hooks (msu1_set_lock_hooks) so
+// emulation-thread register writes that close/seek files
+// cannot race the mixer's msu1_read_audio.
+// Never call while already holding snesAccessLock.
+//---------------------------------------------------------
+void snd3dsLockSnesAccess();
+void snd3dsUnlockSnesAccess();
+
+
+//---------------------------------------------------------
 // Old3DS syscore CPU-budget management, called from the APT hook.
 // No-ops on New3DS (core2).
 //---------------------------------------------------------

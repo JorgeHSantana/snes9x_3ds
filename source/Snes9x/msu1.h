@@ -77,6 +77,16 @@ uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes);
 void       msu1_capture(const Msu1State& state, Msu1Snapshot& out);
 Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap);
 
+// Cross-thread lock hooks (installed once by the platform, both or neither).
+// S9xMSU1WritePort takes them around writes that mutate files/status the
+// mixing thread reads concurrently (ports 3/5/6/7); msu1_restore takes them
+// around the whole restore. Null hooks (the default, and the host-test
+// configuration) make every take/release a no-op.
+// LOCK ORDERING: the hooks acquire snd3DS.snesAccessLock — they must never be
+// invoked from code already holding it. The mixing thread holds that lock in
+// snd3dsMixSamples but only ever calls msu1_read_audio, never these paths.
+void msu1_set_lock_hooks(void (*lock)(void), void (*unlock)(void));
+
 // legacy-boundary wrappers (operate on the global MSU1)
 uint8_t S9xMSU1ReadPort(uint8_t port);
 void    S9xMSU1WritePort(uint8_t port, uint8_t value);

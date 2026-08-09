@@ -243,6 +243,21 @@ void snd3dsResumeMixing()
 
 
 //---------------------------------------------------------
+// MSU-1 lock hooks (see 3dssound.h). The lock exists even
+// when NDSP init failed — snd3dsInitialize always inits it.
+//---------------------------------------------------------
+void snd3dsLockSnesAccess()
+{
+    LightLock_Lock(&snd3DS.snesAccessLock);
+}
+
+void snd3dsUnlockSnesAccess()
+{
+    LightLock_Unlock(&snd3DS.snesAccessLock);
+}
+
+
+//---------------------------------------------------------
 // Initialize the NDSP audio pipeline.
 //
 // Returns true on success. On failure (ndspInit fails because

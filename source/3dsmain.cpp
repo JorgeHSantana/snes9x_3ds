@@ -438,7 +438,12 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             snprintf(slotInfo, sizeof(slotInfo), "  Load Slot #%d", slot);
 
             items.emplace_back([slot, &menuTabs, &currentMenuTab](int val) {
+                // Fence the mixer out while msu1_restore closes/reopens files
+                // (same fence impl3dsQuickSaveLoad uses). Safe here: menu entry
+                // already resumed mixing, so no drain is active to nest with.
+                snd3dsDrainMixing();
                 bool result = impl3dsLoadStateSlot(slot);
+                snd3dsResumeMixing();
                 if (!result) {
                     SMenuTab dialogTab;
                     bool isDialog = false;
@@ -2041,6 +2046,10 @@ bool emulatorInitialize()
     if (!impl3dsInitialize()) return false;
     if (!img3dsInitialize()) return false;
     if (!snd3dsInitialize()) return false;
+
+    // Fence MSU-1 register writes against the mixing thread. Unconditional:
+    // snesAccessLock exists even when NDSP init failed (audioType != 2).
+    msu1_set_lock_hooks(snd3dsLockSnesAccess, snd3dsUnlockSnesAccess);
 
     if (snd3DS.audioType == 2) msu3dsNdspInstall();
 

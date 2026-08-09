@@ -5,6 +5,21 @@
 
 Msu1State MSU1 = {};
 
+// Cross-thread lock hooks (see msu1.h for the contract and lock ordering).
+static void (*s_lock_hook)(void)   = nullptr;
+static void (*s_unlock_hook)(void) = nullptr;
+
+void msu1_set_lock_hooks(void (*lock)(void), void (*unlock)(void))
+{
+    // a half-installed pair would unbalance the lock: install both or neither
+    if ((lock == nullptr) != (unlock == nullptr)) { return; }
+    s_lock_hook   = lock;
+    s_unlock_hook = unlock;
+}
+
+static void msu1_lock(void)   { if (s_lock_hook   != nullptr) { s_lock_hook(); } }
+static void msu1_unlock(void) { if (s_unlock_hook != nullptr) { s_unlock_hook(); } }
+
 bool msu1_build_base_path(const char* rom_path, char* out, size_t out_size)
 {
     if (rom_path == nullptr || out == nullptr || out_size == 0) { return false; }
@@ -248,7 +263,7 @@ void msu1_capture(const Msu1State& state, Msu1Snapshot& out)
     out.resume_pos     = state.resume_pos;
 }
 
-Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap)
+static Msu1Result msu1_restore_locked(Msu1State& state, const Msu1Snapshot& snap)
 {
     if (!state.enabled) { return Msu1Result::InvalidParam; }   // init first
     state.volume       = snap.volume;
@@ -279,7 +294,28 @@ Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap)
     return Msu1Result::Ok;
 }
 
+Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap)
+{
+    // Restore closes/reopens/seeks files the mixing thread may be reading;
+    // fence it with the platform lock hooks (no-ops on host, see msu1.h).
+    msu1_lock();
+    Msu1Result result = msu1_restore_locked(state, snap);
+    msu1_unlock();
+    return result;
+}
+
 uint8_t S9xMSU1ReadPort(uint8_t port)               { return msu1_read_port(MSU1, port); }
-void    S9xMSU1WritePort(uint8_t port, uint8_t value) { msu1_write_port(MSU1, port, value); }
+
+void S9xMSU1WritePort(uint8_t port, uint8_t value)
+{
+    // Ports 3 (data fseek), 5 (track fclose/fopen), 6 (volume the mixer
+    // mixes with) and 7 (status RMW the mixer also RMWs) race the mixing
+    // thread; ports 0-2 and 4 only mutate emu-thread-only latch bytes.
+    // msu1_write_port itself stays hook-free so host tests drive it directly.
+    bool needs_lock = (port == 3) || (port >= 5 && port <= 7);
+    if (needs_lock) { msu1_lock(); }
+    msu1_write_port(MSU1, port, value);
+    if (needs_lock) { msu1_unlock(); }
+}
 
 void S9xMSU1Shutdown(void) { msu1_shutdown(MSU1); }

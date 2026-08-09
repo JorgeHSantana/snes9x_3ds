@@ -92,12 +92,12 @@ TEST_CASE("drain makes fill queue silence even while playing")
     CHECK(fake::last_samples[3] == -1);  // sample idx 1 R: PCM from fixture
     fake::reset();
 
-    // DRAIN: After MixerDrain, fill queue must contain silence, not PCM
+    // DRAIN: fill must queue NOTHING — the channel playing out its already
+    // queued buffers IS the drained state. Queueing (even silence) would race
+    // emu-thread clear_queue calls inside the drain window.
     msu3dsOnEvent(Msu1Event::MixerDrain);
     msu3dsFillAudio();
-    CHECK(fake::queued > 0);
-    CHECK(fake::last_samples[2] == 0);   // sample idx 1 L: silence (not 1)
-    CHECK(fake::last_samples[3] == 0);   // sample idx 1 R: silence (not -1)
+    CHECK(fake::queued == 0);
 
     msu3dsOnEvent(Msu1Event::MixerResume);
     msu1_shutdown(MSU1);

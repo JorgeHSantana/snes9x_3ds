@@ -76,9 +76,14 @@ bool     msu3dsIsMuted(void)
 void msu3dsFillAudio(void)
 {
     if (!g_bridge.initialized) { return; }
+    // Drain contract: queue NOTHING — the channel playing out its already
+    // queued buffers IS the drained state. All emu-thread clear_queue events
+    // (RomUnload / SavestateLoaded) execute inside drain windows, so never
+    // concurrently with a backend queue_buffer call.
+    if (g_bridge.drain_active) { return; }
     const bool playing = MSU1.enabled
         && (MSU1.status & MSU1_FLAG_AUDIO_PLAYING) != 0;
-    if (playing && !g_bridge.drain_active
+    if (playing
         && g_bridge.backend.free_buffer_count() == g_bridge.backend.total_buffer_count()) {
         g_bridge.underruns++;
     }
@@ -86,7 +91,7 @@ void msu3dsFillAudio(void)
         uint32_t cap_samples = g_bridge.backend.buffer_capacity_samples();
         uint32_t cap_bytes   = cap_samples * MSU1_BYTES_PER_SAMPLE;
         uint32_t got = 0;
-        if (playing && !g_bridge.drain_active) {
+        if (playing) {
             got = msu1_read_audio(MSU1, (uint8_t*)g_bridge.staging, cap_bytes);
         }
         if (got < cap_bytes) {
