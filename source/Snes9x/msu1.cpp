@@ -111,4 +111,48 @@ void msu1_shutdown(Msu1State& state)
     state.volume_changed_cb = saved_cb;
 }
 
+static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
+
+uint8_t msu1_read_port(Msu1State& state, uint8_t port)
+{
+    if (port > 7) { return 0x00; }
+    if (!state.enabled) { return 0x00; }
+    switch (port) {
+        case 0: return state.status;
+        case 1: {
+            if (state.data_file == nullptr) { return 0x00; }
+            if (state.data_pos >= state.data_size) { return 0x00; }
+            int c = fgetc(state.data_file);
+            if (c == EOF) { return 0x00; }
+            state.data_pos++;
+            return (uint8_t)c;
+        }
+        default: return MSU1_ID[port - 2];
+    }
+}
+
+void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
+{
+    if (port > 7 || !state.enabled) { return; }
+    switch (port) {
+        case 0: state.data_seek_latch = (state.data_seek_latch & 0xFFFFFF00u) | value; return;
+        case 1: state.data_seek_latch = (state.data_seek_latch & 0xFFFF00FFu) | ((uint32_t)value << 8); return;
+        case 2: state.data_seek_latch = (state.data_seek_latch & 0xFF00FFFFu) | ((uint32_t)value << 16); return;
+        case 3: {
+            state.data_seek_latch = (state.data_seek_latch & 0x00FFFFFFu) | ((uint32_t)value << 24);
+            uint32_t target = state.data_seek_latch;
+            if (target > state.data_size) { target = state.data_size; }  // clamp
+            if (state.data_file != nullptr && fseek(state.data_file, (long)target, SEEK_SET) == 0) {
+                state.data_pos = target;
+            }
+            return;
+        }
+        // ports 4-7 implemented in Task 5
+        default: return;
+    }
+}
+
+uint8_t S9xMSU1ReadPort(uint8_t port)               { return msu1_read_port(MSU1, port); }
+void    S9xMSU1WritePort(uint8_t port, uint8_t value) { msu1_write_port(MSU1, port, value); }
+
 void S9xMSU1Shutdown(void) { msu1_shutdown(MSU1); }
