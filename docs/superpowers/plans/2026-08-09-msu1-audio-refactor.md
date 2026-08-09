@@ -64,3 +64,9 @@
 - [ ] Step 1: Docker `make release` — clean under -Werror.
 - [ ] Step 2: Full suite; final scoped review of the refactor branch delta (the three commits) by a reviewer subagent (spec-conformance + the config-migration correctness is the highest-risk item: hand-trace a v1.7 file read).
 - [ ] Step 3: Fix anything found (fix loop); push; update memory/ledger.
+
+---
+
+## Completion Notes (2026-08-09)
+
+4 tasks + final review + text-fix wave (6 commits, a1fbeed..bbdc783). Suite 78/476; Docker -Werror clean. Final review verified: v1.7→1.8 config migration hand-traced, volume semantics coherent across all toggle sequences, session-latched menu visibility, savestate/gate interactions hold. Deferred: transient "not detected" status after mid-session re-enable (documented); UseGlobalVolume toggle promotes invisible per-game MSU volume on non-MSU games (mirrors SNES semantics); downgrade to older builds self-heals with defaults.
