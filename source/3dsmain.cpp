@@ -47,6 +47,14 @@ static bool cfgFileAvailable[2]; // global config, game config
 static u32 lastLoadedRomCRC = 0;
 static const DirectoryEntry* selectedEntry = nullptr;
 
+// Latches the "Enable MSU-1" checkbox + description row's visibility for the
+// whole session between ROM loads (set once in emulatorLoadRom(), after the
+// load-time gate). makeOptionMenu() gates those two items on this instead of
+// the live Settings.MSU1/Msu1Enabled condition so their visibility cannot
+// change out from under the cursor while the Settings tab is open — see the
+// comment at the gate site in emulatorLoadRom() and at the menu gate.
+static bool menuMsu1RowsVisible = false;
+
 // static globals to prevent heap fragmentation and speed up menu access.
 // note: not thread-safe, but safe here due to sequential menu/emulator execution
 static std::vector<SMenuTab> menuTabs;
@@ -991,13 +999,18 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     }
 
     // Shown for MSU-1 games, and also for games the user previously disabled
-    // MSU-1 on (so they can re-enable it) even after Settings.MSU1 no longer
-    // holds for the currently loaded game. The only thing that can flip this
-    // condition mid-session is the checkbox's own callback below, which
-    // explicitly marks the tab dirty to force a synchronous rebuild — the
-    // same "toggle callback marks tab dirty on visibility change" idiom
-    // already used elsewhere in this function (e.g. Crop & Overscan).
-    if (Settings.MSU1 || !settings3DS.Msu1Enabled) {
+    // MSU-1 on (so they can re-enable it). Gated on the session latch
+    // (snapshotted once in emulatorLoadRom(), see its definition above),
+    // NOT on the live Settings.MSU1/Msu1Enabled condition: re-enabling the
+    // checkbox flips Msu1Enabled while Settings.MSU1 is false, which would
+    // make the live condition (and this row) go false right as its own
+    // callback's menu3dsMarkTabDirty() rebuilds the tab — shrinking the item
+    // count at the cursor and desyncing setupMenu()'s index-based selection
+    // restore. The latch keeps this row's visibility (and the description
+    // row below it) constant for the whole session; only the next ROM load
+    // re-evaluates it. menu3dsMarkTabDirty() is kept in the callback purely
+    // to refresh the status line/subtitle at the bottom of the section.
+    if (menuMsu1RowsVisible) {
         AddMenuCheckbox(items, "  Enable MSU-1"_s, settings3DS.Msu1Enabled,
             []( int val ) {
                 if (CheckAndUpdateToggle(settings3DS.Msu1Enabled, val)) {
@@ -1645,6 +1658,14 @@ bool emulatorLoadRom()
         msu3dsOnEvent(Msu1Event::RomUnload);
         Settings.MSU1 = FALSE;
     }
+
+    // Snapshot the "Enable MSU-1" row's visibility for the rest of this
+    // session, taken AFTER the gate above so it reflects the final
+    // post-config state. makeOptionMenu() gates on this latch instead of the
+    // live condition so toggling the checkbox (which only marks the tab
+    // dirty for a status-line refresh) can never change the Settings tab's
+    // item count mid-session — only the next ROM load re-evaluates it.
+    menuMsu1RowsVisible = (Settings.MSU1 != FALSE) || !settings3DS.Msu1Enabled;
 
     settings3dsUpdate(true);
 
