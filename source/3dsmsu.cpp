@@ -131,6 +131,12 @@ void msu3dsOnEvent(Msu1Event event)
             apply_mix();
             return;
         case Msu1Event::VolumeChanged: apply_mix(); return;
+        case Msu1Event::ConsoleReset:
+            g_bridge.backend.clear_queue();
+            g_bridge.queued_since_clear = false;
+            msu1_soft_reset(MSU1);
+            apply_mix();
+            return;
         case Msu1Event::AppExit:       msu3dsFinalize(); return;
         case Msu1Event::Count:         return;
     }

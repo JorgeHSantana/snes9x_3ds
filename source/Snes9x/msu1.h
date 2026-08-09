@@ -66,6 +66,11 @@ bool       msu1_detect(const char* rom_path);
 Msu1Result msu1_init(Msu1State& state, const char* rom_path);
 void       msu1_shutdown(Msu1State& state);
 
+// Console reset (spec section 6 row 6): stops playback and clears chip
+// registers/latches like a power cycle, but keeps the data file open, the
+// chip enabled and the game volume — the same ROM keeps running.
+void msu1_soft_reset(Msu1State& state);
+
 // register interface (emulation thread)
 uint8_t msu1_read_port(Msu1State& state, uint8_t port);
 void    msu1_write_port(Msu1State& state, uint8_t port, uint8_t value);

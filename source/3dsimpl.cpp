@@ -517,6 +517,10 @@ bool impl3dsLoadROM(char *romFilePath)
 void impl3dsResetConsole()
 {
 	snd3dsDrainMixing();
+	// Inside the drain window (the mixer queues nothing under drain), before
+	// S9xReset so the MSU chip regs/files are back at power-on state before
+	// the CPU starts executing the reset vector.
+	msu3dsOnEvent(Msu1Event::ConsoleReset);
 	S9xReset();
 	gpu3dsInitializeMode7Vertexes();
 	snd3dsResumeMixing();

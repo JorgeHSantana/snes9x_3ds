@@ -126,6 +126,23 @@ void msu1_shutdown(Msu1State& state)
     state.volume_changed_cb = saved_cb;
 }
 
+void msu1_soft_reset(Msu1State& state)
+{
+    if (state.audio_file != nullptr) { fclose(state.audio_file); state.audio_file = nullptr; }
+    state.status           = state.enabled ? MSU1_REVISION : 0;
+    state.current_track    = 0;
+    state.track_latch      = 0;
+    state.data_seek_latch  = 0;
+    state.audio_play_pos   = 0;
+    state.audio_size       = 0;
+    state.audio_loop_point = 0;
+    state.resume_track     = 0;
+    state.resume_pos       = 0;
+    if (state.data_file != nullptr) { fseek(state.data_file, 0, SEEK_SET); }
+    state.data_pos = 0;
+    // keeps: data_file, data_size, enabled, base_path, volume, volume_changed_cb
+}
+
 static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
 
 static void msu1_load_track(Msu1State& state, uint16_t track)

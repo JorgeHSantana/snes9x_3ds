@@ -32,6 +32,7 @@ TEST_CASE("EVERY Msu1Event has a defined, tested outcome")
         { Msu1Event::SavestateLoaded, false, true,  false },
         { Msu1Event::VolumeChanged,   false, false, false },
         { Msu1Event::AppExit,         false, true,  false },
+        { Msu1Event::ConsoleReset,    false, true,  false },
     };
     // THE GUARD: a new enum value without a row here fails immediately.
     static_assert(sizeof(table) / sizeof(table[0]) == (size_t)Msu1Event::Count,

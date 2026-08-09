@@ -5,6 +5,7 @@
 enum class Msu1Event : uint8_t {
     MenuEnter, MenuExit, MixerDrain, MixerResume, TurboOn, TurboOff,
     AptSuspend, AptResume, RomUnload, SavestateLoaded, VolumeChanged, AppExit,
+    ConsoleReset,
     Count   // sentinel — keep last; the matrix test iterates up to here
 };
 
