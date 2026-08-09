@@ -3,6 +3,9 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
+#include <string>
+#include <unistd.h>
 
 namespace fixtures {
 
@@ -32,6 +35,25 @@ inline FILE* make_pcm_file(uint32_t loop_point, uint32_t sample_count)
     }
     rewind(f);
     return f;
+}
+
+// creates <dir>/<name> with given bytes; returns full path ("" on failure)
+inline std::string put_file(const std::string& dir, const char* name,
+                            const char* bytes, size_t len)
+{
+    std::string path = dir + "/" + name;
+    FILE* f = fopen(path.c_str(), "wb");
+    if (f == nullptr) { return std::string(); }
+    if (len > 0) { fwrite(bytes, 1, len, f); }
+    fclose(f);
+    return path;
+}
+
+inline std::string make_tmpdir()
+{
+    char tmpl[] = "/tmp/msu1_test_XXXXXX";
+    char* d = mkdtemp(tmpl);
+    return (d != nullptr) ? std::string(d) : std::string();
 }
 
 } // namespace fixtures
