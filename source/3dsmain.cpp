@@ -591,6 +591,15 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             }
 
             settings3dsUpdate(resetGame);
+
+            // Reset Config can flip Msu1Enabled back to its default (on)
+            // without touching the live chip; re-apply it here so the menu
+            // checkbox and the running chip stay in sync. Menu context, so
+            // the helper's self-contained drain fence is safe to use as-is;
+            // msu3dsDecideEnableAction() no-ops via None when nothing
+            // actually changed.
+            impl3dsApplyMsu1Enable(settings3DS.Msu1Enabled != false);
+
             settings3DS.isDirty = true;
 
             // mark all tabs dirty
