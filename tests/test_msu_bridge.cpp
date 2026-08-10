@@ -87,7 +87,7 @@ TEST_CASE("menu mute freezes the track position; exit resumes exactly there")
     REQUIRE(msu1_init(MSU1, rom.c_str()) == Msu1Result::Ok);
     msu1_write_port(MSU1, 4, 1);
     msu1_write_port(MSU1, 5, 0);
-    msu1_write_port(MSU1, 7, 0x02);      // play, no repeat
+    msu1_write_port(MSU1, 7, 0x01);      // play, no repeat
 
     // one buffer of PCM: frames 0..63 consumed
     fake::reset();
@@ -138,7 +138,7 @@ TEST_CASE("turbo mute keeps consuming PCM (mute-only, position drifts by design)
     REQUIRE(msu1_init(MSU1, rom.c_str()) == Msu1Result::Ok);
     msu1_write_port(MSU1, 4, 1);
     msu1_write_port(MSU1, 5, 0);
-    msu1_write_port(MSU1, 7, 0x02);
+    msu1_write_port(MSU1, 7, 0x01);
 
     msu3dsOnEvent(Msu1Event::TurboOn);
     CHECK(msu3dsIsMuted());

@@ -96,7 +96,7 @@ TEST_CASE("msu1_write_port (unwrapped) never touches the lock hooks")
     msu1_write_port(MSU1, 4, 1);
     msu1_write_port(MSU1, 5, 0);
     msu1_write_port(MSU1, 3, 0);
-    msu1_write_port(MSU1, 7, 0x02);
+    msu1_write_port(MSU1, 7, 0x01);
 
     CHECK(lock_calls == 0);
     CHECK(unlock_calls == 0);

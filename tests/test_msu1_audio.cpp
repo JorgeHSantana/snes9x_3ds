@@ -69,7 +69,7 @@ TEST_CASE("read_audio without repeat stops at end and clears PLAYING")
     msu1_write_port(st, 5, 0);
 
     // Play without repeat (0x02 = play only, no repeat)
-    msu1_write_port(st, 7, 0x02);
+    msu1_write_port(st, 7, 0x01);
 
     // Request 256 bytes, but only 64 available
     uint8_t buf[256] = {};

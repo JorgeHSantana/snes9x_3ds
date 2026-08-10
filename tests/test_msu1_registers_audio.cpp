@@ -81,7 +81,7 @@ TEST_CASE("control $2007: play/repeat bits; ignored under AUDIO_ERROR")
     msu1_write_port(st, 5, 0);
 
     // Control write must be ignored under AUDIO_ERROR
-    msu1_write_port(st, 7, 0x02);
+    msu1_write_port(st, 7, 0x01);
     CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) == 0);
 
     msu1_shutdown(st);
@@ -158,7 +158,7 @@ static Msu1State make_paused_state(std::string& dir_out)
     REQUIRE(msu1_init(st, rom.c_str()) == Msu1Result::Ok);
     msu1_write_port(st, 4, 1);
     msu1_write_port(st, 5, 0);
-    msu1_write_port(st, 7, 0x02);            // play
+    msu1_write_port(st, 7, 0x01);            // play
 
     uint8_t buf[32];
     REQUIRE(msu1_read_audio(st, buf, 32) == 32);   // frames 0..7 consumed
@@ -184,7 +184,7 @@ TEST_CASE("$2007 play+resume continues byte-exact; plain play restarts from the 
     Msu1State st = make_paused_state(dir);
 
     // play + resume (bit2): back to byte 32 => next frame is 8
-    msu1_write_port(st, 7, 0x06);
+    msu1_write_port(st, 7, 0x05);
     CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) != 0);
     CHECK(st.audio_play_pos == 32);
     uint8_t frame[4];
@@ -197,7 +197,7 @@ TEST_CASE("$2007 play+resume continues byte-exact; plain play restarts from the 
     // pause again (stores pos 36), then PLAIN play: restarts from frame 0
     msu1_write_port(st, 7, 0x00);
     CHECK(st.resume_pos == 36);
-    msu1_write_port(st, 7, 0x02);
+    msu1_write_port(st, 7, 0x01);
     CHECK(st.audio_play_pos == 0);
     REQUIRE(msu1_read_audio(st, frame, 4) == 4);
     memcpy(&l, frame, 2);
@@ -218,7 +218,7 @@ TEST_CASE("$2007 resume with a mismatched track plays that track from the start"
     CHECK(st.resume_track == 1);
     CHECK(st.resume_pos == 32);
 
-    msu1_write_port(st, 7, 0x06);            // resume bit, but track differs
+    msu1_write_port(st, 7, 0x05);            // resume bit, but track differs
     CHECK(st.audio_play_pos == 0);           // from the start
 
     msu1_shutdown(st);
@@ -230,7 +230,7 @@ TEST_CASE("$2007 resume with a stored position beyond the track plays from the s
     Msu1State st = make_paused_state(dir);
 
     st.resume_pos = st.audio_size + 4;       // corrupt/oversized stored position
-    msu1_write_port(st, 7, 0x06);
+    msu1_write_port(st, 7, 0x05);
     CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) != 0);
     CHECK(st.audio_play_pos == 0);
 
@@ -254,7 +254,7 @@ TEST_CASE("snapshot round-trip preserves resume fields; resume works after resto
     CHECK(st2.resume_track == 1);
     CHECK(st2.resume_pos == 32);
 
-    msu1_write_port(st2, 7, 0x06);           // resume on the restored state
+    msu1_write_port(st2, 7, 0x05);           // resume on the restored state
     CHECK(st2.audio_play_pos == 32);
     uint8_t frame[4];
     REQUIRE(msu1_read_audio(st2, frame, 4) == 4);
