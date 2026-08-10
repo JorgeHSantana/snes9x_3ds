@@ -11,6 +11,7 @@
 #include "gfx.h"
 #include "missing.h"
 #include "apu.h"
+#include "apulock.h"
 #include "dma.h"
 #include "fxemu.h"
 #include "sa1.h"
@@ -385,8 +386,15 @@ void S9xDoHBlankProcessing ()
 		/*-----------------------------------------------------*/
     	case HBLANK_END_EVENT:
 			S9xSuperFXExec ();
-			
+
+			// Serialize SPC700/APU execution against the audio mixing thread,
+			// which mutates DSP/sound state under the same lock on another
+			// core. Without this the SNES<->SPC700 boot handshake of strict
+			// games (Mega Man X3) intermittently corrupts. No-op until the
+			// platform installs the hooks (apulock.h).
+			apulock_lock ();
 			S9xUpdateAPUTimer();
+			apulock_unlock ();
 			//APU_EXECUTE();
 
 			static const int addr[] = { 0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31 };

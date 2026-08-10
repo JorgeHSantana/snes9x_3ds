@@ -26,6 +26,7 @@
 #include "3dssound.h"
 #include "3dsmsu.h"
 #include "3dsmsu_ndsp.h"
+#include "Snes9x/apulock.h"
 #include "3dsgpu.h"
 #include "3dsimpl.h"
 #include "3dsui.h"
@@ -2204,6 +2205,12 @@ bool emulatorInitialize()
     // Fence MSU-1 register writes against the mixing thread. Unconditional:
     // snesAccessLock exists even when NDSP init failed (audioType != 2).
     msu1_set_lock_hooks(snd3dsLockSnesAccess, snd3dsUnlockSnesAccess);
+
+    // Serialize the emulation thread's per-scanline SPC700/APU execution
+    // against the mixing thread (root cause of the intermittent Mega Man X3
+    // boot-handshake corruption: mixer mutated DSP/sound state on another
+    // core while the SPC700 ran unlocked).
+    apulock_set_hooks(snd3dsLockSnesAccess, snd3dsUnlockSnesAccess);
 
     if (snd3DS.audioType == 2) msu3dsNdspInstall();
 
