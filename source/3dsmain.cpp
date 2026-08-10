@@ -2297,10 +2297,14 @@ void emulatorLoop()
 // Dev convenience (used for emulator-driven validation, e.g. Azahar): boot
 // straight into the ROM whose absolute path is the first line of
 // sdmc:/autoboot.txt. Absent/unreadable file = normal menu boot.
+static void msu1LogToFile(const char* message) { log3dsWrite("[msu1] %s", message); }
+
 static bool tryAutoBoot()
 {
     FILE* f = fopen("sdmc:/autoboot.txt", "r");
     if (f == NULL) { return false; }
+    settings3DS.LogFileEnabled = 1;   // autoboot is a dev/validation mode
+    log3dsInitialize();
     char path[PATH_MAX] = {};
     bool ok = fgets(path, sizeof(path), f) != NULL;
     fclose(f);
@@ -2311,6 +2315,7 @@ static bool tryAutoBoot()
     *slash = '\0';
     file3dsSetCurrentDir(path);
     snprintf(romFileName, sizeof(romFileName), "%s", slash + 1);
+    msu1_set_log_hook(msu1LogToFile);
     log3dsWrite("[autoboot] %s/%s", path, romFileName);
     return emulatorLoadRom();
 }

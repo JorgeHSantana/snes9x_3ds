@@ -70,3 +70,24 @@ TEST_CASE("msu1_is_dma_source requires fixed A-address in $2000-$2007, system ba
     CHECK_FALSE(msu1_is_dma_source(0x40, 0x2001, true));    // bank $40-$7F: not register space
     CHECK_FALSE(msu1_is_dma_source(0x00, 0x2008, true));
 }
+
+static char g_last_log[512];
+static void capture_log(const char* m) { snprintf(g_last_log, sizeof(g_last_log), "%s", m); }
+
+TEST_CASE("log hook reports track-load failures; null hook is safe")
+{
+    Msu1State s = {};
+    s.enabled = true;
+    snprintf(s.base_path, sizeof(s.base_path), "/nonexistent/dir/game");
+    msu1_set_log_hook(nullptr);
+    msu1_write_port(s, 4, 1);
+    msu1_write_port(s, 5, 0);          // load track 1: no crash with null hook
+    CHECK((s.status & MSU1_FLAG_AUDIO_ERROR) != 0);
+
+    g_last_log[0] = 0;
+    msu1_set_log_hook(capture_log);
+    msu1_write_port(s, 4, 2);
+    msu1_write_port(s, 5, 0);          // load track 2: hook captures the failure
+    CHECK(strstr(g_last_log, "fopen failed") != nullptr);
+    msu1_set_log_hook(nullptr);
+}

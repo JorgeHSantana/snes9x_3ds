@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include "msu1.h"
 #include <cstring>
 #include <cstdio>
@@ -145,6 +146,20 @@ void msu1_soft_reset(Msu1State& state)
 
 static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
 
+static void (*g_log_hook)(const char*) = nullptr;
+void msu1_set_log_hook(void (*log)(const char* message)) { g_log_hook = log; }
+
+static void msu1_log(const char* fmt, ...)
+{
+    if (g_log_hook == nullptr) { return; }
+    char buf[MSU1_MAX_BASE_PATH + 64];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    g_log_hook(buf);
+}
+
 static void msu1_load_track(Msu1State& state, uint16_t track)
 {
     if (state.audio_file != nullptr) { fclose(state.audio_file); state.audio_file = nullptr; }
@@ -158,14 +173,20 @@ static void msu1_load_track(Msu1State& state, uint16_t track)
     char path[MSU1_MAX_BASE_PATH + 16];
     if (!msu1_build_track_path(state.base_path, track, path, sizeof(path))) {
         state.status |= MSU1_FLAG_AUDIO_ERROR;
+        msu1_log("track %u: path build failed (base too long)", (unsigned)track);
         return;
     }
     FILE* f = fopen(path, "rb");
-    if (f == nullptr) { state.status |= MSU1_FLAG_AUDIO_ERROR; return; }
+    if (f == nullptr) {
+        state.status |= MSU1_FLAG_AUDIO_ERROR;
+        msu1_log("track %u: fopen failed: %s", (unsigned)track, path);
+        return;
+    }
     Msu1PcmHeader hdr = {};
     if (!msu1_parse_pcm_header(f, hdr)) {
         fclose(f);
         state.status |= MSU1_FLAG_AUDIO_ERROR;
+        msu1_log("track %u: bad MSU1 PCM header: %s", (unsigned)track, path);
         return;
     }
     if (fseek(f, 0, SEEK_END) != 0) { fclose(f); state.status |= MSU1_FLAG_AUDIO_ERROR; return; }
@@ -175,6 +196,8 @@ static void msu1_load_track(Msu1State& state, uint16_t track)
     state.audio_loop_point = hdr.loop_point;
     fseek(f, (long)MSU1_PCM_HEADER_SIZE, SEEK_SET);
     state.audio_file = f;
+    msu1_log("track %u: loaded, %u bytes, loop=%u", (unsigned)track,
+             (unsigned)state.audio_size, (unsigned)state.audio_loop_point);
 }
 
 uint8_t msu1_read_port(Msu1State& state, uint8_t port)
@@ -239,16 +262,29 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
             msu1_load_track(state, state.track_latch);
             return;
         case 6:
+            if ((state.volume == 0) != (value == 0)) {
+                msu1_log("volume %s (%u)", value ? "unmuted" : "muted to 0", (unsigned)value);
+            }
             state.volume = value;
             if (state.volume_changed_cb != nullptr) { state.volume_changed_cb(); }
             return;
         case 7: {
-            if ((state.status & (MSU1_FLAG_AUDIO_BUSY | MSU1_FLAG_AUDIO_ERROR)) != 0) { return; }
-            if (state.audio_file == nullptr) { return; }
+            if ((state.status & (MSU1_FLAG_AUDIO_BUSY | MSU1_FLAG_AUDIO_ERROR)) != 0) {
+                msu1_log("control write %02X DROPPED (status=%02X busy/error)",
+                         (unsigned)value, (unsigned)state.status);
+                return;
+            }
+            if (state.audio_file == nullptr) {
+                msu1_log("control write %02X DROPPED (no audio file)", (unsigned)value);
+                return;
+            }
+            msu1_log("control write %02X (track %u, status=%02X, volume=%u)",
+                     (unsigned)value, (unsigned)state.current_track,
+                     (unsigned)state.status, (unsigned)state.volume);
             bool was_playing = (state.status & MSU1_FLAG_AUDIO_PLAYING) != 0;
             state.status &= (uint8_t)~(MSU1_FLAG_AUDIO_PLAYING | MSU1_FLAG_AUDIO_REPEAT);
-            if ((value & 0x01) != 0) { state.status |= MSU1_FLAG_AUDIO_REPEAT; }
-            if ((value & 0x02) == 0) {
+            if ((value & 0x02) != 0) { state.status |= MSU1_FLAG_AUDIO_REPEAT; }
+            if ((value & 0x01) == 0) {
                 // pause: remember where this track stopped. The stored resume
                 // persists until the next pause overwrites it (a track load
                 // does NOT clear it), so pause -> load other -> reload -> resume

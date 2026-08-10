@@ -101,6 +101,10 @@ Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap);
 // snd3dsMixSamples but only ever calls msu1_read_audio, never these paths.
 void msu1_set_lock_hooks(void (*lock)(void), void (*unlock)(void));
 
+// Optional diagnostics hook (default null = silent). The core reports
+// track-load outcomes through it; the platform forwards to its logger.
+void msu1_set_log_hook(void (*log)(const char* message));
+
 // legacy-boundary wrappers (operate on the global MSU1)
 uint8_t S9xMSU1ReadPort(uint8_t port);
 void    S9xMSU1WritePort(uint8_t port, uint8_t value);
