@@ -55,6 +55,10 @@ static const DirectoryEntry* selectedEntry = nullptr;
 // comment at the gate site in emulatorLoadRom() and at the menu gate.
 static bool menuMsu1RowsVisible = false;
 
+// Diagnostic frame counter, reset at every ROM load: drives the first-ten-
+// seconds per-layer render logging in emulatorLoop().
+static int diagFramesSinceLoad = 0;
+
 // static globals to prevent heap fragmentation and speed up menu access.
 // note: not thread-safe, but safe here due to sequential menu/emulator execution
 static std::vector<SMenuTab> menuTabs;
@@ -1665,6 +1669,7 @@ bool emulatorLoadRom()
     // dirty for a status-line refresh) can never change the Settings tab's
     // item count mid-session — only the next ROM load re-evaluates it.
     menuMsu1RowsVisible = (Settings.MSU1 != FALSE) || !settings3DS.Msu1Enabled;
+    diagFramesSinceLoad = 0;
 
     settings3dsUpdate(true);
 
@@ -2398,6 +2403,32 @@ void emulatorLoop()
         t3dsStartTimer(TIMER_RUN_ONE_FRAME);
         impl3dsRunOneFrame(firstFrame, skipDrawing);
         t3dsStopTimer(TIMER_RUN_ONE_FRAME);
+
+        // Diagnostic: for the first ~10 seconds after a ROM load, log once
+        // per second what the GAME asked us to draw (PPU screen designation
+        // and mode) versus what the render pipeline queued per layer.
+        // Distinguishes "game never enabled/uploaded the BGs" (emulation or
+        // timing side) from "layers submitted but not drawn" (GPU side).
+        if (diagFramesSinceLoad < 600) {
+            if ((diagFramesSinceLoad % 60) == 0) {
+                log3dsWrite("Frame %d: INIDISP=%02X TM=%02X TS=%02X BGMODE=%02X "
+                            "verts M/S: BG0=%d/%d BG1=%d/%d BG2=%d/%d BG3=%d/%d OBJ=%d/%d",
+                            diagFramesSinceLoad,
+                            Memory.FillRAM[0x2100], Memory.FillRAM[0x212C],
+                            Memory.FillRAM[0x212D], Memory.FillRAM[0x2105],
+                            GPU3DSExt.layerList.layers[0].verticesByTarget[0],
+                            GPU3DSExt.layerList.layers[0].verticesByTarget[1],
+                            GPU3DSExt.layerList.layers[1].verticesByTarget[0],
+                            GPU3DSExt.layerList.layers[1].verticesByTarget[1],
+                            GPU3DSExt.layerList.layers[2].verticesByTarget[0],
+                            GPU3DSExt.layerList.layers[2].verticesByTarget[1],
+                            GPU3DSExt.layerList.layers[3].verticesByTarget[0],
+                            GPU3DSExt.layerList.layers[3].verticesByTarget[1],
+                            GPU3DSExt.layerList.layers[4].verticesByTarget[0],
+                            GPU3DSExt.layerList.layers[4].verticesByTarget[1]);
+            }
+            diagFramesSinceLoad++;
+        }
 
 
         long actualTicksThisFrame = (long)(svcGetSystemTick() - startFrameTick);
