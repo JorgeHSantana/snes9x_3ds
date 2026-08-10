@@ -1,7 +1,6 @@
 #include "3dsmsu.h"
 #include <atomic>
 #include <cstring>
-#include <cstdio>
 
 namespace {
 struct BridgeState {
@@ -86,6 +85,15 @@ void msu3dsFinalize(void)
     reset_bridge();
 }
 
+void msu3dsSetUserVolume(float factor)
+{
+    if (!g_bridge.initialized) { return; }
+    if (factor < 0.0f) { factor = 0.0f; }
+    if (factor > 2.0f) { factor = 2.0f; }
+    g_bridge.user_volume = factor;
+    apply_mix();
+}
+
 void msu3dsSetGlobalVolume(float factor)
 {
     // Callers may run before install (snd3dsInitialize applies the volume
@@ -95,17 +103,6 @@ void msu3dsSetGlobalVolume(float factor)
     if (factor < 0.0f) { factor = 0.0f; }
     if (factor > 2.0f) { factor = 2.0f; }
     g_bridge.global_volume = factor;
-    apply_mix();
-}
-
-void msu3dsSetUserVolume(float factor)
-{
-    // User volume multiplier can be set at any time; if not yet initialized,
-    // the value is safely ignored (next initialize will use 1.0f default).
-    if (!g_bridge.initialized) { return; }
-    if (factor < 0.0f) { factor = 0.0f; }
-    if (factor > 2.0f) { factor = 2.0f; }
-    g_bridge.user_volume = factor;
     apply_mix();
 }
 
@@ -161,7 +158,6 @@ void msu3dsOnEvent(Msu1Event event)
         case Msu1Event::RomUnload:
             g_bridge.backend.clear_queue();
             g_bridge.queued_since_clear = false;
-            g_bridge.underruns = 0;   // per-session stat: don't leak into the next game
             S9xMSU1Shutdown();
             apply_mix();
             return;
@@ -181,4 +177,3 @@ void msu3dsOnEvent(Msu1Event event)
         case Msu1Event::Count:         return;
     }
 }
-

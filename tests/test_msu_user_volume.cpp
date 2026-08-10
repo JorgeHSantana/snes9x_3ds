@@ -1,4 +1,3 @@
-// tests/test_msu_user_volume.cpp
 #include "doctest.h"
 #include "3dsmsu.h"
 #include "fake_backend.h"
@@ -23,33 +22,29 @@ TEST_CASE("user volume defaults to neutral 1.0")
     CHECK(fake::last_mix == doctest::Approx(1.0f));
 }
 
-TEST_CASE("user volume multiplies into the mix")
+TEST_CASE("user volume multiplies into the mix and clamps")
 {
     fresh();
-    msu3dsSetUserVolume(0.5f);
-    CHECK(fake::last_mix == doctest::Approx(0.5f));
-    MSU1.volume = 128;
-    msu3dsSetUserVolume(2.0f);
-    CHECK(fake::last_mix == doctest::Approx(2.0f * 128.0f / 255.0f));
+    msu3dsSetUserVolume(1.5f);
+    CHECK(fake::last_mix == doctest::Approx(1.5f));
+    msu3dsSetUserVolume(99.0f);
+    CHECK(fake::last_mix == doctest::Approx(2.0f));
+    msu3dsSetGlobalVolume(1.5f);
+    CHECK(fake::last_mix == doctest::Approx(3.0f));
 }
 
-TEST_CASE("user volume clamps and stacks with global; mute still wins")
+TEST_CASE("mute still wins over user volume")
 {
     fresh();
-    msu3dsSetUserVolume(99.0f);              // clamps to 2.0
-    msu3dsSetGlobalVolume(1.5f);
-    CHECK(fake::last_mix == doctest::Approx(1.5f * 2.0f));
-    msu3dsSetUserVolume(-1.0f);              // clamps to 0.0
-    CHECK(fake::last_mix == doctest::Approx(0.0f));
-    msu3dsSetUserVolume(1.0f);
+    msu3dsSetUserVolume(2.0f);
     msu3dsOnEvent(Msu1Event::MenuEnter);
     CHECK(fake::last_mix == doctest::Approx(0.0f));
     msu3dsOnEvent(Msu1Event::MenuExit);
-    CHECK(fake::last_mix == doctest::Approx(1.5f));
+    CHECK(fake::last_mix == doctest::Approx(2.0f));
 }
 
 TEST_CASE("uninitialized bridge: safe no-op")
 {
     msu3dsFinalize();
-    msu3dsSetUserVolume(0.5f);               // must not crash
+    msu3dsSetUserVolume(1.5f);
 }

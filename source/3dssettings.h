@@ -208,10 +208,8 @@ typedef struct {
 
     int                 Volume;                 // 0: 100%, 1: 125%, 2: 150%, 3: 175%, 4: 200%
     int                 GlobalVolume;
-
-    int                 Msu1Volume;             // MSU-1 track volume: 0 - 200% in steps of 25% (same curve as Volume)
-    int                 GlobalMsu1Volume;       // Global default seeded into Msu1Volume for games without a saved config;
-                                                // also the MSU-1 volume applied when UseGlobalVolume is set
+    int                 Msu1Volume;         // MSU-1 volume picker value 0..4 (100%..200%), per-game
+    int                 GlobalMsu1Volume;   // global counterpart, governed by UseGlobalVolume
 
     int                 AudioBuffer;            // wavebuf depth: 0=Low(4), 1=Normal(8), 2=High(16)
 

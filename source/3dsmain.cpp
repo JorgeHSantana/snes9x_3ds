@@ -26,7 +26,6 @@
 #include "3dssound.h"
 #include "3dsmsu.h"
 #include "3dsmsu_ndsp.h"
-#include "Snes9x/apulock.h"
 #include "3dsgpu.h"
 #include "3dsimpl.h"
 #include "3dsui.h"
@@ -47,11 +46,6 @@ const char* hotkeysData[HOTKEYS_COUNT][3];
 static bool cfgFileAvailable[2]; // global config, game config
 static u32 lastLoadedRomCRC = 0;
 static const DirectoryEntry* selectedEntry = nullptr;
-
-// Latches the "Enable MSU-1" checkbox + description row's visibility for the
-// whole session between ROM loads (set once in emulatorLoadRom(), after the
-// load-time gate). makeOptionMenu() gates those two items on this instead of
-
 
 // static globals to prevent heap fragmentation and speed up menu access.
 // note: not thread-safe, but safe here due to sequential menu/emulator execution
@@ -953,6 +947,21 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                     else
                         CheckAndUpdate( settings3DS.Volume, val );
                 });
+    // Settings.MSU1 is fixed for the lifetime of the loaded ROM, so this
+    // conditional cannot change the tab's item count mid-session.
+    if (Settings.MSU1) {
+        AddMenuPicker(items, "  MSU-1 Volume"_s, "Boosts the MSU-1 soundtrack's volume. 100% = unamplified."_s, makePickerOptions({"100%", "125%", "150%", "175%", "200%"}),
+                    settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume, DIALOG_TYPE_INFO, true,
+                    []( int val ) {
+                        if (settings3DS.UseGlobalVolume) {
+                            if (CheckAndUpdate( settings3DS.GlobalMsu1Volume, val ))
+                                msu3dsSetUserVolume(1.0f + 0.25f * (float)val);
+                        } else {
+                            if (CheckAndUpdate( settings3DS.Msu1Volume, val ))
+                                msu3dsSetUserVolume(1.0f + 0.25f * (float)val);
+                        }
+                    });
+    }
     AddMenuCheckbox(items, "  Apply volume to all games"_s, settings3DS.UseGlobalVolume,
                 []( int val )
                 {
@@ -964,36 +973,11 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                         settings3DS.Volume = settings3DS.GlobalVolume;
                         settings3DS.Msu1Volume = settings3DS.GlobalMsu1Volume;
                     }
-                    // Keep MSU-1 live-applied the same way the volume gauge below does;
-                    // SNES volume itself is picked up passively by the next
-                    // settings3dsUpdate() call (unchanged pre-existing behavior).
-                    msu3dsSetUserVolume((float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume) * 0.25f);
+                    msu3dsSetUserVolume(1.0f + 0.25f * (float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume));
                 });
 
-    AddMenuPicker(items, "  Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
+    AddMenuPicker(items, "  SNES Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.AudioBuffer, val ); });
-
-    // Settings.MSU1 is fixed for the lifetime of the loaded ROM (only a new
-    // ROM load can change it, which rebuilds this menu from scratch), so
-    // gating this gauge on it cannot change the Settings tab's item count
-    // mid-session.
-    if (Settings.MSU1) {
-        AddMenuGauge(items, "  MSU-1 Volume"_s, 0, 8,
-            settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume,
-            []( int val ) {
-                // Mirrors the SNES volume gauge above: write straight into
-                // whichever field (global or per-game) is currently active,
-                // then push the live value the same way the checkbox above does.
-                if (settings3DS.UseGlobalVolume) {
-                    if (CheckAndUpdate( settings3DS.GlobalMsu1Volume, val ))
-                        msu3dsSetUserVolume((float)val * 0.25f);
-                } else {
-                    if (CheckAndUpdate( settings3DS.Msu1Volume, val ))
-                        msu3dsSetUserVolume((float)val * 0.25f);
-                }
-            }, true);
-    }
-
 
     AddMenuDisabledOption(items, ""_s);
 
@@ -1305,14 +1289,17 @@ bool settingsReadWriteFullListByGame(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "PaletteDeferBgMask=%d\n", &settings3DS.PaletteDeferBgMask, 0, 7);
     }
 
-    if (writeMode || detectedConfigVersion >= 1.7f) {
-        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 8);
+    if (writeMode || detectedConfigVersion >= 1.8f) {
+        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 4);
+    } else if (!writeMode && detectedConfigVersion >= 1.7f) {
+        // v1.7 stored Msu1Volume on a removed 0..8 scale: consume and discard.
+        int discardedOldScale = 0;
+        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &discardedOldScale, 0, 8);
     } else if (!writeMode && detectedConfigVersion >= 1.6f) {
-        // v1.6 files carried the removed Msu1Enabled key: consume it to keep
-        // the sequential parse aligned, then read the volume as usual.
-        int discardedMsu1Enabled = 1;
-        config3dsReadWriteInt32(stream, writeMode, "Msu1Enabled=%d\n", &discardedMsu1Enabled, 0, 1);
-        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 8);
+        // v1.6 stored removed keys Msu1Enabled + old-scale Msu1Volume: consume both.
+        int discardedOld = 0;
+        config3dsReadWriteInt32(stream, writeMode, "Msu1Enabled=%d\n", &discardedOld, 0, 1);
+        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &discardedOld, 0, 8);
     }
 
     config3dsReadWriteInt32(stream, writeMode, "Frameskips=%d\n", &settings3DS.MaxFrameSkips, 0, 4);
@@ -1428,13 +1415,18 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "Intensity3D=%d\n", &settings3DS.Intensity3D, 0, 2);
     }
 
-    if (writeMode || detectedConfigVersion >= 1.8f) {
-        config3dsReadWriteInt32(stream, writeMode, "GlobalMsu1Volume=%d\n", &settings3DS.GlobalMsu1Volume, 0, 8);
+    if (writeMode || detectedConfigVersion >= 1.9f) {
+        config3dsReadWriteInt32(stream, writeMode, "GlobalMsu1Volume=%d\n", &settings3DS.GlobalMsu1Volume, 0, 4);
+    } else if (!writeMode && detectedConfigVersion >= 1.8f) {
+        // v1.8 stored GlobalMsu1Volume on a removed 0..8 scale: consume and discard.
+        int discardedOldScale = 0;
+        config3dsReadWriteInt32(stream, writeMode, "GlobalMsu1Volume=%d\n", &discardedOldScale, 0, 8);
     } else if (!writeMode && detectedConfigVersion >= 1.7f) {
-        // migrate v1.7's Msu1VolumeDefault (same position in the sequence) into GlobalMsu1Volume
-        config3dsReadWriteInt32(stream, writeMode, "Msu1VolumeDefault=%d\n", &settings3DS.GlobalMsu1Volume, 0, 8);
+        // v1.7 stored the removed Msu1VolumeDefault key: consume and discard.
+        int discardedOldScale = 0;
+        config3dsReadWriteInt32(stream, writeMode, "Msu1VolumeDefault=%d\n", &discardedOldScale, 0, 8);
     }
-
+    
     config3dsReadWriteEnum(stream, writeMode, "Font=%d\n", &settings3DS.Font, 0, 2);
     config3dsReadWriteEnum(stream, writeMode, "LogFileEnabled=%d\n", &settings3DS.LogFileEnabled, 0, 1);
 
@@ -1589,29 +1581,7 @@ bool emulatorLoadRom()
     // if not, stay on defaults
     cfgFileAvailable[1] = settingsReadWriteFullListByGame(false);
 
-
-
     settings3dsUpdate(true);
-
-    // Diagnostic dump of the effective per-game state that governs layer
-    // rendering — one line per ROM load so field reports can compare a
-    // working boot against a broken one without guesswork.
-    {
-        int layerMask = 0;
-        for (int i = 0; i < 8; ++i)
-            if (settings3DS.LayerEnabled[i])
-                layerMask |= (1 << i);
-        log3dsWrite("Game state: PalFix=%d CommitLine=%d DeferMask=%d Layers=%02X "
-                    "Skips=%d EnhRes=%d Vol=%d MSU(det=%d vol=%d gvol=%d useG=%d) AutoSt=%d",
-                    settings3DS.PaletteFix, SNESGameFixes.PaletteCommitLine,
-                    settings3DS.PaletteDeferBgMask, layerMask,
-                    settings3DS.MaxFrameSkips, (int)settings3DS.EnhancedResolution,
-                    settings3DS.Volume,
-                    Settings.MSU1 ? 1 : 0,
-                    settings3DS.Msu1Volume, settings3DS.GlobalMsu1Volume,
-                    settings3DS.UseGlobalVolume ? 1 : 0,
-                    settings3DS.AutoSavestate ? 1 : 0);
-    }
 
     // reset hotkeys that conflict with the active circle pad binding
     bool cpadBound = settings3DS.UseGlobalButtonMappings ? settings3DS.GlobalBindCirclePad : settings3DS.BindCirclePad;
@@ -2125,12 +2095,6 @@ bool emulatorInitialize()
     // snesAccessLock exists even when NDSP init failed (audioType != 2).
     msu1_set_lock_hooks(snd3dsLockSnesAccess, snd3dsUnlockSnesAccess);
 
-    // Serialize the emulation thread's per-scanline SPC700/APU execution
-    // against the mixing thread (root cause of the intermittent Mega Man X3
-    // boot-handshake corruption: mixer mutated DSP/sound state on another
-    // core while the SPC700 ran unlocked).
-    apulock_set_hooks(snd3dsLockSnesAccess, snd3dsUnlockSnesAccess);
-
     if (snd3DS.audioType == 2) msu3dsNdspInstall();
 
     enableAptHooks();
@@ -2329,7 +2293,6 @@ void emulatorLoop()
         t3dsStartTimer(TIMER_RUN_ONE_FRAME);
         impl3dsRunOneFrame(firstFrame, skipDrawing);
         t3dsStopTimer(TIMER_RUN_ONE_FRAME);
-
 
 
         long actualTicksThisFrame = (long)(svcGetSystemTick() - startFrameTick);

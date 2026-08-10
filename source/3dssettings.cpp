@@ -4,10 +4,10 @@
 #include "snes9x.h"
 #include "memmap.h"
 #include "3dssettings.h"
+#include "3dsmsu.h"
 #include "3dssound.h"
 #include "3dslcd.h"
 #include "3dsui.h"
-#include "3dsmsu.h"
 
 S9xSettings3DS settings3DS;
 
@@ -34,7 +34,7 @@ void settings3dsResetGlobalDefaults() {
     
     settings3DS.TicksPerFrame = TICKS_PER_FRAME_SNES_NTSC;
     settings3DS.GlobalVolume = 2;
-    settings3DS.GlobalMsu1Volume = 4;
+    settings3DS.GlobalMsu1Volume = 0;
 
     settings3DS.GameOverlay = Setting::AssetMode::None;
     settings3DS.GameOverlayAutoFit = false;
@@ -187,7 +187,7 @@ void settings3dsUpdate(bool includeGameSettings)
         }
         
         snd3dsApplyOutputVolume();
-        msu3dsSetUserVolume((float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume) * 0.25f);
+        msu3dsSetUserVolume(1.0f + 0.25f * (float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume));
 
         if (settings3DS.PaletteFix == 0)
             settings3DS.PaletteFix = settings3dsGetGameDefaultPaletteFix();

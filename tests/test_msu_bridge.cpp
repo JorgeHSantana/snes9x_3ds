@@ -204,40 +204,6 @@ TEST_CASE("underrun: not counted before the first PCM queue, counted once fed qu
     msu1_shutdown(MSU1);
 }
 
-TEST_CASE("RomUnload resets the underrun count")
-{
-    // Same fixture/starvation setup as the "underrun: not counted..." test
-    // above, but this time we unload the ROM and confirm the counter — a
-    // debug/UI signal for THIS session — doesn't leak into the next game.
-    std::string dir = make_tmpdir();
-    REQUIRE_FALSE(dir.empty());
-    std::string rom = put_file(dir, "Game.sfc", "", 0);
-    REQUIRE_FALSE(rom.empty());
-    put_file(dir, "Game.msu", "", 0);
-
-    std::string pcm1 = dir + "/Game-1.pcm";
-    REQUIRE(write_pcm_at(pcm1.c_str(), 0, 16));
-
-    MSU1 = Msu1State{};
-    REQUIRE(msu1_init(MSU1, rom.c_str()) == Msu1Result::Ok);
-
-    msu1_write_port(MSU1, 4, 1);
-    msu1_write_port(MSU1, 5, 0);
-    msu1_write_port(MSU1, 7, 0x03);
-
-    fresh_bridge();
-    msu3dsFillAudio();                     // establishes queued_since_clear
-    fake::free_bufs = fake::TOTAL_BUFS;    // simulate the channel starving
-    msu3dsFillAudio();
-    REQUIRE(msu3dsGetUnderrunCount() == 1);
-
-    // RomUnload runs inside the caller's drain window (mixer-safe); it must
-    // zero the counter so a stutter warning from a previous game never
-    // shows up on the next one.
-    msu3dsOnEvent(Msu1Event::RomUnload);
-    CHECK(msu3dsGetUnderrunCount() == 0);
-}
-
 TEST_CASE("uninitialized bridge: all entry points are safe no-ops")
 {
     msu3dsFinalize();

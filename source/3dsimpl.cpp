@@ -526,7 +526,7 @@ void impl3dsResetConsole()
 	snd3dsResumeMixing();
 }
 
-// Based on broken savestate samples:
+// Based on broken savestate samples: 
 // SPC left IPL, DSP still in reset shape, 
 // no keyed channels -> loads with broken audio.
 bool impl3dsHasBrokenAudioStateSignature()

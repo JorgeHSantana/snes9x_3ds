@@ -87,16 +87,10 @@ void config3dsReadWriteInt32(BufferedFileWriter& stream, bool writeMode,
     }
     else
     {
-        // Comment-only formats carry no conversion specifier, so a successful
-        // literal match makes fscanf return 0 (assignments made), never 1.
-        // Only EOF means the line genuinely wasn't there. Treating 0 as a
-        // mismatch made every config load log a bogus warning and, because
-        // the warning is log-once, masked real mismatches later in the file.
+        // safe skip: provide a dummy to discard the read value
         int dummy = 0;
         int itemsRead = fscanf(stream.get(), format, &dummy);
-        bool formatHasConversion = (strchr(format, '%') != NULL);
-        if ((formatHasConversion && itemsRead != 1) ||
-            (!formatHasConversion && itemsRead == EOF)) {
+        if (itemsRead != 1) {
             config3dsLogParseMismatchOnce(format);
         }
     }
