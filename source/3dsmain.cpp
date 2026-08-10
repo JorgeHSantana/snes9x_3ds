@@ -939,7 +939,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuDisabledOption(items, ""_s);
     
     AddMenuHeader2(items, "Audio"_s);
-    AddMenuPicker(items, "  SNES Volume"_s, "Boosts the game's volume. 100% = unamplified.\nHigh values may reduce audio quality on loud games."_s, makePickerOptions({"100%", "125%", "150%", "175%", "200%"}),
+    AddMenuPicker(items, "  Volume Amplification"_s, "Boosts the game's volume. 100% = unamplified.\nHigh values may reduce audio quality on loud games."_s, makePickerOptions({"100%", "125%", "150%", "175%", "200%"}),
                 settings3DS.UseGlobalVolume ? settings3DS.GlobalVolume : settings3DS.Volume, DIALOG_TYPE_INFO, true,
                 []( int val ) {
                     if (settings3DS.UseGlobalVolume)
@@ -947,36 +947,17 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                     else
                         CheckAndUpdate( settings3DS.Volume, val );
                 });
-    // Settings.MSU1 is fixed for the lifetime of the loaded ROM, so this
-    // conditional cannot change the tab's item count mid-session.
-    if (Settings.MSU1) {
-        AddMenuPicker(items, "  MSU-1 Volume"_s, "Boosts the MSU-1 soundtrack's volume. 100% = unamplified."_s, makePickerOptions({"100%", "125%", "150%", "175%", "200%"}),
-                    settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume, DIALOG_TYPE_INFO, true,
-                    []( int val ) {
-                        if (settings3DS.UseGlobalVolume) {
-                            if (CheckAndUpdate( settings3DS.GlobalMsu1Volume, val ))
-                                msu3dsSetUserVolume(1.0f + 0.25f * (float)val);
-                        } else {
-                            if (CheckAndUpdate( settings3DS.Msu1Volume, val ))
-                                msu3dsSetUserVolume(1.0f + 0.25f * (float)val);
-                        }
-                    });
-    }
     AddMenuCheckbox(items, "  Apply volume to all games"_s, settings3DS.UseGlobalVolume,
                 []( int val )
                 {
                     CheckAndUpdateToggle( settings3DS.UseGlobalVolume, val );
-                    if (settings3DS.UseGlobalVolume) {
+                    if (settings3DS.UseGlobalVolume)
                         settings3DS.GlobalVolume = settings3DS.Volume;
-                        settings3DS.GlobalMsu1Volume = settings3DS.Msu1Volume;
-                    } else {
+                    else
                         settings3DS.Volume = settings3DS.GlobalVolume;
-                        settings3DS.Msu1Volume = settings3DS.GlobalMsu1Volume;
-                    }
-                    msu3dsSetUserVolume(1.0f + 0.25f * (float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume));
                 });
 
-    AddMenuPicker(items, "  SNES Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
+    AddMenuPicker(items, "  Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.AudioBuffer, val ); });
 
     AddMenuDisabledOption(items, ""_s);
@@ -1289,19 +1270,6 @@ bool settingsReadWriteFullListByGame(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "PaletteDeferBgMask=%d\n", &settings3DS.PaletteDeferBgMask, 0, 7);
     }
 
-    if (writeMode || detectedConfigVersion >= 1.8f) {
-        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 4);
-    } else if (!writeMode && detectedConfigVersion >= 1.7f) {
-        // v1.7 stored Msu1Volume on a removed 0..8 scale: consume and discard.
-        int discardedOldScale = 0;
-        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &discardedOldScale, 0, 8);
-    } else if (!writeMode && detectedConfigVersion >= 1.6f) {
-        // v1.6 stored removed keys Msu1Enabled + old-scale Msu1Volume: consume both.
-        int discardedOld = 0;
-        config3dsReadWriteInt32(stream, writeMode, "Msu1Enabled=%d\n", &discardedOld, 0, 1);
-        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &discardedOld, 0, 8);
-    }
-
     config3dsReadWriteInt32(stream, writeMode, "Frameskips=%d\n", &settings3DS.MaxFrameSkips, 0, 4);
     config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.Volume, 0, SND3DS_VOLUME_MAX);
     config3dsReadWriteInt32(stream, writeMode, "PalFix=%d\n", &settings3DS.PaletteFix, 0, 3);
@@ -1413,18 +1381,6 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
 
     if (writeMode || detectedConfigVersion >= 1.6f) {
         config3dsReadWriteEnum(stream, writeMode, "Intensity3D=%d\n", &settings3DS.Intensity3D, 0, 2);
-    }
-
-    if (writeMode || detectedConfigVersion >= 1.9f) {
-        config3dsReadWriteInt32(stream, writeMode, "GlobalMsu1Volume=%d\n", &settings3DS.GlobalMsu1Volume, 0, 4);
-    } else if (!writeMode && detectedConfigVersion >= 1.8f) {
-        // v1.8 stored GlobalMsu1Volume on a removed 0..8 scale: consume and discard.
-        int discardedOldScale = 0;
-        config3dsReadWriteInt32(stream, writeMode, "GlobalMsu1Volume=%d\n", &discardedOldScale, 0, 8);
-    } else if (!writeMode && detectedConfigVersion >= 1.7f) {
-        // v1.7 stored the removed Msu1VolumeDefault key: consume and discard.
-        int discardedOldScale = 0;
-        config3dsReadWriteInt32(stream, writeMode, "Msu1VolumeDefault=%d\n", &discardedOldScale, 0, 8);
     }
     
     config3dsReadWriteEnum(stream, writeMode, "Font=%d\n", &settings3DS.Font, 0, 2);

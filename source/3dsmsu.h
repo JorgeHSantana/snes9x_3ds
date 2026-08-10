@@ -24,8 +24,7 @@ bool     msu3dsInitialize(const Msu1AudioBackend& backend,
                           int16_t* staging, uint32_t staging_samples);
 void     msu3dsFinalize(void);
 void     msu3dsOnEvent(Msu1Event event);
-void     msu3dsSetGlobalVolume(float factor);
-void     msu3dsSetUserVolume(float factor);     // per-game/global MSU-1 volume, 1.0 + setting*0.25   // 1.0 + setting*0.25 (same curve as ch 0)
+void     msu3dsSetGlobalVolume(float factor);   // 1.0 + setting*0.25 (same curve as ch 0)
 void     msu3dsFillAudio(void);                 // mixing thread, under snesAccessLock
 uint32_t msu3dsGetUnderrunCount(void);
 bool     msu3dsIsMuted(void);                   // exposed for tests/diagnostics
