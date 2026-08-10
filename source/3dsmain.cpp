@@ -2294,6 +2294,27 @@ void emulatorLoop()
 //---------------------------------------------------------
 // Main entrypoint.
 //---------------------------------------------------------
+// Dev convenience (used for emulator-driven validation, e.g. Azahar): boot
+// straight into the ROM whose absolute path is the first line of
+// sdmc:/autoboot.txt. Absent/unreadable file = normal menu boot.
+static bool tryAutoBoot()
+{
+    FILE* f = fopen("sdmc:/autoboot.txt", "r");
+    if (f == NULL) { return false; }
+    char path[PATH_MAX] = {};
+    bool ok = fgets(path, sizeof(path), f) != NULL;
+    fclose(f);
+    if (!ok) { return false; }
+    path[strcspn(path, "\r\n")] = '\0';
+    char* slash = strrchr(path, '/');
+    if (slash == NULL || slash[1] == '\0') { return false; }
+    *slash = '\0';
+    file3dsSetCurrentDir(path);
+    snprintf(romFileName, sizeof(romFileName), "%s", slash + 1);
+    log3dsWrite("[autoboot] %s/%s", path, romFileName);
+    return emulatorLoadRom();
+}
+
 int main()
 {
     APT_CheckNew3DS(&settings3DS.isNew3DS);
@@ -2315,7 +2336,7 @@ int main()
     img3dsSetThumbMode();
     gfxSetDoubleBuffering(settings3DS.SecondScreen, true);
 
-    GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
+    GPU3DS.emulatorState = tryAutoBoot() ? EMUSTATE_EMULATE : EMUSTATE_PAUSEMENU;
     
     while (aptMainLoop() && GPU3DS.emulatorState != EMUSTATE_END) {
         switch (GPU3DS.emulatorState) {
