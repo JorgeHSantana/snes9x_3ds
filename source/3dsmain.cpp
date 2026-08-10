@@ -2315,7 +2315,6 @@ static bool tryAutoBoot()
     *slash = '\0';
     file3dsSetCurrentDir(path);
     snprintf(romFileName, sizeof(romFileName), "%s", slash + 1);
-    msu1_set_log_hook(msu1LogToFile);
     log3dsWrite("[autoboot] %s/%s", path, romFileName);
     return emulatorLoadRom();
 }
@@ -2337,6 +2336,10 @@ int main()
     if (!emulatorInitialize()) {
         return emulatorFinalize();
     }
+
+    // msu1 diagnostics feed the session log whenever logging is enabled
+    // (log3dsWrite is a no-op otherwise) — menu boots included, not just autoboot.
+    msu1_set_log_hook(msu1LogToFile);
     
     img3dsSetThumbMode();
     gfxSetDoubleBuffering(settings3DS.SecondScreen, true);
