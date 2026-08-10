@@ -112,6 +112,7 @@ Msu1Result msu1_init(Msu1State& state, const char* rom_path)
     }
     state.data_size = (uint32_t)size;
     fseek(state.data_file, 0, SEEK_SET);
+    state.data_file_pos = 0;
     state.enabled = true;
     state.status  = MSU1_REVISION;
     state.volume  = 0;
@@ -139,7 +140,7 @@ void msu1_soft_reset(Msu1State& state)
     state.audio_loop_point = 0;
     state.resume_track     = 0;
     state.resume_pos       = 0;
-    if (state.data_file != nullptr) { fseek(state.data_file, 0, SEEK_SET); }
+    if (state.data_file != nullptr) { fseek(state.data_file, 0, SEEK_SET); state.data_file_pos = 0; }
     state.data_pos = 0;
     // keeps: data_file, data_size, enabled, base_path, volume, volume_changed_cb
 }
@@ -147,6 +148,9 @@ void msu1_soft_reset(Msu1State& state)
 static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
 
 static void (*g_log_hook)(const char*) = nullptr;
+static uint32_t (*g_data_prefetch)(uint32_t, uint8_t*, uint32_t) = nullptr;
+void msu1_set_data_prefetch(uint32_t (*read)(uint32_t pos, uint8_t* dst, uint32_t count))
+{ g_data_prefetch = read; }
 void msu1_set_log_hook(void (*log)(const char* message)) { g_log_hook = log; }
 
 void msu1_diag(const char* fmt, ...)
@@ -207,12 +211,8 @@ uint8_t msu1_read_port(Msu1State& state, uint8_t port)
     switch (port) {
         case 0: return state.status;
         case 1: {
-            if (state.data_file == nullptr) { return 0x00; }
-            if (state.data_pos >= state.data_size) { return 0x00; }
-            int c = fgetc(state.data_file);
-            if (c == EOF) { return 0x00; }
-            state.data_pos++;
-            return (uint8_t)c;
+            uint8_t b = 0;
+            return (msu1_read_data_bulk(state, &b, 1) == 1) ? b : 0x00;
         }
         default: return MSU1_ID[port - 2];
     }
@@ -225,9 +225,21 @@ uint32_t msu1_read_data_bulk(Msu1State& state, uint8_t* dst, uint32_t count)
     if (state.data_pos >= state.data_size) { return 0; }
     uint32_t remaining = state.data_size - state.data_pos;
     if (count > remaining) { count = remaining; }
-    size_t got = fread(dst, 1, count, state.data_file);
-    state.data_pos += (uint32_t)got;
-    return (uint32_t)got;
+
+    uint32_t served = 0;
+    if (g_data_prefetch != nullptr) {
+        served = g_data_prefetch(state.data_pos, dst, count);
+        state.data_pos += served;               // FILE* position now lags data_pos
+        if (served == count) { return served; }
+    }
+    if (state.data_file_pos != state.data_pos) {
+        if (fseek(state.data_file, (long)state.data_pos, SEEK_SET) != 0) { return served; }
+        state.data_file_pos = state.data_pos;
+    }
+    size_t got = fread(dst + served, 1, count - served, state.data_file);
+    state.data_pos      += (uint32_t)got;
+    state.data_file_pos += (uint32_t)got;
+    return served + (uint32_t)got;
 }
 
 uint8_t msu1_dma_b_offset(uint8_t transfer_mode, uint32_t byte_index)
@@ -253,6 +265,7 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
             if (target > state.data_size) { target = state.data_size; }  // clamp
             if (state.data_file != nullptr && fseek(state.data_file, (long)target, SEEK_SET) == 0) {
                 state.data_pos = target;
+                state.data_file_pos = target;
             }
             return;
         }
@@ -396,6 +409,7 @@ static Msu1Result msu1_restore_locked(Msu1State& state, const Msu1Snapshot& snap
     if (dpos > state.data_size) { dpos = state.data_size; }
     if (state.data_file != nullptr && fseek(state.data_file, (long)dpos, SEEK_SET) == 0) {
         state.data_pos = dpos;
+        state.data_file_pos = dpos;
     }
 
     // audio stream: reload the saved track from disk

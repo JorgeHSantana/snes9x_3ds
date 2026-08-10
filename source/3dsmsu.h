@@ -25,6 +25,14 @@ bool     msu3dsInitialize(const Msu1AudioBackend& backend,
 void     msu3dsFinalize(void);
 void     msu3dsOnEvent(Msu1Event event);
 void     msu3dsSetGlobalVolume(float factor);   // 1.0 + setting*0.25 (same curve as ch 0)
+
+// Data-track read-ahead (phase B). Storage is caller-owned; null/0 disables.
+// Locks are leaf hooks (LightLock on 3DS, null = no-op on host tests).
+// Fill runs on the mixing thread; Read is the msu1 core's prefetch source.
+void     msu3dsDataPrefetchInit(uint8_t* storage, uint32_t capacity);
+void     msu3dsDataPrefetchLocks(void (*lock)(void), void (*unlock)(void));
+void     msu3dsDataPrefetchFill(void);
+uint32_t msu3dsDataPrefetchRead(uint32_t pos, uint8_t* dst, uint32_t count);
 void     msu3dsFillAudio(void);                 // mixing thread, under snesAccessLock
 uint32_t msu3dsGetUnderrunCount(void);
 bool     msu3dsIsMuted(void);                   // exposed for tests/diagnostics

@@ -49,6 +49,7 @@ struct Msu1State {
     uint32_t resume_pos;
     FILE*    data_file;          // owned by this struct; nullptr when absent
     uint32_t audio_read_stalls;  // consecutive zero-byte audio freads (runtime only)
+    uint32_t data_file_pos;      // actual FILE position of data_file (runtime only)
     FILE*    audio_file;         // owned by this struct; nullptr when absent
     char     base_path[MSU1_MAX_BASE_PATH];
     void     (*volume_changed_cb)(void);   // optional; installed by the platform bridge
@@ -110,6 +111,11 @@ void msu1_set_log_hook(void (*log)(const char* message));
 // Formats and forwards to the log hook (no-op when the hook is null).
 // Public so platform-side MSU code can share the same diagnostics channel.
 void msu1_diag(const char* fmt, ...);
+
+// Optional data-track prefetch source (default null). When set, bulk reads
+// try it first at the requested file offset; any shortfall falls back to a
+// direct (position-corrected) fread. Installed by the platform bridge.
+void msu1_set_data_prefetch(uint32_t (*read)(uint32_t pos, uint8_t* dst, uint32_t count));
 
 // legacy-boundary wrappers (operate on the global MSU1)
 uint8_t S9xMSU1ReadPort(uint8_t port);

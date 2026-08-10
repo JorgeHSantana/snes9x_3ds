@@ -1,4 +1,5 @@
 // source/3dsmsu_ndsp.cpp — NDSP channel 1 backend. 3DS-only, logic-free.
+#include <stdlib.h>
 #include <3ds.h>
 #include <cstring>
 #include "3dsmsu.h"
@@ -75,6 +76,14 @@ void ndsp_clear_queue(void)
 }
 
 void ndsp_shutdown_channel(void) { ndspChnWaveBufClear(MSU_CHANNEL); }
+
+// phase B: data-track read-ahead ring (see 3dsmsu.cpp). 512 KB is ~1.7 s of
+// Road Blaster's stream; the lock is a leaf held only for index updates.
+constexpr uint32_t PREFETCH_RING_BYTES = 512 * 1024;
+uint8_t*  g_prefetch_ring = nullptr;
+LightLock g_prefetch_lock;
+void prefetch_lock(void)   { LightLock_Lock(&g_prefetch_lock); }
+void prefetch_unlock(void) { LightLock_Unlock(&g_prefetch_lock); }
 } // namespace
 
 bool msu3dsNdspInstall(void)
@@ -86,6 +95,15 @@ bool msu3dsNdspInstall(void)
     if (g_staging == nullptr) {
         g_staging = (int16_t*)linearAlloc(MSU_BUF_BYTES);
         if (g_staging == nullptr) { linearFree(g_pcm_block); g_pcm_block = nullptr; return false; }
+    }
+    if (g_prefetch_ring == nullptr) {
+        g_prefetch_ring = (uint8_t*)malloc(PREFETCH_RING_BYTES);
+        if (g_prefetch_ring != nullptr) {
+            LightLock_Init(&g_prefetch_lock);
+            msu3dsDataPrefetchLocks(prefetch_lock, prefetch_unlock);
+            msu3dsDataPrefetchInit(g_prefetch_ring, PREFETCH_RING_BYTES);
+        }
+        // allocation failure: prefetch stays disabled, phase-A behavior
     }
     Msu1AudioBackend backend = {
         ndsp_init_channel, ndsp_set_mix, ndsp_queue_buffer, ndsp_free_buffer_count,

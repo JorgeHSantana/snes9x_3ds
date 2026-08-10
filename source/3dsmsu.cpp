@@ -50,6 +50,138 @@ void apply_mix(void)
 }
 } // namespace
 
+namespace {
+
+// Data-track read-ahead ring (phase B). Producer = mixing thread
+// (msu3dsDataPrefetchFill), consumer = emulation thread via the msu1 core
+// prefetch hook. The ring lock is a LEAF: nothing else is acquired while
+// holding it, and both critical sections are memcpy/index-sized — the
+// consumer never touches the mixer's long-held snesAccessLock.
+struct PrefetchRing {
+    uint8_t* buf;
+    uint32_t cap;
+    uint32_t rd;            // physical index of the window's first byte
+    uint32_t avail;         // valid bytes in the window
+    uint32_t file_pos_next; // file offset one past the window's last byte
+    uint32_t gen;           // bumped on every window reset (miss/seek/event)
+    FILE*    prod_file;     // producer's own handle on <base>.msu
+    uint32_t prod_pos;      // producer file position (UINT32_MAX = unknown)
+    void (*lock)(void);
+    void (*unlock)(void);
+};
+PrefetchRing g_ring = {};
+
+inline void ring_lock(void)   { if (g_ring.lock)   { g_ring.lock(); } }
+inline void ring_unlock(void) { if (g_ring.unlock) { g_ring.unlock(); } }
+
+// caller must hold the ring lock
+void ring_reset_locked(uint32_t pos)
+{
+    g_ring.rd = 0;
+    g_ring.avail = 0;
+    g_ring.file_pos_next = pos;
+    g_ring.gen++;
+}
+
+void ring_close_producer(void)
+{
+    if (g_ring.prod_file != nullptr) { fclose(g_ring.prod_file); g_ring.prod_file = nullptr; }
+    g_ring.prod_pos = UINT32_MAX;
+}
+
+constexpr uint32_t PREFETCH_MAX_FILL_PER_TICK = 32 * 1024;
+
+} // namespace
+
+void msu3dsDataPrefetchInit(uint8_t* storage, uint32_t capacity)
+{
+    ring_close_producer();
+    g_ring.buf = (capacity > 0) ? storage : nullptr;
+    g_ring.cap = (storage != nullptr) ? capacity : 0;
+    ring_lock();
+    ring_reset_locked(0);
+    ring_unlock();
+}
+
+void msu3dsDataPrefetchLocks(void (*lock)(void), void (*unlock)(void))
+{
+    g_ring.lock = lock;
+    g_ring.unlock = unlock;
+}
+
+uint32_t msu3dsDataPrefetchRead(uint32_t pos, uint8_t* dst, uint32_t count)
+{
+    if (g_ring.buf == nullptr || count == 0) { return 0; }
+    ring_lock();
+    uint32_t win_start = g_ring.file_pos_next - g_ring.avail;
+    uint32_t served = 0;
+    if (g_ring.avail != 0 && pos >= win_start && pos < g_ring.file_pos_next) {
+        uint32_t skip = pos - win_start;
+        g_ring.rd = (g_ring.rd + skip) % g_ring.cap;
+        g_ring.avail -= skip;
+        served = count;
+        if (served > g_ring.avail) { served = g_ring.avail; }
+        uint32_t first = g_ring.cap - g_ring.rd;
+        if (first > served) { first = served; }
+        memcpy(dst, g_ring.buf + g_ring.rd, first);
+        if (served > first) { memcpy(dst + first, g_ring.buf, served - first); }
+        g_ring.rd = (g_ring.rd + served) % g_ring.cap;
+        g_ring.avail -= served;
+    } else {
+        // miss: re-base the window so the producer prefetches from here on
+        ring_reset_locked(pos);
+    }
+    ring_unlock();
+    return served;
+}
+
+void msu3dsDataPrefetchFill(void)
+{
+    if (g_ring.buf == nullptr) { return; }
+    if (!MSU1.enabled || MSU1.data_size == 0 || MSU1.base_path[0] == '\0') {
+        ring_close_producer();
+        return;
+    }
+    if (g_ring.prod_file == nullptr) {
+        char path[MSU1_MAX_BASE_PATH + 8];
+        int n = snprintf(path, sizeof(path), "%s.msu", MSU1.base_path);
+        if (n <= 0 || (size_t)n >= sizeof(path)) { return; }
+        g_ring.prod_file = fopen(path, "rb");
+        if (g_ring.prod_file == nullptr) { return; }
+        g_ring.prod_pos = UINT32_MAX;
+    }
+
+    ring_lock();
+    uint32_t my_gen = g_ring.gen;
+    uint32_t target = g_ring.file_pos_next;
+    uint32_t space  = g_ring.cap - g_ring.avail;
+    uint32_t wr     = (g_ring.rd + g_ring.avail) % g_ring.cap;
+    ring_unlock();
+
+    if (space == 0 || target >= MSU1.data_size) { return; }
+    uint32_t want = MSU1.data_size - target;
+    if (want > space) { want = space; }
+    if (want > PREFETCH_MAX_FILL_PER_TICK) { want = PREFETCH_MAX_FILL_PER_TICK; }
+    uint32_t span = g_ring.cap - wr;              // one contiguous span per tick
+    if (want > span) { want = span; }
+
+    if (g_ring.prod_pos != target) {
+        if (fseek(g_ring.prod_file, (long)target, SEEK_SET) != 0) { return; }
+        g_ring.prod_pos = target;
+    }
+    // fread OUTSIDE the lock: the free region belongs to the producer unless
+    // the generation changes, in which case the bytes are discarded below.
+    size_t got = fread(g_ring.buf + wr, 1, want, g_ring.prod_file);
+    g_ring.prod_pos += (uint32_t)got;
+
+    ring_lock();
+    if (g_ring.gen == my_gen && got > 0) {
+        g_ring.avail += (uint32_t)got;
+        g_ring.file_pos_next += (uint32_t)got;
+    }
+    ring_unlock();
+}
+
 bool msu3dsInitialize(const Msu1AudioBackend& backend,
                       int16_t* staging, uint32_t staging_samples)
 {
@@ -69,12 +201,14 @@ bool msu3dsInitialize(const Msu1AudioBackend& backend,
     g_bridge.staging_samples = staging_samples;
     g_bridge.global_volume   = 1.0f;
     MSU1.volume_changed_cb   = bridge_volume_cb;
+    msu1_set_data_prefetch(msu3dsDataPrefetchRead);
     apply_mix();
     return true;
 }
 
 void msu3dsFinalize(void)
 {
+    ring_close_producer();
     if (!g_bridge.initialized) { return; }
     g_bridge.backend.clear_queue();
     g_bridge.backend.shutdown_channel();
@@ -106,6 +240,7 @@ void msu3dsFillAudio(void)
     // (RomUnload / SavestateLoaded) execute inside drain windows, so never
     // concurrently with a backend queue_buffer call.
     if (g_bridge.drain_active) { return; }
+    msu3dsDataPrefetchFill();
     if (!MSU1.enabled) { return; }        // zero-cost path when no MSU-1 game is loaded
     const bool playing = (MSU1.status & MSU1_FLAG_AUDIO_PLAYING) != 0;
     // Menu/APT pause must FREEZE the track position (spec section 6 row 1):
@@ -148,18 +283,22 @@ void msu3dsOnEvent(Msu1Event event)
         case Msu1Event::RomUnload:
             g_bridge.backend.clear_queue();
             g_bridge.queued_since_clear = false;
+            ring_close_producer();
+            ring_lock(); ring_reset_locked(0); ring_unlock();
             S9xMSU1Shutdown();
             apply_mix();
             return;
         case Msu1Event::SavestateLoaded:
             g_bridge.backend.clear_queue();
             g_bridge.queued_since_clear = false;
+            ring_lock(); ring_reset_locked(MSU1.data_pos); ring_unlock();
             apply_mix();
             return;
         case Msu1Event::VolumeChanged: apply_mix(); return;
         case Msu1Event::ConsoleReset:
             g_bridge.backend.clear_queue();
             g_bridge.queued_since_clear = false;
+            ring_lock(); ring_reset_locked(0); ring_unlock();
             msu1_soft_reset(MSU1);
             apply_mix();
             return;
