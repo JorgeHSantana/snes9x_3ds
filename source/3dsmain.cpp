@@ -51,14 +51,7 @@ static const DirectoryEntry* selectedEntry = nullptr;
 // Latches the "Enable MSU-1" checkbox + description row's visibility for the
 // whole session between ROM loads (set once in emulatorLoadRom(), after the
 // load-time gate). makeOptionMenu() gates those two items on this instead of
-// the live Settings.MSU1/Msu1Enabled condition so their visibility cannot
-// change out from under the cursor while the Settings tab is open — see the
-// comment at the gate site in emulatorLoadRom() and at the menu gate.
-static bool menuMsu1RowsVisible = false;
 
-// Diagnostic frame counter, reset at every ROM load: drives the first-ten-
-// seconds per-layer render logging in emulatorLoop().
-static int diagFramesSinceLoad = 0;
 
 // static globals to prevent heap fragmentation and speed up menu access.
 // note: not thread-safe, but safe here due to sequential menu/emulator execution
@@ -1002,27 +995,9 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             }, true);
     }
 
-    // Shown for MSU-1 games, and also for games the user previously disabled
-    // MSU-1 on (so they can re-enable it). Gated on the session latch
-    // (snapshotted once in emulatorLoadRom(), see its definition above),
-    // NOT on the live Settings.MSU1/Msu1Enabled condition: re-enabling the
-    // checkbox flips Msu1Enabled while Settings.MSU1 is false, which would
-    // make the live condition (and this row) go false right as its own
-    // callback's menu3dsMarkTabDirty() rebuilds the tab — shrinking the item
-    // count at the cursor and desyncing setupMenu()'s index-based selection
-    // restore. The latch keeps this row's visibility (and the description
-    // row below it) constant for the whole session; only the next ROM load
-    // re-evaluates it. menu3dsMarkTabDirty() is kept in the callback purely
-    // to refresh the status line/subtitle at the bottom of the section.
-    if (menuMsu1RowsVisible) {
-        AddMenuCheckbox(items, "  Enable MSU-1"_s, settings3DS.Msu1Enabled,
-            []( int val ) {
-                if (CheckAndUpdateToggle(settings3DS.Msu1Enabled, val)) {
-                    menu3dsMarkTabDirty(TAB_SETTINGS);
-                }
-            });
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Applies the next time the game is loaded."_s, ""_s);
-    }
+    // No Enable checkbox by design (maintainer decision): MSU-1 activates by
+    // file presence; the per-game Msu1Enabled setting remains available as a
+    // hand-editable escape hatch in the config file, applied at load time.
 
     {
         // Snapshot taken at menu-build time. The tab is only marked dirty on
@@ -1041,7 +1016,10 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
         char msu1StatusLine[80];
         snprintf(msu1StatusLine, sizeof(msu1StatusLine), "  %s", msu1RawLine);
-        items.emplace_back(nullptr, MenuItemType::Textarea, msu1StatusLine, ""_s);
+        // Disabled type: renders in the clearly-muted disabled color in all
+        // themes (the Textarea description color was near-identical to normal
+        // text in the Dark theme). Still non-highlightable.
+        items.emplace_back(nullptr, MenuItemType::Disabled, msu1StatusLine, ""_s);
 
         // Always add the subtitle item, even when empty, so the Settings
         // tab's item COUNT stays constant across rebuilds. A conditional
@@ -1059,7 +1037,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         } else {
             msu1StatusSubtitle[0] = '\0';
         }
-        items.emplace_back(nullptr, MenuItemType::Textarea, msu1StatusSubtitle, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Disabled, msu1StatusSubtitle, ""_s);
     }
 
     AddMenuDisabledOption(items, ""_s);
@@ -1663,14 +1641,6 @@ bool emulatorLoadRom()
         Settings.MSU1 = FALSE;
     }
 
-    // Snapshot the "Enable MSU-1" row's visibility for the rest of this
-    // session, taken AFTER the gate above so it reflects the final
-    // post-config state. makeOptionMenu() gates on this latch instead of the
-    // live condition so toggling the checkbox (which only marks the tab
-    // dirty for a status-line refresh) can never change the Settings tab's
-    // item count mid-session — only the next ROM load re-evaluates it.
-    menuMsu1RowsVisible = (Settings.MSU1 != FALSE) || !settings3DS.Msu1Enabled;
-    diagFramesSinceLoad = 0;
 
     settings3dsUpdate(true);
 
@@ -2411,34 +2381,6 @@ void emulatorLoop()
         impl3dsRunOneFrame(firstFrame, skipDrawing);
         t3dsStopTimer(TIMER_RUN_ONE_FRAME);
 
-        // Diagnostic: for the first ~10 seconds after a ROM load, log once
-        // per second what the GAME asked us to draw (PPU screen designation
-        // and mode) versus what the render pipeline queued per layer.
-        // Distinguishes "game never enabled/uploaded the BGs" (emulation or
-        // timing side) from "layers submitted but not drawn" (GPU side).
-        if (diagFramesSinceLoad < 600) {
-            if ((diagFramesSinceLoad % 60) == 0) {
-                log3dsWrite("Frame %d: INIDISP=%02X TM=%02X TS=%02X BGMODE=%02X "
-                            "pad=%08X keys=%08X "
-                            "verts M/S: BG0=%d/%d BG1=%d/%d BG2=%d/%d BG3=%d/%d OBJ=%d/%d",
-                            diagFramesSinceLoad,
-                            (unsigned)IPPU.Joypads[0],
-                            (unsigned)input3dsGetCurrentKeysHeld(),
-                            Memory.FillRAM[0x2100], Memory.FillRAM[0x212C],
-                            Memory.FillRAM[0x212D], Memory.FillRAM[0x2105],
-                            GPU3DSExt.layerList.layers[0].verticesByTarget[0],
-                            GPU3DSExt.layerList.layers[0].verticesByTarget[1],
-                            GPU3DSExt.layerList.layers[1].verticesByTarget[0],
-                            GPU3DSExt.layerList.layers[1].verticesByTarget[1],
-                            GPU3DSExt.layerList.layers[2].verticesByTarget[0],
-                            GPU3DSExt.layerList.layers[2].verticesByTarget[1],
-                            GPU3DSExt.layerList.layers[3].verticesByTarget[0],
-                            GPU3DSExt.layerList.layers[3].verticesByTarget[1],
-                            GPU3DSExt.layerList.layers[4].verticesByTarget[0],
-                            GPU3DSExt.layerList.layers[4].verticesByTarget[1]);
-            }
-            diagFramesSinceLoad++;
-        }
 
 
         long actualTicksThisFrame = (long)(svcGetSystemTick() - startFrameTick);

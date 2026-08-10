@@ -1,5 +1,25 @@
 # Known issues
 
+## Mega Man X3: intermittent missing background layers at boot
+
+Mega Man X3 (vanilla or MSU-1-patched) can intermittently boot with its
+background layers missing (the game enables them but never uploads their
+graphics to VRAM). Extensive investigation (2026-08) established:
+
+* The game's strict SNES CPU <-> SPC700 boot handshake intermittently
+  derails while the NDSP audio mixing thread is active on another core; a
+  probe build with the mixer neutralized booted correctly 5/5 while the
+  normal build failed 3/3 on the same console and SD card.
+* The failure probability is modulated by binary code layout, so it can
+  appear or disappear across otherwise unrelated builds.
+* Serializing the SPC700 execution window against the mixing thread
+  (`source/Snes9x/apulock.*`, kept in the tree as correct-hygiene
+  synchronization) did not eliminate the symptom — the corrupting
+  interaction is subtler than that lock's coverage and remains unresolved.
+
+Workaround: if the game boots with missing graphics, Reset it from the
+menu (or reload) and try again — each boot re-rolls the dice.
+
 ## Old 3DS performance
 
 [Super FX and SA-1](https://en.wikipedia.org/wiki/List_of_Super_NES_enhancement_chips#List_of_Super_NES_games_with_enhancement_chips) titles are generally too demanding for full speed.
