@@ -73,6 +73,15 @@ void msu1_soft_reset(Msu1State& state);
 
 // register interface (emulation thread)
 uint8_t msu1_read_port(Msu1State& state, uint8_t port);
+
+// Reads up to count bytes from the data track at data_pos with one fread.
+// Returns bytes actually read (short at EOF, 0 when disabled or no data
+// file); advances data_pos by the return value. No status flags change.
+uint32_t msu1_read_data_bulk(Msu1State& state, uint8_t* dst, uint32_t count);
+
+// B-bus register offset of the i-th byte of a DMA transfer for a given
+// transfer mode (0-7; 5-7 mirror 1-3). Matches the SNES DMA write patterns.
+uint8_t msu1_dma_b_offset(uint8_t transfer_mode, uint32_t byte_index);
 void    msu1_write_port(Msu1State& state, uint8_t port, uint8_t value);
 
 // audio pull (mixing thread, under snesAccessLock); returns bytes written

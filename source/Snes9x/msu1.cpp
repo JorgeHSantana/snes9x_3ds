@@ -195,6 +195,28 @@ uint8_t msu1_read_port(Msu1State& state, uint8_t port)
     }
 }
 
+uint32_t msu1_read_data_bulk(Msu1State& state, uint8_t* dst, uint32_t count)
+{
+    if (!state.enabled) { return 0; }
+    if (state.data_file == nullptr) { return 0; }
+    if (state.data_pos >= state.data_size) { return 0; }
+    uint32_t remaining = state.data_size - state.data_pos;
+    if (count > remaining) { count = remaining; }
+    size_t got = fread(dst, 1, count, state.data_file);
+    state.data_pos += (uint32_t)got;
+    return (uint32_t)got;
+}
+
+uint8_t msu1_dma_b_offset(uint8_t transfer_mode, uint32_t byte_index)
+{
+    switch (transfer_mode & 0x7) {
+        case 1: case 5: return (uint8_t)(byte_index & 1);
+        case 3: case 7: return (uint8_t)((byte_index >> 1) & 1);
+        case 4:         return (uint8_t)(byte_index & 3);
+        default:        return 0;   // modes 0, 2, 6 write one register
+    }
+}
+
 void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
 {
     if (port > 7 || !state.enabled) { return; }
