@@ -128,6 +128,15 @@ void S9xDoDMA (uint8 Channel)
 	{
 		if ((d->AAddress & 0x7) == 1)
 		{
+			// FMV streams VRAM via transfer mode 1 ($2118/$2119): use the same
+			// inline register macros as the generic fast path below — a full
+			// S9xSetPPU dispatch per byte costs ~300K calls/s at video rates.
+			bool vramPairs = (d->BAddress == 0x18)
+			              && (d->TransferMode == 1 || d->TransferMode == 5);
+	#ifndef CORRECT_VRAM_READS
+			if (vramPairs)
+				IPPU.FirstVRAMRead = TRUE;
+	#endif
 			uint8 span[512];
 			int done = 0;
 			while (done < count)
@@ -137,9 +146,39 @@ void S9xDoDMA (uint8 Channel)
 				uint32 got = msu1_read_data_bulk (MSU1, span, (uint32) chunk);
 				if ((int) got < chunk)
 					memset (span + got, 0, chunk - got);   // past-EOF reads are 0x00
-				for (int i = 0; i < chunk; i++)
-					S9xSetPPU (span[i], 0x2100 + d->BAddress +
-					           msu1_dma_b_offset ((uint8) d->TransferMode, (uint32) (done + i)));
+				if (vramPairs)
+				{
+					// chunk starts on even parity (512-byte chunks), so pairs
+					// stay aligned; a trailing odd byte goes to $2118 like the
+					// generic path's count==1 case.
+					int i = 0;
+					if (!PPU.VMA.FullGraphicCount)
+					{
+						while (i + 1 < chunk)
+						{
+							Work = span[i];     REGISTER_2118_linear(Work);
+							Work = span[i + 1]; REGISTER_2119_linear(Work);
+							i += 2;
+						}
+						if (i < chunk) { Work = span[i]; REGISTER_2118_linear(Work); }
+					}
+					else
+					{
+						while (i + 1 < chunk)
+						{
+							Work = span[i];     REGISTER_2118_tile(Work);
+							Work = span[i + 1]; REGISTER_2119_tile(Work);
+							i += 2;
+						}
+						if (i < chunk) { Work = span[i]; REGISTER_2118_tile(Work); }
+					}
+				}
+				else
+				{
+					for (int i = 0; i < chunk; i++)
+						S9xSetPPU (span[i], 0x2100 + d->BAddress +
+						           msu1_dma_b_offset ((uint8) d->TransferMode, (uint32) (done + i)));
+				}
 				done += chunk;
 			}
 		}
