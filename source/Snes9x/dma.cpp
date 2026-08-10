@@ -118,16 +118,39 @@ void S9xDoDMA (uint8 Channel)
 		break;
     }
 
-	// MSU-1: DMA with a fixed A-bus source in $2000-$2007 (e.g. $2001 -> WRAM $2180).
-	// The generic path below resolves the A-address through memory-map base pointers,
-	// which do not exist for register space; route each byte through the register layer.
+	// MSU-1: DMA with a fixed A-bus source in $2000-$2007 (e.g. $2001 -> VRAM).
+	// The generic path below resolves the A-address through memory-map base
+	// pointers, which do not exist for register space. The data port gets a
+	// bulk fread per span; other ports keep the per-byte register path. The
+	// B-bus follows the transfer-mode write pattern (FMV uses mode 1).
 	if (Settings.MSU1 && !d->TransferDirection &&
 		msu1_is_dma_source ((uint8_t) d->ABank, (uint16_t) d->AAddress, (bool) d->AAddressFixed))
 	{
-		for (int i = 0; i < count; i++)
+		if ((d->AAddress & 0x7) == 1)
 		{
-			Work = S9xMSU1ReadPort ((uint8) (d->AAddress & 0x7));
-			S9xSetPPU (Work, 0x2100 + d->BAddress);
+			uint8 span[512];
+			int done = 0;
+			while (done < count)
+			{
+				int chunk = count - done;
+				if (chunk > (int) sizeof(span)) chunk = (int) sizeof(span);
+				uint32 got = msu1_read_data_bulk (MSU1, span, (uint32) chunk);
+				if ((int) got < chunk)
+					memset (span + got, 0, chunk - got);   // past-EOF reads are 0x00
+				for (int i = 0; i < chunk; i++)
+					S9xSetPPU (span[i], 0x2100 + d->BAddress +
+					           msu1_dma_b_offset ((uint8) d->TransferMode, (uint32) (done + i)));
+				done += chunk;
+			}
+		}
+		else
+		{
+			for (int i = 0; i < count; i++)
+			{
+				Work = S9xMSU1ReadPort ((uint8) (d->AAddress & 0x7));
+				S9xSetPPU (Work, 0x2100 + d->BAddress +
+				           msu1_dma_b_offset ((uint8) d->TransferMode, (uint32) i));
+			}
 		}
 		CPU.Cycles += (count + 1) * SLOW_ONE_CYCLE;
 		S9xUpdateAPUTimer();
