@@ -969,7 +969,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                     // settings3dsUpdate() call (unchanged pre-existing behavior).
                     msu3dsSetUserVolume((float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume) * 0.25f);
                 });
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  Also governs MSU-1 Volume, for games that use it."_s, ""_s);
 
     AddMenuPicker(items, "  Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.AudioBuffer, val ); });
@@ -995,50 +994,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             }, true);
     }
 
-    // No Enable checkbox by design (maintainer decision): MSU-1 activates by
-    // file presence; the per-game Msu1Enabled setting remains available as a
-    // hand-editable escape hatch in the config file, applied at load time.
-
-    {
-        // Snapshot taken at menu-build time. The tab is only marked dirty on
-        // menu entry when Settings.MSU1 is active for the current game (see
-        // the msu3dsOnEvent(Msu1Event::MenuEnter) call site), so this
-        // reflects the just-finished play session for MSU-1 games; non-MSU
-        // games always show the same static line and never force a rebuild.
-        char msu1RawLine[64] = {};
-        char msu1RawSubtitle[64] = {};
-        // Return ignored: these buffers are pre-sized for the longest
-        // possible line/subtitle, so failure is unreachable in practice; the
-        // zero-init above means an (unreachable) failure still yields empty
-        // strings rather than uninitialized stack garbage.
-        msu3dsFormatStatus(Settings.MSU1 != FALSE, settings3DS.Msu1Enabled, MSU1, msu3dsGetUnderrunCount(),
-                            msu1RawLine, sizeof(msu1RawLine), msu1RawSubtitle, sizeof(msu1RawSubtitle));
-
-        char msu1StatusLine[80];
-        snprintf(msu1StatusLine, sizeof(msu1StatusLine), "  %s", msu1RawLine);
-        // Disabled type: renders in the clearly-muted disabled color in all
-        // themes (the Textarea description color was near-identical to normal
-        // text in the Dark theme). Still non-highlightable.
-        items.emplace_back(nullptr, MenuItemType::Disabled, msu1StatusLine, ""_s);
-
-        // Always add the subtitle item, even when empty, so the Settings
-        // tab's item COUNT stays constant across rebuilds. A conditional
-        // item made setupMenu()'s "preserve selection by numeric index"
-        // logic rebind the cursor to the wrong control the moment underruns
-        // first crossed the warning threshold mid-session (the list grew by
-        // one and every later index shifted). An empty Textarea renders
-        // nothing (ui3dsDrawStringWithWrapping on a zero-length string
-        // produces zero line segments, so no draw call happens) — a clean
-        // blank row, the same effect as the AddMenuDisabledOption(items,
-        // ""_s) spacer idiom used elsewhere in this function.
-        char msu1StatusSubtitle[80];
-        if (msu1RawSubtitle[0] != '\0') {
-            snprintf(msu1StatusSubtitle, sizeof(msu1StatusSubtitle), "  %s", msu1RawSubtitle);
-        } else {
-            msu1StatusSubtitle[0] = '\0';
-        }
-        items.emplace_back(nullptr, MenuItemType::Disabled, msu1StatusSubtitle, ""_s);
-    }
 
     AddMenuDisabledOption(items, ""_s);
 
@@ -1350,8 +1305,13 @@ bool settingsReadWriteFullListByGame(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "PaletteDeferBgMask=%d\n", &settings3DS.PaletteDeferBgMask, 0, 7);
     }
 
-    if (writeMode || detectedConfigVersion >= 1.6f) {
-        config3dsReadWriteEnum(stream, writeMode, "Msu1Enabled=%d\n", &settings3DS.Msu1Enabled, 0, 1);
+    if (writeMode || detectedConfigVersion >= 1.7f) {
+        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 8);
+    } else if (!writeMode && detectedConfigVersion >= 1.6f) {
+        // v1.6 files carried the removed Msu1Enabled key: consume it to keep
+        // the sequential parse aligned, then read the volume as usual.
+        int discardedMsu1Enabled = 1;
+        config3dsReadWriteInt32(stream, writeMode, "Msu1Enabled=%d\n", &discardedMsu1Enabled, 0, 1);
         config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 8);
     }
 
@@ -1629,17 +1589,6 @@ bool emulatorLoadRom()
     // if not, stay on defaults
     cfgFileAvailable[1] = settingsReadWriteFullListByGame(false);
 
-    // Load-time gate: apply the per-game Msu1Enabled=false setting directly,
-    // inline, rather than via a self-contained drain-fenced helper (which
-    // would lift the mixer drain fence internally before returning). Doing
-    // the teardown inline keeps it inside the single outer fence this
-    // function already holds open (snd3dsDrainMixing() above ..
-    // snd3dsResumeMixing() below), so SavestateLoaded's clear_queue (below,
-    // at impl3dsLoadStateAuto) still runs inside that same drain window.
-    if (!settings3DS.Msu1Enabled && Settings.MSU1) {
-        msu3dsOnEvent(Msu1Event::RomUnload);
-        Settings.MSU1 = FALSE;
-    }
 
 
     settings3dsUpdate(true);
@@ -1653,12 +1602,12 @@ bool emulatorLoadRom()
             if (settings3DS.LayerEnabled[i])
                 layerMask |= (1 << i);
         log3dsWrite("Game state: PalFix=%d CommitLine=%d DeferMask=%d Layers=%02X "
-                    "Skips=%d EnhRes=%d Vol=%d MSU(det=%d en=%d vol=%d gvol=%d useG=%d) AutoSt=%d",
+                    "Skips=%d EnhRes=%d Vol=%d MSU(det=%d vol=%d gvol=%d useG=%d) AutoSt=%d",
                     settings3DS.PaletteFix, SNESGameFixes.PaletteCommitLine,
                     settings3DS.PaletteDeferBgMask, layerMask,
                     settings3DS.MaxFrameSkips, (int)settings3DS.EnhancedResolution,
                     settings3DS.Volume,
-                    Settings.MSU1 ? 1 : 0, settings3DS.Msu1Enabled ? 1 : 0,
+                    Settings.MSU1 ? 1 : 0,
                     settings3DS.Msu1Volume, settings3DS.GlobalMsu1Volume,
                     settings3DS.UseGlobalVolume ? 1 : 0,
                     settings3DS.AutoSavestate ? 1 : 0);
@@ -2416,14 +2365,6 @@ void emulatorLoop()
         log3dsWrite("MSU-1 underruns: %u", (unsigned)msu3dsGetUnderrunCount());
 
     msu3dsOnEvent(Msu1Event::MenuEnter);
-    // MSU-1 status line (Settings tab) is a snapshot taken at menu-build
-    // time; force a rebuild so it reflects this session's underrun count
-    // and playing/idle state instead of whatever was shown last time.
-    // Gated on Settings.MSU1: non-MSU games always show the same static
-    // "not detected" line, so there's nothing to refresh and no need to
-    // pay for rebuilding the whole Settings tab on every menu entry.
-    if (Settings.MSU1)
-        menu3dsMarkTabDirty(TAB_SETTINGS);
     snd3dsStopPlaying();
     snd3dsResumeMixing();
     lcd3dsRestoreDefaultRate();

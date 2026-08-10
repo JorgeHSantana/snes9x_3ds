@@ -210,7 +210,6 @@ typedef struct {
     int                 GlobalVolume;
 
     int                 Msu1Volume;             // MSU-1 track volume: 0 - 200% in steps of 25% (same curve as Volume)
-    bool                Msu1Enabled;            // Per-game enable/disable for MSU-1 playback
     int                 GlobalMsu1Volume;       // Global default seeded into Msu1Volume for games without a saved config;
                                                 // also the MSU-1 volume applied when UseGlobalVolume is set
 

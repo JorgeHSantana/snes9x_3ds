@@ -39,7 +39,7 @@ MSU-1 doesn't have its own menu section anymore — it's part of the pause menu'
 * **Apply volume to all games** — the existing global-vs-per-game switch. It now governs BOTH volumes: when on, the global SNES volume and the global MSU-1 volume apply to every game; when off, each game uses its own saved values.
 * **Audio Buffer** — unchanged.
 * **MSU-1 Volume** (gauge 0-8) — shown only for the currently loaded MSU-1 game. Balances MSU-1 track volume against the game's own audio; 4 is neutral (1.0x), 0 mutes MSU-1, 8 doubles it. Applies live. Whether it reads/writes the global or the per-game value follows the "Apply volume to all games" switch above, exactly like SNES Volume.
-* MSU-1 activates automatically when the `.msu` file is present. To force it off for a game, set `Msu1Enabled=0` in that game's file under `configs/` (applied at the next load) — there is no menu toggle by design.
+* MSU-1 activates automatically when the `.msu` file is present. There is no enable/disable option by design.
 * **Status line + subtitle** — a snapshot taken each time you open the menu, shown at the bottom of the Audio section:
   * `MSU-1: disabled` — the per-game "Enable MSU-1" setting is off; the chip is torn down for this game.
   * `MSU-1: not detected` — this game has no `.msu` file (or it wasn't found), and MSU-1 is enabled.

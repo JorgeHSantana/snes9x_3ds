@@ -85,7 +85,6 @@ void settings3dsResetGameDefaults() {
     settings3DS.CropBottom = 0;
     settings3DS.Overscan = false;
     settings3DS.Volume = settings3DS.GlobalVolume;
-    settings3DS.Msu1Enabled = true;
     settings3DS.Msu1Volume = settings3DS.GlobalMsu1Volume;
     settings3DS.MaxFrameSkips = 1;
     settings3DS.CurrentSaveSlot = 1;
