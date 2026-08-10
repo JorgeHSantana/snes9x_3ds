@@ -2412,8 +2412,11 @@ void emulatorLoop()
         if (diagFramesSinceLoad < 600) {
             if ((diagFramesSinceLoad % 60) == 0) {
                 log3dsWrite("Frame %d: INIDISP=%02X TM=%02X TS=%02X BGMODE=%02X "
+                            "pad=%08X keys=%08X "
                             "verts M/S: BG0=%d/%d BG1=%d/%d BG2=%d/%d BG3=%d/%d OBJ=%d/%d",
                             diagFramesSinceLoad,
+                            (unsigned)IPPU.Joypads[0],
+                            (unsigned)input3dsGetCurrentKeysHeld(),
                             Memory.FillRAM[0x2100], Memory.FillRAM[0x212C],
                             Memory.FillRAM[0x212D], Memory.FillRAM[0x2105],
                             GPU3DSExt.layerList.layers[0].verticesByTarget[0],
