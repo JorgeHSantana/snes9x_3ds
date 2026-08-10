@@ -115,6 +115,8 @@ void msu3dsFillAudio(void)
     if (playing && !frozen && g_bridge.queued_since_clear
         && g_bridge.backend.free_buffer_count() == g_bridge.backend.total_buffer_count()) {
         g_bridge.underruns++;
+        msu1_diag("audio underrun #%u (track %u)",
+                  (unsigned)g_bridge.underruns, (unsigned)MSU1.current_track);
     }
     while (g_bridge.backend.free_buffer_count() > 0) {
         uint32_t cap_samples = g_bridge.backend.buffer_capacity_samples();

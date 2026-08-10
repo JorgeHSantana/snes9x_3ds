@@ -149,7 +149,7 @@ static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
 static void (*g_log_hook)(const char*) = nullptr;
 void msu1_set_log_hook(void (*log)(const char* message)) { g_log_hook = log; }
 
-static void msu1_log(const char* fmt, ...)
+void msu1_diag(const char* fmt, ...)
 {
     if (g_log_hook == nullptr) { return; }
     char buf[MSU1_MAX_BASE_PATH + 64];
@@ -173,20 +173,20 @@ static void msu1_load_track(Msu1State& state, uint16_t track)
     char path[MSU1_MAX_BASE_PATH + 16];
     if (!msu1_build_track_path(state.base_path, track, path, sizeof(path))) {
         state.status |= MSU1_FLAG_AUDIO_ERROR;
-        msu1_log("track %u: path build failed (base too long)", (unsigned)track);
+        msu1_diag("track %u: path build failed (base too long)", (unsigned)track);
         return;
     }
     FILE* f = fopen(path, "rb");
     if (f == nullptr) {
         state.status |= MSU1_FLAG_AUDIO_ERROR;
-        msu1_log("track %u: fopen failed: %s", (unsigned)track, path);
+        msu1_diag("track %u: fopen failed: %s", (unsigned)track, path);
         return;
     }
     Msu1PcmHeader hdr = {};
     if (!msu1_parse_pcm_header(f, hdr)) {
         fclose(f);
         state.status |= MSU1_FLAG_AUDIO_ERROR;
-        msu1_log("track %u: bad MSU1 PCM header: %s", (unsigned)track, path);
+        msu1_diag("track %u: bad MSU1 PCM header: %s", (unsigned)track, path);
         return;
     }
     if (fseek(f, 0, SEEK_END) != 0) { fclose(f); state.status |= MSU1_FLAG_AUDIO_ERROR; return; }
@@ -196,7 +196,7 @@ static void msu1_load_track(Msu1State& state, uint16_t track)
     state.audio_loop_point = hdr.loop_point;
     fseek(f, (long)MSU1_PCM_HEADER_SIZE, SEEK_SET);
     state.audio_file = f;
-    msu1_log("track %u: loaded, %u bytes, loop=%u", (unsigned)track,
+    msu1_diag("track %u: loaded, %u bytes, loop=%u", (unsigned)track,
              (unsigned)state.audio_size, (unsigned)state.audio_loop_point);
 }
 
@@ -263,22 +263,22 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
             return;
         case 6:
             if ((state.volume == 0) != (value == 0)) {
-                msu1_log("volume %s (%u)", value ? "unmuted" : "muted to 0", (unsigned)value);
+                msu1_diag("volume %s (%u)", value ? "unmuted" : "muted to 0", (unsigned)value);
             }
             state.volume = value;
             if (state.volume_changed_cb != nullptr) { state.volume_changed_cb(); }
             return;
         case 7: {
             if ((state.status & (MSU1_FLAG_AUDIO_BUSY | MSU1_FLAG_AUDIO_ERROR)) != 0) {
-                msu1_log("control write %02X DROPPED (status=%02X busy/error)",
+                msu1_diag("control write %02X DROPPED (status=%02X busy/error)",
                          (unsigned)value, (unsigned)state.status);
                 return;
             }
             if (state.audio_file == nullptr) {
-                msu1_log("control write %02X DROPPED (no audio file)", (unsigned)value);
+                msu1_diag("control write %02X DROPPED (no audio file)", (unsigned)value);
                 return;
             }
-            msu1_log("control write %02X (track %u, status=%02X, volume=%u)",
+            msu1_diag("control write %02X (track %u, status=%02X, volume=%u)",
                      (unsigned)value, (unsigned)state.current_track,
                      (unsigned)state.status, (unsigned)state.volume);
             bool was_playing = (state.status & MSU1_FLAG_AUDIO_PLAYING) != 0;
@@ -340,12 +340,33 @@ uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
                 continue;
             }
             state.status &= (uint8_t)~MSU1_FLAG_AUDIO_PLAYING;
+            msu1_diag("track %u ended (played to end)", (unsigned)state.current_track);
             break;
         }
         uint32_t chunk = max_bytes - written;
         if (chunk > remaining_in_track) { chunk = remaining_in_track; }
         size_t got = fread(out + written, 1, chunk, state.audio_file);
-        if (got == 0) { state.status &= (uint8_t)~MSU1_FLAG_AUDIO_PLAYING; break; }
+        if (got == 0) {
+            // Transient read failure (SD latency spike / hiccup): keep the
+            // track alive, resync the stream, and let the caller pad silence.
+            // Only a persistent failure stops playback.
+            state.audio_read_stalls++;
+            clearerr(state.audio_file);
+            fseek(state.audio_file,
+                  (long)(MSU1_PCM_HEADER_SIZE + state.audio_play_pos), SEEK_SET);
+            if (state.audio_read_stalls == 1) {
+                msu1_diag("track %u: audio read stall at %u/%u",
+                          (unsigned)state.current_track,
+                          (unsigned)state.audio_play_pos, (unsigned)state.audio_size);
+            }
+            if (state.audio_read_stalls > MSU1_AUDIO_STALL_LIMIT) {
+                state.status &= (uint8_t)~MSU1_FLAG_AUDIO_PLAYING;
+                msu1_diag("track %u: giving up after %u stalled reads",
+                          (unsigned)state.current_track, (unsigned)state.audio_read_stalls);
+            }
+            break;
+        }
+        state.audio_read_stalls = 0;
         state.audio_play_pos += (uint32_t)got;
         written += (uint32_t)got;
     }

@@ -7,6 +7,7 @@ inline constexpr uint32_t MSU1_PCM_HEADER_SIZE  = 8;
 inline constexpr uint32_t MSU1_PCM_MAGIC        = 0x3155534D; // "MSU1" as u32-LE
 inline constexpr uint8_t  MSU1_REVISION         = 0x01;
 inline constexpr size_t   MSU1_MAX_BASE_PATH    = 768;
+inline constexpr uint32_t MSU1_AUDIO_STALL_LIMIT = 64;   // consecutive failed reads (~1s of fills) before a track stops
 inline constexpr uint32_t MSU1_BYTES_PER_SAMPLE = 4;          // stereo s16
 inline constexpr uint32_t MSU1_SAMPLE_RATE      = 44100;
 
@@ -47,6 +48,7 @@ struct Msu1State {
     uint16_t resume_track;
     uint32_t resume_pos;
     FILE*    data_file;          // owned by this struct; nullptr when absent
+    uint32_t audio_read_stalls;  // consecutive zero-byte audio freads (runtime only)
     FILE*    audio_file;         // owned by this struct; nullptr when absent
     char     base_path[MSU1_MAX_BASE_PATH];
     void     (*volume_changed_cb)(void);   // optional; installed by the platform bridge
@@ -104,6 +106,10 @@ void msu1_set_lock_hooks(void (*lock)(void), void (*unlock)(void));
 // Optional diagnostics hook (default null = silent). The core reports
 // track-load outcomes through it; the platform forwards to its logger.
 void msu1_set_log_hook(void (*log)(const char* message));
+
+// Formats and forwards to the log hook (no-op when the hook is null).
+// Public so platform-side MSU code can share the same diagnostics channel.
+void msu1_diag(const char* fmt, ...);
 
 // legacy-boundary wrappers (operate on the global MSU1)
 uint8_t S9xMSU1ReadPort(uint8_t port);

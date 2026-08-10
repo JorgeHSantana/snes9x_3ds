@@ -151,3 +151,39 @@ TEST_CASE("zero-length pcm with repeat does not hang; read returns 0 and clears 
 
     msu1_shutdown(st);
 }
+
+TEST_CASE("transient zero-byte read stalls but does not stop the track")
+{
+    std::string dir = fixtures::make_tmpdir();
+    Msu1State st = {};
+    st.enabled = true;
+    snprintf(st.base_path, sizeof(st.base_path), "%s/game", dir.c_str());
+    REQUIRE(fixtures::write_pcm_at((dir + "/game-1.pcm").c_str(), 0, 512));
+    msu1_write_port(st, 4, 1);
+    msu1_write_port(st, 5, 0);
+    msu1_write_port(st, 7, 0x01);
+    REQUIRE((st.status & MSU1_FLAG_AUDIO_PLAYING) != 0);
+
+    // Claim more bytes than the file really has: after the real bytes are
+    // consumed, fread hits EOF with remaining_in_track > 0 -> the
+    // zero-read stall path (same shape as a transient SD read failure).
+    st.audio_size += 4096;
+    uint8_t buf[4096];
+    uint32_t total = 0;
+    while (total < 512 * MSU1_BYTES_PER_SAMPLE) {
+        uint32_t got = msu1_read_audio(st, buf, sizeof(buf));
+        if (got == 0) { break; }
+        total += got;
+    }
+    CHECK(total == 512 * MSU1_BYTES_PER_SAMPLE);         // real bytes all served
+    CHECK(msu1_read_audio(st, buf, sizeof(buf)) == 0);   // stall begins
+    CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) != 0);   // still alive
+    CHECK(st.audio_read_stalls >= 1);
+
+    // Persistent failure eventually stops it.
+    for (uint32_t i = 0; i < MSU1_AUDIO_STALL_LIMIT + 2; i++) {
+        msu1_read_audio(st, buf, sizeof(buf));
+    }
+    CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) == 0);
+    msu1_shutdown(st);
+}

@@ -1,6 +1,6 @@
 # tests/Makefile — host-side unit tests (no devkitARM required)
 CXX      ?= c++
-CXXFLAGS := -std=gnu++17 -g -O0 -Wall -Wextra -Werror \
+CXXFLAGS := -std=gnu++17 -g -O0 -Wall -Wextra -Werror -MMD -MP \
             -I. -Ivendor -I../source -I../source/Snes9x
 BUILDDIR := build
 
@@ -38,3 +38,8 @@ $(BUILDDIR):
 
 clean:
 	rm -rf $(BUILDDIR)
+
+# auto-generated header dependencies (-MMD): a header edit rebuilds every
+# object that includes it — without this, struct layout changes produce
+# stale-object crashes that look like memory corruption
+-include $(OBJS:.o=.d)
