@@ -402,7 +402,7 @@ release : 3dsx cia
 	$(SILENTMSG) $(notdir $<)
 	$(bin2o)
 	
--include $(DEPSDIR)/*.d
+-include $(DEPSDIR)/*.d $(DEPSDIR)/*/*.d
 
 #---------------------------------------------------------------------------------------
 endif
