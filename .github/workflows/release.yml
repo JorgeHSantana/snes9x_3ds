@@ -1,0 +1,63 @@
+name: Build & Release
+
+# Pushing to these branches builds a CLEAN release and publishes it:
+#   nightly -> rolling prerelease "nightly" (overwritten on every push)
+#   stable  -> permanent release tagged stable-YYYYMMDD-<sha>, marked latest
+on:
+  push:
+    branches: [nightly, stable]
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    name: Host test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run doctest suite
+        run: make -C tests
+
+  build-release:
+    name: Clean build + release
+    needs: tests
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # ALWAYS a clean build. Incremental builds once shipped binaries with
+      # mismatched struct layouts (see the note in the Makefile) — CI exists
+      # so that can never happen again.
+      - name: Build .cia/.3dsx (devkitARM container)
+        run: |
+          docker run --rm -v "$PWD":/snes9x_3ds -w /snes9x_3ds \
+            devkitpro/devkitarm bash -c "make clean && make release"
+          ls -la output/snes9x_3ds.cia output/snes9x_3ds.3dsx
+
+      - name: Publish nightly (rolling prerelease)
+        if: github.ref_name == 'nightly'
+        run: |
+          SHORT=${GITHUB_SHA::7}
+          gh release delete nightly --yes || true
+          git push origin :refs/tags/nightly || true
+          gh release create nightly \
+            output/snes9x_3ds.cia output/snes9x_3ds.3dsx \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Nightly $(date -u +%Y-%m-%d) ($SHORT)" \
+            --notes "Automated nightly build from \`$SHORT\`. For testing — may be unstable."
+
+      - name: Publish stable release
+        if: github.ref_name == 'stable'
+        run: |
+          SHORT=${GITHUB_SHA::7}
+          TAG="stable-$(date -u +%Y%m%d)-$SHORT"
+          gh release create "$TAG" \
+            output/snes9x_3ds.cia output/snes9x_3ds.3dsx \
+            --latest \
+            --target "$GITHUB_SHA" \
+            --title "Stable $(date -u +%Y-%m-%d)" \
+            --generate-notes
