@@ -159,6 +159,13 @@ uint32_t msu1_take_visible_vram_writes(void)
     g_visible_vram_writes = 0;
     return n;
 }
+static uint32_t g_branch_seeks = 0;
+uint32_t msu1_take_data_branch_seeks(void)
+{
+    uint32_t n = g_branch_seeks;
+    g_branch_seeks = 0;
+    return n;
+}
 bool msu1_consume_frame_torn(void)
 {
     bool torn = g_frame_torn;
@@ -279,6 +286,9 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
             state.data_seek_latch = (state.data_seek_latch & 0x00FFFFFFu) | ((uint32_t)value << 24);
             uint32_t target = state.data_seek_latch;
             if (target > state.data_size) { target = state.data_size; }  // clamp
+            uint32_t dist = (target > state.data_pos) ? (target - state.data_pos)
+                                                      : (state.data_pos - target);
+            if (dist > 65536) { g_branch_seeks++; }   // FMV branch cut signature
             if (state.data_file != nullptr && fseek(state.data_file, (long)target, SEEK_SET) == 0) {
                 state.data_pos = target;
                 state.data_file_pos = target;

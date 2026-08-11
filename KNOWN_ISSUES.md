@@ -205,3 +205,20 @@ For general Satellaview background - including compatibility categories and avai
 | BS Zelda no Densetsu - Dai-3-wa | 🇯🇵 | 🔴&nbsp;Broken | O3DS & N3DS: Black screen. Unplayable. |
 | BS Zelda no Densetsu - Kodai no Sekiban - Dai-1 to Dai-4 | 🇯🇵 | 🔴&nbsp;Broken | O3DS & N3DS: Stuck early on. Unplayable. |
 | Sutte Hakkun (Event Version, Winter Event Version, BS Version 2) | 🇯🇵 | 🔴&nbsp;Broken | Boots, but the game always believes a save exists: a file can be selected and the map loads, but no level can be chosen. Returning to the file-select menu leaves the cursor misplaced, and deleting the save files (and the .srm) repeats the same loop. |
+
+## Super Road Blaster (MSU-1): brief flicker during FMV gameplay
+
+**Symptom:** occasional single-frame flicker in the video during gameplay,
+most visible right after steering inputs (video branch cuts).
+
+**Cause:** the hack races its video uploads against the frame in ways that
+assume cycle-accurate timing; this port's snes9x 1.43 core is approximate,
+so part of an upload occasionally lands inside the visible frame and gets
+drawn. Several mitigations already absorb most of it (blank-section
+suppression, torn-frame holds, branch-seek shield — see
+source/3dsimpl.cpp); the residue would need timing-accuracy work.
+
+**Workaround:** none needed — cosmetic only. An "MSU-1 Video FPS" menu
+setting (msu1FmvFrameDivider in 3dsimpl.cpp, default off) is prepared as a
+future lever: half rate hides most residual flicker at the cost of video
+smoothness.

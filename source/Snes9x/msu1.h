@@ -124,6 +124,7 @@ void msu1_mark_frame_torn(void);
 bool msu1_consume_frame_torn(void);
 void     msu1_note_visible_vram_write(void);   // CPU-store uploads (no DMA)
 uint32_t msu1_take_visible_vram_writes(void);  // read + reset, once per frame
+uint32_t msu1_take_data_branch_seeks(void);    // large data-track seeks (FMV branch cuts)
 
 // legacy-boundary wrappers (operate on the global MSU1)
 uint8_t S9xMSU1ReadPort(uint8_t port);

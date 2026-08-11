@@ -882,7 +882,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	// activity (torn frames) was seen recently, so MSU-1 games with normal
 	// graphics (e.g. MMX3) keep full rate.
 	// TODO: expose in the menu (Settings tab) as "MSU-1 Video FPS".
-	static int msu1FmvFrameDivider = 2;
+	static int msu1FmvFrameDivider = 1;
 	static int msu1FmvActiveFrames = 0;   // decays; >0 = FMV in progress
 	static unsigned msu1PaceFrame = 0;
 	static unsigned msu1PacePhase = 0;
@@ -920,13 +920,30 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 			torn = dmaTorn || cpuWrites > 512;
 		}
 		if (torn) {
-			msu1FmvActiveFrames = 120;   // keep the paced rate for ~2s of frames
+			msu1FmvActiveFrames = 600;   // stay warm across scene gaps (~10s)
 			// a frame we DID render came out torn: shift the pacing phase so
 			// the rendered slots land on the clean frames of the upload cycle
 			if (!skipDrawingFrame)
 				msu1PacePhase ^= 1;
 		} else if (msu1FmvActiveFrames > 0) {
 			msu1FmvActiveFrames--;
+		}
+		// A large data-track seek is the exact signature of an FMV branch cut
+		// (video start, steering in Road Blaster): shield the next ~12 frames
+		// so the burst upload never reaches the screen. The cooldown keeps a
+		// seek-happy game from freezing the picture.
+		static int msuBranchShield = 0;
+		static int msuShieldCooldown = 0;
+		if (Settings.MSU1 && msu1_take_data_branch_seeks() > 0
+			&& msuBranchShield == 0 && msuShieldCooldown == 0) {
+			msuBranchShield = 12;
+			msuShieldCooldown = 42;
+		}
+		if (msuShieldCooldown > 0)
+			msuShieldCooldown--;
+		if (msuBranchShield > 0) {
+			msuBranchShield--;
+			skipDrawingFrame = true;
 		}
 		if (torn && !skipDrawingFrame && msuTornHolds < 2) {
 			msuTornHolds++;
