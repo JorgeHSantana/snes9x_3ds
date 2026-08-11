@@ -235,10 +235,20 @@ FPGA flashcarts (SD2SNES/FXPak) where those reads are free; under
 emulation the per-instruction cost is irreducible and exceeds the
 New 3DS budget by design.
 
-**Possible future fix:** a game-specific speed hack that recognizes the
-hack's copy loop and executes the whole block transfer natively (the
-same mechanism as the port's existing WDM speed hacks, applied to a
-data-copy loop). Requires reverse-engineering the hack's ROM.
+**What was tried:** the streamer was disassembled — it uploads the MSU
+data to the SPC700 through the $2140/$2141 handshake. WDM speed hacks on
+both handshake spin-waits ($83:C967 and $83:C99B, applied only when the
+ROM header reads `KILLER INSTINCT MSU1`, so the original game is
+untouched) were confirmed active on hardware and did not help: the
+dominant cost is the transfer itself, which saturates *both* emulated
+CPUs — the 65816 sender loop and the SPC700 receive loop each execute
+tens of millions of instructions per second by design.
+
+**Possible future fix (parked, issue #1):** macro-execute the whole
+protocol — recognize the sender loop *and* the hack's SPC-side receive
+driver, then deliver the bytes directly into APU RAM without instruction
+emulation. Requires reverse-engineering the SPC-side driver; large and
+fragile against hack updates.
 
 **Workaround:** enable Frameskip for this game; other MSU-1 packs
 (audio-only and Road Blaster-style FMV) are unaffected.
