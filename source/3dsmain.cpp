@@ -957,6 +957,10 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                         settings3DS.Volume = settings3DS.GlobalVolume;
                 });
 
+    AddMenuPicker(items, "  MSU-1 Video FPS"_s, "Caps how often MSU-1 FMV frames are shown.\nLower values lighten rendering and can hide flicker.\nNo effect on games without MSU-1 video."_s, makePickerOptions({"Off", "40 FPS", "30 FPS", "24 FPS", "20 FPS"}),
+                settings3DS.Msu1VideoFps, DIALOG_TYPE_INFO, true,
+                []( int val ) { CheckAndUpdate( settings3DS.Msu1VideoFps, val ); });
+
     AddMenuPicker(items, "  Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.AudioBuffer, val ); });
 
@@ -1381,6 +1385,10 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
 
     if (writeMode || detectedConfigVersion >= 1.6f) {
         config3dsReadWriteEnum(stream, writeMode, "Intensity3D=%d\n", &settings3DS.Intensity3D, 0, 2);
+    }
+
+    if (writeMode || detectedConfigVersion >= 1.7f) {
+        config3dsReadWriteInt32(stream, writeMode, "Msu1VideoFps=%d\n", &settings3DS.Msu1VideoFps, 0, 4);
     }
     
     config3dsReadWriteEnum(stream, writeMode, "Font=%d\n", &settings3DS.Font, 0, 2);

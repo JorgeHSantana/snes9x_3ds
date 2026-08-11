@@ -876,19 +876,16 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	notif3dsTick();
 	notif3dsSync();
 
-	// MSU-1 FMV presentation rate. 1 = every frame (60/50fps), 2 = half rate
-	// (30/25fps), 3 = a third. Halving skips the whole SNES render for the
-	// paced-out frames, which also lightens the load. Only applies while FMV
-	// activity (torn frames) was seen recently, so MSU-1 games with normal
-	// graphics (e.g. MMX3) keep full rate.
-	// TODO: expose in the menu (Settings tab) as "MSU-1 Video FPS".
-	static int msu1FmvFrameDivider = 1;
+	// MSU-1 FMV presentation cap ("MSU-1 Video FPS" in the menu). Paced-out
+	// frames skip the whole SNES render, so lower caps also lighten the
+	// load. Engages only while FMV activity (torn frames) was seen
+	// recently, so MSU-1 games with normal graphics keep full rate.
+	static const uint32_t msu1FpsTable[5] = { 0, 40, 30, 24, 20 };
 	static int msu1FmvActiveFrames = 0;   // decays; >0 = FMV in progress
-	static unsigned msu1PaceFrame = 0;
-	static unsigned msu1PacePhase = 0;
-	msu1PaceFrame++;
-	if (Settings.MSU1 && msu1FmvActiveFrames > 0 && msu1FmvFrameDivider > 1
-		&& ((msu1PaceFrame + msu1PacePhase) % (unsigned)msu1FmvFrameDivider) != 0) {
+	static uint32_t msu1PaceAcc = 0;
+	uint32_t msu1TargetFps = msu1FpsTable[(settings3DS.Msu1VideoFps >= 0 && settings3DS.Msu1VideoFps <= 4) ? settings3DS.Msu1VideoFps : 0];
+	if (Settings.MSU1 && msu1TargetFps > 0 && msu1FmvActiveFrames > 0
+		&& !msu1_pace_step(&msu1PaceAcc, msu1TargetFps, Settings.PAL ? 50 : 60)) {
 		skipDrawingFrame = true;
 	}
 
@@ -921,10 +918,6 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 		}
 		if (torn) {
 			msu1FmvActiveFrames = 600;   // stay warm across scene gaps (~10s)
-			// a frame we DID render came out torn: shift the pacing phase so
-			// the rendered slots land on the clean frames of the upload cycle
-			if (!skipDrawingFrame)
-				msu1PacePhase ^= 1;
 		} else if (msu1FmvActiveFrames > 0) {
 			msu1FmvActiveFrames--;
 		}

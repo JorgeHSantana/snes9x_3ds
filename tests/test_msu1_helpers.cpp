@@ -100,3 +100,24 @@ TEST_CASE("torn-frame flag: mark, consume once, then clear")
     CHECK(msu1_consume_frame_torn());
     CHECK_FALSE(msu1_consume_frame_torn());
 }
+
+TEST_CASE("frame pacer: exact presented counts for any target rate")
+{
+    // 24 fps over one second of NTSC (60 frames) -> exactly 24 presents
+    uint32_t acc = 0;
+    int shown = 0;
+    for (int i = 0; i < 60; i++) { if (msu1_pace_step(&acc, 24, 60)) shown++; }
+    CHECK(shown == 24);
+    // 30 fps over one second of PAL (50 frames) -> exactly 30 presents
+    acc = 0; shown = 0;
+    for (int i = 0; i < 50; i++) { if (msu1_pace_step(&acc, 30, 50)) shown++; }
+    CHECK(shown == 30);
+    // target >= native presents everything
+    acc = 0; shown = 0;
+    for (int i = 0; i < 50; i++) { if (msu1_pace_step(&acc, 60, 50)) shown++; }
+    CHECK(shown == 50);
+    // degenerate inputs are safe
+    CHECK(msu1_pace_step(nullptr, 30, 60));
+    acc = 0;
+    CHECK(msu1_pace_step(&acc, 30, 0));
+}

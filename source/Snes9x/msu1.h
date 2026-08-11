@@ -126,6 +126,11 @@ void     msu1_note_visible_vram_write(void);   // CPU-store uploads (no DMA)
 uint32_t msu1_take_visible_vram_writes(void);  // read + reset, once per frame
 uint32_t msu1_take_data_branch_seeks(void);    // large data-track seeks (FMV branch cuts)
 
+// Bresenham frame pacer: accumulates target_fps per native frame and says
+// whether this frame should be presented. Exact for any target (e.g. 24 on
+// a 60 Hz NTSC or 50 Hz PAL stream). target >= native presents everything.
+bool msu1_pace_step(uint32_t* acc, uint32_t target_fps, uint32_t native_fps);
+
 // legacy-boundary wrappers (operate on the global MSU1)
 uint8_t S9xMSU1ReadPort(uint8_t port);
 void    S9xMSU1WritePort(uint8_t port, uint8_t value);

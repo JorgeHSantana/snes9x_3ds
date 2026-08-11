@@ -159,6 +159,18 @@ uint32_t msu1_take_visible_vram_writes(void)
     g_visible_vram_writes = 0;
     return n;
 }
+bool msu1_pace_step(uint32_t* acc, uint32_t target_fps, uint32_t native_fps)
+{
+    if (acc == nullptr || native_fps == 0) { return true; }
+    if (target_fps >= native_fps) { *acc = 0; return true; }
+    *acc += target_fps;
+    if (*acc >= native_fps) {
+        *acc -= native_fps;
+        return true;
+    }
+    return false;
+}
+
 static uint32_t g_branch_seeks = 0;
 uint32_t msu1_take_data_branch_seeks(void)
 {

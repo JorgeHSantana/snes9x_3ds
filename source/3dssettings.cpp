@@ -26,6 +26,7 @@ void settings3dsResetGlobalDefaults() {
     settings3DS.Disable3DSlider = false;
     settings3DS.Intensity3D = Setting::Intensity3D::Standard;
     settings3DS.LogFileEnabled = false;
+    settings3DS.Msu1VideoFps = 0;
 
     settings3DS.ScreenStretch = Setting::ScreenStretch::Aspect_4_3;
     settings3DS.ScreenFilter = Setting::ScreenFilter::Smooth;
