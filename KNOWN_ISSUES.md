@@ -222,3 +222,23 @@ source/3dsimpl.cpp); the residue would need timing-accuracy work.
 setting (msu1FmvFrameDivider in 3dsimpl.cpp, default off) is prepared as a
 future lever: half rate hides most residual flicker at the cost of video
 smoothness.
+
+## Killer Instinct (Arcade MSU-1): slow fights on real hardware
+
+**Symptom:** the arcade-style fights run well in PC emulators but are slow
+on a New 3DS (menus/intro are fine after the CPU-polled read micro-cache).
+
+**Cause:** measured at 2-5 MB/s, the hack streams its animated arcade
+backgrounds through single-byte CPU reads of the MSU-1 data port —
+millions of emulated 65816 instructions per second. The hack targets
+FPGA flashcarts (SD2SNES/FXPak) where those reads are free; under
+emulation the per-instruction cost is irreducible and exceeds the
+New 3DS budget by design.
+
+**Possible future fix:** a game-specific speed hack that recognizes the
+hack's copy loop and executes the whole block transfer natively (the
+same mechanism as the port's existing WDM speed hacks, applied to a
+data-copy loop). Requires reverse-engineering the hack's ROM.
+
+**Workaround:** enable Frameskip for this game; other MSU-1 packs
+(audio-only and Road Blaster-style FMV) are unaffected.
