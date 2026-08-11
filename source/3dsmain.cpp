@@ -1043,6 +1043,18 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             [layer]( int val ) { CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val ); });
     }
     items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
+
+    if (gpu3dsIs3DAvailable()) {
+        AddMenuHeader2(items, "Stereoscopic 3D"_s);
+
+        static const char *stereoNames[5] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites" };
+        for (int l = 0; l < 5; l++) {
+            AddMenuGauge(items, stereoNames[l], -8, 8, settings3DS.StereoDepth[l],
+                [l]( int val ) { CheckAndUpdate( settings3DS.StereoDepth[l], val ); }, true);
+        }
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Depth per layer: + pops out, - sinks into the screen."_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s, ""_s);
+    }
         AddMenuDisabledOption(items, ""_s);
 };
 
@@ -1519,6 +1531,56 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
 }
 
 //----------------------------------------------------------------------
+// Stereoscopic 3D depths live in their own shareable files:
+// sd:/3ds/snes9x_3ds/stereo3d/<rom>.3d (fallback: default.3d).
+//----------------------------------------------------------------------
+static const int stereoDepthDefault[5] = { 0, -2, -1, 0, 0 };
+static const char *stereoDepthKeys[5] = { "BG1", "BG2", "BG3", "BG4", "OBJ" };
+
+void settingsLoadStereo3D()
+{
+    for (int i = 0; i < 5; i++)
+        settings3DS.StereoDepth[i] = stereoDepthDefault[i];
+
+    char path[PATH_MAX];
+    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
+
+    FILE *f = path[0] != '\0' ? fopen(path, "r") : NULL;
+    if (!f) {
+        snprintf(path, sizeof(path), "%s/stereo3d/default.3d", settings3DS.RootDir);
+        f = fopen(path, "r");
+    }
+    if (!f) return;
+
+    char line[64];
+    while (fgets(line, sizeof(line), f)) {
+        for (int i = 0; i < 5; i++) {
+            char fmt[16];
+            int v;
+            snprintf(fmt, sizeof(fmt), "%s=%%d", stereoDepthKeys[i]);
+            if (sscanf(line, fmt, &v) == 1)
+                settings3DS.StereoDepth[i] = v < -8 ? -8 : (v > 8 ? 8 : v);
+        }
+    }
+    fclose(f);
+}
+
+void settingsSaveStereo3D()
+{
+    char path[PATH_MAX];
+    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
+    if (path[0] == '\0') return;
+
+    FILE *f = fopen(path, "w");
+    if (!f) return;
+
+    fprintf(f, "# snes9x_3ds stereoscopic 3D depths (-8..8): + pops out, - sinks in\n");
+    for (int i = 0; i < 5; i++)
+        fprintf(f, "%s=%d\n", stereoDepthKeys[i], settings3DS.StereoDepth[i]);
+    fclose(f);
+}
+
+//----------------------------------------------------------------------
 // Save settings by game.
 //----------------------------------------------------------------------
 bool settingsSave(bool includeGameSettings)
@@ -1543,6 +1605,8 @@ bool settingsSave(bool includeGameSettings)
             osTickCounterUpdate(&timer);
             log3dsWrite("Game settings saved in %.3fms", osTickCounterRead(&timer));
         }
+
+        settingsSaveStereo3D();
     }
     
     settings3DS.isDirty = false;
@@ -1606,6 +1670,8 @@ bool emulatorLoadRom()
     // if file exists, overwrite the defaults
     // if not, stay on defaults
     cfgFileAvailable[1] = settingsReadWriteFullListByGame(false);
+
+    settingsLoadStereo3D();
 
     settings3dsUpdate(true);
 

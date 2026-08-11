@@ -264,6 +264,11 @@ typedef struct {
                                                // (BG0-3, OBJ, Backdrop, Color Math, Brightness).
                                                // All true by default.
 
+    int                 StereoDepth[5];        // Stereoscopic 3D depth per layer (BG1-4, Sprites),
+                                               // -8..+8: + pops out of the screen, - sinks into it.
+                                               // Saved to sd:/3ds/snes9x_3ds/stereo3d/<rom>.3d
+                                               // (shareable), NOT to the regular config.
+
     bool                isNew3DS;
     bool                isRomFsLoaded;
     bool                isRomLoaded;

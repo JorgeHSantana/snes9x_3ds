@@ -4,6 +4,7 @@
 #include "snes9x.h"
 #include "memmap.h"
 #include "3dssettings.h"
+#include "3dsgpu.h"
 #include "3dsmsu.h"
 #include "3dssound.h"
 #include "3dslcd.h"
@@ -189,6 +190,10 @@ void settings3dsUpdate(bool includeGameSettings)
         
         snd3dsApplyOutputVolume();
         msu3dsSetGlobalVolume(0.25f * (float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume));
+
+        // stereo 3D depths (BG1-4, Sprites) -> GPU; other LAYER_IDs stay 0
+        for (int i = 0; i < 8; i++)
+            GPU3DS.stereoLayerDepth[i] = (i < 5) ? (float)settings3DS.StereoDepth[i] : 0.0f;
 
         if (settings3DS.PaletteFix == 0)
             settings3DS.PaletteFix = settings3dsGetGameDefaultPaletteFix();

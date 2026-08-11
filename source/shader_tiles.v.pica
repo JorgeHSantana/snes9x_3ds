@@ -94,10 +94,10 @@ depth_computation:
 
 draw:
     ; pass through, set final values for projection, textureScale and color in geo shader
-    ; Stereo parallax: shift X by (depth plane * per-eye signed amount).
-    ; r0.z = depth normalized to 0..15/16; stereoIOD.x = 0 when 3D is off,
-    ; so this is an exact no-op in 2D (mad by zero).
-    mad     r0.x, r0.z, stereoIOD.x, r0.x
+    ; Stereo parallax: flat per-layer X shift, set between layer draws
+    ; (stereoIOD.x = eye sign * slider * layer depth; 0 with 3D off, so
+    ; this is an exact no-op in 2D).
+    add     r0.x, stereoIOD.x, r0.x
     mov     outpos, r0
     mov     outtex, r10
     mov     outcol, r11

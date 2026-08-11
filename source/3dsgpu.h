@@ -280,14 +280,17 @@ typedef struct
     // uniform last received (re-sent on change or shader rebind).
     float                       stereoParallax;
     float                       stereoParallaxApplied;
-    // alternate-eye stereo: true when the current drawn frame's LAYER PASS
-    // belongs to the RIGHT eye (parallax +iod, rendered into
-    // SNES_MAIN_RIGHT); toggles every drawn frame while the slider is
-    // active. Both eyes composite every frame from the retained textures.
+    // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
     // false when the optional right-eye VRAM texture failed to allocate;
     // gates the whole stereo path off (gpu3dsGetIOD returns 0)
     bool                        stereoTexAvailable;
+    // signed slider factor for the CURRENT eye's layer pass: +slider for
+    // the left eye, -slider for the right (positive layer depth then pops
+    // out of the screen), 0 with 3D off. Per-layer parallax =
+    // stereoEyeIOD * stereoLayerDepth[LAYER_ID] (px, set between draws).
+    float                       stereoEyeIOD;
+    float                       stereoLayerDepth[8];
 
     u32                         vramTotal;
     u32                         linearMemTotal;

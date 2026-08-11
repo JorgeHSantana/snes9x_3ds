@@ -978,12 +978,22 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	gpu3dsFrameBegin(screenshot.dirty ? C3D_FRAME_SYNCDRAW : 0, !skipDrawingFrame);
 		if (!firstFrame && !skipDrawingFrame) {
 			t3dsStartTimer(TIMER_DRAW_SNES_SCREEN);
-			// Alternate the stereo eye on every drawn frame; the layer pass
-			// carries that eye's parallax. 0 with the slider off (2D parity).
-			float iod = gpu3dsGetIOD();
-			GPU3DS.stereoRightPass = (iod != 0.0f) && !GPU3DS.stereoRightPass;
-			GPU3DS.stereoParallax = GPU3DS.stereoRightPass ? iod : -iod;
+			// Render both eyes' layer passes into their retained textures.
+			// Each layer shifts by stereoEyeIOD * its configured depth
+			// (Stereoscopic 3D menu): left eye +slider, right -slider, so
+			// positive depths pop out of the screen. 0 with the slider off
+			// (2D parity), and the right pass is skipped entirely then.
+			float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
+			GPU3DS.stereoRightPass = false;
+			GPU3DS.stereoEyeIOD = slider;
     		gpu3dsDrawSnesScreen();
+			if (slider != 0.0f) {
+				GPU3DS.stereoRightPass = true;
+				GPU3DS.stereoEyeIOD = -slider;
+				GPU3DS.appliedRenderState.target = TARGET_UNSET;
+				gpu3dsDrawSnesScreen();
+				GPU3DS.stereoRightPass = false;
+			}
 			t3dsStopTimer(TIMER_DRAW_SNES_SCREEN);
 		}
 
@@ -1245,7 +1255,7 @@ bool impl3dsTakeScreenshot(char *path, size_t bufferSize, bool renderFrame) {
 
 		if (settings3DS.Mode7BilinearFilter) {
 			// screenshots are always mono and must land in SNES_MAIN
-			GPU3DS.stereoParallax = 0.0f;
+			GPU3DS.stereoEyeIOD = 0.0f;
 			GPU3DS.stereoRightPass = false;
 			gpu3dsDrawSnesScreen();
 		}
