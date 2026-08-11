@@ -205,6 +205,22 @@ bool impl3dsInitialize()
 	setDepthBufferByTex(GPU3DS.textures[SNES_MAIN].target, &GPU3DS.textures[SNES_DEPTH].tex);
 	setDepthBufferByTex(GPU3DS.textures[SNES_SUB].target, &GPU3DS.textures[SNES_DEPTH].tex);
 
+	// Right-eye main screen for the stereo dual pass. Optional: VRAM is
+	// tight (~730KB free), so on failure stereo is disabled instead of
+	// failing the boot. 2DS consoles never allocate it.
+	GPU3DS.stereoTexAvailable = false;
+	if (gpu3dsIs3DAvailable()) {
+		const SGPUTextureConfig stereoTexConfig =
+			{ defaultTextureParams, SNES_MAIN_RIGHT, GPU_RGBA8, 512, 256 };
+		if (gpu3dsAllocVramTextureAndTarget(&GPU3DS.textures[SNES_MAIN_RIGHT], &stereoTexConfig)) {
+			setDepthBufferByTex(GPU3DS.textures[SNES_MAIN_RIGHT].target, &GPU3DS.textures[SNES_DEPTH].tex);
+			GPU3DS.stereoTexAvailable = true;
+			log3dsWrite("stereo right-eye vram texture allocated (512.00kb)");
+		} else {
+			log3dsWrite("stereo right-eye vram texture UNAVAILABLE - 3D disabled");
+		}
+	}
+
 	const SGPUTextureConfig lramTexConfig[] = {
 		{ defaultTextureParams, SNES_TILE_CACHE, GPU_RGBA5551, 1024, 1024 },
 		{ defaultTextureParams, SNES_MODE7_TILE_CACHE, GPU_RGBA5551, 128, 128 }
@@ -690,7 +706,8 @@ void impl3dsClearTopFramebuffers()
 }
 
 static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *list,
-	const GameScreenViewport &gameScreenViewport, bool drawBackground, bool balancedFilterEnabled, float xOffset) {
+	const GameScreenViewport &gameScreenViewport, bool drawBackground, bool balancedFilterEnabled, float xOffset,
+	SGPU_TEXTURE_ID mainTex = SNES_MAIN) {
 
 	gpu3dsSetDefaultRenderState(SPROGRAM_SCREEN, false);
 
@@ -705,7 +722,7 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 		gameScreenViewport.tx1, gameScreenViewport.ty1, 0);
 
 	GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0;
-	GPU3DS.currentRenderState.textureBind = SNES_MAIN;
+	GPU3DS.currentRenderState.textureBind = mainTex;
 
 	gpu3dsDraw(list, NULL, list->count);
 
@@ -715,18 +732,18 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 			gameScreenViewport.tx0, gameScreenViewport.ty0, gameScreenViewport.tx1, gameScreenViewport.ty1, 0, 0xFFFFFF88);
 
 		// Temporarily switch to linear sampling for the blend pass.
-		C3D_TexSetFilter(&GPU3DS.textures[SNES_MAIN].tex, GPU_LINEAR, GPU_LINEAR);
-		C3D_TexBind(0, &GPU3DS.textures[SNES_MAIN].tex);
+		C3D_TexSetFilter(&GPU3DS.textures[mainTex].tex, GPU_LINEAR, GPU_LINEAR);
+		C3D_TexBind(0, &GPU3DS.textures[mainTex].tex);
 
 		GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_VERTEX_ALPHA;
-		GPU3DS.currentRenderState.textureBind = SNES_MAIN;
+		GPU3DS.currentRenderState.textureBind = mainTex;
 		GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_ENABLED;
 
 		gpu3dsDraw(list, NULL, list->count);
 
 		// Restore nearest sampling for subsequent draws in balanced mode.
-		C3D_TexSetFilter(&GPU3DS.textures[SNES_MAIN].tex, GPU_NEAREST, GPU_NEAREST);
-		C3D_TexBind(0, &GPU3DS.textures[SNES_MAIN].tex);
+		C3D_TexSetFilter(&GPU3DS.textures[mainTex].tex, GPU_NEAREST, GPU_NEAREST);
+		C3D_TexBind(0, &GPU3DS.textures[mainTex].tex);
 		GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
 		GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0;
 	}
@@ -860,15 +877,20 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	if (renderRightEye) {
 		// Re-render the SNES layers with mirrored parallax so the game
 		// content itself gets per-depth-plane separation (the left eye's
-		// layer pass ran with -iod before the left composite above).
+		// layer pass ran with -iod before the left composite above). The
+		// pass renders into SNES_MAIN_RIGHT: rewriting SNES_MAIN mid-frame
+		// broke on real hardware (both eyes sampled the same content and
+		// draws were lost to cache flushes) while Azahar masked it.
 		GPU3DS.stereoParallax = iod;
+		GPU3DS.stereoRightPass = true;
 		GPU3DS.appliedRenderState.target = TARGET_UNSET;
 		gpu3dsDrawSnesScreen();
+		GPU3DS.stereoRightPass = false;
 
 		GPU3DS.activeSide = GFX_RIGHT;
 		GPU3DS.appliedRenderState.target = TARGET_UNSET;
 
-		impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, iod);
+		impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, iod, SNES_MAIN_RIGHT);
 
 		GPU3DS.activeSide = GFX_LEFT;
 	}

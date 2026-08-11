@@ -85,7 +85,7 @@ typedef enum {
 
 typedef enum
 {
-    TARGET_SNES_MAIN,    
+    TARGET_SNES_MAIN,
 	TARGET_SNES_SUB,
 	TARGET_SNES_DEPTH,
 	TARGET_SNES_MODE7_FULL,
@@ -103,6 +103,7 @@ typedef enum
 	SNES_DEPTH,
 	SNES_MODE7_FULL,
 	SNES_MODE7_TILE_0,
+	SNES_MAIN_RIGHT,            // right-eye main screen (stereo dual pass)
 	SNES_TILE_CACHE,
     SNES_MODE7_TILE_CACHE,
     
@@ -279,6 +280,12 @@ typedef struct
     // uniform last received (re-sent on change or shader rebind).
     float                       stereoParallax;
     float                       stereoParallaxApplied;
+    // right-eye pass: redirects TARGET_SNES_MAIN to the SNES_MAIN_RIGHT
+    // texture so nothing rewrites a texture mid-frame (real-PICA hazard)
+    bool                        stereoRightPass;
+    // false when the optional right-eye VRAM texture failed to allocate;
+    // gates the whole stereo path off (gpu3dsGetIOD returns 0)
+    bool                        stereoTexAvailable;
 
     u32                         vramTotal;
     u32                         linearMemTotal;

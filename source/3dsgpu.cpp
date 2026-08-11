@@ -53,7 +53,7 @@ static SGPU_TOP_MODE gpu3dsGetTopMode()
 //---------------------------------------------------------
 float gpu3dsGetIOD()
 {
-    if (GPU3DS.topMode != TOP_MODE_3D)
+    if (GPU3DS.topMode != TOP_MODE_3D || !GPU3DS.stereoTexAvailable)
         return 0.0f;
 
     return osGet3DSliderState() * gpu3dsGetIODBase();
@@ -990,6 +990,16 @@ void gpu3dsSetRenderTargetToFrameBuffer(SGPU_TARGET_ID targetId)
 
 void gpu3dsSetRenderTargetToTexture(SGPU_TARGET_ID target)
 {
+    // right-eye layer pass renders the main screen into its own texture so
+    // SNES_MAIN is never rewritten mid-frame (real-PICA cache hazard).
+    // Redirected here (not via a new SGPU_TARGET_ID) so the packed render
+    // state keeps its 3-bit target field; same 512x256 dims = same
+    // projection, so the state diffing stays correct.
+    if (target == TARGET_SNES_MAIN && GPU3DS.stereoRightPass) {
+        C3D_FrameDrawOn(GPU3DS.textures[SNES_MAIN_RIGHT].target);
+        return;
+    }
+
     SGPUTexture *texture = &GPU3DS.textures[target];
 
     C3D_FrameDrawOn(texture->target);
