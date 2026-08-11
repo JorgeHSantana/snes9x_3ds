@@ -402,6 +402,14 @@ release : 3dsx cia
 	$(SILENTMSG) $(notdir $<)
 	$(bin2o)
 	
+# IMPORTANT: the subdirectory glob ($(DEPSDIR)/*/*.d) must stay. Without it,
+# the dependency files generated for source/Snes9x/ were never included, so
+# header changes (e.g. adding a field to settings3DS) did NOT recompile
+# gfxhw/ppu/dma. Incremental builds then linked objects with MISMATCHED
+# struct layouts: the render path read fields 4 bytes off and games showed
+# "broken layers"/"broken fades" that appeared or vanished with unrelated
+# edits. If a change ever behaves impossibly, run a full "make clean" build
+# before debugging anything else.
 -include $(DEPSDIR)/*.d $(DEPSDIR)/*/*.d
 
 #---------------------------------------------------------------------------------------

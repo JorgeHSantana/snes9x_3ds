@@ -880,10 +880,10 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	// frames skip the whole SNES render, so lower caps also lighten the
 	// load. Engages only while FMV activity (torn frames) was seen
 	// recently, so MSU-1 games with normal graphics keep full rate.
-	static const uint32_t msu1FpsTable[5] = { 0, 40, 30, 24, 20 };
+	static const uint32_t msu1FpsTable[6] = { 0, 40, 30, 20, 15, 10 };
 	static int msu1FmvActiveFrames = 0;   // decays; >0 = FMV in progress
 	static uint32_t msu1PaceAcc = 0;
-	uint32_t msu1TargetFps = msu1FpsTable[(settings3DS.Msu1VideoFps >= 0 && settings3DS.Msu1VideoFps <= 4) ? settings3DS.Msu1VideoFps : 0];
+	uint32_t msu1TargetFps = msu1FpsTable[(settings3DS.Msu1VideoFps >= 0 && settings3DS.Msu1VideoFps <= 5) ? settings3DS.Msu1VideoFps : 0];
 	if (Settings.MSU1 && msu1TargetFps > 0 && msu1FmvActiveFrames > 0
 		&& !msu1_pace_step(&msu1PaceAcc, msu1TargetFps, Settings.PAL ? 50 : 60)) {
 		skipDrawingFrame = true;

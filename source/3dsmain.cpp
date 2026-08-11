@@ -944,6 +944,13 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuCheckbox(items, "  Mode 7 Smoothing"_s, settings3DS.Mode7BilinearFilter,
         []( int val ) { CheckAndUpdateToggle( settings3DS.Mode7BilinearFilter, val ); });
 
+    if (Settings.MSU1)
+    {
+        AddMenuPicker(items, "  MSU-1 Video FPS"_s, "Caps how often MSU-1 FMV frames are shown.\nLower values lighten rendering and can hide flicker."_s, makePickerOptions({"Off", "40 FPS", "30 FPS", "20 FPS", "15 FPS", "10 FPS"}),
+                    settings3DS.Msu1VideoFps, DIALOG_TYPE_INFO, true,
+                    []( int val ) { CheckAndUpdate( settings3DS.Msu1VideoFps, val ); });
+    }
+
     AddMenuDisabledOption(items, ""_s);
     
     AddMenuHeader2(items, "Audio"_s);
@@ -974,7 +981,9 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                     if (settings3DS.UseGlobalVolume)
                     {
                         settings3DS.GlobalVolume = settings3DS.Volume;
-                        settings3DS.GlobalMsu1Volume = settings3DS.Msu1Volume;
+                        // only an MSU-1 game may promote its MSU-1 volume to global
+                        if (Settings.MSU1)
+                            settings3DS.GlobalMsu1Volume = settings3DS.Msu1Volume;
                     }
                     else
                     {
@@ -982,10 +991,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                         settings3DS.Msu1Volume = settings3DS.GlobalMsu1Volume;
                     }
                 });
-
-    AddMenuPicker(items, "  MSU-1 Video FPS"_s, "Caps how often MSU-1 FMV frames are shown.\nLower values lighten rendering and can hide flicker.\nNo effect on games without MSU-1 video."_s, makePickerOptions({"Off", "40 FPS", "30 FPS", "24 FPS", "20 FPS"}),
-                settings3DS.Msu1VideoFps, DIALOG_TYPE_INFO, true,
-                []( int val ) { CheckAndUpdate( settings3DS.Msu1VideoFps, val ); });
 
     AddMenuPicker(items, "  SNES Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.AudioBuffer, val ); });
@@ -1433,7 +1438,7 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     }
 
     if (writeMode || detectedConfigVersion >= 1.7f) {
-        config3dsReadWriteInt32(stream, writeMode, "Msu1VideoFps=%d\n", &settings3DS.Msu1VideoFps, 0, 4);
+        config3dsReadWriteInt32(stream, writeMode, "Msu1VideoFps=%d\n", &settings3DS.Msu1VideoFps, 0, 5);
     }
 
     // Gauge-era leftovers (v1.8-2.0 wrote different keys here) hit the parse
