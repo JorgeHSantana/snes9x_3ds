@@ -255,10 +255,11 @@ void gpu3dsDrawTiledLayerSingleSection(SLayer *layer, SLayerSection *section) {
     GPU3DS.currentRenderState.packed =
         (GPU3DS.currentRenderState.packed & ~mask) | (section->state.packed & mask);
 
-    // ghost fragments carry low alpha; the section's alpha test would
-    // discard them all — blending already handles transparent texels
+    // ghost fragments carry low alpha: the sections' >=0.5 alpha test would
+    // discard them, but the test must still kill fully transparent texels
+    // (sprites lost their transparency with the test fully off)
     if (GPU3DS.stereoGhostPass)
-        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
 
     gpu3dsDraw(&GPU3DS.vertices[section->vboId], NULL, section->count, section->from);
 }
@@ -285,10 +286,11 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
     GPU3DS.currentRenderState.packed =
         (GPU3DS.currentRenderState.packed & ~layerMask[0]) | (first->state.packed & layerMask[0]);
 
-    // ghost fragments carry low alpha; the sections' alpha test would
-    // discard them all — blending already handles transparent texels
+    // ghost fragments carry low alpha: the sections' >=0.5 alpha test would
+    // discard them, but the test must still kill fully transparent texels
+    // (sprites lost their transparency with the test fully off)
     if (GPU3DS.stereoGhostPass)
-        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
 
     for (int idx = from; idx < to; idx++) {
         SLayerSection *section = &list->sections[idx];
@@ -306,7 +308,7 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
                 GPU3DS.currentRenderState.packed =
                     (GPU3DS.currentRenderState.packed & ~layerMask[1]) | (section->state.packed & layerMask[1]);
                 if (GPU3DS.stereoGhostPass)
-                    GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+                    GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
                 batchFrom += batchCount;
                 batchCount = 0;
             }
