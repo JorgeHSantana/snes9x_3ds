@@ -248,7 +248,8 @@ void gpu3dsDrawVerticalSectionLayer(SLayer *layer, int from, int to) {
 // (SMK race).
 void gpu3dsDrawTiledLayerSingleSection(SLayer *layer, SLayerSection *section) {
     GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
-    GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+    GPU3DS.currentRenderState.alphaBlending =
+        GPU3DS.stereoGhostPass ? ALPHA_BLENDING_ENABLED : ALPHA_BLENDING_DISABLED;
 
     u64 mask = gpu3dsGetLayerPackedMask(layer->id, true);
     GPU3DS.currentRenderState.packed =
@@ -263,9 +264,10 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
     u16 batchFrom = 0;
     u16 batchCount = 0;
 
-    // Those fields are set once before the loop and stay constant 
+    // Those fields are set once before the loop and stay constant
     GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
-    GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+    GPU3DS.currentRenderState.alphaBlending =
+        GPU3DS.stereoGhostPass ? ALPHA_BLENDING_ENABLED : ALPHA_BLENDING_DISABLED;
     
     // restrict the diff to only the properties that actually vary across sections for that layer type
     u64 layerMask[2];
@@ -325,18 +327,42 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
 // otherwise unused; stage-0 helpers only ever clear stage 1. t scales with
 // the 3D slider, so 2D parity is exact with 3D off.
 static u32 s_atmosLastColor;
+// >0 while the current layer's haze is strong enough to deserve ghost
+// (blur) passes; doubles as the ghosts' alpha
+static float s_atmosGhostAlpha;
 
 static void gpu3dsResetStereoAtmosphere()
 {
     C3D_TexEnvInit(C3D_GetTexEnv(2));
+    C3D_TexEnvInit(C3D_GetTexEnv(3));
     s_atmosLastColor = 0xFFFFFFFF;
+    s_atmosGhostAlpha = 0.0f;
+    GPU3DS.stereoGhostPass = false;
+}
+
+// Stage 3 modulates the output alpha for the ghost passes (RGB passes
+// through); a <= 0 restores passthrough.
+static void gpu3dsSetGhostAlpha(float a)
+{
+    C3D_TexEnv *env = C3D_GetTexEnv(3);
+    C3D_TexEnvInit(env);
+    if (a <= 0.0f)
+        return;
+    C3D_TexEnvColor(env, ((u32)(a * 255.0f) << 24) | 0x00FFFFFF);
+    C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS, GPU_CONSTANT);
+    C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
 }
 
 static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id)
 {
-    float depthIn = -GPU3DS.stereoLayerDepth[id] / 8.0f;   // 0..1 when sinking
-    if (depthIn < 0.0f) depthIn = 0.0f;
-    if (depthIn > 1.0f) depthIn = 1.0f;
+    // relative model: the deepest configured layer gets the full gauge
+    // strength, shallower ones scale by their share of that depth
+    float depthIn = 0.0f;
+    if (GPU3DS.stereoMaxSink > 0.0f) {
+        depthIn = -GPU3DS.stereoLayerDepth[id] / GPU3DS.stereoMaxSink;
+        if (depthIn < 0.0f) depthIn = 0.0f;
+        if (depthIn > 1.0f) depthIn = 1.0f;
+    }
 
     float slider = GPU3DS.stereoEyeIOD < 0.0f ? -GPU3DS.stereoEyeIOD : GPU3DS.stereoEyeIOD;
 
@@ -352,6 +378,10 @@ static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id)
         u8 a = (u8)(t * 255.0f);
         color = ((u32)a << 24) | ((u32)b << 16) | ((u32)g << 8) | r;
     }
+
+    // hazy layers also get ghost (blur) passes: soft edges are what makes
+    // it read as smoke rather than desaturation
+    s_atmosGhostAlpha = hz > 0.02f ? (0.20f + 0.50f * (hz / 0.60f)) : 0.0f;
 
     if (color == s_atmosLastColor)
         return;
@@ -407,13 +437,34 @@ void gpu3dsDrawLayers(SLayerList *list) {
             GPU3DS.currentRenderState.depthTest = id < LAYER_OBJ ? SGPU_STATE_ENABLED : SGPU_STATE_DISABLED;
 
             if (id < LAYER_BACKDROP) {
-                if (list->useDrawArraysForTiledLayers) {
-                    gpu3dsDrawTiledLayerSingleSection(layer, &list->sections[from]);
+                // hazy layers draw 2 extra ghost passes shifted +-1px with
+                // reduced alpha (a cheap box blur: soft "smoky" edges)
+                float ghost = s_atmosGhostAlpha;
+                float baseParallax = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id];
+                int passes = ghost > 0.0f ? 3 : 1;
+
+                for (int gp = 0; gp < passes; gp++) {
+                    if (gp == 1) {
+                        GPU3DS.stereoGhostPass = true;
+                        gpu3dsSetGhostAlpha(ghost);
+                        gpu3dsSetStereoParallax(baseParallax + 1.0f);
+                    } else if (gp == 2) {
+                        gpu3dsSetStereoParallax(baseParallax - 1.0f);
+                    }
+
+                    if (list->useDrawArraysForTiledLayers) {
+                        gpu3dsDrawTiledLayerSingleSection(layer, &list->sections[from]);
+                    }
+                    else {
+                        u32 bufferOffset = layer->bufferOffset + (sub ? 0 : layer->verticesByTarget[TARGET_SNES_SUB]);
+                        u16 *indices = (u16 *)list->ibo + bufferOffset;
+                        gpu3dsDrawTiledLayer(layer, indices, from, to);
+                    }
                 }
-                else {
-                    u32 bufferOffset = layer->bufferOffset + (sub ? 0 : layer->verticesByTarget[TARGET_SNES_SUB]);
-                    u16 *indices = (u16 *)list->ibo + bufferOffset;
-                    gpu3dsDrawTiledLayer(layer, indices, from, to);
+
+                if (passes > 1) {
+                    GPU3DS.stereoGhostPass = false;
+                    gpu3dsSetGhostAlpha(0.0f);
                 }
             }
             else {

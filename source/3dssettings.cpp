@@ -192,8 +192,13 @@ void settings3dsUpdate(bool includeGameSettings)
         msu3dsSetGlobalVolume(0.25f * (float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume));
 
         // stereo 3D depths (BG1-4, Sprites) -> GPU; other LAYER_IDs stay 0
-        for (int i = 0; i < 8; i++)
+        float maxSink = 0.0f;
+        for (int i = 0; i < 8; i++) {
             GPU3DS.stereoLayerDepth[i] = (i < 5) ? (float)settings3DS.StereoDepth[i] : 0.0f;
+            if (-GPU3DS.stereoLayerDepth[i] > maxSink)
+                maxSink = -GPU3DS.stereoLayerDepth[i];
+        }
+        GPU3DS.stereoMaxSink = maxSink;
         GPU3DS.stereoFade = settings3DS.StereoFade;
         GPU3DS.stereoHaze = settings3DS.StereoHaze;
 

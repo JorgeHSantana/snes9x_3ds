@@ -1050,7 +1050,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     if (gpu3dsIs3DAvailable()) {
         AddMenuHeader2(items, "Stereoscopic 3D"_s);
 
-        static const char *stereoNames[5] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites" };
+        static const char *stereoNames[5] = { "  BG1 Depth", "  BG2 Depth", "  BG3 Depth", "  BG4 Depth", "  Sprites Depth" };
         for (int l = 0; l < 5; l++) {
             AddMenuGauge(items, stereoNames[l], -8, 8, settings3DS.StereoDepth[l],
                 [l]( int val ) { CheckAndUpdate( settings3DS.StereoDepth[l], val ); }, true);
