@@ -366,7 +366,10 @@ static void gpu3dsSetGhostAlpha(float a)
     if (a <= 0.0f)
         return;
     C3D_TexEnvColor(env, ((u32)(a * 255.0f) << 24) | 0x00FFFFFF);
-    C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS, GPU_CONSTANT);
+    // ghost alpha = texture alpha x constant: keeps transparent texels dead
+    // while staying immune to the per-scene vertex-alpha class, which
+    // color-math scenes set to 0 (that zeroed a PREVIOUS-based modulate)
+    C3D_TexEnvSrc(env, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT);
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
 }
 
