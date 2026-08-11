@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project is a fork of the legacy snes9x_3ds codebase by [bubble2k](https://github.com/bubble2k16/snes9x_3ds) and continues that work with a modernized architecture and improved user experience.
+This fork by [JorgeHSantana](https://github.com/JorgeHSantana/snes9x_3ds) adds **MSU-1 support** — CD-quality music and full-motion video streaming — on top of [matbo87](https://github.com/matbo87/snes9x_3ds)'s modernized fork of the legacy snes9x_3ds codebase by [bubble2k](https://github.com/bubble2k16/snes9x_3ds).
 It builds with current devkitARM, libctru and citro3d releases (as of June 2026). Optional assets are available in the dedicated asset repository: [snes9x_3ds-assets](https://github.com/matbo87/snes9x_3ds-assets).
 
 It works on all 2DS and 3DS models.
@@ -12,6 +12,7 @@ Feedback and bug reports are welcome.
 
 ## Main features
 
+* MSU-1 support: CD-quality music packs and FMV playback, with per-game MSU-1 volume and video FPS settings
 * Improved rendering for HDMA-heavy games and mosaic effects
 * SNES refresh rate matching (60.1 Hz for NTSC, 50 Hz for PAL)
 * NDSP audio output
@@ -24,7 +25,7 @@ Feedback and bug reports are welcome.
 ## Setup
 
 * A modded 3DS is required; DSP firmware (`3ds/dspfirm.cdc`) is needed for sound output.
-* Install via [Universal Updater](https://universal-team.net/projects/universal-updater.html), or install the latest `.cia` from [Releases](https://github.com/matbo87/snes9x_3ds/releases).
+* Install via [Universal Updater](https://universal-team.net/projects/universal-updater.html), or install the latest `.cia` from [Releases](https://github.com/JorgeHSantana/snes9x_3ds/releases).
 * Optional: download asset packs from [snes9x_3ds-assets releases](https://github.com/matbo87/snes9x_3ds-assets/releases).
 
 ROMs can be stored in any folder. ZIP files are not supported.
