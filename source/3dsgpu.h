@@ -274,6 +274,12 @@ typedef struct
     u32                         currentRenderTargetDim;
     u32                         currentTextureDim;
 
+    // stereo layer parallax (SNES px per depth plane) for the CURRENT eye's
+    // layer pass; 0 when 3D is off. applied* mirrors what the tiles shader
+    // uniform last received (re-sent on change or shader rebind).
+    float                       stereoParallax;
+    float                       stereoParallaxApplied;
+
     u32                         vramTotal;
     u32                         linearMemTotal;
 

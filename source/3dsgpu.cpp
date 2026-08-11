@@ -367,6 +367,13 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_TEX_OFFSET], textureOffset[3], textureOffset[2], textureOffset[1], textureOffset[0]);
     }
 
+    if (state->shader == SPROGRAM_TILES &&
+        (shaderUpdated || GPU3DS.stereoParallaxApplied != GPU3DS.stereoParallax)) {
+        C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD],
+            GPU3DS.stereoParallax, 0.0f, 0.0f, 0.0f);
+        GPU3DS.stereoParallaxApplied = GPU3DS.stereoParallax;
+    }
+
     if (shaderUpdated && state->shader == SPROGRAM_MODE7) {
         float updateFrame[4] = {(float)GPU3DSExt.mode7FrameCount, 0.0f, 0.0f, 0.0f}; // wzyx
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_UPDATE_FRAME], updateFrame[3], updateFrame[2], updateFrame[1], updateFrame[0]);

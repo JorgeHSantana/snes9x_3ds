@@ -49,3 +49,23 @@ Only phase 1 of 3 was done; docs in that repo (plan.md/architecture.md).
 - Color-math/brightness layers must NOT shift (they're screen-space) —
   likely need stereoIOD=0 for those draws (they render as LAYER_COLOR_MATH /
   LAYER_BRIGHTNESS in the same pass).
+
+## SPIKE RESULT (2026-08-11): WORKING in Azahar
+Dual layer pass implemented: left eye's pass runs with -iod before the left
+composite (impl3dsRunOneFrame), right eye re-runs gpu3dsDrawSnesScreen with
++iod inside impl3dsSceneRender. Tiles shader = single `mad` (exact no-op at
+slider 0). Uniform pushed via gpu3dsSetShaderAndUniforms on change/rebind.
+Mode7 shader change from the prior attempt REVERTED (it was the texture
+baker, wrong place — Mode 7 stays flat for now).
+
+Measured in Azahar (side-by-side, factor_3d=80, MMX3 ZP intro): per-layer
+dx between eyes = far city -2px, towers -12px, bridge -17px, dialog -19px —
+monotone depth-ordered separation at a steady 60 FPS. Screenshot analysis
+via gradient template matching (venv in scratchpad).
+
+Next (hardware): judge the effect + comfort on a real New 3DS, decide the
+parallax SIGN (current: front layers pop OUT of the screen; flipping the
+two signs in 3dsimpl.cpp pushes the scene INTO the screen instead), maybe
+scale per Intensity3D, and evaluate the shifted-edge artifact at the
+viewport borders. Azahar preview knobs: qt-config.ini factor_3d=0..100,
+render_3d=1 (side-by-side).

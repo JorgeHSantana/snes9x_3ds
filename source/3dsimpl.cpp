@@ -858,6 +858,13 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, -iod);
 
 	if (renderRightEye) {
+		// Re-render the SNES layers with mirrored parallax so the game
+		// content itself gets per-depth-plane separation (the left eye's
+		// layer pass ran with -iod before the left composite above).
+		GPU3DS.stereoParallax = iod;
+		GPU3DS.appliedRenderState.target = TARGET_UNSET;
+		gpu3dsDrawSnesScreen();
+
 		GPU3DS.activeSide = GFX_RIGHT;
 		GPU3DS.appliedRenderState.target = TARGET_UNSET;
 
@@ -950,6 +957,8 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	gpu3dsFrameBegin(screenshot.dirty ? C3D_FRAME_SYNCDRAW : 0, !skipDrawingFrame);
 		if (!firstFrame && !skipDrawingFrame) {
 			t3dsStartTimer(TIMER_DRAW_SNES_SCREEN);
+			// left eye's layer pass; 0 with the slider off (exact 2D parity)
+			GPU3DS.stereoParallax = -gpu3dsGetIOD();
     		gpu3dsDrawSnesScreen();
 			t3dsStopTimer(TIMER_DRAW_SNES_SCREEN);
 		}
@@ -1211,6 +1220,7 @@ bool impl3dsTakeScreenshot(char *path, size_t bufferSize, bool renderFrame) {
     	gpu3dsFrameBegin(0, true);
 
 		if (settings3DS.Mode7BilinearFilter) {
+			GPU3DS.stereoParallax = 0.0f;   // screenshots are always mono
 			gpu3dsDrawSnesScreen();
 		}
 
