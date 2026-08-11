@@ -103,6 +103,7 @@ typedef enum
 	SNES_DEPTH,
 	SNES_MODE7_FULL,
 	SNES_MODE7_TILE_0,
+	SNES_MAIN_RIGHT,            // retained right-eye main screen (stereo)
 	SNES_TILE_CACHE,
     SNES_MODE7_TILE_CACHE,
     
@@ -279,10 +280,14 @@ typedef struct
     // uniform last received (re-sent on change or shader rebind).
     float                       stereoParallax;
     float                       stereoParallaxApplied;
-    // alternate-eye stereo: true when the current drawn frame belongs to
-    // the RIGHT eye (layer pass parallax +iod, composite to the right
-    // target); toggles every drawn frame while the 3D slider is active
+    // alternate-eye stereo: true when the current drawn frame's LAYER PASS
+    // belongs to the RIGHT eye (parallax +iod, rendered into
+    // SNES_MAIN_RIGHT); toggles every drawn frame while the slider is
+    // active. Both eyes composite every frame from the retained textures.
     bool                        stereoRightPass;
+    // false when the optional right-eye VRAM texture failed to allocate;
+    // gates the whole stereo path off (gpu3dsGetIOD returns 0)
+    bool                        stereoTexAvailable;
 
     u32                         vramTotal;
     u32                         linearMemTotal;

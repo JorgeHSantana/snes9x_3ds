@@ -205,6 +205,24 @@ bool impl3dsInitialize()
 	setDepthBufferByTex(GPU3DS.textures[SNES_MAIN].target, &GPU3DS.textures[SNES_DEPTH].tex);
 	setDepthBufferByTex(GPU3DS.textures[SNES_SUB].target, &GPU3DS.textures[SNES_DEPTH].tex);
 
+	// Retained right-eye main screen for alternate-eye stereo: each eye's
+	// layer pass writes its own texture (on its own frame), and BOTH eyes
+	// composite every frame from the retained textures. Optional: on
+	// allocation failure stereo is disabled instead of failing the boot.
+	// 2DS consoles never allocate it.
+	GPU3DS.stereoTexAvailable = false;
+	if (gpu3dsIs3DAvailable()) {
+		const SGPUTextureConfig stereoTexConfig =
+			{ defaultTextureParams, SNES_MAIN_RIGHT, GPU_RGBA8, 512, 256 };
+		if (gpu3dsAllocVramTextureAndTarget(&GPU3DS.textures[SNES_MAIN_RIGHT], &stereoTexConfig)) {
+			setDepthBufferByTex(GPU3DS.textures[SNES_MAIN_RIGHT].target, &GPU3DS.textures[SNES_DEPTH].tex);
+			GPU3DS.stereoTexAvailable = true;
+			log3dsWrite("stereo right-eye vram texture allocated (512.00kb)");
+		} else {
+			log3dsWrite("stereo right-eye vram texture UNAVAILABLE - 3D disabled");
+		}
+	}
+
 	const SGPUTextureConfig lramTexConfig[] = {
 		{ defaultTextureParams, SNES_TILE_CACHE, GPU_RGBA5551, 1024, 1024 },
 		{ defaultTextureParams, SNES_MODE7_TILE_CACHE, GPU_RGBA5551, 128, 128 }
@@ -847,36 +865,34 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	float iod = gpu3dsGetIOD();
 
 	// Alternate-eye stereo: each drawn frame renders the layer pass ONCE
-	// (with this frame's eye parallax, chosen in impl3dsRunOneFrame) and
-	// composites only that eye; the other eye's LCD keeps its last image.
-	// Costs the same as mono — the full dual pass broke on real hardware
-	// (mid-frame texture rewrite hazards) and doubled GPU time.
+	// (this frame's eye, chosen in impl3dsRunOneFrame, into that eye's
+	// retained texture) but BOTH eyes composite every frame from the
+	// retained textures — so the LCD never shows a stale back buffer.
+	// Costs one layer pass + two cheap composites per frame; the full
+	// per-frame dual pass broke on real hardware (mid-frame texture
+	// rewrite hazards) and doubled GPU time.
 	bool stereoActive = iod != 0.0f;
-	bool rightFrame = stereoActive && GPU3DS.stereoRightPass;
 
 	bool balancedFilterEnabled =
 		settings3DS.ScreenFilter == Setting::ScreenFilter::Balanced && !screenshot.dirty &&
 		(settings3DS.ScreenStretch != Setting::ScreenStretch::None || settings3DS.Overscan);
 
-	GPU3DS.activeSide = rightFrame ? GFX_RIGHT : GFX_LEFT;
-
 	if (drawBackground) {
-		gpu3dsClearScreen(settings3DS.GameScreen, false);
-	}
-
-	impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled,
-		rightFrame ? iod : -iod);
-
-	if (stereoActive) {
-		// The eye NOT drawn this frame: mark its retained render target used
-		// (no clear, no draws) so C3D re-transfers the last rendered image
-		// to the fresh LCD back buffer — otherwise that eye flickers between
-		// two stale framebuffers under double buffering.
-		C3D_FrameDrawOn(GPU3DS.screenTargets[rightFrame ? SCREEN_TARGET_LEFT : SCREEN_TARGET_RIGHT]);
-		GPU3DS.appliedRenderState.target = TARGET_UNSET;
+		gpu3dsClearScreen(settings3DS.GameScreen, stereoActive);
 	}
 
 	GPU3DS.activeSide = GFX_LEFT;
+	impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, -iod);
+
+	if (stereoActive) {
+		GPU3DS.activeSide = GFX_RIGHT;
+		GPU3DS.appliedRenderState.target = TARGET_UNSET;
+
+		impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, iod,
+			SNES_MAIN_RIGHT);
+
+		GPU3DS.activeSide = GFX_LEFT;
+	}
 }
 
 //---------------------------------------------------------
@@ -1228,7 +1244,9 @@ bool impl3dsTakeScreenshot(char *path, size_t bufferSize, bool renderFrame) {
     	gpu3dsFrameBegin(0, true);
 
 		if (settings3DS.Mode7BilinearFilter) {
-			GPU3DS.stereoParallax = 0.0f;   // screenshots are always mono
+			// screenshots are always mono and must land in SNES_MAIN
+			GPU3DS.stereoParallax = 0.0f;
+			GPU3DS.stereoRightPass = false;
 			gpu3dsDrawSnesScreen();
 		}
 
