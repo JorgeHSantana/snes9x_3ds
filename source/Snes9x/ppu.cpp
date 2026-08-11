@@ -186,8 +186,22 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 
 				// Commit the brightness setting
 				//
-				int brightness = PPU.ForcedBlanking ? 0 : PPU.Brightness;
-				S9xUpdateVerticalSectionValue(&IPPU.BrightnessSections, brightness);
+				// MSU-1 FMV: the upload blank window is meant to sit inside
+				// vblank, but this port's timing lets it drift into the
+				// visible frame — painting a rolling black section (visible
+				// as video flicker). Blank engaged mid-visible-frame in an
+				// MSU-1 game is that drifted window: keep the section at the
+				// current brightness instead of black. Real fades write
+				// brightness with the blank bit clear, so they still land;
+				// a blank that persists into the next frame still blacks it
+				// (the start-of-frame reset reads PPU.ForcedBlanking).
+				bool suppressBlankSection = Settings.MSU1 && PPU.ForcedBlanking
+					&& CPU.V_Counter >= 1 && CPU.V_Counter <= 224;
+				if (!suppressBlankSection)
+				{
+					int brightness = PPU.ForcedBlanking ? 0 : PPU.Brightness;
+					S9xUpdateVerticalSectionValue(&IPPU.BrightnessSections, brightness);
+				}
 			}
 			break;
 
@@ -481,6 +495,11 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			break;
 
 		  case 0x2118:
+			// FMV upload via plain CPU stores (KI streams this way — no DMA):
+			// count writes landing inside the visible frame so the platform
+			// can hold half-uploaded video frames.
+			if (Settings.MSU1 && CPU.V_Counter >= 1 && CPU.V_Counter <= 224)
+				msu1_note_visible_vram_write();
 			// VRAM write data (low)
 #ifndef CORRECT_VRAM_READS
 			IPPU.FirstVRAMRead = TRUE;
@@ -489,6 +508,11 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			break;
 
 		  case 0x2119:
+			// FMV upload via plain CPU stores (KI streams this way — no DMA):
+			// count writes landing inside the visible frame so the platform
+			// can hold half-uploaded video frames.
+			if (Settings.MSU1 && CPU.V_Counter >= 1 && CPU.V_Counter <= 224)
+				msu1_note_visible_vram_write();
 			// VRAM write data (high)
 #ifndef CORRECT_VRAM_READS
 			IPPU.FirstVRAMRead = TRUE;
@@ -543,6 +567,11 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			break;
 
 		  case 0x2122:
+			// FMV upload via plain CPU stores (KI streams this way — no DMA):
+			// count writes landing inside the visible frame so the platform
+			// can hold half-uploaded video frames.
+			if (Settings.MSU1 && CPU.V_Counter >= 1 && CPU.V_Counter <= 224)
+				msu1_note_visible_vram_write();
 			REGISTER_2122(Byte);
 			break;
 

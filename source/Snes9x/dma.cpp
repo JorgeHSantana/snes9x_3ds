@@ -118,6 +118,19 @@ void S9xDoDMA (uint8 Channel)
 		break;
     }
 
+	// MSU-1 FMV: a sizeable VRAM upload that starts inside the visible frame
+	// will be half-drawn by the per-section renderer (blink / placeholder
+	// tiles). Mark the frame so the platform can hold the previous image.
+	// Threshold skips legit small mid-frame effects; vblank uploads (V>=225)
+	// and non-MSU games never trip it.
+	if (Settings.MSU1 && !d->TransferDirection
+		&& CPU.V_Counter >= 1 && CPU.V_Counter <= 224
+		&& (((d->BAddress == 0x18 || d->BAddress == 0x19) && count >= 256)
+		 || (d->BAddress == 0x22 && count >= 32)))
+	{
+		msu1_mark_frame_torn();
+	}
+
 	// MSU-1: DMA with a fixed A-bus source in $2000-$2007 (e.g. $2001 -> VRAM).
 	// The generic path below resolves the A-address through memory-map base
 	// pointers, which do not exist for register space. The data port gets a

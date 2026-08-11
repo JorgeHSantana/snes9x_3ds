@@ -8,6 +8,7 @@
 #include "cpuexec.h"
 #include "gfx.h"
 #include "apu.h"
+#include "msu1.h"
 #include "cheats.h"
 #include "cliphw.h"
 
@@ -3874,6 +3875,12 @@ void S9xUpdateScreenHardware ()
 	// anyLayerDeferred forces a render even if S9xTrimBlackScanlines would
 	// veto this segment, so trim-skipped ranges still flush deferred catch-up.
 	bool RenderThisSection = anyLayerDeferred ? true : S9xTrimBlackScanlines(&IPPU.BrightnessSections);
+
+	// MSU-1 FMV: an all-black frame mid-video is almost always the upload
+	// blank crossing the whole frame — flag it so the platform holds the
+	// previous image (bounded to 2 holds, so real fades still land).
+	if (!RenderThisSection && Settings.MSU1)
+		msu1_mark_frame_torn();
 
 	// set render state to default
 	renderState = GPU3DS.currentRenderState;

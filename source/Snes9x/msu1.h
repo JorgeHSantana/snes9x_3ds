@@ -117,6 +117,14 @@ void msu1_diag(const char* fmt, ...);
 // direct (position-corrected) fread. Installed by the platform bridge.
 void msu1_set_data_prefetch(uint32_t (*read)(uint32_t pos, uint8_t* dst, uint32_t count));
 
+// FMV tear tracking: large VRAM DMAs landing inside the visible frame mark
+// it torn; the platform holds the previous presented frame instead of
+// showing a half-uploaded video frame (blink/pink-tile suppression).
+void msu1_mark_frame_torn(void);
+bool msu1_consume_frame_torn(void);
+void     msu1_note_visible_vram_write(void);   // CPU-store uploads (no DMA)
+uint32_t msu1_take_visible_vram_writes(void);  // read + reset, once per frame
+
 // legacy-boundary wrappers (operate on the global MSU1)
 uint8_t S9xMSU1ReadPort(uint8_t port);
 void    S9xMSU1WritePort(uint8_t port, uint8_t value);

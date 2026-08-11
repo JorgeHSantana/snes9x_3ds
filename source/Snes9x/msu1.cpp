@@ -149,6 +149,22 @@ static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
 
 static void (*g_log_hook)(const char*) = nullptr;
 static uint32_t (*g_data_prefetch)(uint32_t, uint8_t*, uint32_t) = nullptr;
+static bool g_frame_torn = false;
+void msu1_mark_frame_torn(void) { g_frame_torn = true; }
+static uint32_t g_visible_vram_writes = 0;
+void msu1_note_visible_vram_write(void) { g_visible_vram_writes++; }
+uint32_t msu1_take_visible_vram_writes(void)
+{
+    uint32_t n = g_visible_vram_writes;
+    g_visible_vram_writes = 0;
+    return n;
+}
+bool msu1_consume_frame_torn(void)
+{
+    bool torn = g_frame_torn;
+    g_frame_torn = false;
+    return torn;
+}
 void msu1_set_data_prefetch(uint32_t (*read)(uint32_t pos, uint8_t* dst, uint32_t count))
 { g_data_prefetch = read; }
 void msu1_set_log_hook(void (*log)(const char* message)) { g_log_hook = log; }

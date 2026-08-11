@@ -890,6 +890,27 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 		S9xMainLoopWithSA1();
 	t3dsStopTimer(TIMER_S9X_MAIN_LOOP);
 
+	// MSU-1 FMV: a frame marked torn (a large VRAM upload landed inside the
+	// visible area mid-emulation) would present a half-drawn video frame —
+	// the source of FMV blinking and placeholder tiles. Hold the previous
+	// presented image instead, at most one hold in a row so a game tearing
+	// every frame still presents at half rate.
+	{
+		static int msuTornHolds = 0;
+		bool torn = false;
+		if (Settings.MSU1) {
+			bool dmaTorn = msu1_consume_frame_torn();
+			uint32_t cpuWrites = msu1_take_visible_vram_writes();
+			torn = dmaTorn || cpuWrites > 512;
+		}
+		if (torn && msuTornHolds < 2) {
+			msuTornHolds++;
+			skipDrawingFrame = true;
+		} else {
+			msuTornHolds = 0;
+		}
+	}
+
 	// C3D_FRAME_SYNCDRAW only when needed for screenshots (drains previous display transfer).
 	gpu3dsFrameBegin(screenshot.dirty ? C3D_FRAME_SYNCDRAW : 0, !skipDrawingFrame);
 		if (!firstFrame && !skipDrawingFrame) {

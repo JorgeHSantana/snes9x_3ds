@@ -91,3 +91,12 @@ TEST_CASE("log hook reports track-load failures; null hook is safe")
     CHECK(strstr(g_last_log, "fopen failed") != nullptr);
     msu1_set_log_hook(nullptr);
 }
+
+TEST_CASE("torn-frame flag: mark, consume once, then clear")
+{
+    CHECK_FALSE(msu1_consume_frame_torn());
+    msu1_mark_frame_torn();
+    msu1_mark_frame_torn();                  // idempotent
+    CHECK(msu1_consume_frame_torn());
+    CHECK_FALSE(msu1_consume_frame_torn());
+}
