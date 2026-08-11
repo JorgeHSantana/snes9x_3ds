@@ -46,7 +46,6 @@ void snd3dsApplyOutputVolume()
     // Gauge scale: 25% per step, midpoint 4 = 100% (unamplified).
     // v=0 -> mute ... v=4 -> 1.0x ... v=8 -> 2.0x
     float gain = v * 0.25f;
-    msu3dsSetGlobalVolume(gain);
 
     float mix[12] = { gain, gain, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     ndspChnSetMix(0, mix);

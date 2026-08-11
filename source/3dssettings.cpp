@@ -188,7 +188,7 @@ void settings3dsUpdate(bool includeGameSettings)
         }
         
         snd3dsApplyOutputVolume();
-        msu3dsSetUserVolume(0.25f * (float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume));
+        msu3dsSetGlobalVolume(0.25f * (float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume));
 
         if (settings3DS.PaletteFix == 0)
             settings3DS.PaletteFix = settings3dsGetGameDefaultPaletteFix();

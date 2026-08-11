@@ -24,7 +24,7 @@ bool     msu3dsInitialize(const Msu1AudioBackend& backend,
                           int16_t* staging, uint32_t staging_samples);
 void     msu3dsFinalize(void);
 void     msu3dsOnEvent(Msu1Event event);
-void     msu3dsSetGlobalVolume(float factor);   // 1.0 + setting*0.25 (same curve as ch 0)
+void     msu3dsSetGlobalVolume(float factor);   // MSU-1 Volume gauge, v*0.25 (independent of SNES volume)
 void     msu3dsSetUserVolume(float factor);     // MSU-1 balance gauge, v*0.25 (4 = same as SNES)
 
 // Data-track read-ahead (phase B). Storage is caller-owned; null/0 disables.
