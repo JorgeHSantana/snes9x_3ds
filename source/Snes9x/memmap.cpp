@@ -3192,7 +3192,13 @@ void CMemory::ApplySpeedHackPatches()
 		if (allMatches)
 		{
 			*SNESGameFixes.SpeedHackAddress[n] = 0x42;
-			//printf ("Patched main: %x\n", SNESGameFixes.SpeedHackSNESAddress[n]);
+			msu1_diag("speedhack applied at %06X",
+			          (unsigned)SNESGameFixes.SpeedHackSNESAddress[n]);
+		}
+		else
+		{
+			msu1_diag("speedhack SKIPPED at %06X (bytes differ)",
+			          (unsigned)SNESGameFixes.SpeedHackSNESAddress[n]);
 		}			
 	}
 
@@ -3817,6 +3823,15 @@ void CMemory::ApplyROMFixes ()
 	if (strcmp (ROMName, "AXELAY") == 0)
 	{
 		SpeedHackAdd(0x00893D, -1, 0xf0, 0xdb, -1, -1);  // US + EUR version
+	}
+	if (strcmp (ROMName, "KILLER INSTINCT MSU1") == 0)
+	{
+		// MSU-1 Arcade hack: the streamer uploads MSU data to the SPC700
+		// through the $2140 handshake, spinning CPX $2140 / BNE for every
+		// byte at MB/s rates. Fast-forward those spins to the next event so
+		// the emulated SPC can acknowledge in bulk.
+		SpeedHackAdd(0x83C967, -1, 0xD0, 0xFB, -1, -1);  // main streamer ack spin
+		SpeedHackAdd(0x83C99B, -1, 0xD0, 0xFB, -1, -1);  // second streamer instance
 	}
 
 	int instructionSet = 0;
