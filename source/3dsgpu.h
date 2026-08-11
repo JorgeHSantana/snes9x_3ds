@@ -389,6 +389,20 @@ static inline void gpu3dsWaitForVBlank(gfxScreen_t screen) {
         gspWaitForVBlank1();
 }
 
+// Push the stereo parallax uniform immediately (dedup'd). Must NOT rely on
+// gpu3dsApplyRenderState: its `if (!diff) return` early-out skips uniform
+// handling between consecutive layer draws with identical packed state,
+// which left every BG after the first stuck on the first BG's parallax.
+// citro3d queues the value and flushes it on the next draw.
+static inline void gpu3dsSetStereoParallax(float v)
+{
+    GPU3DS.stereoParallax = v;
+    if (GPU3DS.stereoParallaxApplied == v)
+        return;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD], v, 0.0f, 0.0f, 0.0f);
+    GPU3DS.stereoParallaxApplied = v;
+}
+
 static inline void gpu3dsApplyRenderState(SGPURenderState *state)
 {
     u64 diff = GPU3DS.appliedRenderState.packed ^ state->packed;

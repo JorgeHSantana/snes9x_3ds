@@ -322,7 +322,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
     // draw window_lr into depth buffer first (screen-space: no parallax)
     SLayer *layer = &list->layers[LAYER_WINDOW_LR];
 
-    GPU3DS.stereoParallax = 0.0f;
+    gpu3dsSetStereoParallax(0.0f);
 
     if (layer->verticesByTarget[0]) {
         GPU3DS.currentRenderState.target = TARGET_SNES_DEPTH;
@@ -341,9 +341,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
             LAYER_ID id = list->layersByTarget[i][j];
             SLayer *layer = &list->layers[id];
 
-            // per-layer stereo parallax (0 for backdrop/color math/etc.);
-            // the render-state diffing re-sends the uniform when it changes
-            GPU3DS.stereoParallax = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id];
+            // per-layer stereo parallax (0 for backdrop/color math/etc.)
+            gpu3dsSetStereoParallax(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id]);
 
             int from = layer->sectionsOffset + (sub ? 0 : layer->sectionsByTarget[TARGET_SNES_SUB]);
             int to = from + layer->sectionsByTarget[i];
@@ -368,7 +367,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
         }
     }
 
-    GPU3DS.stereoParallax = 0.0f;
+    gpu3dsSetStereoParallax(0.0f);
 }
 
 void gpu3dsDrawMode7Texture()
