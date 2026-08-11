@@ -36,6 +36,7 @@ void log3dsInitialize() {
 
     logFile = fopen(filepath, "w"); // overwrite file on each run
     if (logFile) {
+        setvbuf(logFile, NULL, _IOLBF, 512);   // line-buffered: diagnostics reach the file immediately
         osTime = osGetTime();
     }
 }

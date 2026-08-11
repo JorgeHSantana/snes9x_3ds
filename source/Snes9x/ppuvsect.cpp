@@ -37,9 +37,19 @@ void S9xResetVerticalSection(VerticalSections *verticalSections)
 // 
 // Call this before rendering the screen inside S9xUpdateScreenHardware.
 //
+#define VERTICAL_SECTION_MAX 241    // capacity of VerticalSections::Section[]
+
 void S9xCommitVerticalSection(VerticalSections *verticalSections)
 {
-	if (IPPU.CurrentLine != verticalSections->StartY)
+	// Section[] holds 241 entries but a game changing a register on every
+	// scanline (windows via HDMA, brightness toggles into vblank) can
+	// produce more changes than that in one frame. Unbounded, the append
+	// writes past the array into whatever the linker placed next — the
+	// layout-dependent corruption behind the "layers break when the menu
+	// code changes" saga. Dropping the excess sections only costs a
+	// sub-frame effect on the last scanlines.
+	if (IPPU.CurrentLine != verticalSections->StartY
+		&& verticalSections->Count < VERTICAL_SECTION_MAX)
 	{
 		verticalSections->Section[verticalSections->Count].StartY = verticalSections->StartY;
 		verticalSections->Section[verticalSections->Count].EndY = IPPU.CurrentLine - 1;
@@ -58,7 +68,8 @@ void S9xCommitVerticalSection(VerticalSections *verticalSections)
 void S9xUpdateVerticalSectionValue(VerticalSections *verticalSections, uint32 newValue)
 {
 	if (IPPU.RenderThisFrame && 
-		IPPU.CurrentLine != verticalSections->StartY && verticalSections->CurrentValue != newValue)
+		IPPU.CurrentLine != verticalSections->StartY && verticalSections->CurrentValue != newValue
+		&& verticalSections->Count < VERTICAL_SECTION_MAX)
 	{
 		verticalSections->Section[verticalSections->Count].StartY = verticalSections->StartY;
 		verticalSections->Section[verticalSections->Count].EndY = IPPU.CurrentLine - 1;

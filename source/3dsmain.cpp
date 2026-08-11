@@ -39,6 +39,14 @@ inline std::string operator "" _s(const char* s, size_t length) {
 }
 
 char romFileName[NAME_MAX + 1];
+// Dev probe (armed by sdmc:/menuprobe.txt next to autoboot.txt): while the
+// file exists, the emulator does an automatic menu round-trip every ~10s —
+// the full pause/resume path (settings3dsUpdate included) with no input —
+// to reproduce the "layers break after touching settings" bug.
+static int  g_menuProbeCountdown = 0;
+static bool g_menuProbeActive = false;
+static bool g_menuProbeArmed = false;
+
 bool slotLoaded = false;
 
 const char* hotkeysData[HOTKEYS_COUNT][3];
@@ -1961,6 +1969,13 @@ void showMenu() {
     bool runNextGame = false;
     SMenuTab dialogTab;
 
+    if (g_menuProbeActive) {
+        g_menuProbeActive = false;
+        g_menuProbeCountdown = 600;          // re-arm the next round-trip
+        GPU3DS.emulatorState = EMUSTATE_EMULATE;
+        log3dsWrite("[menuprobe] leaving menu (instant)");
+    }
+
     while (aptMainLoop() && GPU3DS.emulatorState == EMUSTATE_PAUSEMENU) {
         int result = menu3dsMenuSelectItem(dialogTab, isDialog, currentMenuTab, menuTabs);
 
@@ -2259,6 +2274,11 @@ void emulatorLoop()
         t3dsStopTimer(TIMER_RUN_ONE_FRAME);
 
 
+        if (g_menuProbeArmed && g_menuProbeCountdown > 0 && --g_menuProbeCountdown == 0) {
+            g_menuProbeActive = true;
+            GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
+            log3dsWrite("[menuprobe] entering menu");        }
+
         long actualTicksThisFrame = (long)(svcGetSystemTick() - startFrameTick);
         skipDrawing = paceFrame(actualTicksThisFrame, totalFrames, snesFrameTotalActualTicks, snesFrameTotalAccurateTicks, snesFramesSkipped);
 
@@ -2307,12 +2327,20 @@ void emulatorLoop()
 // sdmc:/autoboot.txt. Absent/unreadable file = normal menu boot.
 static void msu1LogToFile(const char* message) { log3dsWrite("[msu1] %s", message); }
 
+
 static bool tryAutoBoot()
 {
     FILE* f = fopen("sdmc:/autoboot.txt", "r");
     if (f == NULL) { return false; }
     settings3DS.LogFileEnabled = 1;   // autoboot is a dev/validation mode
     log3dsInitialize();
+    FILE* probe = fopen("sdmc:/menuprobe.txt", "r");
+    if (probe != NULL) {
+        fclose(probe);
+        g_menuProbeArmed = true;
+        g_menuProbeCountdown = 600;
+        log3dsWrite("[menuprobe] armed: instant menu round-trip every ~600 frames");
+    }
     char path[PATH_MAX] = {};
     bool ok = fgets(path, sizeof(path), f) != NULL;
     fclose(f);
