@@ -296,6 +296,7 @@ typedef struct
     // strength; shallower layers scale by sink/stereoMaxSink.
     int                         stereoFade;
     int                         stereoHaze;
+    int                         stereoBlur;
     float                       stereoMaxSink;
     // true while a hazed layer's ghost (blur) passes are being drawn:
     // the tiled-layer draw helpers enable alpha blending for these

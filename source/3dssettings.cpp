@@ -201,6 +201,7 @@ void settings3dsUpdate(bool includeGameSettings)
         GPU3DS.stereoMaxSink = maxSink;
         GPU3DS.stereoFade = settings3DS.StereoFade;
         GPU3DS.stereoHaze = settings3DS.StereoHaze;
+        GPU3DS.stereoBlur = settings3DS.StereoBlur;
 
         if (settings3DS.PaletteFix == 0)
             settings3DS.PaletteFix = settings3dsGetGameDefaultPaletteFix();

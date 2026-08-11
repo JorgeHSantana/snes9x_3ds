@@ -255,6 +255,11 @@ void gpu3dsDrawTiledLayerSingleSection(SLayer *layer, SLayerSection *section) {
     GPU3DS.currentRenderState.packed =
         (GPU3DS.currentRenderState.packed & ~mask) | (section->state.packed & mask);
 
+    // ghost fragments carry low alpha; the section's alpha test would
+    // discard them all — blending already handles transparent texels
+    if (GPU3DS.stereoGhostPass)
+        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+
     gpu3dsDraw(&GPU3DS.vertices[section->vboId], NULL, section->count, section->from);
 }
 
@@ -280,6 +285,11 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
     GPU3DS.currentRenderState.packed =
         (GPU3DS.currentRenderState.packed & ~layerMask[0]) | (first->state.packed & layerMask[0]);
 
+    // ghost fragments carry low alpha; the sections' alpha test would
+    // discard them all — blending already handles transparent texels
+    if (GPU3DS.stereoGhostPass)
+        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+
     for (int idx = from; idx < to; idx++) {
         SLayerSection *section = &list->sections[idx];
         u16 sFrom = section->from;
@@ -295,6 +305,8 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
                 vboId = section->vboId;
                 GPU3DS.currentRenderState.packed =
                     (GPU3DS.currentRenderState.packed & ~layerMask[1]) | (section->state.packed & layerMask[1]);
+                if (GPU3DS.stereoGhostPass)
+                    GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
                 batchFrom += batchCount;
                 batchCount = 0;
             }
@@ -327,9 +339,11 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
 // otherwise unused; stage-0 helpers only ever clear stage 1. t scales with
 // the 3D slider, so 2D parity is exact with 3D off.
 static u32 s_atmosLastColor;
-// >0 while the current layer's haze is strong enough to deserve ghost
-// (blur) passes; doubles as the ghosts' alpha
+// >0 while the current layer's blur deserves ghost passes (the ghosts'
+// alpha); the offset widens with the blur level so the gauge controls
+// both the smear distance and its visibility
 static float s_atmosGhostAlpha;
+static float s_atmosGhostOffset;
 
 static void gpu3dsResetStereoAtmosphere()
 {
@@ -337,6 +351,7 @@ static void gpu3dsResetStereoAtmosphere()
     C3D_TexEnvInit(C3D_GetTexEnv(3));
     s_atmosLastColor = 0xFFFFFFFF;
     s_atmosGhostAlpha = 0.0f;
+    s_atmosGhostOffset = 0.0f;
     GPU3DS.stereoGhostPass = false;
 }
 
@@ -379,9 +394,17 @@ static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id)
         color = ((u32)a << 24) | ((u32)b << 16) | ((u32)g << 8) | r;
     }
 
-    // hazy layers also get ghost (blur) passes: soft edges are what makes
-    // it read as smoke rather than desaturation
-    s_atmosGhostAlpha = hz > 0.02f ? (0.20f + 0.50f * (hz / 0.60f)) : 0.0f;
+    // Depth Blur is its own control: ghost passes with soft edges,
+    // independent from the haze tint. The level widens the smear
+    // (1..3px) and strengthens the ghosts together.
+    float blur = (GPU3DS.stereoBlur / 8.0f) * depthIn * slider;
+    if (blur > 0.02f) {
+        s_atmosGhostAlpha = 0.25f + 0.25f * blur;
+        s_atmosGhostOffset = 1.0f + 2.0f * blur;
+    } else {
+        s_atmosGhostAlpha = 0.0f;
+        s_atmosGhostOffset = 0.0f;
+    }
 
     if (color == s_atmosLastColor)
         return;
@@ -447,9 +470,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     if (gp == 1) {
                         GPU3DS.stereoGhostPass = true;
                         gpu3dsSetGhostAlpha(ghost);
-                        gpu3dsSetStereoParallax(baseParallax + 1.0f);
+                        gpu3dsSetStereoParallax(baseParallax + s_atmosGhostOffset);
                     } else if (gp == 2) {
-                        gpu3dsSetStereoParallax(baseParallax - 1.0f);
+                        gpu3dsSetStereoParallax(baseParallax - s_atmosGhostOffset);
                     }
 
                     if (list->useDrawArraysForTiledLayers) {
