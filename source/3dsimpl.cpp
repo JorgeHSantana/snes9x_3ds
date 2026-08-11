@@ -876,6 +876,22 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 	notif3dsTick();
 	notif3dsSync();
 
+	// MSU-1 FMV presentation rate. 1 = every frame (60/50fps), 2 = half rate
+	// (30/25fps), 3 = a third. Halving skips the whole SNES render for the
+	// paced-out frames, which also lightens the load. Only applies while FMV
+	// activity (torn frames) was seen recently, so MSU-1 games with normal
+	// graphics (e.g. MMX3) keep full rate.
+	// TODO: expose in the menu (Settings tab) as "MSU-1 Video FPS".
+	static int msu1FmvFrameDivider = 2;
+	static int msu1FmvActiveFrames = 0;   // decays; >0 = FMV in progress
+	static unsigned msu1PaceFrame = 0;
+	static unsigned msu1PacePhase = 0;
+	msu1PaceFrame++;
+	if (Settings.MSU1 && msu1FmvActiveFrames > 0 && msu1FmvFrameDivider > 1
+		&& ((msu1PaceFrame + msu1PacePhase) % (unsigned)msu1FmvFrameDivider) != 0) {
+		skipDrawingFrame = true;
+	}
+
 	IPPU.RenderThisFrame = !skipDrawingFrame;
 
 	if (firstFrame)
@@ -903,10 +919,19 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 			uint32_t cpuWrites = msu1_take_visible_vram_writes();
 			torn = dmaTorn || cpuWrites > 512;
 		}
-		if (torn && msuTornHolds < 2) {
+		if (torn) {
+			msu1FmvActiveFrames = 120;   // keep the paced rate for ~2s of frames
+			// a frame we DID render came out torn: shift the pacing phase so
+			// the rendered slots land on the clean frames of the upload cycle
+			if (!skipDrawingFrame)
+				msu1PacePhase ^= 1;
+		} else if (msu1FmvActiveFrames > 0) {
+			msu1FmvActiveFrames--;
+		}
+		if (torn && !skipDrawingFrame && msuTornHolds < 2) {
 			msuTornHolds++;
 			skipDrawingFrame = true;
-		} else {
+		} else if (!torn) {
 			msuTornHolds = 0;
 		}
 	}
