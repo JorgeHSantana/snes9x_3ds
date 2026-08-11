@@ -41,14 +41,16 @@ jobs:
         if: github.ref_name == 'nightly'
         run: |
           SHORT=${GITHUB_SHA::7}
-          gh release delete nightly --yes || true
-          git push origin :refs/tags/nightly || true
-          gh release create nightly \
+          SUBJECT=$(git log -1 --format=%s "$GITHUB_SHA")
+          # tag is nightly-latest (NOT "nightly") so it never collides with the branch name
+          gh release delete nightly-latest --yes || true
+          git push origin :refs/tags/nightly-latest || true
+          gh release create nightly-latest \
             output/snes9x_3ds.cia output/snes9x_3ds.3dsx \
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Nightly $(date -u +%Y-%m-%d) ($SHORT)" \
-            --notes "Automated nightly build from \`$SHORT\`. For testing — may be unstable."
+            --notes "Automated nightly build from \`$SHORT\` — _${SUBJECT}_. For testing; may be unstable."
 
       - name: Publish stable release
         if: github.ref_name == 'stable'
