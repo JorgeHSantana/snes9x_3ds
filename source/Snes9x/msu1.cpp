@@ -253,7 +253,36 @@ uint8_t msu1_read_port(Msu1State& state, uint8_t port)
     }
 }
 
+static uint32_t msu1_read_data_span(Msu1State& state, uint8_t* dst, uint32_t count);
+
 uint32_t msu1_read_data_bulk(Msu1State& state, uint8_t* dst, uint32_t count)
+{
+    // CPU-polled streaming (e.g. Killer Instinct's FMV) reads one byte per
+    // call at hundreds of KB/s; paying a prefetch-ring lock per byte is
+    // measurable on the emulation thread. Serve tiny reads from a 64-byte
+    // micro-cache refilled through the normal path (ring hit or fread).
+    if (count == 1 && state.enabled && state.data_file != nullptr) {
+        uint32_t off = state.data_pos - state.rb_cache_pos;
+        if (state.rb_cache_len != 0 && state.data_pos >= state.rb_cache_pos
+            && off < state.rb_cache_len) {
+            dst[0] = state.rb_cache[off];
+            state.data_pos++;
+            return 1;
+        }
+        uint32_t pos = state.data_pos;
+        uint32_t got = msu1_read_data_span(state, state.rb_cache, (uint32_t)sizeof(state.rb_cache));
+        if (got == 0) { state.rb_cache_len = 0; return 0; }
+        state.rb_cache_pos = pos;
+        state.rb_cache_len = got;
+        state.data_pos = pos + 1;          // span advanced it by `got`; hand out one byte
+        dst[0] = state.rb_cache[0];
+        return 1;
+    }
+    state.rb_cache_len = 0;                // bulk consumers bypass the cache
+    return msu1_read_data_span(state, dst, count);
+}
+
+static uint32_t msu1_read_data_span(Msu1State& state, uint8_t* dst, uint32_t count)
 {
     if (!state.enabled) { return 0; }
     if (state.data_file == nullptr) { return 0; }
@@ -298,6 +327,7 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
             state.data_seek_latch = (state.data_seek_latch & 0x00FFFFFFu) | ((uint32_t)value << 24);
             uint32_t target = state.data_seek_latch;
             if (target > state.data_size) { target = state.data_size; }  // clamp
+            state.rb_cache_len = 0;   // seek invalidates the read-ahead micro-cache
             uint32_t dist = (target > state.data_pos) ? (target - state.data_pos)
                                                       : (state.data_pos - target);
             if (dist > 65536) { g_branch_seeks++; }   // FMV branch cut signature
@@ -445,6 +475,7 @@ static Msu1Result msu1_restore_locked(Msu1State& state, const Msu1Snapshot& snap
     // data stream
     uint32_t dpos = snap.data_pos;
     if (dpos > state.data_size) { dpos = state.data_size; }
+    state.rb_cache_len = 0;
     if (state.data_file != nullptr && fseek(state.data_file, (long)dpos, SEEK_SET) == 0) {
         state.data_pos = dpos;
         state.data_file_pos = dpos;

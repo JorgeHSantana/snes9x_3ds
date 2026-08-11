@@ -71,3 +71,46 @@ TEST_CASE("bulk read: disabled or missing file reads nothing")
     s.enabled = true;
     CHECK(msu1_read_data_bulk(s, buf, 4) == 0);
 }
+
+TEST_CASE("port-1 micro-cache: singles match plain reads across seeks and bulk mixes")
+{
+    std::string dir = make_tmpdir();
+    Msu1State s = make_data_state(dir, 300);
+
+    // sequential single-byte reads (cache path) return the exact stream
+    uint8_t b = 0;
+    for (int i = 0; i < 100; i++) {
+        REQUIRE(msu1_read_data_bulk(s, &b, 1) == 1);
+        REQUIRE(b == (uint8_t)(i & 0xFF));
+    }
+    CHECK(s.data_pos == 100);
+
+    // a bulk read in the middle bypasses and invalidates the cache
+    uint8_t buf[32];
+    REQUIRE(msu1_read_data_bulk(s, buf, 32) == 32);
+    for (int i = 0; i < 32; i++) { CHECK(buf[i] == (uint8_t)((100 + i) & 0xFF)); }
+
+    // singles continue correctly after the bulk read
+    REQUIRE(msu1_read_data_bulk(s, &b, 1) == 1);
+    CHECK(b == (uint8_t)(132 & 0xFF));
+
+    // a port-3 seek invalidates the cache; singles read the new position
+    msu1_write_port(s, 0, 0x05);
+    msu1_write_port(s, 1, 0x00);
+    msu1_write_port(s, 2, 0x00);
+    msu1_write_port(s, 3, 0x00);          // data_pos = 5
+    REQUIRE(msu1_read_data_bulk(s, &b, 1) == 1);
+    CHECK(b == (uint8_t)(5 & 0xFF));
+
+    // EOF: singles stop cleanly at the end
+    msu1_write_port(s, 0, 0x2A);          // seek to 298 = 0x12A
+    msu1_write_port(s, 1, 0x01);
+    msu1_write_port(s, 2, 0x00);
+    msu1_write_port(s, 3, 0x00);
+    REQUIRE(msu1_read_data_bulk(s, &b, 1) == 1);
+    CHECK(b == (uint8_t)(298 & 0xFF));
+    REQUIRE(msu1_read_data_bulk(s, &b, 1) == 1);
+    CHECK(b == (uint8_t)(299 & 0xFF));
+    CHECK(msu1_read_data_bulk(s, &b, 1) == 0);
+    fclose(s.data_file);
+}

@@ -50,6 +50,9 @@ struct Msu1State {
     FILE*    data_file;          // owned by this struct; nullptr when absent
     uint32_t audio_read_stalls;  // consecutive zero-byte audio freads (runtime only)
     uint32_t data_file_pos;      // actual FILE position of data_file (runtime only)
+    uint8_t  rb_cache[64];       // micro-cache for CPU-polled port-1 reads (runtime only)
+    uint32_t rb_cache_pos;       // file offset of rb_cache[0]
+    uint32_t rb_cache_len;       // valid bytes in rb_cache (0 = empty)
     FILE*    audio_file;         // owned by this struct; nullptr when absent
     char     base_path[MSU1_MAX_BASE_PATH];
     void     (*volume_changed_cb)(void);   // optional; installed by the platform bridge
