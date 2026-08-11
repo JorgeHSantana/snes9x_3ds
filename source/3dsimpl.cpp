@@ -713,9 +713,11 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 
 	gpu3dsSetDefaultRenderState(SPROGRAM_SCREEN, false);
 
-	// draw the area behind the game screen
+	// draw the area behind the game screen. Pinned to depth 0 (the screen
+	// plane): no per-eye offset, so the wallpaper stays neutral while the
+	// game layers pop in/out around it (issue #7).
 	if (drawBackground) {
-		img3dsDrawBackground(UI_BG_GAME, paused, xOffset);
+		img3dsDrawBackground(UI_BG_GAME, paused, 0.0f);
 	}
 
 	gpu3dsAddSimpleQuadVertexes(

@@ -291,6 +291,9 @@ typedef struct
     // stereoEyeIOD * stereoLayerDepth[LAYER_ID] (px, set between draws).
     float                       stereoEyeIOD;
     float                       stereoLayerDepth[8];
+    // atmospheric depth cues, scaled by how deep a layer sinks (0..8 each)
+    int                         stereoFade;
+    int                         stereoHaze;
 
     u32                         vramTotal;
     u32                         linearMemTotal;

@@ -124,6 +124,9 @@ namespace {
     }
 
     void AddMenuHeader2(std::vector<SMenuItem>& items, const std::string& text) {
+        // breathing room before every section header
+        if (!items.empty())
+            items.emplace_back(nullptr, MenuItemType::Disabled, ""_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Header2, text, ""_s);
     }
 
@@ -1052,7 +1055,12 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             AddMenuGauge(items, stereoNames[l], -8, 8, settings3DS.StereoDepth[l],
                 [l]( int val ) { CheckAndUpdate( settings3DS.StereoDepth[l], val ); }, true);
         }
+        AddMenuGauge(items, "  Depth Fade"_s, 0, 8, settings3DS.StereoFade,
+            []( int val ) { CheckAndUpdate( settings3DS.StereoFade, val ); }, true);
+        AddMenuGauge(items, "  Depth Haze"_s, 0, 8, settings3DS.StereoHaze,
+            []( int val ) { CheckAndUpdate( settings3DS.StereoHaze, val ); }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Depth per layer: + pops out, - sinks into the screen."_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Fade darkens and Haze fogs layers by how deep they sink."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s, ""_s);
     }
         AddMenuDisabledOption(items, ""_s);
@@ -1541,6 +1549,8 @@ void settingsLoadStereo3D()
 {
     for (int i = 0; i < 5; i++)
         settings3DS.StereoDepth[i] = stereoDepthDefault[i];
+    settings3DS.StereoFade = 0;
+    settings3DS.StereoHaze = 0;
 
     char path[PATH_MAX];
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
@@ -1553,14 +1563,18 @@ void settingsLoadStereo3D()
     if (!f) return;
 
     char line[64];
+    int v;
     while (fgets(line, sizeof(line), f)) {
         for (int i = 0; i < 5; i++) {
             char fmt[16];
-            int v;
             snprintf(fmt, sizeof(fmt), "%s=%%d", stereoDepthKeys[i]);
             if (sscanf(line, fmt, &v) == 1)
                 settings3DS.StereoDepth[i] = v < -8 ? -8 : (v > 8 ? 8 : v);
         }
+        if (sscanf(line, "FADE=%d", &v) == 1)
+            settings3DS.StereoFade = v < 0 ? 0 : (v > 8 ? 8 : v);
+        if (sscanf(line, "HAZE=%d", &v) == 1)
+            settings3DS.StereoHaze = v < 0 ? 0 : (v > 8 ? 8 : v);
     }
     fclose(f);
 }
@@ -1577,6 +1591,9 @@ void settingsSaveStereo3D()
     fprintf(f, "# snes9x_3ds stereoscopic 3D depths (-8..8): + pops out, - sinks in\n");
     for (int i = 0; i < 5; i++)
         fprintf(f, "%s=%d\n", stereoDepthKeys[i], settings3DS.StereoDepth[i]);
+    fprintf(f, "# fade darkens / haze fogs layers by how deep they sink (0..8)\n");
+    fprintf(f, "FADE=%d\n", settings3DS.StereoFade);
+    fprintf(f, "HAZE=%d\n", settings3DS.StereoHaze);
     fclose(f);
 }
 

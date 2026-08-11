@@ -194,6 +194,8 @@ void settings3dsUpdate(bool includeGameSettings)
         // stereo 3D depths (BG1-4, Sprites) -> GPU; other LAYER_IDs stay 0
         for (int i = 0; i < 8; i++)
             GPU3DS.stereoLayerDepth[i] = (i < 5) ? (float)settings3DS.StereoDepth[i] : 0.0f;
+        GPU3DS.stereoFade = settings3DS.StereoFade;
+        GPU3DS.stereoHaze = settings3DS.StereoHaze;
 
         if (settings3DS.PaletteFix == 0)
             settings3DS.PaletteFix = settings3dsGetGameDefaultPaletteFix();

@@ -318,11 +318,64 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
     gpu3dsDraw(&GPU3DS.vertices[vboId], (void *)(indices + batchFrom), batchCount);
 }
 
+// Atmospheric depth cues (Depth Fade / Depth Haze): texenv stage 2
+// interpolates the layer toward a target color by t, where t grows with how
+// deep the layer sinks (out = prev*(1-t) + target*t; fade pulls toward
+// black, haze toward the fog color, combined in one stage). Stage 2 is
+// otherwise unused; stage-0 helpers only ever clear stage 1. t scales with
+// the 3D slider, so 2D parity is exact with 3D off.
+static u32 s_atmosLastColor;
+
+static void gpu3dsResetStereoAtmosphere()
+{
+    C3D_TexEnvInit(C3D_GetTexEnv(2));
+    s_atmosLastColor = 0xFFFFFFFF;
+}
+
+static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id)
+{
+    float depthIn = -GPU3DS.stereoLayerDepth[id] / 8.0f;   // 0..1 when sinking
+    if (depthIn < 0.0f) depthIn = 0.0f;
+    if (depthIn > 1.0f) depthIn = 1.0f;
+
+    float slider = GPU3DS.stereoEyeIOD < 0.0f ? -GPU3DS.stereoEyeIOD : GPU3DS.stereoEyeIOD;
+
+    float f = (GPU3DS.stereoFade / 8.0f) * depthIn * slider * 0.70f;
+    float hz = (GPU3DS.stereoHaze / 8.0f) * depthIn * slider * 0.60f;
+    float t = f + hz;
+    if (t > 0.85f) t = 0.85f;
+
+    u32 color = 0xFFFFFFFF;   // sentinel: passthrough
+    if (t >= 0.01f) {
+        float w = hz / (f + hz);   // haze share picks the target color
+        u8 r = (u8)(200.0f * w), g = (u8)(205.0f * w), b = (u8)(215.0f * w);
+        u8 a = (u8)(t * 255.0f);
+        color = ((u32)a << 24) | ((u32)b << 16) | ((u32)g << 8) | r;
+    }
+
+    if (color == s_atmosLastColor)
+        return;
+    s_atmosLastColor = color;
+
+    C3D_TexEnv *env = C3D_GetTexEnv(2);
+    C3D_TexEnvInit(env);
+    if (color == 0xFFFFFFFF)
+        return;
+
+    C3D_TexEnvColor(env, color);
+    C3D_TexEnvSrc(env, C3D_RGB, GPU_CONSTANT, GPU_PREVIOUS, GPU_CONSTANT);
+    C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_ALPHA);
+    C3D_TexEnvFunc(env, C3D_RGB, GPU_INTERPOLATE);
+    C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS);
+    C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
+}
+
 void gpu3dsDrawLayers(SLayerList *list) {
     // draw window_lr into depth buffer first (screen-space: no parallax)
     SLayer *layer = &list->layers[LAYER_WINDOW_LR];
 
     gpu3dsSetStereoParallax(0.0f);
+    gpu3dsResetStereoAtmosphere();
 
     if (layer->verticesByTarget[0]) {
         GPU3DS.currentRenderState.target = TARGET_SNES_DEPTH;
@@ -341,8 +394,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
             LAYER_ID id = list->layersByTarget[i][j];
             SLayer *layer = &list->layers[id];
 
-            // per-layer stereo parallax (0 for backdrop/color math/etc.)
+            // per-layer stereo parallax + atmosphere (both neutral for
+            // backdrop/color math/etc., whose depth entries are 0)
             gpu3dsSetStereoParallax(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id]);
+            gpu3dsSetStereoLayerAtmosphere(id);
 
             int from = layer->sectionsOffset + (sub ? 0 : layer->sectionsByTarget[TARGET_SNES_SUB]);
             int to = from + layer->sectionsByTarget[i];
@@ -368,6 +423,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
     }
 
     gpu3dsSetStereoParallax(0.0f);
+    gpu3dsResetStereoAtmosphere();   // the composites must not inherit it
 }
 
 void gpu3dsDrawMode7Texture()

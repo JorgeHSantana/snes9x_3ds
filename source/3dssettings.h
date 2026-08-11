@@ -268,6 +268,8 @@ typedef struct {
                                                // -8..+8: + pops out of the screen, - sinks into it.
                                                // Saved to sd:/3ds/snes9x_3ds/stereo3d/<rom>.3d
                                                // (shareable), NOT to the regular config.
+    int                 StereoFade;            // 0..8: darkens layers by how deep they sink (same .3d file)
+    int                 StereoHaze;            // 0..8: fogs layers by how deep they sink (same .3d file)
 
     bool                isNew3DS;
     bool                isRomFsLoaded;
