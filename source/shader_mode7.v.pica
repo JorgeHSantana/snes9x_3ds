@@ -1,8 +1,9 @@
 ; Uniforms
-.fvec       projection[4]       ; #0 - 3
-.fvec       textureScale        ; #4
-.fvec       textureOffset       ; #5 (not used here, but for convenience)
-.fvec     	updateFrame         ; #6
+.fvec       projection[4]         ; #0 - 3
+.fvec       textureScale          ; #4
+.fvec       textureOffset         ; #5 (not used here, but for convenience)
+.fvec       updateFrame           ; #6
+.fvec       stereoIOD             ; #7 - Inter-ocular distance for horizontal parallax
 
 ; Constants
 .constf c_base          (0, 1, 2, 8)    ; (x, y, z, w)
@@ -45,6 +46,18 @@
     mov     r0.z, r1.y                  ; r0.z = 1
 
 depth_lt_16384:
+    ; Apply horizontal parallax based on depth and stereoIOD
+    ; r0.z contains depth (0.0 for non-mode7, 1.0 for mode7)
+    ; stereoIOD.x contains the parallax amount from CPU
+    ; offset = stereoIOD * depth, applied to X based on vertex position
+    mul     r1.x, r0.z, stereoIOD.x    ; r1.x = depth * stereoIOD (parallax offset)
+    cmp     r0.x, lt, lt, c_base.x     ; if x < 0, apply negative offset (left side)
+    jmpc    cmp.x, apply_parallax_neg  ; else apply positive offset (right side)
+    mad     r0.x, r1.x, c_base.y, r0.x; r0.x = r0.x + r1.x (positive offset)
+    jmp     apply_parallax_done
+apply_parallax_neg:
+    mad     r0.x, r1.x, c_base.z, r0.x; r0.x = r0.x - r1.x (negative offset)
+apply_parallax_done:
     mov     outpos, r0
     mov     outtex, r10
     mov     outcol, c_base.xxxx         ; always (0,0,0,0)

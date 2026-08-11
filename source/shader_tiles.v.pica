@@ -1,8 +1,9 @@
 ; Uniforms
-.fvec       projection[4]       ; #0 - 3
-.fvec       textureScale        ; #4
-.fvec       textureOffset       ; #5 
-                                ; x = texture offset (0.0 or 1.0 for mode5/6 hi-res flipping)
+.fvec       projection[4]        ; #0 - 3
+.fvec       textureScale         ; #4
+.fvec       textureOffset        ; #5
+                                 ; x = texture offset (0.0 or 1.0 for mode5/6 hi-res flipping)
+.fvec       stereoIOD            ; #6 - Inter-ocular distance for horizontal parallax
 
 ; Constants
 .constf c_base          (0, 1, 2, 8)    ; (x, y, z, w)
@@ -92,7 +93,19 @@ depth_computation:
     mul     r0.z, r0.z, r1.x            ; r0.z = r0.z / 16
 
 draw:
-    ; pass through, set final values for projection, textureScale and color in geo shader
+     ; pass through, set final values for projection, textureScale and color in geo shader
+    ; Apply horizontal parallax based on depth and stereoIOD
+    ; r0.z contains normalized depth (0.0-1.0)
+    ; stereoIOD.x contains the parallax amount from CPU
+    ; offset = stereoIOD * depth, applied to X based on vertex position
+    mul     r1.x, r0.z, stereoIOD.x    ; r1.x = depth * stereoIOD (parallax offset)
+    cmp     r0.x, lt, lt, c_base.x     ; if x < 0, apply negative offset (left side)
+    jmpc    cmp.x, apply_parallax_neg  ; else apply positive offset (right side)
+    mad     r0.x, r1.x, c_base.y, r0.x; r0.x = r0.x + r1.x (positive offset)
+    jmp     apply_parallax_done
+apply_parallax_neg:
+    mad     r0.x, r1.x, c_base.z, r0.x; r0.x = r0.x - r1.x (negative offset)
+apply_parallax_done:
     mov     outpos, r0
     mov     outtex, r10
     mov     outcol, r11

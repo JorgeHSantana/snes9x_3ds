@@ -74,11 +74,12 @@ typedef enum {
     SPROGRAM_COUNT,
 } SGPU_SHADER_PROGRAM;
 
-typedef enum { 
+typedef enum {
     ULOC_PROJECTION,
     ULOC_TEX_SCALE,
     ULOC_TEX_OFFSET,
     ULOC_UPDATE_FRAME,
+    ULOC_STEREO_IOD,
     ULOC_COUNT
 } SGPU_SHADER_ULOC;
 

@@ -820,19 +820,22 @@ void gpu3dsDestroyTexture(SGPUTexture *texture)
         C3D_TexDelete(&texture->tex);
     }
 }
-
 bool gpu3dsInitializeShaderUniformLocations()
 {
 
-    // used by shader_screen (v), shader_tiles (g), shader_mode7 (g)
+
+     // used by shader_screen (v), shader_tiles (g), shader_mode7 (g)
     GPU3DS.shaderULocs[ULOC_PROJECTION] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_SCREEN].shaderProgram.vertexShader, "projection");
     GPU3DS.shaderULocs[ULOC_TEX_SCALE] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_SCREEN].shaderProgram.vertexShader, "textureScale");
     
-    // used by shader_tiles (v)
+     // used by shader_tiles (v)
     GPU3DS.shaderULocs[ULOC_TEX_OFFSET] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "textureOffset");
     
-    // used by shader_mode7 (v)
+     // used by shader_mode7 (v)
     GPU3DS.shaderULocs[ULOC_UPDATE_FRAME] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_MODE7].shaderProgram.vertexShader, "updateFrame");
+    
+     // used by shader_tiles (v) and shader_mode7 (v) for stereo parallax
+    GPU3DS.shaderULocs[ULOC_STEREO_IOD] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoIOD");
 
 	bool uLocsInvalid = false;
 
