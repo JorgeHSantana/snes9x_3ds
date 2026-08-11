@@ -489,7 +489,9 @@ bool gpu3dsInitialize()
 
 
     // Increased buffer size to 1MB for screens with heavy effects (multiple wavy backgrounds and line-by-line windows).
-    C3D_Init(C3D_DEFAULT_CMDBUF_SIZE * 4);
+    // 8x: the stereo dual layer pass doubles per-frame GPU commands; at 4x
+    // heavy scenes overflowed mid-frame on hardware (right eye lost draws)
+    C3D_Init(C3D_DEFAULT_CMDBUF_SIZE * 8);
     C3D_CullFace(GPU_CULL_NONE);
 
     log3dsWrite("C3D_Init v");
