@@ -209,6 +209,8 @@ typedef struct {
     int                 Volume;                 // 0: 100%, 1: 125%, 2: 150%, 3: 175%, 4: 200%
     int                 GlobalVolume;
     int                 Msu1VideoFps;       // FMV presentation cap: 0=Off, 1=40, 2=30, 3=24, 4=20 (global)
+    int                 Msu1Volume;         // MSU-1 balance gauge 0..8 (25%/step, 4 = same as SNES), per-game
+    int                 GlobalMsu1Volume;   // global counterpart, governed by UseGlobalVolume
 
     int                 AudioBuffer;            // wavebuf depth: 0=Low(4), 1=Normal(8), 2=High(16)
 

@@ -947,29 +947,47 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuDisabledOption(items, ""_s);
     
     AddMenuHeader2(items, "Audio"_s);
-    AddMenuPicker(items, "  Volume Amplification"_s, "Boosts the game's volume. 100% = unamplified.\nHigh values may reduce audio quality on loud games."_s, makePickerOptions({"100%", "125%", "150%", "175%", "200%"}),
-                settings3DS.UseGlobalVolume ? settings3DS.GlobalVolume : settings3DS.Volume, DIALOG_TYPE_INFO, true,
+    // Gauges: 25% per step, midpoint (4) = 100%.
+    AddMenuGauge(items, "  SNES Volume"_s, 0, SND3DS_VOLUME_MAX,
+                settings3DS.UseGlobalVolume ? settings3DS.GlobalVolume : settings3DS.Volume,
                 []( int val ) {
                     if (settings3DS.UseGlobalVolume)
                         CheckAndUpdate( settings3DS.GlobalVolume, val );
                     else
                         CheckAndUpdate( settings3DS.Volume, val );
                 });
+    if (Settings.MSU1)
+    {
+        AddMenuGauge(items, "  MSU-1 Volume"_s, 0, 8,
+                    settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume,
+                    []( int val ) {
+                        if (settings3DS.UseGlobalVolume)
+                            CheckAndUpdate( settings3DS.GlobalMsu1Volume, val );
+                        else
+                            CheckAndUpdate( settings3DS.Msu1Volume, val );
+                    });
+    }
     AddMenuCheckbox(items, "  Apply volume to all games"_s, settings3DS.UseGlobalVolume,
                 []( int val )
                 {
                     CheckAndUpdateToggle( settings3DS.UseGlobalVolume, val );
                     if (settings3DS.UseGlobalVolume)
+                    {
                         settings3DS.GlobalVolume = settings3DS.Volume;
+                        settings3DS.GlobalMsu1Volume = settings3DS.Msu1Volume;
+                    }
                     else
+                    {
                         settings3DS.Volume = settings3DS.GlobalVolume;
+                        settings3DS.Msu1Volume = settings3DS.GlobalMsu1Volume;
+                    }
                 });
 
     AddMenuPicker(items, "  MSU-1 Video FPS"_s, "Caps how often MSU-1 FMV frames are shown.\nLower values lighten rendering and can hide flicker.\nNo effect on games without MSU-1 video."_s, makePickerOptions({"Off", "40 FPS", "30 FPS", "24 FPS", "20 FPS"}),
                 settings3DS.Msu1VideoFps, DIALOG_TYPE_INFO, true,
                 []( int val ) { CheckAndUpdate( settings3DS.Msu1VideoFps, val ); });
 
-    AddMenuPicker(items, "  Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
+    AddMenuPicker(items, "  SNES Audio Buffer"_s, "Higher values can reduce audio crackling, especially on Old 3DS, at the cost of more audio latency."_s, makePickerOptions({"Low", "Normal", "High"}), settings3DS.AudioBuffer, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.AudioBuffer, val ); });
 
     AddMenuDisabledOption(items, ""_s);
@@ -1282,8 +1300,27 @@ bool settingsReadWriteFullListByGame(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "PaletteDeferBgMask=%d\n", &settings3DS.PaletteDeferBgMask, 0, 7);
     }
 
+    if (writeMode || detectedConfigVersion >= 1.9f) {
+        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 8);
+    }
+    else if (detectedConfigVersion >= 1.6f) {
+        // Interim MSU-1 builds wrote extra keys here; consume them so the
+        // sequential parse stays aligned, then remap to the gauge scale.
+        if (detectedConfigVersion < 1.7f)
+            config3dsReadWriteInt32(stream, writeMode, "Msu1Enabled=%d\n", NULL, 0, 1);
+        config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 8);
+        if (detectedConfigVersion >= 1.8f)
+            settings3DS.Msu1Volume += 4;    // v1.8 scale was 0..4 = 100%..200%
+    }
+
     config3dsReadWriteInt32(stream, writeMode, "Frameskips=%d\n", &settings3DS.MaxFrameSkips, 0, 4);
-    config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.Volume, 0, SND3DS_VOLUME_MAX);
+    if (writeMode || detectedConfigVersion >= 1.9f) {
+        config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.Volume, 0, SND3DS_VOLUME_MAX);
+    } else {
+        // Pre-gauge scale was 0..4 = 100%..200%; gauge midpoint 4 = 100%.
+        config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.Volume, 0, 4);
+        settings3DS.Volume += 4;
+    }
     config3dsReadWriteInt32(stream, writeMode, "PalFix=%d\n", &settings3DS.PaletteFix, 0, 3);
 
     config3dsReadWriteEnum(stream, writeMode, "AutoSavestate=%d\n", &settings3DS.AutoSavestate, 0, 1);
@@ -1398,6 +1435,12 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     if (writeMode || detectedConfigVersion >= 1.7f) {
         config3dsReadWriteInt32(stream, writeMode, "Msu1VideoFps=%d\n", &settings3DS.Msu1VideoFps, 0, 4);
     }
+
+    // Gauge-era leftovers (v1.8-2.0 wrote different keys here) hit the parse
+    // mismatch, keep defaults for the rest and self-heal on the next save.
+    if (writeMode || detectedConfigVersion >= 2.1f) {
+        config3dsReadWriteInt32(stream, writeMode, "GlobalMsu1Volume=%d\n", &settings3DS.GlobalMsu1Volume, 0, 8);
+    }
     
     config3dsReadWriteEnum(stream, writeMode, "Font=%d\n", &settings3DS.Font, 0, 2);
     config3dsReadWriteEnum(stream, writeMode, "LogFileEnabled=%d\n", &settings3DS.LogFileEnabled, 0, 1);
@@ -1410,7 +1453,13 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     snprintf(formatBuf, sizeof(formatBuf), "LastSelectedFilename=%%%zu[^\n]\n", sizeof(settings3DS.lastSelectedFilename) - 1);
     config3dsReadWriteString(stream, writeMode, "LastSelectedFilename=%s\n", formatBuf, settings3DS.lastSelectedFilename);
 
-    config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.GlobalVolume, 0, SND3DS_VOLUME_MAX);
+    if (writeMode || detectedConfigVersion >= 2.1f) {
+        config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.GlobalVolume, 0, SND3DS_VOLUME_MAX);
+    } else {
+        // Pre-gauge scale was 0..4 = 100%..200%; gauge midpoint 4 = 100%.
+        config3dsReadWriteInt32(stream, writeMode, "Vol=%d\n", &settings3DS.GlobalVolume, 0, 4);
+        settings3DS.GlobalVolume += 4;
+    }
     config3dsReadWriteEnum(stream, writeMode, "BindCirclePad=%d\n", &settings3DS.GlobalBindCirclePad, 0, 1);
 
     static const char *buttonName[10] = {"A", "B", "X", "Y", "L", "R", "ZL", "ZR", "SELECT","START"};

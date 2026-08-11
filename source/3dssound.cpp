@@ -43,8 +43,9 @@ void snd3dsApplyOutputVolume()
     // Volume gain runs in NDSP, after its resample to the DSP rate (~32728.5 Hz).
     // Boosting before the resample can clip loud passages, 
     // and resampling a clipped signal produces aliasing artifacts.
-    // 25% per step: v=0 -> 1.0x ... v=4 -> 2.0x
-    float gain = 1.0f + (v * 0.25f);
+    // Gauge scale: 25% per step, midpoint 4 = 100% (unamplified).
+    // v=0 -> mute ... v=4 -> 1.0x ... v=8 -> 2.0x
+    float gain = v * 0.25f;
     msu3dsSetGlobalVolume(gain);
 
     float mix[12] = { gain, gain, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };

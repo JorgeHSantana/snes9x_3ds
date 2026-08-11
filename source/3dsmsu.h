@@ -25,6 +25,7 @@ bool     msu3dsInitialize(const Msu1AudioBackend& backend,
 void     msu3dsFinalize(void);
 void     msu3dsOnEvent(Msu1Event event);
 void     msu3dsSetGlobalVolume(float factor);   // 1.0 + setting*0.25 (same curve as ch 0)
+void     msu3dsSetUserVolume(float factor);     // MSU-1 balance gauge, v*0.25 (4 = same as SNES)
 
 // Data-track read-ahead (phase B). Storage is caller-owned; null/0 disables.
 // Locks are leaf hooks (LightLock on 3DS, null = no-op on host tests).

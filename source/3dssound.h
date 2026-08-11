@@ -9,7 +9,7 @@
 #define SND3DS_SAMPLES_PER_LOOP  256
 
 // Highest Volume setting. 4 maps to 2.0x gain — about as loud as NDSP seems to go
-#define SND3DS_VOLUME_MAX        4
+#define SND3DS_VOLUME_MAX        8
 
 // Sized for the max.
 // Active reservoir depth is user-selectable via the "Audio Buffer" setting
