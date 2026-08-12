@@ -805,8 +805,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             }
         });
 
-    AddMenuDisabledOption(items, ""_s);
-
     AddMenuCheckbox(items, "  Crop & Overscan"_s, settings3DS.CropEnabled,
         []( int val ) {
             bool wasShown = settings3DS.CropEnabled;
