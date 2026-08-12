@@ -196,9 +196,18 @@ void settings3dsUpdate(bool includeGameSettings)
         float focusFront = (float)settings3DS.StereoFocusFront;
         float maxExcess = 0.0f;
         float maxBackExcess = 0.0f;
+        float maxPop = 0.0f;
+        float maxAbs = 0.0f;
         for (int i = 0; i < 8; i++) {
             float depth = (i < 5) ? (float)settings3DS.StereoDepth[i] : 0.0f;
             GPU3DS.stereoLayerDepth[i] = depth;
+
+            if (depth > maxPop)
+                maxPop = depth;
+            if (depth > maxAbs)
+                maxAbs = depth;
+            if (-depth > maxAbs)
+                maxAbs = -depth;
 
             // distance beyond the focus zone (0 inside it)
             float excess = 0.0f;
@@ -215,6 +224,8 @@ void settings3dsUpdate(bool includeGameSettings)
         GPU3DS.stereoFocusFront = focusFront;
         GPU3DS.stereoMaxExcess = maxExcess;
         GPU3DS.stereoMaxBackExcess = maxBackExcess;
+        GPU3DS.stereoMaxPop = maxPop;
+        GPU3DS.stereoMaxAbs = maxAbs;
         GPU3DS.stereoFade = settings3DS.StereoFade;
         GPU3DS.stereoHaze = settings3DS.StereoHaze;
         GPU3DS.stereoBlur = settings3DS.StereoBlur;

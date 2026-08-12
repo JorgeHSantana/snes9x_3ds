@@ -769,12 +769,16 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 		img3dsDrawGameOverlay(UI_OVERLAY, gameScreenViewport.sWidth, gameScreenViewport.cHeight);
 
 		if (paused) {
-			// dim overlay + pause notification (nearest layer)
+			// dim overlay + pause notification, placed ONE layer in front
+			// of the highest configured pop-out (full eye offset = depth 8
+			// was too far forward to read comfortably)
+			float msgDepth = GPU3DS.stereoMaxPop + 1.0f;
+			if (msgDepth > IOD_MAX_PIXELS) msgDepth = IOD_MAX_PIXELS;
 			SGPUTexture *notifTexture = &GPU3DS.textures[UI_NOTIF_MSG];
 			int wx = notifTexture->tex.width - 1;
 			int wy = notifTexture->tex.height - 1;
 			gpu3dsAddQuadRect(0, 0, settings3DS.GameScreenWidth, SCREEN_HEIGHT, wx, wy, 0, 0xaa);
-			notif3dsDraw(UI_NOTIF_MSG, settings3DS.GameScreen, -xOffset);
+			notif3dsDraw(UI_NOTIF_MSG, settings3DS.GameScreen, -xOffset * (msgDepth / IOD_MAX_PIXELS));
 		} else {
 			notif3dsDraw(UI_NOTIF_MSG, settings3DS.GameScreen);
 			notif3dsDraw(UI_NOTIF_FPS, settings3DS.GameScreen);
@@ -865,6 +869,18 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	bool isFullScreen = gameScreenViewport.sWidth >= settings3DS.GameScreenWidth && gameScreenViewport.cHeight >= SCREEN_HEIGHT;
 	bool drawBackground = !isFullScreen;
 	float iod = gpu3dsGetIOD();
+
+	// Stereo edge crop (issue #11): per-layer parallax corrupts up to
+	// max|depth| x slider columns at each edge of the retained textures
+	// (layers missing/duplicating columns there). Narrow the sampled
+	// source so those columns are never shown - the stretch scaling
+	// absorbs the difference. Zero cost with 3D off or all depths 0.
+	if (iod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f) {
+		float edgeCrop = GPU3DS.stereoMaxAbs * (iod / IOD_MAX_PIXELS)
+			* ((float)GPU3DSExt.renderWidth / 256.0f);
+		gameScreenViewport.tx0 += edgeCrop;
+		gameScreenViewport.tx1 -= edgeCrop;
+	}
 
 	// Alternate-eye stereo: each drawn frame renders the layer pass ONCE
 	// (this frame's eye, chosen in impl3dsRunOneFrame, into that eye's

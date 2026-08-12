@@ -310,6 +310,11 @@ typedef struct
     float                       stereoFocusFront;
     float                       stereoMaxExcess;
     float                       stereoMaxBackExcess;
+    // composite helpers: highest configured pop-out (>=0, for placing the
+    // pause overlay one layer in front of everything) and largest |depth|
+    // (for cropping the parallax-corrupted columns off the texture edges)
+    float                       stereoMaxPop;
+    float                       stereoMaxAbs;
     // true while a hazed layer's ghost (blur) passes are being drawn:
     // the tiled-layer draw helpers enable alpha blending for these
     bool                        stereoGhostPass;
