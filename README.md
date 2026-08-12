@@ -174,5 +174,6 @@ See:
 * Wyatt-James for his [snes9x_3ds fork](https://github.com/Wyatt-James/snes9x_3ds); this fork adapts a few safety, audio and stability fixes from his work
 * ramzinouri's [snes9x_3ds fork](https://github.com/ramzinouri/snes9x_3ds) inspired the image border/background and theme support
 * willjow's [snes9x_3ds fork](https://github.com/willjow/snes9x_3ds) revived the project after development had gone quiet
+* Tyler Sanders for the first stereoscopic 3D attempt (snes9x_3ds_3D); the stereo 3D work in this fork started from his phase-1 shader groundwork
 * The Citra/Azahar teams for making 3DS emulator testing and debugging practical
 * Everyone reporting issues, testing games and suggesting improvements
