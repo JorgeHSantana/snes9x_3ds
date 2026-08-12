@@ -905,8 +905,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         AddMenuGauge(items, "  Second Screen BG Opacity"_s, 1, OPACITY_STEPS, settings3DS.SecondScreenBgOpacity,
                         []( int val ) { CheckAndUpdate( settings3DS.SecondScreenBgOpacity, val ); });
     }
-        
-    AddMenuDisabledOption(items, ""_s);
 
     AddMenuCheckbox(items, "  Show FPS", settings3DS.ShowFPS,
         []( int val ) { CheckAndUpdateToggle( settings3DS.ShowFPS, val ); });
@@ -1098,8 +1096,6 @@ void makeControlsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     }
                 });
 
-    AddMenuDisabledOption(items, ""_s);
-
     for (int displayIdx = 0; displayIdx < HOTKEYS_COUNT; ++displayIdx) {
         int i = hotkeyDisplayOrder[displayIdx];
         AddMenuPicker( items,  hotkeysData[i][1], hotkeysData[i][2], makeOptionsFor3DSButtonMapping(), 
@@ -1150,7 +1146,6 @@ void makeControlsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 });
     
     
-    AddMenuHeader2(items, "");
     AddMenuHeader2(items, "Analog to Digital Type"_s);
     AddMenuCheckbox(items, "  Bind Circle Pad to D-Pad"_s, settings3DS.UseGlobalButtonMappings ? settings3DS.GlobalBindCirclePad : settings3DS.BindCirclePad,
                   []( int val ) {
@@ -1171,7 +1166,6 @@ void makeControlsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         }
 
         std::string optionButtonName = std::string(t3dsButtonNames[i]);
-        AddMenuHeader2(items, "");
         AddMenuHeader2(items, optionButtonName);
 
         for (size_t j = 0; j < 3; ++j) {
