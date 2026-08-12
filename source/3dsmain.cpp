@@ -124,9 +124,16 @@ namespace {
     }
 
     void AddMenuHeader2(std::vector<SMenuItem>& items, const std::string& text) {
-        // breathing room before every section header
-        if (!items.empty())
-            items.emplace_back(nullptr, MenuItemType::Disabled, ""_s, ""_s);
+        // breathing room before every section header, unless the previous
+        // item already provides it (a manual blank line or another header)
+        if (!items.empty()) {
+            const SMenuItem& prev = items.back();
+            bool alreadySpaced =
+                (prev.Type == MenuItemType::Disabled && prev.Text.empty()) ||
+                prev.Type == MenuItemType::Header1;
+            if (!alreadySpaced)
+                items.emplace_back(nullptr, MenuItemType::Disabled, ""_s, ""_s);
+        }
         items.emplace_back(nullptr, MenuItemType::Header2, text, ""_s);
     }
 
@@ -346,8 +353,6 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
 
         }, MenuItemType::Action, "  Take Screenshot"_s, ""_s);
 
-        AddMenuHeader2(items, ""_s);
-
         AddMenuHeader2(items, "Save and Load"_s);
         AddMenuCheckbox(items, "  Create screenshot when saving"_s, settings3DS.SaveStateScreenshots,
             []( int val ) {
@@ -361,7 +366,7 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 }
             });
         items.emplace_back(nullptr, MenuItemType::Textarea, "  (disabling removes existing savestate screenshots)"_s, ""_s);
-        AddMenuHeader2(items, ""_s);
+        AddMenuDisabledOption(items, ""_s);
 
         char slotInfo[32];
 
@@ -442,8 +447,8 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 }
             );
         }
-        AddMenuHeader2(items, ""_s);
-        
+        AddMenuDisabledOption(items, ""_s);
+
         for (int slot = 1; slot <= SAVESLOTS_MAX; ++slot) {
             bool hasState = impl3dsSlotHasState(slot);
             snprintf(slotInfo, sizeof(slotInfo), "  Load Slot #%d", slot);
@@ -473,7 +478,7 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 }
             }, hasState ? MenuItemType::Action : MenuItemType::Disabled, slotInfo, ""_s);
         }
-        AddMenuHeader2(items, ""_s);
+        AddMenuDisabledOption(items, ""_s);
     }
 
     AddMenuHeader1(items, "APPEARANCE"_s);
@@ -613,7 +618,7 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     AddMenuPicker(items, "  Quit Emulator"_s, "Are you sure you want to quit?", makePickerOptions({ "Yes", "No" }), 1, DIALOG_TYPE_WARN, false,
         []( int val ) { if ( val == 0 ) { GPU3DS.emulatorState = EMUSTATE_END; } });
 
-    AddMenuHeader2(items, ""_s);
+    AddMenuDisabledOption(items, ""_s);
     std::string info = std::string(settings3dsGetAppVersion("  Snes9x for 3DS v")) + " \x0b7 github.com/JorgeHSantana/snes9x_3ds";
     AddMenuDisabledOption(items, info);
 }
