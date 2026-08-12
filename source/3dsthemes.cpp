@@ -14,8 +14,8 @@ Theme3ds Themes[]={
       0xffffff, //selectedItemTextColor
       0x949494, //selectedItemDescriptionTextColor
       0xaaaaaa, //normalItemTextColor
-      0x999999, //normalItemDescriptionTextColor
-      0x787878, //disabledItemTextColor
+      0x707070, //normalItemDescriptionTextColor
+      0x4a4a4a, //disabledItemTextColor
       0x1aa1fa, //headerItemTextColor
       0x1aa1fa, //subtitleTextColor
       0xFF9900, //accentColor
@@ -38,8 +38,8 @@ Theme3ds Themes[]={
       0x66ff66, //selectedItemTextColor
       0x66ff66, //selectedItemDescriptionTextColor
       0xffffff, //normalItemTextColor
-      0xcccccc, //normalItemDescriptionTextColor
-      0xaaaaaa, //disabledItemTextColor
+      0x9a9a9a, //normalItemDescriptionTextColor
+      0x646464, //disabledItemTextColor
       0x66ff66, //headerItemTextColor
       0x66ff66, //subtitleTextColor
       0x66ff66, //accentColor
@@ -62,8 +62,8 @@ Theme3ds Themes[]={
       0xffffff, //selectedItemTextColor
       0x777777, //selectedItemDescriptionTextColor
       0x333333, //normalItemTextColor
-      0x777777, //normalItemDescriptionTextColor
-      0x888888, //disabledItemTextColor
+      0x999999, //normalItemDescriptionTextColor
+      0xbbbbbb, //disabledItemTextColor
       0x1E88E5, //headerItemTextColor
       0x1E88E5, //subtitleTextColor
       0xFF9900, //accentColor

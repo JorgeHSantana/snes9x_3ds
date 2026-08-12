@@ -1002,7 +1002,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuDisabledOption(items, ""_s);
 
     AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
-    AddMenuDisabledOption(items, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s);
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s, ""_s);
     AddMenuDisabledOption(items, ""_s);
 
     // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
@@ -1043,26 +1043,27 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             AddMenuGauge(items, stereoNames[l], -8, 8, settings3DS.StereoDepth[l],
                 [l]( int val ) { CheckAndUpdate( settings3DS.StereoDepth[l], val ); }, true, true);
         }
-        AddMenuDisabledOption(items, "  + pops out of the screen, - sinks into it."_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  + pops out of the screen, - sinks into it."_s, ""_s);
 
         AddMenuHeader2(items, "Focus"_s);
         AddMenuGauge(items, "  Back"_s, -8, 0, settings3DS.StereoFocusBack,
             []( int val ) { CheckAndUpdate( settings3DS.StereoFocusBack, val ); }, true);
         AddMenuGauge(items, "  Front"_s, 0, 8, settings3DS.StereoFocusFront,
             []( int val ) { CheckAndUpdate( settings3DS.StereoFocusFront, val ); }, true);
-        AddMenuDisabledOption(items, "  Layers inside the Back..Front zone are untouched; effects"_s);
-        AddMenuDisabledOption(items, "  grow with the distance beyond it (gray depth values)."_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Layers inside the Back..Front zone are untouched; effects"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  grow with the distance beyond it (gray depth values)."_s, ""_s);
 
         AddMenuHeader2(items, "Effects"_s);
         AddMenuGauge(items, "  Fade"_s, 0, 8, settings3DS.StereoFade,
             []( int val ) { CheckAndUpdate( settings3DS.StereoFade, val ); }, true);
-        AddMenuDisabledOption(items, "  Darkens layers behind the focus zone."_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Darkens layers behind the focus zone."_s, ""_s);
         AddMenuGauge(items, "  Haze"_s, 0, 8, settings3DS.StereoHaze,
             []( int val ) { CheckAndUpdate( settings3DS.StereoHaze, val ); }, true);
-        AddMenuDisabledOption(items, "  Fogs layers behind the focus zone."_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Fogs layers behind the focus zone."_s, ""_s);
         AddMenuGauge(items, "  Blur"_s, 0, 8, settings3DS.StereoBlur,
             []( int val ) { CheckAndUpdate( settings3DS.StereoBlur, val ); }, true);
-        AddMenuDisabledOption(items, "  Smudges layers outside the zone, back and front."_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Smudges layers outside the zone, back and front."_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Enabling it may cause small image artifacts."_s, ""_s);
     }
         AddMenuDisabledOption(items, ""_s);
 };
