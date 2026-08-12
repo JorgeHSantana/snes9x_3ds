@@ -329,6 +329,10 @@ void file3dsSetCurrentDirCacheDate(u64 createdAt) {
     utils3dsGetFormattedDate((time_t)createdAt, currentDirCacheDate, sizeof(currentDirCacheDate));
 }
 
+// raw creation time of the currently loaded cache (0 = none), so the
+// staleness check in file3dsGetFiles can compare against the clock
+static u64 currentDirCacheCreatedAt = 0;
+
 DirCacheStatus file3dsLoadDirCache(std::vector<DirectoryEntry>& files, const char* cachePath) {
     DirCacheStatus status = DirCacheStatus::Success;
 
@@ -360,6 +364,7 @@ DirCacheStatus file3dsLoadDirCache(std::vector<DirectoryEntry>& files, const cha
     }
 
     file3dsSetCurrentDirCacheDate(header.createdAt);
+    currentDirCacheCreatedAt = header.createdAt;
 
     for (const auto& entry : files) {
         if (entry.Type == FileEntryType::File) {
@@ -437,11 +442,29 @@ bool file3dsGetFiles(std::vector<DirectoryEntry>& files, std::vector<SMenuTab>& 
     file3dsGetCurrentDirCacheName(cachePath, sizeof(cachePath));
 
     if (file3dsLoadDirCache(files, cachePath) == DirCacheStatus::Success) {
-        currentDirLoadedFromCache = true;
-        osTickCounterUpdate(&timer);
-        log3dsWrite("[file3dsGetFiles] %d files loaded from cache (%s) in %.3fms", files.size(), cachePath, osTickCounterRead(&timer));
+        // Self-validating cache (issue #6): a snapshot older than the TTL
+        // is re-scanned on this visit (with the caching indicator) and
+        // rewritten, so content copied to the SD while the console was
+        // off shows up without a manual rescan. Fresh caches still serve
+        // instantly, keeping big-directory navigation fast.
+        const u64 DIR_CACHE_TTL_SECONDS = 15 * 60;
+        u64 now = (u64)time(NULL);
+        bool stale = currentDirCacheCreatedAt == 0 ||
+            now < currentDirCacheCreatedAt ||
+            now - currentDirCacheCreatedAt > DIR_CACHE_TTL_SECONDS;
 
-        return true;
+        if (!stale) {
+            currentDirLoadedFromCache = true;
+            osTickCounterUpdate(&timer);
+            log3dsWrite("[file3dsGetFiles] %d files loaded from cache (%s) in %.3fms", files.size(), cachePath, osTickCounterRead(&timer));
+
+            return true;
+        }
+
+        log3dsWrite("[file3dsGetFiles] cache stale (%llus old), rescanning: %s",
+            now - currentDirCacheCreatedAt, cachePath);
+        files.clear();
+        currentDirRomCount = 0;
     }
     
     // slow path
