@@ -40,7 +40,9 @@ static SGPU_TOP_MODE gpu3dsGetTopMode()
     if (settings3DS.EnhancedResolution == Setting::EnhancedResolution::Wide && gpu3dsIsWideAvailable())
         return TOP_MODE_WIDE;
 
-    if (!settings3DS.Disable3DSlider && gpu3dsIs3DAvailable())
+    // the physical slider is the only 3D control: 0 = exact 2D. The legacy
+    // Disable3DSlider/Intensity3D settings are ignored (no menu items now).
+    if (gpu3dsIs3DAvailable())
         return TOP_MODE_3D;
 
     return TOP_MODE_2D;
@@ -61,15 +63,12 @@ float gpu3dsGetIOD()
 
 float gpu3dsGetIODBase()
 {
-    if (settings3DS.Intensity3D == Setting::Intensity3D::High) {
-        return IOD_MAX_PIXELS;
-    }
-
-    if (settings3DS.Intensity3D == Setting::Intensity3D::Medium) {
-        return 5.0f;
-    }
-
-    return 3.0f;
+    // fixed at the full range: the slider position scales it analogically.
+    // This also guarantees no layer ever pops past the screen glass
+    // (net parallax of a +8 layer at full slider = 0), so the pause
+    // notification - drawn at the full eye offset - always sits in front
+    // of every layer.
+    return IOD_MAX_PIXELS;
 }
 
 bool gpu3dsIs3DAvailable()
