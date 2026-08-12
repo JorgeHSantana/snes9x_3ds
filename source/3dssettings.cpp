@@ -226,6 +226,7 @@ void settings3dsUpdate(bool includeGameSettings)
         GPU3DS.stereoMaxBackExcess = maxBackExcess;
         GPU3DS.stereoMaxPop = maxPop;
         GPU3DS.stereoMaxAbs = maxAbs;
+        GPU3DS.stereoEdgeMode = settings3DS.StereoEdgeMode;
         GPU3DS.stereoFade = settings3DS.StereoFade;
         GPU3DS.stereoHaze = settings3DS.StereoHaze;
         GPU3DS.stereoBlur = settings3DS.StereoBlur;

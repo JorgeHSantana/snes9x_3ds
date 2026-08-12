@@ -760,6 +760,20 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 		gpu3dsDraw(list, NULL, list->count);
 	}
 
+	// Edge Cleanup "Bars": cover the parallax-corrupted side columns with
+	// vertical black bars, pinned to the screen plane (no per-eye offset)
+	float edgeIod = xOffset < 0.0f ? -xOffset : xOffset;
+	if (GPU3DS.stereoEdgeMode == 1 && edgeIod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f) {
+		int barW = (int)(GPU3DS.stereoMaxAbs * (edgeIod / IOD_MAX_PIXELS)
+			* ((float)gameScreenViewport.sWidth / 256.0f) + 0.999f);
+		gpu3dsAddQuadRect(gameScreenViewport.sx0, gameScreenViewport.sy0,
+			gameScreenViewport.sx0 + barW, gameScreenViewport.sy1, 0, 0, 0, 0xff);
+		gpu3dsAddQuadRect(gameScreenViewport.sx1 - barW, gameScreenViewport.sy0,
+			gameScreenViewport.sx1, gameScreenViewport.sy1, 0, 0, 0, 0xff);
+		GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_COLOR;
+		gpu3dsDraw(list, NULL, list->count);
+	}
+
 	if (!screenshot.dirty) {
 		img3dsDrawScanlines(
 			gameScreenViewport.sx0, gameScreenViewport.sy0,
@@ -859,6 +873,26 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
     gameScreenViewport.sy0 = (SCREEN_HEIGHT - gameScreenViewport.cHeight) / 2;
     gameScreenViewport.sx1 = gameScreenViewport.sx0 + gameScreenViewport.sWidth;
     gameScreenViewport.sy1 = gameScreenViewport.sy0 + gameScreenViewport.cHeight;
+
+	float iod = gpu3dsGetIOD();
+
+	// Edge Cleanup: source columns to hide per side (Trim and Zoom)
+	float edgeCropSrc = 0.0f;
+	if (GPU3DS.stereoEdgeMode >= 2 && iod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f)
+		edgeCropSrc = GPU3DS.stereoMaxAbs * (iod / IOD_MAX_PIXELS);
+
+	// "Trim": physically narrow the game window by the corrupted columns.
+	// The window shrink is an integer, and the source crop is derived BACK
+	// from it, so the stretch mode's scale factor stays exactly intact
+	// (the wallpaper shows at the sides).
+	if (GPU3DS.stereoEdgeMode == 2 && edgeCropSrc > 0.0f) {
+		float scale = (float)gameScreenViewport.sWidth / 256.0f;
+		int cropScreen = (int)(edgeCropSrc * scale + 0.999f);
+		gameScreenViewport.sx0 += cropScreen;
+		gameScreenViewport.sx1 -= cropScreen;
+		gameScreenViewport.sWidth -= 2 * cropScreen;
+		edgeCropSrc = (float)cropScreen / scale;
+	}
 	
     // Start half a pixel in from the edges so linear filtering can't leave a thin line
     gameScreenViewport.tx0 = 0.5f;
@@ -868,16 +902,15 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 
 	bool isFullScreen = gameScreenViewport.sWidth >= settings3DS.GameScreenWidth && gameScreenViewport.cHeight >= SCREEN_HEIGHT;
 	bool drawBackground = !isFullScreen;
-	float iod = gpu3dsGetIOD();
 
-	// Stereo edge crop (issue #11): per-layer parallax corrupts up to
-	// max|depth| x slider columns at each edge of the retained textures
-	// (layers missing/duplicating columns there). Narrow the sampled
-	// source so those columns are never shown - the stretch scaling
-	// absorbs the difference. Zero cost with 3D off or all depths 0.
-	if (iod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f) {
-		float edgeCrop = GPU3DS.stereoMaxAbs * (iod / IOD_MAX_PIXELS)
-			* ((float)GPU3DSExt.renderWidth / 256.0f);
+	// Edge Cleanup source crop (issue #11): per-layer parallax corrupts up
+	// to max|depth| x slider columns at each edge of the retained textures
+	// (layers missing/duplicating columns there). Trim and Zoom both stop
+	// sampling those columns; Trim narrowed the window above (scale kept)
+	// while Zoom keeps the window and lets the stretch absorb the crop.
+	// Zero cost with 3D off or all depths 0.
+	if (edgeCropSrc > 0.0f) {
+		float edgeCrop = edgeCropSrc * ((float)GPU3DSExt.renderWidth / 256.0f);
 		gameScreenViewport.tx0 += edgeCrop;
 		gameScreenViewport.tx1 -= edgeCrop;
 	}
