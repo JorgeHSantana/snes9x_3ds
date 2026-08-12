@@ -1061,8 +1061,8 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Smudges layers outside the zone, back and front."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Enabling it may cause small image artifacts."_s, ""_s);
         AddMenuPicker(items, "  Edge Cleanup"_s,
-            "The per-layer parallax corrupts a few columns at the screen\nedges. Bars covers them with black bars; Zoom crops them away\n(absorbed by the stretch); Off shows the raw edges."_s,
-            makePickerOptions({"Off", "Bars", "Trim", "Zoom"}), settings3DS.StereoEdgeMode, DIALOG_TYPE_INFO, true,
+            "The per-layer parallax corrupts a few columns at the screen\nedges. Trim narrows the game window (scale kept); Zoom crops\nthem away, absorbed by the stretch; Off shows the raw edges."_s,
+            makePickerOptions({"Off", "Trim", "Zoom"}), settings3DS.StereoEdgeMode, DIALOG_TYPE_INFO, true,
             []( int val ) { CheckAndUpdate( settings3DS.StereoEdgeMode, val ); });
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Hides the screen-edge columns disturbed by the 3D shifts."_s, ""_s);
     }
@@ -1553,7 +1553,7 @@ void settingsLoadStereo3D()
     settings3DS.StereoBlur = 0;
     settings3DS.StereoFocusBack = -1;
     settings3DS.StereoFocusFront = 1;
-    settings3DS.StereoEdgeMode = 3;   // Zoom
+    settings3DS.StereoEdgeMode = 2;   // Zoom
 
     char path[PATH_MAX];
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
@@ -1585,7 +1585,7 @@ void settingsLoadStereo3D()
         if (sscanf(line, "FOCUSFRONT=%d", &v) == 1)
             settings3DS.StereoFocusFront = v < 0 ? 0 : (v > 8 ? 8 : v);
         if (sscanf(line, "EDGEMODE=%d", &v) == 1)
-            settings3DS.StereoEdgeMode = v < 0 ? 0 : (v > 3 ? 3 : v);
+            settings3DS.StereoEdgeMode = v < 0 ? 0 : (v > 2 ? 2 : v);
     }
     fclose(f);
 }
@@ -1610,7 +1610,7 @@ void settingsSaveStereo3D()
     fprintf(f, "BLUR=%d\n", settings3DS.StereoBlur);
     fprintf(f, "FOCUSBACK=%d\n", settings3DS.StereoFocusBack);
     fprintf(f, "FOCUSFRONT=%d\n", settings3DS.StereoFocusFront);
-    fprintf(f, "# edge cleanup for parallax side columns: 0 off, 1 bars, 2 trim, 3 zoom\n");
+    fprintf(f, "# edge cleanup for parallax side columns: 0 off, 1 trim, 2 zoom\n");
     fprintf(f, "EDGEMODE=%d\n", settings3DS.StereoEdgeMode);
     fclose(f);
 }

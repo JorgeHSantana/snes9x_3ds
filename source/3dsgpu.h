@@ -315,7 +315,7 @@ typedef struct
     // (for cropping the parallax-corrupted columns off the texture edges)
     float                       stereoMaxPop;
     float                       stereoMaxAbs;
-    int                         stereoEdgeMode;   // 0 Off, 1 Bars, 2 Zoom
+    int                         stereoEdgeMode;   // 0 Off, 1 Trim, 2 Zoom
     // true while a hazed layer's ghost (blur) passes are being drawn:
     // the tiled-layer draw helpers enable alpha blending for these
     bool                        stereoGhostPass;

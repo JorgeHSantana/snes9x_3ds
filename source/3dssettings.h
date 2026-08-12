@@ -274,9 +274,8 @@ typedef struct {
                                                // linearly with distance to the zone edge (same .3d file)
     int                 StereoFocusBack;       // -8..0: back edge of the focus zone (default -1)
     int                 StereoFocusFront;      // 0..+8: front edge of the focus zone (default +1)
-    int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Bars
-                                               // (black bars over the columns), 2 = Trim
-                                               // (game window narrows, scale kept), 3 = Zoom
+    int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
+                                               // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)
 
     bool                isNew3DS;

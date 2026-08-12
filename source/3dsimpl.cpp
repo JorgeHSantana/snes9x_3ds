@@ -760,20 +760,6 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 		gpu3dsDraw(list, NULL, list->count);
 	}
 
-	// Edge Cleanup "Bars": cover the parallax-corrupted side columns with
-	// vertical black bars, pinned to the screen plane (no per-eye offset)
-	float edgeIod = xOffset < 0.0f ? -xOffset : xOffset;
-	if (GPU3DS.stereoEdgeMode == 1 && edgeIod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f) {
-		int barW = (int)(GPU3DS.stereoMaxAbs * (edgeIod / IOD_MAX_PIXELS)
-			* ((float)gameScreenViewport.sWidth / 256.0f) + 0.999f);
-		gpu3dsAddQuadRect(gameScreenViewport.sx0, gameScreenViewport.sy0,
-			gameScreenViewport.sx0 + barW, gameScreenViewport.sy1, 0, 0, 0, 0xff);
-		gpu3dsAddQuadRect(gameScreenViewport.sx1 - barW, gameScreenViewport.sy0,
-			gameScreenViewport.sx1, gameScreenViewport.sy1, 0, 0, 0, 0xff);
-		GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_COLOR;
-		gpu3dsDraw(list, NULL, list->count);
-	}
-
 	if (!screenshot.dirty) {
 		img3dsDrawScanlines(
 			gameScreenViewport.sx0, gameScreenViewport.sy0,
@@ -878,14 +864,14 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 
 	// Edge Cleanup: source columns to hide per side (Trim and Zoom)
 	float edgeCropSrc = 0.0f;
-	if (GPU3DS.stereoEdgeMode >= 2 && iod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f)
+	if (GPU3DS.stereoEdgeMode >= 1 && iod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f)
 		edgeCropSrc = GPU3DS.stereoMaxAbs * (iod / IOD_MAX_PIXELS);
 
 	// "Trim": physically narrow the game window by the corrupted columns.
 	// The window shrink is an integer, and the source crop is derived BACK
 	// from it, so the stretch mode's scale factor stays exactly intact
 	// (the wallpaper shows at the sides).
-	if (GPU3DS.stereoEdgeMode == 2 && edgeCropSrc > 0.0f) {
+	if (GPU3DS.stereoEdgeMode == 1 && edgeCropSrc > 0.0f) {
 		float scale = (float)gameScreenViewport.sWidth / 256.0f;
 		int cropScreen = (int)(edgeCropSrc * scale + 0.999f);
 		gameScreenViewport.sx0 += cropScreen;
