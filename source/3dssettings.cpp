@@ -192,13 +192,29 @@ void settings3dsUpdate(bool includeGameSettings)
         msu3dsSetGlobalVolume(0.25f * (float)(settings3DS.UseGlobalVolume ? settings3DS.GlobalMsu1Volume : settings3DS.Msu1Volume));
 
         // stereo 3D depths (BG1-4, Sprites) -> GPU; other LAYER_IDs stay 0
-        float maxSink = 0.0f;
+        float focusBack = (float)settings3DS.StereoFocusBack;
+        float focusFront = (float)settings3DS.StereoFocusFront;
+        float maxExcess = 0.0f;
+        float maxBackExcess = 0.0f;
         for (int i = 0; i < 8; i++) {
-            GPU3DS.stereoLayerDepth[i] = (i < 5) ? (float)settings3DS.StereoDepth[i] : 0.0f;
-            if (-GPU3DS.stereoLayerDepth[i] > maxSink)
-                maxSink = -GPU3DS.stereoLayerDepth[i];
+            float depth = (i < 5) ? (float)settings3DS.StereoDepth[i] : 0.0f;
+            GPU3DS.stereoLayerDepth[i] = depth;
+
+            // distance beyond the focus zone (0 inside it)
+            float excess = 0.0f;
+            if (depth < focusBack)
+                excess = focusBack - depth;
+            else if (depth > focusFront)
+                excess = depth - focusFront;
+            if (excess > maxExcess)
+                maxExcess = excess;
+            if (depth < focusBack && excess > maxBackExcess)
+                maxBackExcess = excess;
         }
-        GPU3DS.stereoMaxSink = maxSink;
+        GPU3DS.stereoFocusBack = focusBack;
+        GPU3DS.stereoFocusFront = focusFront;
+        GPU3DS.stereoMaxExcess = maxExcess;
+        GPU3DS.stereoMaxBackExcess = maxBackExcess;
         GPU3DS.stereoFade = settings3DS.StereoFade;
         GPU3DS.stereoHaze = settings3DS.StereoHaze;
         GPU3DS.stereoBlur = settings3DS.StereoBlur;

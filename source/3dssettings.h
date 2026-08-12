@@ -270,7 +270,10 @@ typedef struct {
                                                // (shareable), NOT to the regular config.
     int                 StereoFade;            // 0..8: darkens layers by how deep they sink (same .3d file)
     int                 StereoHaze;            // 0..8: fogs layers by how deep they sink (same .3d file)
-    int                 StereoBlur;            // 0..8: ghost-blurs layers by how deep they sink (same .3d file)
+    int                 StereoBlur;            // 0..8: ghost-blurs layers outside the focus zone,
+                                               // linearly with distance to the zone edge (same .3d file)
+    int                 StereoFocusBack;       // -8..0: back edge of the focus zone (default -1)
+    int                 StereoFocusFront;      // 0..+8: front edge of the focus zone (default +1)
 
     bool                isNew3DS;
     bool                isRomFsLoaded;

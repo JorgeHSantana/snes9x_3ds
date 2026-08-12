@@ -145,8 +145,10 @@ namespace {
         items.emplace_back(callback, MenuItemType::Radio, text, ""_s, value);
     }
 
-    void AddMenuGauge(std::vector<SMenuItem>& items, const std::string& text, int min, int max, int value, std::function<void(int)> callback, bool showValue = false) {
-        items.emplace_back(callback, MenuItemType::Gauge, text, showValue ? "1"_s : ""_s, value, min, max);
+    // focusZoneCue: depth gauges dim their value when it leaves the stereo
+    // focus zone (the layer will receive Depth Blur)
+    void AddMenuGauge(std::vector<SMenuItem>& items, const std::string& text, int min, int max, int value, std::function<void(int)> callback, bool showValue = false, bool focusZoneCue = false) {
+        items.emplace_back(callback, MenuItemType::Gauge, text, focusZoneCue ? "2"_s : (showValue ? "1"_s : ""_s), value, min, max);
     }
 
     void AddMenuPicker(std::vector<SMenuItem>& items, const std::string& text, const std::string& description, const std::vector<SMenuItem>& options, int value, int dialogType, bool showSelectedOptionInMenu, std::function<void(int)> callback) {
@@ -1058,7 +1060,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         static const char *stereoNames[5] = { "  BG1 Depth", "  BG2 Depth", "  BG3 Depth", "  BG4 Depth", "  Sprites Depth" };
         for (int l = 0; l < 5; l++) {
             AddMenuGauge(items, stereoNames[l], -8, 8, settings3DS.StereoDepth[l],
-                [l]( int val ) { CheckAndUpdate( settings3DS.StereoDepth[l], val ); }, true);
+                [l]( int val ) { CheckAndUpdate( settings3DS.StereoDepth[l], val ); }, true, true);
         }
         AddMenuGauge(items, "  Depth Fade"_s, 0, 8, settings3DS.StereoFade,
             []( int val ) { CheckAndUpdate( settings3DS.StereoFade, val ); }, true);
@@ -1066,9 +1068,15 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             []( int val ) { CheckAndUpdate( settings3DS.StereoHaze, val ); }, true);
         AddMenuGauge(items, "  Depth Blur"_s, 0, 8, settings3DS.StereoBlur,
             []( int val ) { CheckAndUpdate( settings3DS.StereoBlur, val ); }, true);
+        AddMenuGauge(items, "  Focus Back"_s, -8, 0, settings3DS.StereoFocusBack,
+            []( int val ) { CheckAndUpdate( settings3DS.StereoFocusBack, val ); }, true);
+        AddMenuGauge(items, "  Focus Front"_s, 0, 8, settings3DS.StereoFocusFront,
+            []( int val ) { CheckAndUpdate( settings3DS.StereoFocusFront, val ); }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Depth per layer: + pops out, - sinks into the screen."_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Fade darkens, Haze fogs, Blur smudges the sinking layers,"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  strongest on the deepest one."_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Layers inside the Focus Back..Front zone stay untouched"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  (outside it, their depth value turns gray). Effects grow"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  with the distance to the zone: Fade darkens and Haze fogs"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  behind it, Blur smudges in both directions."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s, ""_s);
     }
         AddMenuDisabledOption(items, ""_s);
@@ -1560,6 +1568,8 @@ void settingsLoadStereo3D()
     settings3DS.StereoFade = 0;
     settings3DS.StereoHaze = 0;
     settings3DS.StereoBlur = 0;
+    settings3DS.StereoFocusBack = -1;
+    settings3DS.StereoFocusFront = 1;
 
     char path[PATH_MAX];
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
@@ -1586,6 +1596,10 @@ void settingsLoadStereo3D()
             settings3DS.StereoHaze = v < 0 ? 0 : (v > 8 ? 8 : v);
         if (sscanf(line, "BLUR=%d", &v) == 1)
             settings3DS.StereoBlur = v < 0 ? 0 : (v > 8 ? 8 : v);
+        if (sscanf(line, "FOCUSBACK=%d", &v) == 1)
+            settings3DS.StereoFocusBack = v < -8 ? -8 : (v > 0 ? 0 : v);
+        if (sscanf(line, "FOCUSFRONT=%d", &v) == 1)
+            settings3DS.StereoFocusFront = v < 0 ? 0 : (v > 8 ? 8 : v);
     }
     fclose(f);
 }
@@ -1602,10 +1616,14 @@ void settingsSaveStereo3D()
     fprintf(f, "# snes9x_3ds stereoscopic 3D depths (-8..8): + pops out, - sinks in\n");
     for (int i = 0; i < 5; i++)
         fprintf(f, "%s=%d\n", stereoDepthKeys[i], settings3DS.StereoDepth[i]);
-    fprintf(f, "# fade darkens / haze fogs / blur smudges layers by how deep they sink (0..8)\n");
+    fprintf(f, "# effects apply only outside the focus zone [FOCUSBACK..FOCUSFRONT],\n");
+    fprintf(f, "# growing linearly with the distance to the zone edge (0..8 each):\n");
+    fprintf(f, "# fade darkens / haze fogs behind it, blur smudges in both directions\n");
     fprintf(f, "FADE=%d\n", settings3DS.StereoFade);
     fprintf(f, "HAZE=%d\n", settings3DS.StereoHaze);
     fprintf(f, "BLUR=%d\n", settings3DS.StereoBlur);
+    fprintf(f, "FOCUSBACK=%d\n", settings3DS.StereoFocusBack);
+    fprintf(f, "FOCUSFRONT=%d\n", settings3DS.StereoFocusFront);
     fclose(f);
 }
 

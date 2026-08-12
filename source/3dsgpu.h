@@ -296,13 +296,20 @@ typedef struct
     // stereoEyeIOD * stereoLayerDepth[LAYER_ID] (px, set between draws).
     float                       stereoEyeIOD;
     float                       stereoLayerDepth[8];
-    // atmospheric depth cues, scaled by how deep a layer sinks (0..8 each).
-    // Relative model: the DEEPEST configured layer receives the full gauge
-    // strength; shallower layers scale by sink/stereoMaxSink.
+    // atmospheric depth cues (0..8 each), anchored on the focus zone
+    // [stereoFocusBack..stereoFocusFront]: layers inside are untouched.
+    // Blur grows linearly with the distance to the NEAREST zone edge
+    // (both directions); fade/haze grow with the distance behind the
+    // zone's back edge only (distance cues). Relative model: the layer
+    // farthest outside receives the full gauge strength
+    // (stereoMaxExcess for blur, stereoMaxBackExcess for fade/haze).
     int                         stereoFade;
     int                         stereoHaze;
     int                         stereoBlur;
-    float                       stereoMaxSink;
+    float                       stereoFocusBack;
+    float                       stereoFocusFront;
+    float                       stereoMaxExcess;
+    float                       stereoMaxBackExcess;
     // true while a hazed layer's ghost (blur) passes are being drawn:
     // the tiled-layer draw helpers enable alpha blending for these
     bool                        stereoGhostPass;

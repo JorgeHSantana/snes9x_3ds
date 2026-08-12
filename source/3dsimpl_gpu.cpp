@@ -375,14 +375,13 @@ static void gpu3dsSetGhostAlpha(float a)
 
 static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id)
 {
-    // relative model: the deepest configured layer gets the full gauge
-    // strength, shallower ones scale by their share of that depth
-    float depthIn = 0.0f;
-    if (GPU3DS.stereoMaxSink > 0.0f) {
-        depthIn = -GPU3DS.stereoLayerDepth[id] / GPU3DS.stereoMaxSink;
-        if (depthIn < 0.0f) depthIn = 0.0f;
-        if (depthIn > 1.0f) depthIn = 1.0f;
-    }
+    // all cues anchor on the focus zone: layers inside it are untouched.
+    // Relative model: the layer farthest outside gets the full gauge
+    // strength, the ones in between scale linearly by their share.
+    // Fade/haze count only the distance BEHIND the zone (distance cues).
+    float depth = GPU3DS.stereoLayerDepth[id];
+    float backExcess = depth < GPU3DS.stereoFocusBack ? GPU3DS.stereoFocusBack - depth : 0.0f;
+    float depthIn = GPU3DS.stereoMaxBackExcess > 0.0f ? backExcess / GPU3DS.stereoMaxBackExcess : 0.0f;
 
     float slider = GPU3DS.stereoEyeIOD < 0.0f ? -GPU3DS.stereoEyeIOD : GPU3DS.stereoEyeIOD;
 
@@ -401,8 +400,15 @@ static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id)
 
     // Depth Blur is its own control: ghost passes with soft edges,
     // independent from the haze tint. The level widens the smear
-    // (1..3px) and strengthens the ghosts together.
-    float blur = (GPU3DS.stereoBlur / 8.0f) * depthIn * slider;
+    // (1..3px) and strengthens the ghosts together. Unlike fade/haze it
+    // is a focus cue, not a distance cue: it counts the distance to the
+    // nearest zone edge in BOTH directions (depth-of-field).
+    float excess = backExcess;
+    if (depth > GPU3DS.stereoFocusFront)
+        excess = depth - GPU3DS.stereoFocusFront;
+
+    float excessIn = GPU3DS.stereoMaxExcess > 0.0f ? excess / GPU3DS.stereoMaxExcess : 0.0f;
+    float blur = (GPU3DS.stereoBlur / 8.0f) * excessIn * slider;
     if (blur > 0.02f) {
         s_atmosGhostAlpha = 0.25f + 0.25f * blur;
         s_atmosGhostOffset = 1.0f + 2.0f * blur;

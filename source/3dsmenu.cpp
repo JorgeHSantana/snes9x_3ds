@@ -301,7 +301,16 @@ void menu3dsDrawItems(
             if (!currentTab->MenuItems[i].Description.empty()) {
                 char valueText[12];
                 snprintf(valueText, sizeof(valueText), "%d", currentTab->MenuItems[i].Value);
-                ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, horizontalPadding, y, 246, y + fontHeight, color, HALIGN_RIGHT, valueText);
+
+                // depth gauges ("2"): gray out the value when the layer
+                // leaves the stereo focus zone (it will get Depth Blur)
+                int valueColor = color;
+                if (currentTab->MenuItems[i].Description[0] == '2' &&
+                    (currentTab->MenuItems[i].Value < settings3DS.StereoFocusBack ||
+                     currentTab->MenuItems[i].Value > settings3DS.StereoFocusFront))
+                    valueColor = 0x808080;
+
+                ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, horizontalPadding, y, 246, y + fontHeight, valueColor, HALIGN_RIGHT, valueText);
             }
         }
         else if (currentTab->MenuItems[i].Type == MenuItemType::Picker)
