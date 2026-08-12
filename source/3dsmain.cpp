@@ -1015,7 +1015,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     AddMenuDisabledOption(items, ""_s);
 
-    AddMenuHeader1(items, "ADVANCED SETTINGS"_s);
+    AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
 
     // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
     if (settings3DS.PaletteFix == 1)

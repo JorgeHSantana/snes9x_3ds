@@ -316,6 +316,9 @@ void gpu3dsSetFragmentOperations(SGPURenderState *state, u64 diff) {
             case ALPHA_BLENDING_SUB_DIV2:
                 gpu3dsEnableSubtractiveDiv2Blending();
                 break;
+            case ALPHA_BLENDING_GHOST:
+                gpu3dsEnableGhostBlending();
+                break;
             default:
                 gpu3dsDisableAlphaBlending();
                 break;
@@ -891,6 +894,19 @@ void gpu3dsDisableAlphaBlending()
         GPU_BLEND_ADD,
         GPU_ONE, GPU_ZERO,
         GPU_ONE, GPU_ZERO
+    );
+}
+
+// Ghost passes: src-alpha blend on RGB, dest alpha preserved. The render
+// texture's alpha is the color-math mask (DST_ALPHA blends read it), so the
+// ghosts' low alpha must never be written into it.
+void gpu3dsEnableGhostBlending()
+{
+    C3D_AlphaBlend(
+        GPU_BLEND_ADD,
+        GPU_BLEND_ADD,
+        GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA,
+        GPU_ZERO, GPU_ONE
     );
 }
 

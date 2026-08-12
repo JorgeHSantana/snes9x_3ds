@@ -148,6 +148,11 @@ typedef enum
     ALPHA_BLENDING_ADD_DIV2,
     ALPHA_BLENDING_SUB,
     ALPHA_BLENDING_SUB_DIV2,
+    // src-alpha blend on RGB but dest alpha untouched: the SNES_MAIN/SUB
+    // alpha channel is the color-math mask, and clobbering it with the
+    // ghosts' low alpha blacked out whole layers whenever a scene enabled
+    // color math (dialog boxes) — DST_ALPHA-based blends read it back
+    ALPHA_BLENDING_GHOST,
     ALPHA_BLENDING_UNSET,
 } SGPU_ALPHA_BLENDINGMODE;
 
@@ -385,6 +390,7 @@ void gpu3dsEnableAdditiveDiv2Blending();
 void gpu3dsEnableSubtractiveDiv2Blending();
 void gpu3dsDisableAlphaBlending();
 void gpu3dsDisableAlphaBlendingKeepDestAlpha();
+void gpu3dsEnableGhostBlending();
 
 void gpu3dsSetDefaultRenderState(SGPU_SHADER_PROGRAM shader, bool isSecondScreen = false);
 void gpu3dsSetFragmentOperations(SGPURenderState *state, u64 diff);

@@ -249,7 +249,7 @@ void gpu3dsDrawVerticalSectionLayer(SLayer *layer, int from, int to) {
 void gpu3dsDrawTiledLayerSingleSection(SLayer *layer, SLayerSection *section) {
     GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
     GPU3DS.currentRenderState.alphaBlending =
-        GPU3DS.stereoGhostPass ? ALPHA_BLENDING_ENABLED : ALPHA_BLENDING_DISABLED;
+        GPU3DS.stereoGhostPass ? ALPHA_BLENDING_GHOST : ALPHA_BLENDING_DISABLED;
 
     u64 mask = gpu3dsGetLayerPackedMask(layer->id, true);
     GPU3DS.currentRenderState.packed =
@@ -273,7 +273,7 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
     // Those fields are set once before the loop and stay constant
     GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
     GPU3DS.currentRenderState.alphaBlending =
-        GPU3DS.stereoGhostPass ? ALPHA_BLENDING_ENABLED : ALPHA_BLENDING_DISABLED;
+        GPU3DS.stereoGhostPass ? ALPHA_BLENDING_GHOST : ALPHA_BLENDING_DISABLED;
     
     // restrict the diff to only the properties that actually vary across sections for that layer type
     u64 layerMask[2];
