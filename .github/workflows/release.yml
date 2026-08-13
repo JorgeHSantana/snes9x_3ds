@@ -37,29 +37,43 @@ jobs:
             devkitpro/devkitarm bash -c "make clean && make release"
           ls -la output/snes9x_3ds.cia output/snes9x_3ds.3dsx
 
+      - name: Backfill release notes (idempotent)
+        run: |
+          for f in .github/release-notes/*.md; do
+            tag=$(basename "$f" .md)
+            gh release edit "$tag" --notes-file "$f" 2>/dev/null || true
+          done
+
       - name: Publish nightly (rolling prerelease)
         if: github.ref_name == 'nightly'
         run: |
           SHORT=${GITHUB_SHA::7}
-          SUBJECT=$(git log -1 --format=%s "$GITHUB_SHA")
           # tag is nightly-latest (NOT "nightly") so it never collides with the branch name
           gh release delete nightly-latest --yes || true
           git push origin :refs/tags/nightly-latest || true
+          # release notes = the CHANGELOG's Unreleased section
+          {
+            echo "Automated nightly build from \`$SHORT\`. For testing; may be unstable."
+            echo
+            awk '/^## Unreleased/{f=1;next}/^## /{f=0}f' CHANGELOG.md
+          } > /tmp/notes.md
           gh release create nightly-latest \
             output/snes9x_3ds.cia output/snes9x_3ds.3dsx \
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Nightly $(date -u +%Y-%m-%d) ($SHORT)" \
-            --notes "Automated nightly build from \`$SHORT\` — _${SUBJECT}_. For testing; may be unstable."
+            --notes-file /tmp/notes.md
 
       - name: Publish stable release
         if: github.ref_name == 'stable'
         run: |
           SHORT=${GITHUB_SHA::7}
           TAG="stable-$(date -u +%Y%m%d)-$SHORT"
+          # release notes = the CHANGELOG's Unreleased section
+          awk '/^## Unreleased/{f=1;next}/^## /{f=0}f' CHANGELOG.md > /tmp/notes.md
           gh release create "$TAG" \
             output/snes9x_3ds.cia output/snes9x_3ds.3dsx \
             --latest \
             --target "$GITHUB_SHA" \
             --title "Stable $(date -u +%Y-%m-%d)" \
-            --generate-notes
+            --notes-file /tmp/notes.md
