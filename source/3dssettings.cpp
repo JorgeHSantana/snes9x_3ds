@@ -354,6 +354,13 @@ bool settings3dsStereoReleaseScreen()
     return removed;
 }
 
+int settings3dsStereoActiveIndex()
+{
+    if (s_stereoActiveIdx >= 0 && s_stereoActiveIdx < settings3DS.StereoProfilesCount)
+        return s_stereoActiveIdx;
+    return -1;
+}
+
 const char *settings3dsStereoActiveName()
 {
     if (s_stereoActiveIdx >= 0 && s_stereoActiveIdx < settings3DS.StereoProfilesCount)

@@ -2376,6 +2376,16 @@ void showMenu() {
     static std::vector<SMenuItem> emptyCheats;
     int currentMenuTab = menu3dsGetLastSelectedTabIndex();
 
+    // opening the menu points 'Editing Profile' at the profile the current
+    // screen matches, not whichever one was edited last
+    if (settings3DS.isRomLoaded) {
+        int activeIdx = settings3dsStereoActiveIndex();
+        if (activeIdx != s_stereoEditIdx) {
+            s_stereoEditIdx = activeIdx;
+            menu3dsMarkTabDirty(TAB_SETTINGS);
+        }
+    }
+
     // 1. first boot
     // 2. new game loaded
     if (menuTabs.empty() || Memory.ROMCRC32 != lastLoadedRomCRC || menu3dsHasDirtyTabs())

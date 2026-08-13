@@ -329,6 +329,7 @@ void settings3dsStereoFrameTick();
 void settings3dsStereoArmCapture(int profileIdx);
 bool settings3dsStereoReleaseScreen();
 const char *settings3dsStereoActiveName();
+int settings3dsStereoActiveIndex();   // -1 = Default profile
 void settings3dsApplyScreenLayout();
 void settings3dsApplyScreenStretch();
 
