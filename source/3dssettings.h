@@ -278,6 +278,29 @@ typedef struct {
                                                // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)
 
+    // --- PER-SCENE 3D PROFILES (issue #23) ---
+    // The flat Stereo* fields above are the DEFAULT profile. Named
+    // profiles bind to PPU scene signatures and override them while the
+    // matching scene is on screen (30-frame hysteresis, depths lerped).
+    #define STEREO_PROFILES_MAX 8
+    #define STEREO_BINDS_MAX    16
+    struct SStereoProfile {
+        char Name[16];
+        int  Depth[5];
+        int  Fade, Haze, Blur;
+        int  FocusBack, FocusFront;
+        int  EdgeMode;
+    };
+    struct SStereoBind {
+        u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C
+        u64  Mask;         // per-byte compare mask (00 byte = ignore that register)
+        int  ProfileIdx;
+    };
+    SStereoProfile      StereoProfiles[STEREO_PROFILES_MAX];
+    int                 StereoProfilesCount;
+    SStereoBind         StereoBinds[STEREO_BINDS_MAX];
+    int                 StereoBindsCount;
+
     bool                isNew3DS;
     bool                isRomFsLoaded;
     bool                isRomLoaded;
@@ -291,6 +314,10 @@ extern S9xSettings3DS settings3DS;
 void settings3dsResetGlobalDefaults();
 void settings3dsResetGameDefaults();
 void settings3dsUpdate(bool includeGameSettings);
+
+// per-scene 3D profiles (issue #23)
+void settings3dsStereoApplyDefault();
+void settings3dsStereoFrameTick();
 void settings3dsApplyScreenLayout();
 void settings3dsApplyScreenStretch();
 

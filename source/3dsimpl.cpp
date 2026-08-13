@@ -938,6 +938,10 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 
 void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 {
+	// per-scene 3D profiles (issue #23): match the PPU scene signature and
+	// swap the stereo config with hysteresis + lerp
+	settings3dsStereoFrameTick();
+
 	notif3dsTick();
 	notif3dsSync();
 

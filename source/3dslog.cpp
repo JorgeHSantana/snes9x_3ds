@@ -8,7 +8,7 @@
 #include "3dssettings.h"
 #include "3dslog.h"
 
-static const bool FORCE_DEBUG_LOGS = false;
+static const bool FORCE_DEBUG_LOGS = true;   // SIG PROBE (#23 phase 1)
 
 static FILE *logFile = NULL;
 static u64 osTime;

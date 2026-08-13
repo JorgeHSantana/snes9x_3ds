@@ -1554,6 +1554,8 @@ void settingsLoadStereo3D()
     settings3DS.StereoFocusBack = -1;
     settings3DS.StereoFocusFront = 1;
     settings3DS.StereoEdgeMode = 2;   // Zoom
+    settings3DS.StereoProfilesCount = 0;
+    settings3DS.StereoBindsCount = 0;
 
     char path[PATH_MAX];
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
@@ -1565,27 +1567,65 @@ void settingsLoadStereo3D()
     }
     if (!f) return;
 
-    char line[64];
+    // keys route to the "current target": the flat default fields, or the
+    // profile opened by the last PROFILE= line (issue #23)
+    int *tDepth = settings3DS.StereoDepth;
+    int *tFade = &settings3DS.StereoFade;
+    int *tHaze = &settings3DS.StereoHaze;
+    int *tBlur = &settings3DS.StereoBlur;
+    int *tFB = &settings3DS.StereoFocusBack;
+    int *tFF = &settings3DS.StereoFocusFront;
+    int *tEdge = &settings3DS.StereoEdgeMode;
+
+    char line[96], name[16];
     int v;
+    unsigned long long sv, mv;
     while (fgets(line, sizeof(line), f)) {
+        if (sscanf(line, "PROFILE=%15[^\r\n]", name) == 1) {
+            if (settings3DS.StereoProfilesCount < STEREO_PROFILES_MAX) {
+                S9xSettings3DS::SStereoProfile *p =
+                    &settings3DS.StereoProfiles[settings3DS.StereoProfilesCount++];
+                snprintf(p->Name, sizeof(p->Name), "%s", name);
+                for (int i = 0; i < 5; i++) p->Depth[i] = stereoDepthDefault[i];
+                p->Fade = p->Haze = p->Blur = 0;
+                p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 2;
+                tDepth = p->Depth; tFade = &p->Fade; tHaze = &p->Haze;
+                tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
+                tEdge = &p->EdgeMode;
+            }
+            continue;
+        }
+        if (sscanf(line, "BIND=%15[^:]:%llx:%llx", name, &sv, &mv) == 3) {
+            if (settings3DS.StereoBindsCount < STEREO_BINDS_MAX) {
+                for (int i = 0; i < settings3DS.StereoProfilesCount; i++) {
+                    if (strcmp(settings3DS.StereoProfiles[i].Name, name) == 0) {
+                        S9xSettings3DS::SStereoBind *b =
+                            &settings3DS.StereoBinds[settings3DS.StereoBindsCount++];
+                        b->Sig = sv; b->Mask = mv; b->ProfileIdx = i;
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
         for (int i = 0; i < 5; i++) {
             char fmt[16];
             snprintf(fmt, sizeof(fmt), "%s=%%d", stereoDepthKeys[i]);
             if (sscanf(line, fmt, &v) == 1)
-                settings3DS.StereoDepth[i] = v < -8 ? -8 : (v > 8 ? 8 : v);
+                tDepth[i] = v < -8 ? -8 : (v > 8 ? 8 : v);
         }
         if (sscanf(line, "FADE=%d", &v) == 1)
-            settings3DS.StereoFade = v < 0 ? 0 : (v > 8 ? 8 : v);
+            *tFade = v < 0 ? 0 : (v > 8 ? 8 : v);
         if (sscanf(line, "HAZE=%d", &v) == 1)
-            settings3DS.StereoHaze = v < 0 ? 0 : (v > 8 ? 8 : v);
+            *tHaze = v < 0 ? 0 : (v > 8 ? 8 : v);
         if (sscanf(line, "BLUR=%d", &v) == 1)
-            settings3DS.StereoBlur = v < 0 ? 0 : (v > 8 ? 8 : v);
+            *tBlur = v < 0 ? 0 : (v > 8 ? 8 : v);
         if (sscanf(line, "FOCUSBACK=%d", &v) == 1)
-            settings3DS.StereoFocusBack = v < -8 ? -8 : (v > 0 ? 0 : v);
+            *tFB = v < -8 ? -8 : (v > 0 ? 0 : v);
         if (sscanf(line, "FOCUSFRONT=%d", &v) == 1)
-            settings3DS.StereoFocusFront = v < 0 ? 0 : (v > 8 ? 8 : v);
+            *tFF = v < 0 ? 0 : (v > 8 ? 8 : v);
         if (sscanf(line, "EDGEMODE=%d", &v) == 1)
-            settings3DS.StereoEdgeMode = v < 0 ? 0 : (v > 2 ? 2 : v);
+            *tEdge = v < 0 ? 0 : (v > 2 ? 2 : v);
     }
     fclose(f);
 }
@@ -1612,6 +1652,25 @@ void settingsSaveStereo3D()
     fprintf(f, "FOCUSFRONT=%d\n", settings3DS.StereoFocusFront);
     fprintf(f, "# edge cleanup for parallax side columns: 0 off, 1 trim, 2 zoom\n");
     fprintf(f, "EDGEMODE=%d\n", settings3DS.StereoEdgeMode);
+
+    // per-scene profiles + PPU-signature binds (issue #23). BIND bytes:
+    // b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C; mask byte 00
+    // ignores that register.
+    for (int pi = 0; pi < settings3DS.StereoProfilesCount; pi++) {
+        const S9xSettings3DS::SStereoProfile *p = &settings3DS.StereoProfiles[pi];
+        fprintf(f, "PROFILE=%s\n", p->Name);
+        for (int i = 0; i < 5; i++)
+            fprintf(f, "%s=%d\n", stereoDepthKeys[i], p->Depth[i]);
+        fprintf(f, "FADE=%d\nHAZE=%d\nBLUR=%d\n", p->Fade, p->Haze, p->Blur);
+        fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\n",
+            p->FocusBack, p->FocusFront, p->EdgeMode);
+    }
+    for (int bi = 0; bi < settings3DS.StereoBindsCount; bi++) {
+        const S9xSettings3DS::SStereoBind *b = &settings3DS.StereoBinds[bi];
+        fprintf(f, "BIND=%s:%016llX:%016llX\n",
+            settings3DS.StereoProfiles[b->ProfileIdx].Name,
+            (unsigned long long)b->Sig, (unsigned long long)b->Mask);
+    }
     fclose(f);
 }
 
