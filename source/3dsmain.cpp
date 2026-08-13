@@ -1026,36 +1026,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s, ""_s);
     AddMenuDisabledOption(items, ""_s);
 
-    // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
-    if (settings3DS.PaletteFix == 1)
-    {
-        AddMenuHeader2(items, "Reduce Layer Draws on Palette Changes"_s);
-
-        static const char *deferBgNames[3] = { "  BG1", "  BG2", "  BG3" };
-        for (int bg = LAYER_BG0; bg <= LAYER_BG2; bg++) {
-            AddMenuCheckbox(items, deferBgNames[bg], (settings3DS.PaletteDeferBgMask >> bg) & 1,
-                [bg]( int val ) {
-                    u8 newMask = val
-                        ? (settings3DS.PaletteDeferBgMask | (1 << bg))
-                        : (settings3DS.PaletteDeferBgMask & ~(1 << bg));
-                    CheckAndUpdate( settings3DS.PaletteDeferBgMask, newMask );
-                });
-        }
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Can speed up games like Top Gear that change colors"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  mid-frame by drawing a layer fewer times."_s, ""_s);
-
-        AddMenuDisabledOption(items, ""_s);
-    }
-
-    AddMenuHeader2(items, "Enable / Disable Layers"_s);
-
-    static const char *layerNames[LAYER_BRIGHTNESS + 1] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites", "  Backdrop", "  Color Math", "  Brightness" };
-    for (int layer = LAYER_BG0; layer <= LAYER_BRIGHTNESS; layer++) {
-        AddMenuCheckbox(items, layerNames[layer], settings3DS.LayerEnabled[layer],
-            [layer]( int val ) { CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val ); });
-    }
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
-
     if (gpu3dsIs3DAvailable()) {
         AddMenuHeader2(items, "Scene Profiles"_s);
 
@@ -1138,6 +1108,32 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             menu3dsMarkTabDirty(TAB_SETTINGS);
         }, MenuItemType::Action, "  Delete Profile"_s, ""_s);
 
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+            bool removed = settings3dsStereoReleaseScreen();
+            menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Release This Screen",
+                removed ? "This screen was unbound - it now uses the Default\nprofile again."
+                        : "This screen has no profile bound to it.",
+                Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+            menu3dsMarkTabDirty(TAB_SETTINGS);
+        }, MenuItemType::Action, "  Release This Screen"_s, ""_s);
+
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            if (s_stereoEditIdx < 0) return;
+            S9xSettings3DS::SStereoProfile *p = &settings3DS.StereoProfiles[s_stereoEditIdx];
+            SwkbdState swkbd;
+            char buf[16];
+            swkbdInit(&swkbd, SWKBD_TYPE_QWERTY, 1, sizeof(buf) - 1);
+            swkbdSetInitialText(&swkbd, p->Name);
+            swkbdSetHintText(&swkbd, "Profile name");
+            if (swkbdInputText(&swkbd, buf, sizeof(buf)) == SWKBD_BUTTON_CONFIRM && buf[0] != '\0') {
+                snprintf(p->Name, sizeof(p->Name), "%s", buf);
+                settings3DS.isDirty = true;
+                menu3dsMarkTabDirty(TAB_SETTINGS);
+            }
+        }, MenuItemType::Action, "  Rename Profile"_s, ""_s);
+
         {
             char matchLine[48];
             snprintf(matchLine, sizeof(matchLine), "  This screen matches: %s", settings3dsStereoActiveName());
@@ -1178,6 +1174,38 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             []( int val ) { CheckAndUpdate( *stereoEditField(5), val ); });
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Hides the screen-edge columns disturbed by the 3D shifts."_s, ""_s);
     }
+
+    // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
+    if (settings3DS.PaletteFix == 1)
+    {
+        AddMenuHeader2(items, "Reduce Layer Draws on Palette Changes"_s);
+
+        static const char *deferBgNames[3] = { "  BG1", "  BG2", "  BG3" };
+        for (int bg = LAYER_BG0; bg <= LAYER_BG2; bg++) {
+            AddMenuCheckbox(items, deferBgNames[bg], (settings3DS.PaletteDeferBgMask >> bg) & 1,
+                [bg]( int val ) {
+                    u8 newMask = val
+                        ? (settings3DS.PaletteDeferBgMask | (1 << bg))
+                        : (settings3DS.PaletteDeferBgMask & ~(1 << bg));
+                    CheckAndUpdate( settings3DS.PaletteDeferBgMask, newMask );
+                });
+        }
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Can speed up games like Top Gear that change colors"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  mid-frame by drawing a layer fewer times."_s, ""_s);
+
+        AddMenuDisabledOption(items, ""_s);
+    }
+
+    AddMenuHeader2(items, "Enable / Disable Layers"_s);
+
+    static const char *layerNames[LAYER_BRIGHTNESS + 1] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites", "  Backdrop", "  Color Math", "  Brightness" };
+    for (int layer = LAYER_BG0; layer <= LAYER_BRIGHTNESS; layer++) {
+        AddMenuCheckbox(items, layerNames[layer], settings3DS.LayerEnabled[layer],
+            [layer]( int val ) { CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val ); });
+    }
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
+
+
         AddMenuDisabledOption(items, ""_s);
 };
 

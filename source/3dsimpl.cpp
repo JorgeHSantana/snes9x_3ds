@@ -780,7 +780,11 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 			gpu3dsAddQuadRect(0, 0, settings3DS.GameScreenWidth, SCREEN_HEIGHT, wx, wy, 0, 0xaa);
 			notif3dsDraw(UI_NOTIF_MSG, settings3DS.GameScreen, -xOffset * (msgDepth / gpu3dsGetIODBase()));
 		} else {
-			notif3dsDraw(UI_NOTIF_MSG, settings3DS.GameScreen);
+			// in-game notifications sit one layer in front of the highest
+			// pop-out, same rule as the pause overlay
+			float msgDepth = GPU3DS.stereoMaxPop + 1.0f;
+			if (msgDepth > IOD_MAX_PIXELS) msgDepth = IOD_MAX_PIXELS;
+			notif3dsDraw(UI_NOTIF_MSG, settings3DS.GameScreen, -xOffset * (msgDepth / gpu3dsGetIODBase()));
 			notif3dsDraw(UI_NOTIF_FPS, settings3DS.GameScreen);
 		}
 	}

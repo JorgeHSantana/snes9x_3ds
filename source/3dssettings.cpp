@@ -5,6 +5,7 @@
 #include "memmap.h"
 #include "3dssettings.h"
 #include "3dslog.h"
+#include "3dsui_notif.h"
 #include "3dsgpu.h"
 #include "3dsmsu.h"
 #include "3dssound.h"
@@ -317,6 +318,42 @@ void settings3dsStereoArmCapture(int profileIdx)
     s_capWatch = -1;
 }
 
+// unbind whatever the CURRENT scene matches (inverse of capture)
+bool settings3dsStereoReleaseScreen()
+{
+    u8 *rr = Memory.FillRAM;
+    u64 sig = (u64)rr[0x2105]
+        | ((u64)rr[0x212C] << 8)  | ((u64)rr[0x212D] << 16)
+        | ((u64)rr[0x2130] << 24) | ((u64)rr[0x2131] << 32)
+        | ((u64)rr[0x2106] << 40) | ((u64)rr[0x420C] << 48);
+    u64 sig2 = (u64)rr[0x2101]
+        | ((u64)rr[0x2107] << 8)  | ((u64)rr[0x2108] << 16)
+        | ((u64)rr[0x2109] << 24) | ((u64)rr[0x210A] << 32)
+        | ((u64)rr[0x210B] << 40) | ((u64)rr[0x210C] << 48);
+    int watch = settings3DS.StereoWatchAddr >= 0
+        ? Memory.RAM[settings3DS.StereoWatchAddr & 0x1FFFF] : -1;
+
+    bool removed = false;
+    for (int i = settings3DS.StereoBindsCount - 1; i >= 0; i--) {
+        const S9xSettings3DS::SStereoBind *b = &settings3DS.StereoBinds[i];
+        bool hits = ((sig ^ b->Sig) & b->Mask) == 0 &&
+                    ((sig2 ^ b->Sig2) & b->Mask2) == 0 &&
+                    (b->WatchVal < 0 || b->WatchVal == watch);
+        if (hits) {
+            for (int j = i; j < settings3DS.StereoBindsCount - 1; j++)
+                settings3DS.StereoBinds[j] = settings3DS.StereoBinds[j + 1];
+            settings3DS.StereoBindsCount--;
+            removed = true;
+        }
+    }
+    if (removed) {
+        s_stereoActiveIdx = -1;
+        settings3dsStereoApplyDefault();
+        settings3DS.isDirty = true;
+    }
+    return removed;
+}
+
 const char *settings3dsStereoActiveName()
 {
     if (s_stereoActiveIdx >= 0 && s_stereoActiveIdx < settings3DS.StereoProfilesCount)
@@ -390,6 +427,11 @@ void settings3dsStereoFrameTick()
         s_capOr2 |= sig2; s_capAnd2 &= sig2;
         if (settings3DS.StereoWatchAddr >= 0)
             s_capWatch = Memory.RAM[settings3DS.StereoWatchAddr & 0x1FFFF];
+        if (s_capFrames % 60 == 0) {
+            char msg[48];
+            snprintf(msg, sizeof(msg), "Capturing screen: %ds...", s_capFrames / 60);
+            notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen, 900.0, msg);
+        }
         if (--s_capFrames == 0 && s_capProfile >= 0 &&
             s_capProfile < settings3DS.StereoProfilesCount) {
             u64 mask = settings3dsCapMask(s_capOr, s_capAnd) & 0x00FFFFFFFFFFFFFFULL;
@@ -414,6 +456,10 @@ void settings3dsStereoFrameTick()
                 b->WatchVal = s_capWatch;
                 b->ProfileIdx = s_capProfile;
                 settings3DS.isDirty = true;
+                char msg[48];
+                snprintf(msg, sizeof(msg), "Screen captured: %s",
+                    settings3DS.StereoProfiles[s_capProfile].Name);
+                notif3dsTrigger(Notif::Misc, Notif::Success, settings3DS.GameScreen, 2500.0, msg);
                 log3dsWrite("[sig] captured -> %s (mask=%016llX watch=%02X)",
                     settings3DS.StereoProfiles[s_capProfile].Name,
                     (unsigned long long)mask, s_capWatch);

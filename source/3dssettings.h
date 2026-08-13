@@ -327,6 +327,7 @@ void settings3dsStereoFrameTick();
 // per-byte mask from the bits that flap, then bind the screen to the
 // profile (replacing any bind that previously matched it)
 void settings3dsStereoArmCapture(int profileIdx);
+bool settings3dsStereoReleaseScreen();
 const char *settings3dsStereoActiveName();
 void settings3dsApplyScreenLayout();
 void settings3dsApplyScreenStretch();
