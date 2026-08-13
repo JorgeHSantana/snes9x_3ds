@@ -63,12 +63,10 @@ float gpu3dsGetIOD()
 
 float gpu3dsGetIODBase()
 {
-    // fixed at the full range: the slider position scales it analogically.
-    // This also guarantees no layer ever pops past the screen glass
-    // (net parallax of a +8 layer at full slider = 0), so the pause
-    // notification - drawn at the full eye offset - always sits in front
-    // of every layer.
-    return IOD_MAX_PIXELS;
+    // the old Standard default: game layers never use this base (their
+    // parallax is slider x depth directly), but the splash, menu and
+    // pause overlay do - 8px there reads far too strong (hardware verdict)
+    return 3.0f;
 }
 
 bool gpu3dsIs3DAvailable()

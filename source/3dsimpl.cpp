@@ -778,7 +778,7 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 			int wx = notifTexture->tex.width - 1;
 			int wy = notifTexture->tex.height - 1;
 			gpu3dsAddQuadRect(0, 0, settings3DS.GameScreenWidth, SCREEN_HEIGHT, wx, wy, 0, 0xaa);
-			notif3dsDraw(UI_NOTIF_MSG, settings3DS.GameScreen, -xOffset * (msgDepth / IOD_MAX_PIXELS));
+			notif3dsDraw(UI_NOTIF_MSG, settings3DS.GameScreen, -xOffset * (msgDepth / gpu3dsGetIODBase()));
 		} else {
 			notif3dsDraw(UI_NOTIF_MSG, settings3DS.GameScreen);
 			notif3dsDraw(UI_NOTIF_FPS, settings3DS.GameScreen);
@@ -865,7 +865,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	// Edge Cleanup: source columns to hide per side (Trim and Zoom)
 	float edgeCropSrc = 0.0f;
 	if (GPU3DS.stereoEdgeMode >= 1 && iod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f)
-		edgeCropSrc = GPU3DS.stereoMaxAbs * (iod / IOD_MAX_PIXELS) * STEREO_PARALLAX_SCALE;
+		edgeCropSrc = GPU3DS.stereoMaxAbs * (iod / gpu3dsGetIODBase()) * STEREO_PARALLAX_SCALE;
 
 	// "Trim": physically narrow the game window by the corrupted columns.
 	// The window shrink is an integer, and the source crop is derived BACK
