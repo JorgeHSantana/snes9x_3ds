@@ -11,8 +11,8 @@ using fixtures::put_file;
 using fixtures::write_pcm_at;
 
 // Fixtures generated with:
-//   ffmpeg -f s16le -ar 44100 -ac 2 -i ramp.raw \
-//          -metadata MSU1_LOOPPOINT=500 ramp2000-loop500.flac
+//   ffmpeg -f s16le -ar 44100 -ac 2 -i ramp.raw
+//          -metadata MSU1_LOOPPOINT=500 ramp2000-loop500.flac   (one line)
 // where ramp.raw holds 2000 frames of L=i, R=-i — the same pattern
 // fixtures::write_pcm_at produces, so decode output can be byte-compared.
 static const uint32_t kFrames = 2000;

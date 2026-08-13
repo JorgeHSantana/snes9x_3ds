@@ -2,7 +2,7 @@
 
 ## Overview
 
-This fork by [JorgeHSantana](https://github.com/JorgeHSantana/snes9x_3ds) adds **MSU-1 support** — CD-quality music and full-motion video streaming — on top of [matbo87](https://github.com/matbo87/snes9x_3ds)'s modernized fork of the legacy snes9x_3ds codebase by [bubble2k](https://github.com/bubble2k16/snes9x_3ds).
+This fork by [JorgeHSantana](https://github.com/JorgeHSantana/snes9x_3ds) adds **MSU-1 support** (CD-quality music and full-motion video streaming, with optional FLAC-compressed packs) and **per-layer stereoscopic 3D** (each SNES layer at its own depth, with automatic per-screen Scene Profiles) on top of [matbo87](https://github.com/matbo87/snes9x_3ds)'s modernized fork of the legacy snes9x_3ds codebase by [bubble2k](https://github.com/bubble2k16/snes9x_3ds).
 It builds with current devkitARM, libctru and citro3d releases (as of June 2026). Optional assets are available in the dedicated asset repository: [snes9x_3ds-assets](https://github.com/matbo87/snes9x_3ds-assets).
 
 It works on all 2DS and 3DS models.
@@ -15,6 +15,9 @@ Feedback and bug reports are welcome.
 * MSU-1 support: CD-quality music packs and FMV playback, with per-game MSU-1 volume and video FPS settings
 * Compressed MSU-1 audio: `.flac` tracks play when the raw `.pcm` is absent (roughly half the SD space, still lossless)
 * MSU-1 pack folders show up as single game entries in the file browser; ROMs also load from `.zip`
+* Stereoscopic 3D with per-layer depth (BG1-4 + sprites), focus zone with distance effects (fade, haze, depth-of-field blur), Edge Cleanup, and Enhanced Resolution rendering
+* Scene Profiles (experimental): capture a screen and its own 3D configuration is applied automatically whenever that screen shows up
+* File browser with instant cached listings that self-refresh in the background when SD contents change
 * Improved rendering for HDMA-heavy games and mosaic effects
 * SNES refresh rate matching (60.1 Hz for NTSC, 50 Hz for PAL)
 * NDSP audio output
@@ -211,6 +214,9 @@ See:
 
 * The Snes9x team for the SNES emulator core, and the libretro Snes9x core maintainers for ongoing reference work
 * bubble2k, original author of [snes9x_3ds](https://github.com/bubble2k16/snes9x_3ds), for creating the excellent base this fork builds on
+* matbo87, whose [modernized fork](https://github.com/matbo87/snes9x_3ds) (current toolchain, NDSP audio, UI overhaul) is the direct base of this one
+* [JorgeHSantana](https://github.com/JorgeHSantana) — MSU-1 support, FLAC packs, per-layer stereoscopic 3D, Scene Profiles, zip loading and the other features of this fork
+* [dr_flac](https://github.com/mackron/dr_libs) by David Reid (public domain) for FLAC decoding, and [doctest](https://github.com/doctest/doctest) for the host test suite
 * Wyatt-James for his [snes9x_3ds fork](https://github.com/Wyatt-James/snes9x_3ds); this fork adapts a few safety, audio and stability fixes from his work
 * ramzinouri's [snes9x_3ds fork](https://github.com/ramzinouri/snes9x_3ds) inspired the image border/background and theme support
 * willjow's [snes9x_3ds fork](https://github.com/willjow/snes9x_3ds) revived the project after development had gone quiet
