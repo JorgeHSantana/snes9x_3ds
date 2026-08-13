@@ -598,6 +598,11 @@ void gpu3dsPrepareSnesScreenForNextFrame() {
         gpu3dsClearTexture(&GPU3DS.textures[SNES_MAIN], 0);
         gpu3dsClearTexture(&GPU3DS.textures[SNES_SUB], 0);
         gpu3dsClearTexture(&GPU3DS.textures[SNES_DEPTH], 0);
+        // the retained right-eye texture keeps a stale frame at the OLD
+        // render width across Enhanced Resolution changes; the composite
+        // then shows it misscaled on the right eye (issue #9)
+        if (GPU3DS.stereoTexAvailable)
+            gpu3dsClearTexture(&GPU3DS.textures[SNES_MAIN_RIGHT], 0);
         GPU3DSExt.render2x.dirty = false;
     }
 }
