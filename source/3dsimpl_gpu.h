@@ -201,6 +201,13 @@ typedef struct
 
 extern SGPU3DSExtended GPU3DSExt;
 
+// Per-layer parallax scale: doubled under Enhanced Resolution, where the
+// 512px render rasterizes shifts at half-SNES-pixel granularity - stronger
+// depth AND finer slider steps (4d+1 levels vs d+1 at native). At native
+// 256px any raised scale showed artifacts on hardware, so it stays 1.0
+// there. Edge crop and the pause overlay use the same scale.
+#define STEREO_PARALLAX_SCALE (GPU3DSExt.render2x.enabled ? 2.0f : 1.0f)
+
 void gpu3dsDeallocLayers();
 void gpu3dsResetLayerSectionLimits(SLayerList *list);
 void gpu3dsInitLayers();
