@@ -89,6 +89,17 @@ Broad, risky, hard-to-review PRs may be closed or split into smaller changes. Pr
 
 AI note: I use AI assistants as part of my development workflow, including code review, debugging, planning, implementation and documentation. All changes are reviewed and adjusted by me before they are merged.
 
+## Experimental: Scene Profiles (per-screen 3D)
+
+The Scene Profiles feature (Settings -> 3D Stereoscopic Settings) can bind
+different 3D configurations to individual screens of a game (title, menus,
+gameplay), switching automatically as scenes change. **This is experimental**:
+scene detection relies on PPU register fingerprints and an optional WRAM
+watch byte, and games reusing the same video setup across screens may match
+the wrong profile. Multiple profiles can cause 3D instability in such cases -
+if that happens, use "Release This Screen" or delete the profiles to return
+to the single Default profile.
+
 ## Screenshots
 
 <table>

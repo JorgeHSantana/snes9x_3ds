@@ -6,6 +6,7 @@
 #include "3dssettings.h"
 #include "3dslog.h"
 #include "3dsui_notif.h"
+#include "3dsstereosig.h"
 #include "3dsgpu.h"
 #include "3dsmsu.h"
 #include "3dssound.h"
@@ -336,9 +337,8 @@ bool settings3dsStereoReleaseScreen()
     bool removed = false;
     for (int i = settings3DS.StereoBindsCount - 1; i >= 0; i--) {
         const S9xSettings3DS::SStereoBind *b = &settings3DS.StereoBinds[i];
-        bool hits = ((sig ^ b->Sig) & b->Mask) == 0 &&
-                    ((sig2 ^ b->Sig2) & b->Mask2) == 0 &&
-                    (b->WatchVal < 0 || b->WatchVal == watch);
+        bool hits = stereoSigBindMatches(sig, sig2, watch,
+            b->Sig, b->Mask, b->Sig2, b->Mask2, b->WatchVal);
         if (hits) {
             for (int j = i; j < settings3DS.StereoBindsCount - 1; j++)
                 settings3DS.StereoBinds[j] = settings3DS.StereoBinds[j + 1];
@@ -361,17 +361,7 @@ const char *settings3dsStereoActiveName()
     return "Default";
 }
 
-// per-byte mask: keep a register only if no bit of it flapped
-static u64 settings3dsCapMask(u64 orv, u64 andv)
-{
-    u64 mask = 0;
-    for (int i = 0; i < 8; i++) {
-        u64 byteMask = 0xFFULL << (i * 8);
-        if ((orv & byteMask) == (andv & byteMask))
-            mask |= byteMask;
-    }
-    return mask;
-}
+
 
 void settings3dsStereoApplyDefault()
 {
@@ -434,14 +424,13 @@ void settings3dsStereoFrameTick()
         }
         if (--s_capFrames == 0 && s_capProfile >= 0 &&
             s_capProfile < settings3DS.StereoProfilesCount) {
-            u64 mask = settings3dsCapMask(s_capOr, s_capAnd) & 0x00FFFFFFFFFFFFFFULL;
-            u64 mask2 = settings3dsCapMask(s_capOr2, s_capAnd2) & 0x00FFFFFFFFFFFFFFULL;
+            u64 mask = stereoSigCapMask(s_capOr, s_capAnd);
+            u64 mask2 = stereoSigCapMask(s_capOr2, s_capAnd2);
             // drop any bind this scene currently matches (re-bind semantics)
             for (int i = settings3DS.StereoBindsCount - 1; i >= 0; i--) {
                 const S9xSettings3DS::SStereoBind *b = &settings3DS.StereoBinds[i];
-                bool hits = ((s_capAnd ^ b->Sig) & b->Mask) == 0 &&
-                            ((s_capAnd2 ^ b->Sig2) & b->Mask2) == 0 &&
-                            (b->WatchVal < 0 || b->WatchVal == s_capWatch);
+                bool hits = stereoSigBindMatches(s_capAnd, s_capAnd2, s_capWatch,
+                    b->Sig, b->Mask, b->Sig2, b->Mask2, b->WatchVal);
                 if (hits) {
                     for (int j = i; j < settings3DS.StereoBindsCount - 1; j++)
                         settings3DS.StereoBinds[j] = settings3DS.StereoBinds[j + 1];
@@ -473,10 +462,10 @@ void settings3dsStereoFrameTick()
     int match = -1;
     for (int i = 0; i < settings3DS.StereoBindsCount; i++) {
         const S9xSettings3DS::SStereoBind *b = &settings3DS.StereoBinds[i];
-        if (((sig ^ b->Sig) & b->Mask) == 0 &&
-            ((sig2 ^ b->Sig2) & b->Mask2) == 0 &&
-            (b->WatchVal < 0 || settings3DS.StereoWatchAddr < 0 ||
-             Memory.RAM[settings3DS.StereoWatchAddr & 0x1FFFF] == (uint8)b->WatchVal) &&
+        int watch = settings3DS.StereoWatchAddr >= 0
+            ? Memory.RAM[settings3DS.StereoWatchAddr & 0x1FFFF] : -1;
+        if (stereoSigBindMatches(sig, sig2, b->WatchVal < 0 ? -1 : watch,
+                b->Sig, b->Mask, b->Sig2, b->Mask2, b->WatchVal) &&
             b->ProfileIdx < settings3DS.StereoProfilesCount) {
             match = b->ProfileIdx;
             break;

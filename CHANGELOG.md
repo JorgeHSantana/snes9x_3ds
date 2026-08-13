@@ -1,6 +1,37 @@
 # Changelog
 Notable changes to this project will be documented in this file.
 
+## Unreleased (nightly)
+
+### Features
+* **Scene Profiles (experimental)**: per-screen 3D configurations that switch
+  automatically. Capture a screen from the pause menu ("Capture This Screen"),
+  and the emulator learns a PPU-register fingerprint (auto-masking blinking
+  bits) plus an optional WRAM game-mode byte (`WATCH=` in the .3d file) to
+  recognize it. Profiles are managed in-menu (create as a copy, rename via the
+  system keyboard, delete, release a screen) and persist in the shareable
+  `.3d` files. Switches use a 30-frame hysteresis and lerp the depths.
+* Edge Cleanup option (Off / Trim / Zoom) hides the screen-edge columns
+  disturbed by the per-layer parallax.
+* Configurable focus zone (Focus Back/Front): layers inside stay untouched;
+  Fade/Haze/Blur grow with the distance beyond it. Blur also applies to
+  foreground layers (depth of field).
+* Enhanced Resolution now doubles the parallax scale and refines the slider
+  response (half-SNES-pixel steps); blur aura scales 1.875x there.
+
+### Fixes
+* Ghost blur no longer blacks out layers in color-math scenes (dialog boxes):
+  ghost passes preserve the destination alpha used as the color-math mask.
+* The right-eye texture is cleared on Enhanced Resolution changes (stale
+  frame showed misscaled on the right eye after toggling the mode).
+* Pause overlay and in-game notifications draw one layer in front of the
+  highest configured pop-out, and the IOD base returned to the Standard 3px
+  (menu/splash 3D was unintentionally running at maximum strength).
+* Directory cache self-validates after 15 minutes, so ROMs/MSU packs copied
+  while the console was off appear without a manual rescan.
+* Menu spacing/color cleanup across all tabs; stereo settings reorganized
+  (Scene Profiles, Layers, Depth, Focus, Effects).
+
 ## v1.61
 
 ### Features
