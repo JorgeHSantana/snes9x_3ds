@@ -411,10 +411,10 @@ static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id)
     float blur = (GPU3DS.stereoBlur / 8.0f) * excessIn * slider;
     if (blur > 0.02f) {
         s_atmosGhostAlpha = 0.25f + 0.25f * blur;
-        // under Enhanced Resolution the aura grows 1.75x (not the full 2x
+        // under Enhanced Resolution the aura grows 1.875x (not the full 2x
         // of the parallax scale) to track the stronger depth there
         s_atmosGhostOffset = (1.0f + 2.0f * blur)
-            * (GPU3DSExt.render2x.enabled ? 1.75f : 1.0f);
+            * (GPU3DSExt.render2x.enabled ? 1.875f : 1.0f);
     } else {
         s_atmosGhostAlpha = 0.0f;
         s_atmosGhostOffset = 0.0f;
