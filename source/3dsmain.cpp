@@ -1022,6 +1022,30 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     AddMenuDisabledOption(items, ""_s);
 
+    AddMenuHeader1(items, "ADVANCED SETTINGS"_s);
+
+    // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
+    if (settings3DS.PaletteFix == 1)
+    {
+        AddMenuHeader2(items, "Reduce Layer Draws on Palette Changes"_s);
+
+        static const char *deferBgNames[3] = { "  BG1", "  BG2", "  BG3" };
+        for (int bg = LAYER_BG0; bg <= LAYER_BG2; bg++) {
+            AddMenuCheckbox(items, deferBgNames[bg], (settings3DS.PaletteDeferBgMask >> bg) & 1,
+                [bg]( int val ) {
+                    u8 newMask = val
+                        ? (settings3DS.PaletteDeferBgMask | (1 << bg))
+                        : (settings3DS.PaletteDeferBgMask & ~(1 << bg));
+                    CheckAndUpdate( settings3DS.PaletteDeferBgMask, newMask );
+                });
+        }
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Can speed up games like Top Gear that change colors"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  mid-frame by drawing a layer fewer times."_s, ""_s);
+
+        AddMenuDisabledOption(items, ""_s);
+    }
+    AddMenuDisabledOption(items, ""_s);
+
     AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
     items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s, ""_s);
     AddMenuDisabledOption(items, ""_s);
@@ -1186,26 +1210,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             []( int val ) { CheckAndUpdate( *stereoEditField(5), val ); });
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Hides the screen-edge columns disturbed by the 3D shifts."_s, ""_s);
     }
-    // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
-    if (settings3DS.PaletteFix == 1)
-    {
-        AddMenuHeader2(items, "Reduce Layer Draws on Palette Changes"_s);
 
-        static const char *deferBgNames[3] = { "  BG1", "  BG2", "  BG3" };
-        for (int bg = LAYER_BG0; bg <= LAYER_BG2; bg++) {
-            AddMenuCheckbox(items, deferBgNames[bg], (settings3DS.PaletteDeferBgMask >> bg) & 1,
-                [bg]( int val ) {
-                    u8 newMask = val
-                        ? (settings3DS.PaletteDeferBgMask | (1 << bg))
-                        : (settings3DS.PaletteDeferBgMask & ~(1 << bg));
-                    CheckAndUpdate( settings3DS.PaletteDeferBgMask, newMask );
-                });
-        }
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Can speed up games like Top Gear that change colors"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  mid-frame by drawing a layer fewer times."_s, ""_s);
-
-        AddMenuDisabledOption(items, ""_s);
-    }
 
 
 
