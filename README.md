@@ -13,6 +13,8 @@ Feedback and bug reports are welcome.
 ## Main features
 
 * MSU-1 support: CD-quality music packs and FMV playback, with per-game MSU-1 volume and video FPS settings
+* Compressed MSU-1 audio: `.flac` tracks play when the raw `.pcm` is absent (roughly half the SD space, still lossless)
+* MSU-1 pack folders show up as single game entries in the file browser; ROMs also load from `.zip`
 * Improved rendering for HDMA-heavy games and mosaic effects
 * SNES refresh rate matching (60.1 Hz for NTSC, 50 Hz for PAL)
 * NDSP audio output
@@ -28,7 +30,7 @@ Feedback and bug reports are welcome.
 * Install via [Universal Updater](https://universal-team.net/projects/universal-updater.html), or install the latest `.cia` from [Releases](https://github.com/JorgeHSantana/snes9x_3ds/releases).
 * Optional: download asset packs from [snes9x_3ds-assets releases](https://github.com/matbo87/snes9x_3ds-assets/releases).
 
-ROMs can be stored in any folder. ZIP files are not supported.
+ROMs can be stored in any folder.
 
 Supported ROM formats:
 * `.smc`
@@ -36,6 +38,7 @@ Supported ROM formats:
 * `.fig`
 * `.bs`
 * `.bsx`
+* `.zip` (the first ROM inside is loaded; saves are keyed by the zip's name)
 
 Configs, saves and imported assets are stored in `sd:/3ds/snes9x_3ds`.
 
@@ -164,6 +167,32 @@ to the single Default profile.
 
 * Cheat support is only lightly tested and some codes may not work correctly
 * Use cheats with caution: broken codes can affect gameplay or damage save data
+
+### Converting MSU-1 packs to FLAC
+
+MSU-1 packs mandate raw PCM (~10MB per minute of music), so full packs reach
+hundreds of MB. This port also plays `.flac` audio tracks: for each track it
+first tries `<game>-N.pcm`, then `<game>-N.flac`. FLAC is lossless (identical
+audio) at roughly half the size, and the loop point is preserved through a
+`MSU1_LOOPPOINT` metadata tag read from the file.
+
+Convert a pack on your PC with ffmpeg (bash):
+
+```bash
+for f in *.pcm; do
+  loop=$(python3 -c "import struct,sys;print(struct.unpack('<I',open(sys.argv[1],'rb').read(8)[4:8])[0])" "$f")
+  tail -c +9 "$f" | ffmpeg -f s16le -ar 44100 -ac 2 -i - \
+    -metadata MSU1_LOOPPOINT=$loop "${f%.pcm}.flac"
+done
+```
+
+Then delete the `.pcm` files from the SD card (keep the `.msu` data file —
+video/data tracks must stay raw). Notes:
+
+* Converted packs are specific to this port; SD2SNES and other emulators
+  still need the raw `.pcm` files.
+* Tracks must remain stereo 44.1kHz (the ffmpeg line above keeps them so).
+* A `.flac` without the loop tag loops from the beginning of the track.
 
 ### Satellaview (BS-X) games
 

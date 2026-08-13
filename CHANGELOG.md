@@ -4,6 +4,23 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
+* **Load ROMs from .zip archives**: the browser lists `.zip` files and the
+  loader decompresses the first ROM inside (macOS junk entries are skipped).
+  Saves and configs are keyed by the zip's basename, so they are shared with
+  a loose copy of the same game. MSU-1 packs must stay unzipped.
+* **Compressed MSU-1 audio (FLAC)**: when `<base>-N.pcm` is missing, the
+  emulator plays `<base>-N.flac` instead (lossless, ~half the size, decoded
+  in real time). The loop point comes from a `MSU1_LOOPPOINT=<samples>`
+  metadata tag - see the README for the one-line ffmpeg conversion.
+* **MSU-1 pack folders are listed as games**: a subfolder holding exactly one
+  ROM plus MSU-1 files now appears in its parent directory as a single entry
+  named after the folder, booting the ROM directly (no extra navigation hop).
+* **Background directory refresh**: cached folders still open instantly, but
+  a background sweep now spots content copied to the SD afterwards and
+  refreshes the on-screen list automatically - no manual rescan needed.
+  (Cache format bumped; the first visit after updating rescans once.)
+* Opening the menu now points "Editing Profile" at the scene profile the
+  current screen matches, instead of the last profile edited.
 * **Scene Profiles (experimental)**: per-screen 3D configurations that switch
   automatically. Capture a screen from the pause menu ("Capture This Screen"),
   and the emulator learns a PPU-register fingerprint (auto-masking blinking
