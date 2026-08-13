@@ -1022,11 +1022,11 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     AddMenuDisabledOption(items, ""_s);
 
-    AddMenuHeader1(items, "ADVANCED SETTINGS"_s);
-
     // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
     if (settings3DS.PaletteFix == 1)
     {
+        AddMenuHeader1(items, "ADVANCED SETTINGS"_s);
+
         AddMenuHeader2(items, "Reduce Layer Draws on Palette Changes"_s);
 
         static const char *deferBgNames[3] = { "  BG1", "  BG2", "  BG3" };
@@ -1044,7 +1044,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
         AddMenuDisabledOption(items, ""_s);
     }
-    AddMenuDisabledOption(items, ""_s);
 
     AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
     items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s, ""_s);
