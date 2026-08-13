@@ -1069,21 +1069,19 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             });
 
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
-            SMenuTab dialogTab; bool isDialog = false;
-            if (s_stereoEditIdx < 0) {
-                menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Capture This Screen",
-                    "Select or create a profile first - captures bind the\ncurrent screen to the profile being edited.",
-                    Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
-                menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
-                return;
+            if (s_stereoEditIdx < 0) return;
+            S9xSettings3DS::SStereoProfile *p = &settings3DS.StereoProfiles[s_stereoEditIdx];
+            SwkbdState swkbd;
+            char buf[16];
+            swkbdInit(&swkbd, SWKBD_TYPE_QWERTY, 1, sizeof(buf) - 1);
+            swkbdSetInitialText(&swkbd, p->Name);
+            swkbdSetHintText(&swkbd, "Profile name");
+            if (swkbdInputText(&swkbd, buf, sizeof(buf)) == SWKBD_BUTTON_CONFIRM && buf[0] != '\0') {
+                snprintf(p->Name, sizeof(p->Name), "%s", buf);
+                settings3DS.isDirty = true;
+                menu3dsMarkTabDirty(TAB_SETTINGS);
             }
-            settings3dsStereoArmCapture(s_stereoEditIdx);
-            menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Capture This Screen",
-                "After resuming, keep the game on this screen for ~5\nseconds. The screen will then switch to this profile\nautomatically whenever it appears.",
-                Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
-            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
-        }, MenuItemType::Action, "  Capture This Screen"_s, ""_s);
-
+        }, MenuItemType::Action, "  Rename Profile"_s, ""_s);
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             if (s_stereoEditIdx < 0) return;
             SMenuTab dialogTab; bool isDialog = false;
@@ -1107,7 +1105,21 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             settings3DS.isDirty = true;
             menu3dsMarkTabDirty(TAB_SETTINGS);
         }, MenuItemType::Action, "  Delete Profile"_s, ""_s);
-
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+            if (s_stereoEditIdx < 0) {
+                menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Capture This Screen",
+                    "Select or create a profile first - captures bind the\ncurrent screen to the profile being edited.",
+                    Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+                menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+                return;
+            }
+            settings3dsStereoArmCapture(s_stereoEditIdx);
+            menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Capture This Screen",
+                "After resuming, keep the game on this screen for ~5\nseconds. The screen will then switch to this profile\nautomatically whenever it appears.",
+                Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+        }, MenuItemType::Action, "  Capture This Screen"_s, ""_s);
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             bool removed = settings3dsStereoReleaseScreen();
@@ -1119,20 +1131,9 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             menu3dsMarkTabDirty(TAB_SETTINGS);
         }, MenuItemType::Action, "  Release This Screen"_s, ""_s);
 
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
-            if (s_stereoEditIdx < 0) return;
-            S9xSettings3DS::SStereoProfile *p = &settings3DS.StereoProfiles[s_stereoEditIdx];
-            SwkbdState swkbd;
-            char buf[16];
-            swkbdInit(&swkbd, SWKBD_TYPE_QWERTY, 1, sizeof(buf) - 1);
-            swkbdSetInitialText(&swkbd, p->Name);
-            swkbdSetHintText(&swkbd, "Profile name");
-            if (swkbdInputText(&swkbd, buf, sizeof(buf)) == SWKBD_BUTTON_CONFIRM && buf[0] != '\0') {
-                snprintf(p->Name, sizeof(p->Name), "%s", buf);
-                settings3DS.isDirty = true;
-                menu3dsMarkTabDirty(TAB_SETTINGS);
-            }
-        }, MenuItemType::Action, "  Rename Profile"_s, ""_s);
+
+
+
 
         {
             char matchLine[48];
