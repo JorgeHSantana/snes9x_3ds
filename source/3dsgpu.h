@@ -306,9 +306,11 @@ typedef struct
     // zone's back edge only (distance cues). Relative model: the layer
     // farthest outside receives the full gauge strength
     // (stereoMaxExcess for blur, stereoMaxBackExcess for fade/haze).
-    int                         stereoFade;
-    int                         stereoHaze;
-    int                         stereoBlur;
+    // float so profile switches can interpolate them (they lerp along
+    // with the depths; only Edge Cleanup's mode snaps)
+    float                       stereoFade;
+    float                       stereoHaze;
+    float                       stereoBlur;
     float                       stereoFocusBack;
     float                       stereoFocusFront;
     float                       stereoMaxExcess;

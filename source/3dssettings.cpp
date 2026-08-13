@@ -253,10 +253,10 @@ void settings3dsUpdate(bool includeGameSettings)
 // computes every derived GPU3DS stereo field from a (possibly lerped)
 // set of float depths + effect/zone values
 static void settings3dsStereoApplyValues(const float depths[5],
-    int fade, int haze, int blur, int focusB, int focusF, int edgeMode)
+    float fade, float haze, float blur, float focusB, float focusF, int edgeMode)
 {
-    float focusBack = (float)focusB;
-    float focusFront = (float)focusF;
+    float focusBack = focusB;
+    float focusFront = focusF;
     float maxExcess = 0.0f, maxBackExcess = 0.0f, maxPop = 0.0f, maxAbs = 0.0f;
 
     for (int i = 0; i < 8; i++) {
@@ -373,8 +373,8 @@ void settings3dsStereoApplyDefault()
 
     float depths[5];
     for (int i = 0; i < 5; i++) depths[i] = (float)p->Depth[i];
-    settings3dsStereoApplyValues(depths, p->Fade, p->Haze, p->Blur,
-        p->FocusBack, p->FocusFront, p->EdgeMode);
+    settings3dsStereoApplyValues(depths, (float)p->Fade, (float)p->Haze,
+        (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront, p->EdgeMode);
 }
 
 // called once per emulated frame while in-game
@@ -389,6 +389,7 @@ void settings3dsStereoFrameTick()
     static int s_stableFrames = 0;
     static int s_lerpLeft = 0;
     static float s_fromDepths[5];
+    static float s_fromFx[5];   // fade, haze, blur, focusBack, focusFront
 
     u8 *rr = Memory.FillRAM;
     u64 sig = (u64)rr[0x2105]
@@ -477,6 +478,11 @@ void settings3dsStereoFrameTick()
         if (match == s_pendingIdx) {
             if (++s_stableFrames >= HYSTERESIS_FRAMES) {
                 for (int i = 0; i < 5; i++) s_fromDepths[i] = GPU3DS.stereoLayerDepth[i];
+                s_fromFx[0] = GPU3DS.stereoFade;
+                s_fromFx[1] = GPU3DS.stereoHaze;
+                s_fromFx[2] = GPU3DS.stereoBlur;
+                s_fromFx[3] = GPU3DS.stereoFocusBack;
+                s_fromFx[4] = GPU3DS.stereoFocusFront;
                 s_stereoActiveIdx = match;
                 s_lerpLeft = LERP_FRAMES;
                 settings3DS.menuTabDirty[1] = true;   // TAB_SETTINGS: refresh 'This screen matches'
@@ -504,8 +510,12 @@ void settings3dsStereoFrameTick()
         float depths[5];
         for (int i = 0; i < 5; i++)
             depths[i] = s_fromDepths[i] + ((float)p->Depth[i] - s_fromDepths[i]) * t;
-        settings3dsStereoApplyValues(depths, p->Fade, p->Haze, p->Blur,
-            p->FocusBack, p->FocusFront, p->EdgeMode);
+        float fx[5] = { (float)p->Fade, (float)p->Haze, (float)p->Blur,
+                        (float)p->FocusBack, (float)p->FocusFront };
+        for (int i = 0; i < 5; i++)
+            fx[i] = s_fromFx[i] + (fx[i] - s_fromFx[i]) * t;
+        settings3dsStereoApplyValues(depths, fx[0], fx[1], fx[2], fx[3], fx[4],
+            p->EdgeMode);
     }
 }
 
