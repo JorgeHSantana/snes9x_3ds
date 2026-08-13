@@ -54,6 +54,8 @@ struct Msu1State {
     uint32_t rb_cache_pos;       // file offset of rb_cache[0]
     uint32_t rb_cache_len;       // valid bytes in rb_cache (0 = empty)
     FILE*    audio_file;         // owned by this struct; nullptr when absent
+    void*    audio_flac;         // drflac* when the track is a .flac fallback
+                                 // (exactly one of audio_file/audio_flac is set)
     char     base_path[MSU1_MAX_BASE_PATH];
     void     (*volume_changed_cb)(void);   // optional; installed by the platform bridge
 };
@@ -64,6 +66,7 @@ extern Msu1State MSU1;
 bool msu1_parse_pcm_header(FILE* file, Msu1PcmHeader& out);
 bool msu1_build_base_path(const char* rom_path, char* out, size_t out_size);
 bool msu1_build_track_path(const char* base_path, uint16_t track, char* out, size_t out_size);
+bool msu1_build_track_path_ext(const char* base_path, uint16_t track, const char* ext, char* out, size_t out_size);
 bool msu1_is_port_address(uint16_t address);
 bool msu1_is_dma_source(uint8_t a_bank, uint16_t a_address, bool a_fixed);
 

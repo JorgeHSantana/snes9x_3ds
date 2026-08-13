@@ -38,12 +38,31 @@ bool msu1_build_base_path(const char* rom_path, char* out, size_t out_size)
     return true;
 }
 
+static void msu1_audio_close(Msu1State& state);
+
+// FLAC fallback decoder (issue #4): when <base>-N.pcm is missing, the port
+// looks for <base>-N.flac and decodes it in real time where the raw fread
+// used to happen. Lossless + sample-exact seeks keep MSU loop semantics.
+#define DR_FLAC_IMPLEMENTATION
+#define DR_FLAC_NO_OGG
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include "../vendor/dr_flac.h"
+#pragma GCC diagnostic pop
+
+bool msu1_build_track_path_ext(const char* base_path, uint16_t track,
+                               const char* ext, char* out, size_t out_size)
+{
+    if (base_path == nullptr || out == nullptr || out_size == 0) { return false; }
+    int written = snprintf(out, out_size, "%s-%u%s", base_path, (unsigned)track, ext);
+    return written > 0 && (size_t)written < out_size;
+}
+
 bool msu1_build_track_path(const char* base_path, uint16_t track,
                            char* out, size_t out_size)
 {
-    if (base_path == nullptr || out == nullptr || out_size == 0) { return false; }
-    int written = snprintf(out, out_size, "%s-%u.pcm", base_path, (unsigned)track);
-    return written > 0 && (size_t)written < out_size;
+    return msu1_build_track_path_ext(base_path, track, ".pcm", out, out_size);
 }
 
 bool msu1_parse_pcm_header(FILE* file, Msu1PcmHeader& out)
@@ -123,6 +142,7 @@ void msu1_shutdown(Msu1State& state)
 {
     if (state.data_file != nullptr)  { fclose(state.data_file); }
     if (state.audio_file != nullptr) { fclose(state.audio_file); }
+    if (state.audio_flac != nullptr) { drflac_close((drflac*)state.audio_flac); }
     void (*saved_cb)(void) = state.volume_changed_cb;   // survives ROM switches
     state = Msu1State{};
     state.volume_changed_cb = saved_cb;
@@ -130,7 +150,7 @@ void msu1_shutdown(Msu1State& state)
 
 void msu1_soft_reset(Msu1State& state)
 {
-    if (state.audio_file != nullptr) { fclose(state.audio_file); state.audio_file = nullptr; }
+    msu1_audio_close(state);
     state.status           = state.enabled ? MSU1_REVISION : 0;
     state.current_track    = 0;
     state.track_latch      = 0;
@@ -199,9 +219,75 @@ void msu1_diag(const char* fmt, ...)
     g_log_hook(buf);
 }
 
-static void msu1_load_track(Msu1State& state, uint16_t track)
+// --- audio stream backend (raw pcm FILE* or dr_flac decoder) ---------------
+
+static void msu1_audio_close(Msu1State& state)
 {
     if (state.audio_file != nullptr) { fclose(state.audio_file); state.audio_file = nullptr; }
+    if (state.audio_flac != nullptr) { drflac_close((drflac*)state.audio_flac); state.audio_flac = nullptr; }
+}
+
+static bool msu1_audio_ready(const Msu1State& state)
+{
+    return state.audio_file != nullptr || state.audio_flac != nullptr;
+}
+
+// position the stream at 'byte_pos' decoded bytes past the (virtual) header
+static bool msu1_audio_seek(Msu1State& state, uint32_t byte_pos)
+{
+    if (state.audio_flac != nullptr) {
+        return drflac_seek_to_pcm_frame((drflac*)state.audio_flac,
+                                        byte_pos / MSU1_BYTES_PER_SAMPLE) != DRFLAC_FALSE;
+    }
+    if (state.audio_file == nullptr) { return false; }
+    return fseek(state.audio_file,
+                 (long)(MSU1_PCM_HEADER_SIZE + byte_pos), SEEK_SET) == 0;
+}
+
+static size_t msu1_audio_read_bytes(Msu1State& state, uint8_t* dst, uint32_t bytes)
+{
+    if (state.audio_flac != nullptr) {
+        drflac_uint64 frames = bytes / MSU1_BYTES_PER_SAMPLE;
+        if (frames == 0) { return 0; }
+        drflac_uint64 got = drflac_read_pcm_frames_s16((drflac*)state.audio_flac,
+                                                       frames, (drflac_int16*)dst);
+        return (size_t)(got * MSU1_BYTES_PER_SAMPLE);
+    }
+    if (state.audio_file == nullptr) { return 0; }
+    return fread(dst, 1, bytes, state.audio_file);
+}
+
+// FLAC open: total frame count sizes the stream; the loop point comes from a
+// vorbis comment MSU1_LOOPPOINT=<samples> (written by the pack converter),
+// matching the 8-byte header of the raw .pcm it replaces. Missing tag = 0.
+static void msu1_flac_meta(void* pUserData, drflac_metadata* pMetadata)
+{
+    if (pMetadata->type != DRFLAC_METADATA_BLOCK_TYPE_VORBIS_COMMENT) { return; }
+
+    uint32_t* loop_out = (uint32_t*)pUserData;
+    drflac_vorbis_comment_iterator it;
+    drflac_init_vorbis_comment_iterator(&it,
+        pMetadata->data.vorbis_comment.commentCount,
+        pMetadata->data.vorbis_comment.pComments);
+
+    drflac_uint32 len = 0;
+    const char* c;
+    while ((c = drflac_next_vorbis_comment(&it, &len)) != NULL) {
+        const char key[] = "MSU1_LOOPPOINT=";
+        const drflac_uint32 keyLen = sizeof(key) - 1;
+        if (len > keyLen && strncasecmp(c, key, keyLen) == 0) {
+            char value[16] = {};
+            drflac_uint32 vlen = len - keyLen;
+            if (vlen >= sizeof(value)) { vlen = sizeof(value) - 1; }
+            memcpy(value, c + keyLen, vlen);
+            *loop_out = (uint32_t)strtoul(value, NULL, 10);
+        }
+    }
+}
+
+static void msu1_load_track(Msu1State& state, uint16_t track)
+{
+    msu1_audio_close(state);
     state.status &= (uint8_t)~(MSU1_FLAG_AUDIO_PLAYING | MSU1_FLAG_AUDIO_REPEAT
                              | MSU1_FLAG_AUDIO_ERROR);
     state.current_track   = track;
@@ -217,8 +303,29 @@ static void msu1_load_track(Msu1State& state, uint16_t track)
     }
     FILE* f = fopen(path, "rb");
     if (f == nullptr) {
-        state.status |= MSU1_FLAG_AUDIO_ERROR;
-        msu1_diag("track %u: fopen failed: %s", (unsigned)track, path);
+        char flacPath[MSU1_MAX_BASE_PATH + 16];
+        uint32_t loop = 0;
+        drflac* fl = nullptr;
+        if (msu1_build_track_path_ext(state.base_path, track, ".flac",
+                                      flacPath, sizeof(flacPath))) {
+            fl = drflac_open_file_with_metadata(flacPath, msu1_flac_meta, &loop, NULL);
+        }
+        if (fl == nullptr) {
+            state.status |= MSU1_FLAG_AUDIO_ERROR;
+            msu1_diag("track %u: fopen failed: %s (no .flac fallback)", (unsigned)track, path);
+            return;
+        }
+        if (fl->channels != 2 || fl->sampleRate != MSU1_SAMPLE_RATE) {
+            drflac_close(fl);
+            state.status |= MSU1_FLAG_AUDIO_ERROR;
+            msu1_diag("track %u: flac must be stereo 44.1kHz: %s", (unsigned)track, flacPath);
+            return;
+        }
+        state.audio_flac       = fl;
+        state.audio_size       = (uint32_t)(fl->totalPCMFrameCount * MSU1_BYTES_PER_SAMPLE);
+        state.audio_loop_point = loop;
+        msu1_diag("track %u: flac loaded, %u bytes decoded, loop=%u", (unsigned)track,
+                 (unsigned)state.audio_size, (unsigned)state.audio_loop_point);
         return;
     }
     Msu1PcmHeader hdr = {};
@@ -355,7 +462,7 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
                          (unsigned)value, (unsigned)state.status);
                 return;
             }
-            if (state.audio_file == nullptr) {
+            if (!msu1_audio_ready(state)) {
                 msu1_diag("control write %02X DROPPED (no audio file)", (unsigned)value);
                 return;
             }
@@ -384,8 +491,7 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
                 && state.resume_pos <= state.audio_size) {
                 start_pos = state.resume_pos;
             }
-            if (fseek(state.audio_file,
-                      (long)(MSU1_PCM_HEADER_SIZE + start_pos), SEEK_SET) == 0) {
+            if (msu1_audio_seek(state, start_pos)) {
                 state.audio_play_pos = start_pos;
                 state.status |= MSU1_FLAG_AUDIO_PLAYING;
             }
@@ -398,7 +504,7 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
 uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
 {
     if (out == nullptr || max_bytes == 0) { return 0; }
-    if (!state.enabled || state.audio_file == nullptr) { return 0; }
+    if (!state.enabled || !msu1_audio_ready(state)) { return 0; }
     if ((state.status & MSU1_FLAG_AUDIO_PLAYING) == 0) { return 0; }
 
     uint32_t written = 0;
@@ -412,8 +518,7 @@ uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
                 }
                 uint32_t loop_bytes = state.audio_loop_point * MSU1_BYTES_PER_SAMPLE;
                 if (loop_bytes >= state.audio_size) { loop_bytes = 0; }   // defensive clamp
-                if (fseek(state.audio_file,
-                          (long)(MSU1_PCM_HEADER_SIZE + loop_bytes), SEEK_SET) != 0) {
+                if (!msu1_audio_seek(state, loop_bytes)) {
                     state.status &= (uint8_t)~MSU1_FLAG_AUDIO_PLAYING;
                     break;
                 }
@@ -426,15 +531,14 @@ uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
         }
         uint32_t chunk = max_bytes - written;
         if (chunk > remaining_in_track) { chunk = remaining_in_track; }
-        size_t got = fread(out + written, 1, chunk, state.audio_file);
+        size_t got = msu1_audio_read_bytes(state, out + written, chunk);
         if (got == 0) {
             // Transient read failure (SD latency spike / hiccup): keep the
             // track alive, resync the stream, and let the caller pad silence.
             // Only a persistent failure stops playback.
             state.audio_read_stalls++;
-            clearerr(state.audio_file);
-            fseek(state.audio_file,
-                  (long)(MSU1_PCM_HEADER_SIZE + state.audio_play_pos), SEEK_SET);
+            if (state.audio_file != nullptr) { clearerr(state.audio_file); }
+            msu1_audio_seek(state, state.audio_play_pos);
             if (state.audio_read_stalls == 1) {
                 msu1_diag("track %u: audio read stall at %u/%u",
                           (unsigned)state.current_track,
@@ -487,8 +591,7 @@ static Msu1Result msu1_restore_locked(Msu1State& state, const Msu1Snapshot& snap
         return Msu1Result::FileMissing;
     }
     if (snap.audio_play_pos <= state.audio_size
-        && fseek(state.audio_file,
-                 (long)(MSU1_PCM_HEADER_SIZE + snap.audio_play_pos), SEEK_SET) == 0) {
+        && msu1_audio_seek(state, snap.audio_play_pos)) {
         state.audio_play_pos = snap.audio_play_pos;
         state.status |= (uint8_t)(snap.status
                         & (MSU1_FLAG_AUDIO_PLAYING | MSU1_FLAG_AUDIO_REPEAT));
