@@ -102,7 +102,9 @@ void menu3dsDrawSplash(float fade = 1.0f)
     if (settings3DS.isRomLoaded)
         return;
 
-    float iod = gpu3dsGetIOD();
+    // the splash layers use the raw eye offset, which reads too strong at
+    // full slider - run its 3D at half depth
+    float iod = gpu3dsGetIOD() * 0.5f;
     bool renderRightEye = iod != 0;
 
     GSPGPU_FramebufferFormat gpuBufFmt = (GSPGPU_FramebufferFormat)DISPLAY_TRANSFER_FMT;
