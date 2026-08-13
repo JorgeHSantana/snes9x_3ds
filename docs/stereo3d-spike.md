@@ -69,3 +69,14 @@ two signs in 3dsimpl.cpp pushes the scene INTO the screen instead), maybe
 scale per Intensity3D, and evaluate the shifted-edge artifact at the
 viewport borders. Azahar preview knobs: qt-config.ini factor_3d=0..100,
 render_3d=1 (side-by-side).
+
+## Hardware validation - Old 3DS (2026-08-13)
+
+Tested on a real Old 3DS: the full stereo pipeline (alternate-eye layer
+pass, retained per-eye textures, dual composite) plus the per-scene
+profile matcher run at full speed - "funciona muito bem" (Jorge).
+The matcher itself is negligible by design (~15 byte reads + a few
+64-bit compares per frame, log writes only on signature change), and
+profile switches only touch the values the stereo pipeline already
+consumes. This confirms the feature set is not New-3DS-only: the 804MHz
+boost is not required for stereo 3D or scene profiles.
