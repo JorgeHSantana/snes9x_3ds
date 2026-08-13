@@ -49,6 +49,9 @@
 	GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO))
 
 #define IOD_MAX_PIXELS 8.0f
+// scales every layer's parallax (issue #22): stronger effect and more
+// 1px slider steps per depth; edge crop and the pause overlay follow it
+#define STEREO_PARALLAX_SCALE 1.0f
 
 #define STENCIL_TEST_DISABLED 16
 #define STENCIL_TEST_ENABLED_WINDOWING_DISABLED 1
