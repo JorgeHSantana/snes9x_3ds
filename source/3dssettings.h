@@ -294,12 +294,17 @@ typedef struct {
     struct SStereoBind {
         u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C
         u64  Mask;         // per-byte compare mask (00 byte = ignore that register)
+        u64  Sig2;         // packed VRAM bases: b0=2101 b1..b6=2107..210C
+        u64  Mask2;
+        int  WatchVal;     // expected WRAM watch byte (-1 = not used)
         int  ProfileIdx;
     };
     SStereoProfile      StereoProfiles[STEREO_PROFILES_MAX];
     int                 StereoProfilesCount;
     SStereoBind         StereoBinds[STEREO_BINDS_MAX];
     int                 StereoBindsCount;
+    int                 StereoWatchAddr;   // WRAM offset of the game-mode byte
+                                           // (WATCH= in the .3d); -1 = none
 
     bool                isNew3DS;
     bool                isRomFsLoaded;

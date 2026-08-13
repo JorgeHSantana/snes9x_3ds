@@ -323,6 +323,7 @@ void settings3dsStereoFrameTick()
     const int LERP_FRAMES = 20;
 
     static u64 s_lastSig = ~0ULL;
+    static u64 s_lastSig2 = ~0ULL;
     static int s_pendingIdx = -2;
     static int s_stableFrames = 0;
     static int s_lerpLeft = 0;
@@ -333,18 +334,31 @@ void settings3dsStereoFrameTick()
         | ((u64)rr[0x212C] << 8)  | ((u64)rr[0x212D] << 16)
         | ((u64)rr[0x2130] << 24) | ((u64)rr[0x2131] << 32)
         | ((u64)rr[0x2106] << 40) | ((u64)rr[0x420C] << 48);
+    // VRAM base registers: scene-static and near-unique per scene, the
+    // discriminator when the mode/layer tuple collides (e.g. MMX3 title
+    // vs stage start)
+    u64 sig2 = (u64)rr[0x2101]
+        | ((u64)rr[0x2107] << 8)  | ((u64)rr[0x2108] << 16)
+        | ((u64)rr[0x2109] << 24) | ((u64)rr[0x210A] << 32)
+        | ((u64)rr[0x210B] << 40) | ((u64)rr[0x210C] << 48);
 
-    if (sig != s_lastSig) {
-        log3dsWrite("[sig] 2105=%02X TM=%02X TS=%02X 2130=%02X 2131=%02X 2106=%02X 420C=%02X",
-            rr[0x2105], rr[0x212C], rr[0x212D], rr[0x2130], rr[0x2131], rr[0x2106], rr[0x420C]);
+    if ((sig ^ s_lastSig) | (sig2 ^ s_lastSig2)) {
+        log3dsWrite("[sig] 2105=%02X TM=%02X TS=%02X 2130=%02X 2131=%02X 2106=%02X 420C=%02X | 2101=%02X 2107=%02X 2108=%02X 2109=%02X 210A=%02X 210B=%02X 210C=%02X",
+            rr[0x2105], rr[0x212C], rr[0x212D], rr[0x2130], rr[0x2131], rr[0x2106], rr[0x420C],
+            rr[0x2101], rr[0x2107], rr[0x2108], rr[0x2109], rr[0x210A], rr[0x210B], rr[0x210C]);
         s_lastSig = sig;
+        s_lastSig2 = sig2;
     }
 
     // match against the binds (first hit wins); no hit -> default (-1)
     int match = -1;
     for (int i = 0; i < settings3DS.StereoBindsCount; i++) {
         const S9xSettings3DS::SStereoBind *b = &settings3DS.StereoBinds[i];
-        if (((sig ^ b->Sig) & b->Mask) == 0 && b->ProfileIdx < settings3DS.StereoProfilesCount) {
+        if (((sig ^ b->Sig) & b->Mask) == 0 &&
+            ((sig2 ^ b->Sig2) & b->Mask2) == 0 &&
+            (b->WatchVal < 0 || settings3DS.StereoWatchAddr < 0 ||
+             Memory.RAM[settings3DS.StereoWatchAddr & 0x1FFFF] == (uint8)b->WatchVal) &&
+            b->ProfileIdx < settings3DS.StereoProfilesCount) {
             match = b->ProfileIdx;
             break;
         }

@@ -1156,6 +1156,10 @@ bool impl3dsLoadState(const char* filename)
 	bool success = S9xLoadSnapshot(filename);
 	if (success)
 	{
+		// LOAD PROBE (#23): what does the register mirror hold right after restore?
+		log3dsWrite("[sig] post-load 2105=%02X TM=%02X TS=%02X 420C=%02X 2107=%02X 210B=%02X",
+			Memory.FillRAM[0x2105], Memory.FillRAM[0x212C], Memory.FillRAM[0x212D],
+			Memory.FillRAM[0x420C], Memory.FillRAM[0x2107], Memory.FillRAM[0x210B]);
 		gpu3dsInitializeMode7Vertexes();
 		msu3dsOnEvent(Msu1Event::SavestateLoaded);
 	}

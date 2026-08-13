@@ -1556,6 +1556,7 @@ void settingsLoadStereo3D()
     settings3DS.StereoEdgeMode = 2;   // Zoom
     settings3DS.StereoProfilesCount = 0;
     settings3DS.StereoBindsCount = 0;
+    settings3DS.StereoWatchAddr = -1;
 
     char path[PATH_MAX];
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
@@ -1595,13 +1596,23 @@ void settingsLoadStereo3D()
             }
             continue;
         }
-        if (sscanf(line, "BIND=%15[^:]:%llx:%llx", name, &sv, &mv) == 3) {
+        if (sscanf(line, "WATCH=%llx", &sv) == 1) {
+            settings3DS.StereoWatchAddr = (int)(sv & 0x1FFFF);
+            continue;
+        }
+        unsigned long long sv2 = 0, mv2 = 0;
+        int wv = -1;
+        int bn = sscanf(line, "BIND=%15[^:]:%llx:%llx:%llx:%llx:%x", name, &sv, &mv, &sv2, &mv2, &wv);
+        if (bn >= 3) {
             if (settings3DS.StereoBindsCount < STEREO_BINDS_MAX) {
                 for (int i = 0; i < settings3DS.StereoProfilesCount; i++) {
                     if (strcmp(settings3DS.StereoProfiles[i].Name, name) == 0) {
                         S9xSettings3DS::SStereoBind *b =
                             &settings3DS.StereoBinds[settings3DS.StereoBindsCount++];
-                        b->Sig = sv; b->Mask = mv; b->ProfileIdx = i;
+                        b->Sig = sv; b->Mask = mv;
+                        b->Sig2 = sv2; b->Mask2 = mv2;
+                        b->WatchVal = (bn >= 6 && wv <= 0xFF) ? wv : -1;
+                        b->ProfileIdx = i;
                         break;
                     }
                 }
@@ -1665,11 +1676,15 @@ void settingsSaveStereo3D()
         fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\n",
             p->FocusBack, p->FocusFront, p->EdgeMode);
     }
+    if (settings3DS.StereoWatchAddr >= 0)
+        fprintf(f, "WATCH=%X\n", settings3DS.StereoWatchAddr);
     for (int bi = 0; bi < settings3DS.StereoBindsCount; bi++) {
         const S9xSettings3DS::SStereoBind *b = &settings3DS.StereoBinds[bi];
-        fprintf(f, "BIND=%s:%016llX:%016llX\n",
+        fprintf(f, "BIND=%s:%016llX:%016llX:%016llX:%016llX:%02X\n",
             settings3DS.StereoProfiles[b->ProfileIdx].Name,
-            (unsigned long long)b->Sig, (unsigned long long)b->Mask);
+            (unsigned long long)b->Sig, (unsigned long long)b->Mask,
+            (unsigned long long)b->Sig2, (unsigned long long)b->Mask2,
+            b->WatchVal < 0 ? 0xFFFF : b->WatchVal);
     }
     fclose(f);
 }
