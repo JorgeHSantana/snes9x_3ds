@@ -10,9 +10,13 @@ Notable changes to this project will be documented in this file.
   bits) plus an optional WRAM game-mode byte (`WATCH=` in the .3d file) to
   recognize it. Profiles are managed in-menu (create as a copy, rename via the
   system keyboard, delete, release a screen) and persist in the shareable
-  `.3d` files. Switches use a 30-frame hysteresis and lerp the depths.
-* Edge Cleanup option (Off / Trim / Zoom) hides the screen-edge columns
-  disturbed by the per-layer parallax.
+  `.3d` files. Switches use a 30-frame hysteresis and smoothly interpolate
+  everything: layer depths, Fade/Haze/Blur and the focus zone glide from the
+  current values to the new profile's over 20 frames.
+* "+ New Profile" opens the system keyboard right away to name the new
+  profile (cancel keeps the automatic "Profile N" name).
+* Edge Cleanup option (Off / Trim / Zoom, default Trim) hides the
+  screen-edge columns disturbed by the per-layer parallax.
 * Configurable focus zone (Focus Back/Front): layers inside stay untouched;
   Fade/Haze/Blur grow with the distance beyond it. Blur also applies to
   foreground layers (depth of field).
@@ -20,6 +24,9 @@ Notable changes to this project will be documented in this file.
   response (half-SNES-pixel steps); blur aura scales 1.875x there.
 
 ### Fixes
+* The Smooth screen filter now also applies to the right-eye texture: with
+  3D enabled the right eye composited with unfiltered (nearest) sampling,
+  which read as "the filter turns off in 3D".
 * Ghost blur no longer blacks out layers in color-math scenes (dialog boxes):
   ghost passes preserve the destination alpha used as the color-math mask.
 * The right-eye texture is cleared on Enhanced Resolution changes (stale
