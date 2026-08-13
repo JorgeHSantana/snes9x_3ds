@@ -176,6 +176,10 @@ void menu3dsSelectRandomGameIndex(SMenuTab& currentTab, int min, int max, int la
 void menu3dsSetScreenDirty(bool gameScreen = true, bool secondScreen = false);
 
 void menu3dsMarkTabDirty(int tab);
+
+// called once per frame from the menu event loop while no dialog is open;
+// used to apply background directory-cache refreshes on the UI thread
+void menu3dsSetIdleCallback(void (*callback)(void));
 bool menu3dsHasDirtyTabs();
 
 std::string menu3dsGetRomInfo();

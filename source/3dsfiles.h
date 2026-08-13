@@ -10,13 +10,12 @@
 #include <vector>
 
 #include "3dsmenu.h"
-
-enum class FileEntryType { ParentDirectory, ChildDirectory, File };
+#include "3dsdirentry.h"
 
 #define PARENT_DIRECTORY_LABEL "  ... Parent Directory"
 
 #define DIRECTORY_CACHE_THRESHOLD 50
-#define DIRECTORY_CACHE_VERSION 1
+#define DIRECTORY_CACHE_VERSION 2
 
 #define CACHE_LINE_SIZE     32
 
@@ -25,27 +24,6 @@ enum class FileEntryType { ParentDirectory, ChildDirectory, File };
 #define MAX_IO_BUFFER_SIZE (512 * 256 * 4)
 
 #define MAX_THUMB_TYPES 3
-
-struct DirectoryEntry {
-    char Filename[NAME_MAX + 1];
-    FileEntryType Type;
-
-    DirectoryEntry() {
-        Filename[0] = '\0';
-        Type = FileEntryType::File;
-        
-    }
-
-    DirectoryEntry(const char* name, FileEntryType type) {
-        snprintf(Filename, sizeof(Filename), "%.*s",
-                 static_cast<int>(sizeof(Filename) - 1),
-                 name ? name : "");
-
-        Type = type;
-    }
-    
-    operator const char*() const { return Filename; }
-};
 
 // data buffer
 // holds the actual file content (png pixel data, save state data, etc.)
@@ -103,6 +81,15 @@ void file3dsSetRomNameMappings(const char* file);
 
 bool IsFileExists(const char * filename);
 bool file3dsIsValidFilename(const char* filename);
+
+// Background cache validation (issue #6): after a directory is served from
+// its cache, a worker thread rescans it; when the contents differ, the UI
+// thread picks the fresh list up here (returns false if nothing pending or
+// the user already navigated elsewhere).
+bool file3dsBgRefreshTake(std::vector<DirectoryEntry>& files);
+
+// display name for a VirtualFile entry (the pack folder name)
+void file3dsGetVirtualDisplayName(const DirectoryEntry& entry, char* output, size_t bufferSize);
 
 // full path for related files (saves, configs, etc.)
 void file3dsGetRelatedPath(const char* path, char* output, size_t bufferSize, const char* ext, const char* targetDir, bool trimmed = false);

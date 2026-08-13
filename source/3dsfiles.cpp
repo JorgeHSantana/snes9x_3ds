@@ -23,6 +23,8 @@ typedef struct {
     u64 createdAt;
 } DirCacheHeader;
 
+void file3dsShowCachingIndicator(std::vector<SMenuTab>& menuTabs);
+
 static std::unordered_map<std::string, std::string> romNameMappings;
 
 static char availableThumbnailTypes[MAX_THUMB_TYPES][32]; // boxart, title, gameplay
@@ -265,11 +267,11 @@ bool file3dsIsCurrentDirLoadedFromCache()
     return currentDirLoadedFromCache;
 }
 
-void file3dsGetCurrentDirCacheName(char* output, size_t bufferSize) {
+static void file3dsGetDirCacheNameFor(const char* dir, char* output, size_t bufferSize) {
     if (!output || bufferSize == 0) return;
 
     char escapedPath[PATH_MAX];
-    utils3dsGetSanitizedPath(currentDir, escapedPath, sizeof(escapedPath));
+    utils3dsGetSanitizedPath(dir, escapedPath, sizeof(escapedPath));
 
     // root path sanitizes to empty string —> no cache file for root
     if (escapedPath[0] == '\0') {
@@ -282,6 +284,10 @@ void file3dsGetCurrentDirCacheName(char* output, size_t bufferSize) {
         // no cache file for this edge case
         output[0] = '\0';
     }
+}
+
+void file3dsGetCurrentDirCacheName(char* output, size_t bufferSize) {
+    file3dsGetDirCacheNameFor(currentDir, output, bufferSize);
 }
 
 void file3dsGoUpOrDownDirectory(const DirectoryEntry& entry) {
@@ -333,13 +339,131 @@ void file3dsSetCurrentDirCacheDate(u64 createdAt) {
 // staleness check in file3dsGetFiles can compare against the clock
 static u64 currentDirCacheCreatedAt = 0;
 
-DirCacheStatus file3dsLoadDirCache(std::vector<DirectoryEntry>& files, const char* cachePath) {
+// --- background cache validation (issue #6) ---------------------------------
+// After serving a directory from its cache, a low-priority worker rescans it.
+// The worker never touches the UI's vectors: it fills its own list and the UI
+// thread swaps it in via file3dsBgRefreshTake at a safe point in the menu
+// loop. bgGeneration is bumped on every list rebuild, so results computed for
+// a directory the user already left (or rescanned) are dropped.
+static LightLock bgLock;
+static bool bgLockInitialized = false;
+static volatile bool bgScanRunning = false;
+static bool bgResultReady = false;
+static std::vector<DirectoryEntry> bgResult;
+static int bgResultRomCount = 0;
+static char bgScanDir[PATH_MAX];
+static u32 bgGeneration = 0;
+static u32 bgScanGeneration = 0;
+
+static void file3dsBgLockInit() {
+    if (!bgLockInitialized) {
+        LightLock_Init(&bgLock);
+        bgLockInitialized = true;
+    }
+}
+
+// invalidate any pending/in-flight background result (list is being rebuilt)
+static void file3dsBgInvalidate() {
+    file3dsBgLockInit();
+    LightLock_Lock(&bgLock);
+    bgGeneration++;
+    bgResultReady = false;
+    LightLock_Unlock(&bgLock);
+}
+
+// True when the subdirectory contains exactly one ROM plus MSU-1 pack files
+// (.msu data/.pcm or compressed audio). romOut receives the ROM's filename.
+static bool file3dsProbeMsuPack(const char* parentDir, const char* dirName, char* romOut, size_t romOutSize) {
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s%s", parentDir, dirName);
+
+    DIR* d = opendir(path);
+    if (!d) return false;
+
+    int romCount = 0;
+    bool hasMsuFiles = false;
+    struct dirent* entry;
+
+    while ((entry = readdir(d)) != NULL) {
+        if (entry->d_name[0] == '.' || entry->d_type != DT_REG)
+            continue;
+
+        if (file3dsIsValidFilename(entry->d_name)) {
+            if (++romCount > 1) break;
+            snprintf(romOut, romOutSize, "%s", entry->d_name);
+        } else if (!hasMsuFiles) {
+            const char* dot = strrchr(entry->d_name, '.');
+            if (dot && (strcasecmp(dot, ".msu") == 0 || strcasecmp(dot, ".pcm") == 0 ||
+                        strcasecmp(dot, ".flac") == 0 || strcasecmp(dot, ".ogg") == 0)) {
+                hasMsuFiles = true;
+            }
+        }
+    }
+
+    closedir(d);
+    return dirEntryQualifiesAsMsuPack(romCount, hasMsuFiles);
+}
+
+// The full directory sweep shared by the UI scan and the background worker:
+// readdir + MSU-pack flattening + sort. menuTabs may be NULL (worker).
+static bool file3dsScanDirectoryInto(const char* dirPath, std::vector<DirectoryEntry>& files,
+    int& romCount, std::vector<SMenuTab>* menuTabs, bool showCachingIndicator) {
+
+    DIR* d = opendir(dirPath);
+    if (!d) {
+        return false;
+    }
+
+    if (strlen(dirPath) > strlen("sdmc:/")) {
+        files.emplace_back(PARENT_DIRECTORY_LABEL, FileEntryType::ParentDirectory);
+    }
+
+    struct dirent* entry;
+
+    while ((entry = readdir(d)) != NULL) {
+        if (entry->d_name[0] == '.')
+            continue;
+
+        if (entry->d_type == DT_DIR) {
+            char packRom[NAME_MAX + 1];
+            if (file3dsProbeMsuPack(dirPath, entry->d_name, packRom, sizeof(packRom)) &&
+                strlen(entry->d_name) + 1 + strlen(packRom) <= NAME_MAX) {
+                char vpath[NAME_MAX * 2 + 2];   // guarded <= NAME_MAX above
+                snprintf(vpath, sizeof(vpath), "%s/%s", entry->d_name, packRom);
+                files.emplace_back(vpath, FileEntryType::VirtualFile);
+                romCount++;
+            } else {
+                files.emplace_back(entry->d_name, FileEntryType::ChildDirectory);
+            }
+        } else if (entry->d_type == DT_REG) {
+            if (file3dsIsValidFilename(entry->d_name)) {
+                files.emplace_back(entry->d_name, FileEntryType::File);
+                romCount++;
+
+                if (files.size() == DIRECTORY_CACHE_THRESHOLD + 1 && menuTabs && showCachingIndicator) {
+                    file3dsShowCachingIndicator(*menuTabs);
+                }
+            }
+        }
+    }
+
+    closedir(d);
+
+    // directories first, then files and MSU packs interleaved alphabetically
+    std::sort(files.begin(), files.end(), dirEntrySortLess);
+
+    return true;
+}
+
+// header/entry read without any global side effects (also used by the
+// background worker, which must not touch the UI-facing state)
+static DirCacheStatus file3dsReadDirCacheRaw(std::vector<DirectoryEntry>& files,
+    const char* cachePath, DirCacheHeader& header) {
     DirCacheStatus status = DirCacheStatus::Success;
 
     FILE* fp = file3dsOpen(cachePath, "rb");
     if (!fp) return DirCacheStatus::NotFound;
 
-    DirCacheHeader header;
     if (fread(&header, sizeof(DirCacheHeader), 1, fp) != 1) {
         status = DirCacheStatus::Corrupt;
         goto cleanup;
@@ -363,17 +487,25 @@ DirCacheStatus file3dsLoadDirCache(std::vector<DirectoryEntry>& files, const cha
         }
     }
 
-    file3dsSetCurrentDirCacheDate(header.createdAt);
-    currentDirCacheCreatedAt = header.createdAt;
-
-    for (const auto& entry : files) {
-        if (entry.Type == FileEntryType::File) {
-            currentDirRomCount++;
-        }
-    }
-
 cleanup:
     if (fp) file3dsClose(fp);
+    return status;
+}
+
+DirCacheStatus file3dsLoadDirCache(std::vector<DirectoryEntry>& files, const char* cachePath) {
+    DirCacheHeader header;
+    DirCacheStatus status = file3dsReadDirCacheRaw(files, cachePath, header);
+
+    if (status == DirCacheStatus::Success) {
+        file3dsSetCurrentDirCacheDate(header.createdAt);
+        currentDirCacheCreatedAt = header.createdAt;
+
+        for (const auto& entry : files) {
+            if (entry.Type == FileEntryType::File || entry.Type == FileEntryType::VirtualFile) {
+                currentDirRomCount++;
+            }
+        }
+    }
 
     if (status == DirCacheStatus::Corrupt) {
         log3dsWrite("[file3dsLoadDirCache] cache invalid (Code %d). Deleting: %s", status, cachePath);
@@ -383,9 +515,10 @@ cleanup:
     return status;
 }
 
-void file3dsSaveDirCache(const std::vector<DirectoryEntry>& files, const char* cachePath) {
+// raw write, no UI-facing side effects (worker-safe)
+static u64 file3dsWriteDirCacheRaw(const std::vector<DirectoryEntry>& files, const char* cachePath) {
     FILE* fp = fopen(cachePath, "wb");
-    if (!fp) return;
+    if (!fp) return 0;
 
     // disable buffering (_IONBF)
     // We are writing the vector in one massive shot. 
@@ -396,13 +529,21 @@ void file3dsSaveDirCache(const std::vector<DirectoryEntry>& files, const char* c
     DirCacheHeader header = { 0x534E3958, DIRECTORY_CACHE_VERSION, (u32)files.size(), createdAt };
     
     fwrite(&header, sizeof(DirCacheHeader), 1, fp);
-    file3dsSetCurrentDirCacheDate(createdAt);
 
     if (!files.empty()) {
         fwrite(files.data(), sizeof(DirectoryEntry), files.size(), fp);
     }
     
     fclose(fp);
+    return createdAt;
+}
+
+void file3dsSaveDirCache(const std::vector<DirectoryEntry>& files, const char* cachePath) {
+    u64 createdAt = file3dsWriteDirCacheRaw(files, cachePath);
+    if (createdAt) {
+        file3dsSetCurrentDirCacheDate(createdAt);
+        currentDirCacheCreatedAt = createdAt;
+    }
 }
 
 void file3dsDeleteCurrentDirCache() {
@@ -425,7 +566,92 @@ void file3dsShowCachingIndicator(std::vector<SMenuTab>& menuTabs) {
     menu3dsSwapBuffersAndWaitForVBlank();
 }
 
+static void file3dsBgScanThread(void*) {
+    char dir[PATH_MAX];
+    u32 gen;
+
+    LightLock_Lock(&bgLock);
+    snprintf(dir, sizeof(dir), "%s", bgScanDir);
+    gen = bgScanGeneration;
+    LightLock_Unlock(&bgLock);
+
+    std::vector<DirectoryEntry> fresh;
+    int romCount = 0;
+
+    if (file3dsScanDirectoryInto(dir, fresh, romCount, NULL, false)) {
+        char cachePath[PATH_MAX];
+        file3dsGetDirCacheNameFor(dir, cachePath, sizeof(cachePath));
+
+        std::vector<DirectoryEntry> cached;
+        DirCacheHeader header;
+        bool changed = true;
+        if (cachePath[0] != '\0' &&
+            file3dsReadDirCacheRaw(cached, cachePath, header) == DirCacheStatus::Success) {
+            changed = !dirEntryListsEqual(fresh, cached);
+        }
+
+        if (changed) {
+            log3dsWrite("[file3dsBgScanThread] %s changed on disk, refreshing (%d entries)", dir, fresh.size());
+            if (cachePath[0] != '\0' && fresh.size() >= DIRECTORY_CACHE_THRESHOLD) {
+                file3dsWriteDirCacheRaw(fresh, cachePath);
+            }
+
+            LightLock_Lock(&bgLock);
+            if (gen == bgGeneration) {
+                bgResult.swap(fresh);
+                bgResultRomCount = romCount;
+                bgResultReady = true;
+            }
+            LightLock_Unlock(&bgLock);
+        }
+    }
+
+    bgScanRunning = false;
+}
+
+static void file3dsBgStartValidation() {
+    file3dsBgLockInit();
+
+    if (bgScanRunning) return;
+    bgScanRunning = true;
+
+    LightLock_Lock(&bgLock);
+    snprintf(bgScanDir, sizeof(bgScanDir), "%s", currentDir);
+    bgScanGeneration = bgGeneration;
+    bgResultReady = false;
+    LightLock_Unlock(&bgLock);
+
+    // low priority, current core, detached: one readdir sweep then exits
+    Thread t = threadCreate(file3dsBgScanThread, NULL, 0x4000, 0x3F, -2, true);
+    if (!t) {
+        bgScanRunning = false;
+    }
+}
+
+bool file3dsBgRefreshTake(std::vector<DirectoryEntry>& files) {
+    if (!bgLockInitialized || !bgResultReady) return false;
+
+    bool taken = false;
+    LightLock_Lock(&bgLock);
+    if (bgResultReady && strcmp(bgScanDir, currentDir) == 0) {
+        files.swap(bgResult);
+        bgResult.clear();
+        currentDirRomCount = bgResultRomCount;
+        currentDirLoadedFromCache = false;
+        taken = true;
+    }
+    bgResultReady = false;
+    LightLock_Unlock(&bgLock);
+
+    return taken;
+}
+
+void file3dsGetVirtualDisplayName(const DirectoryEntry& entry, char* output, size_t bufferSize) {
+    dirEntryVirtualDisplayName(entry, output, bufferSize);
+}
+
 bool file3dsGetFiles(std::vector<DirectoryEntry>& files, std::vector<SMenuTab>& menuTabs, bool showCachingIndicator) {
+    file3dsBgInvalidate();
     currentDirRomCount = 0;
     currentDirLoadedFromCache = false;
     files.clear();
@@ -458,6 +684,8 @@ bool file3dsGetFiles(std::vector<DirectoryEntry>& files, std::vector<SMenuTab>& 
             osTickCounterUpdate(&timer);
             log3dsWrite("[file3dsGetFiles] %d files loaded from cache (%s) in %.3fms", files.size(), cachePath, osTickCounterRead(&timer));
 
+            // serve the snapshot instantly, verify it in the background
+            file3dsBgStartValidation();
             return true;
         }
 
@@ -472,42 +700,9 @@ bool file3dsGetFiles(std::vector<DirectoryEntry>& files, std::vector<SMenuTab>& 
 
     file3dsSetCurrentDirCacheDate(0);
     
-    DIR* d = opendir(currentDir);
-    if (!d) {
+    if (!file3dsScanDirectoryInto(currentDir, files, currentDirRomCount, &menuTabs, showCachingIndicator)) {
         return false;
     }
-
-    if (strlen(currentDir) > strlen("sdmc:/")) {
-        files.emplace_back(PARENT_DIRECTORY_LABEL, FileEntryType::ParentDirectory);
-    }
-
-    struct dirent* entry;
-    
-    while ((entry = readdir(d)) != NULL) {
-        if (entry->d_name[0] == '.')
-            continue;
-
-        if (entry->d_type == DT_DIR) {
-            files.emplace_back(entry->d_name, FileEntryType::ChildDirectory);
-        } else if (entry->d_type == DT_REG) {
-            if (file3dsIsValidFilename(entry->d_name)) {
-                files.emplace_back(entry->d_name, FileEntryType::File);
-                currentDirRomCount++;
-
-                if (files.size() == DIRECTORY_CACHE_THRESHOLD + 1 && showCachingIndicator) {
-                    file3dsShowCachingIndicator(menuTabs);
-                }
-            }
-        }
-    }
-    
-    closedir(d);
-    
-    // directories first, then alphabetically
-    std::sort(files.begin(), files.end(), [](const DirectoryEntry& a, const DirectoryEntry& b) {
-    if (a.Type != b.Type) return a.Type < b.Type;
-        return strcasecmp(a.Filename, b.Filename) < 0;
-    });
 
     osTickCounterUpdate(&timer);
     log3dsWrite("[file3dsGetFiles] %s: %d files prepared in %.3fms", currentDir, files.size(), osTickCounterRead(&timer));

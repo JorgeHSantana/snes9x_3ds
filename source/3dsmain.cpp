@@ -2049,10 +2049,18 @@ int fillFileMenuEntries(std::vector<SMenuItem>& fileMenu, const char *selectedIt
         else if (entry->Type == FileEntryType::ParentDirectory)
             prefix = MENU_PREFIX_PARENT_DIRECTORY;
 
+        // MSU pack folders are shown by their folder name, booting the ROM inside
+        char displayName[NAME_MAX + 1];
+        if (entry->Type == FileEntryType::VirtualFile) {
+            file3dsGetVirtualDisplayName(*entry, displayName, sizeof(displayName));
+        } else {
+            snprintf(displayName, sizeof(displayName), "%s", entry->Filename);
+        }
+
         char label[NAME_MAX + 1];
         const size_t prefixLen = strlen(prefix);
         const size_t maxFilenameLen = (prefixLen < sizeof(label) - 1) ? (sizeof(label) - 1 - prefixLen) : 0;
-        snprintf(label, sizeof(label), "%s%.*s", prefix, (int)maxFilenameLen, entry->Filename);
+        snprintf(label, sizeof(label), "%s%.*s", prefix, (int)maxFilenameLen, displayName);
 
         if (selectedItemName && selectedItemName[0] != '\0') {
             if (strncmp(entry->Filename, selectedItemName, NAME_MAX) == 0) {
@@ -2092,7 +2100,28 @@ void updateFileMenuTab(const char *selectedItemName, bool showCachingIndicator, 
     fileMenuTab.MakeSureSelectionIsOnScreen(MENU_HEIGHT, 2);
 }
 
+// Applies a background directory-cache refresh (issue #6) on the UI thread:
+// swaps in the fresh list and rebuilds the file tab, keeping the selection.
+static void fileMenuIdleTick() {
+    if (menuTabs.empty()) return;
+
+    SMenuTab& fileMenuTab = menuTabs.back();
+
+    char selectedName[NAME_MAX + 1] = "";
+    int selected = fileMenuTab.SelectedItemIndex;
+    if (selected >= 0 && selected < static_cast<int>(entries.size())) {
+        snprintf(selectedName, sizeof(selectedName), "%s", entries[selected].Filename);
+    }
+
+    if (!file3dsBgRefreshTake(entries)) return;
+
+    fileMenuTab.SelectedItemIndex = fillFileMenuEntries(fileMenuTab.MenuItems, selectedName);
+    fileMenuTab.MakeSureSelectionIsOnScreen(MENU_HEIGHT, 2);
+    menu3dsSetScreenDirty(true, true);
+}
+
 void setupMenu(int& currentMenuTab) {
+    menu3dsSetIdleCallback(fileMenuIdleTick);
     int requiredTabs = settings3DS.isRomLoaded ? 5 : 2;
     int fileMenuTabIndex = settings3DS.isRomLoaded ? 4 : 1;
     bool isFirstRun = menuTabs.empty();
@@ -2301,7 +2330,7 @@ void onDirectoryEntrySelected(
     std::vector<SMenuItem>& cheatMenu,
     const DirectoryEntry*& entry
 ) {
-    if (entry->Type == FileEntryType::File) 
+    if (entry->Type == FileEntryType::File || entry->Type == FileEntryType::VirtualFile) 
     {
         snprintf(romFileName, sizeof(romFileName), "%s", entry->Filename);
 

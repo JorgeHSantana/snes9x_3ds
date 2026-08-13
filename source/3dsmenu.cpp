@@ -16,6 +16,12 @@
 #define ANIMATE_DIALOG_STEPS 8
 
 static bool swapBuffer = true;
+
+static void (*menuIdleCallback)(void) = NULL;
+
+void menu3dsSetIdleCallback(void (*callback)(void)) {
+    menuIdleCallback = callback;
+}
 static bool gameScreenDirty = true;
 static bool secondScreenDirty = true;
 static bool isScrolling = false;
@@ -830,6 +836,9 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
             returnResult = -1;
             break;
         }
+
+        if (!isDialog && menuIdleCallback)
+            menuIdleCallback();
 
         hidScanInput();
         thisKeysHeld = hidKeysHeld();
