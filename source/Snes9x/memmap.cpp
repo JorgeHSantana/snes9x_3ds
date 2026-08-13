@@ -756,6 +756,54 @@ again:
 	return TRUE;
 }
 
+#ifdef UNZIP_SUPPORT
+#include <minizip/unzip.h>
+#include "zipselect.h"
+
+// Decompresses the first ROM entry of a .zip into 'buffer' (up to maxRead
+// bytes, matching the loose-file read cap). Returns bytes read, 0 on error.
+static int32 LoadZipRom (const char* zipname, uint8* buffer, int32 maxRead)
+{
+	unzFile file = unzOpen (zipname);
+	if (!file)
+		return (0);
+
+	bool found = false;
+	int err = unzGoToFirstFile (file);
+
+	while (err == UNZ_OK)
+	{
+		char entryName [_MAX_PATH + 1];
+		unz_file_info info;
+
+		if (unzGetCurrentFileInfo (file, &info, entryName, sizeof (entryName),
+				NULL, 0, NULL, 0) != UNZ_OK)
+			break;
+
+		if (zipEntryIsRom (entryName))
+		{
+			found = true;
+			break;
+		}
+
+		err = unzGoToNextFile (file);
+	}
+
+	int32 size = 0;
+
+	if (found && unzOpenCurrentFile (file) == UNZ_OK)
+	{
+		size = unzReadCurrentFile (file, buffer, maxRead);
+		if (size < 0)
+			size = 0;
+		unzCloseCurrentFile (file);
+	}
+
+	unzClose (file);
+	return (size);
+}
+#endif
+
 uint32 CMemory::FileLoader (uint8* buffer, const char* filename, int32 maxsize)
 {
 	STREAM ROMFile;
@@ -771,10 +819,6 @@ uint32 CMemory::FileLoader (uint8* buffer, const char* filename, int32 maxsize)
 
 	unsigned long FileSize = 0;
 	
-#ifdef UNZIP_SUPPORT
-	unzFile file=NULL;
-#endif
-    
 	_splitpath (filename, drive, dir, name, ext);
     _makepath (fname, drive, dir, name, ext);
 	
@@ -788,10 +832,39 @@ uint32 CMemory::FileLoader (uint8* buffer, const char* filename, int32 maxsize)
 
 	switch( nFormat )
 	{
-	case FILE_ZIP:	
+	case FILE_ZIP:
+#ifdef UNZIP_SUPPORT
+	{
+		len = LoadZipRom (fname, buffer, maxsize + 0x200);
+		if (len == 0)
+		{
+			S9xMessage (S9X_ERROR, S9X_ROM_INFO, "No ROM found inside the zip archive.");
+			return (0);
+		}
+
+		strcpy (ROMFilename, fname);
+
+		// same copier-header handling as the loose-file path below
+		HeaderCount = 0;
+		FileSize = len;
+		int32 calc_size = (FileSize / 0x2000) * 0x2000;
+		if ((FileSize - calc_size == 512 && !Settings.ForceNoHeader) ||
+			Settings.ForceHeader)
+		{
+			memmove (buffer, buffer + 512, calc_size);
+			HeaderCount++;
+			FileSize -= 512;
+		}
+		TotalFileSize = FileSize;
+	}
+#else
+		S9xMessage (S9X_ERROR, S9X_ROM_INFO, "Zip archives are not supported in this build.");
+		return (0);
+#endif
+		break;
+
 	case FILE_RAR:
-		// non existant rar loading
-		S9xMessage (S9X_ERROR, S9X_ROM_INFO, "Zip/Rar Archives are not currently supported.");
+		S9xMessage (S9X_ERROR, S9X_ROM_INFO, "Rar archives are not supported.");
 		return (0);
 		break;
 
