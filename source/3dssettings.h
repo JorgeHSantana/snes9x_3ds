@@ -323,6 +323,11 @@ void settings3dsUpdate(bool includeGameSettings);
 // per-scene 3D profiles (issue #23)
 void settings3dsStereoApplyDefault();
 void settings3dsStereoFrameTick();
+// arm the capture: observe the scene for ~5s after resuming, learn the
+// per-byte mask from the bits that flap, then bind the screen to the
+// profile (replacing any bind that previously matched it)
+void settings3dsStereoArmCapture(int profileIdx);
+const char *settings3dsStereoActiveName();
 void settings3dsApplyScreenLayout();
 void settings3dsApplyScreenStretch();
 

@@ -762,6 +762,31 @@ const std::vector<SMenuItem>& makeOptionsForScreenFilter() {
     return items;
 }
 
+
+// which profile the stereo gauges edit: -1 = Default (the flat fields)
+static int s_stereoEditIdx = -1;
+
+static int *stereoEditDepth(int layer) {
+    if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount)
+        return &settings3DS.StereoProfiles[s_stereoEditIdx].Depth[layer];
+    return &settings3DS.StereoDepth[layer];
+}
+static int *stereoEditField(int which) {
+    if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount) {
+        S9xSettings3DS::SStereoProfile *p = &settings3DS.StereoProfiles[s_stereoEditIdx];
+        switch (which) {
+            case 0: return &p->Fade;      case 1: return &p->Haze;
+            case 2: return &p->Blur;      case 3: return &p->FocusBack;
+            case 4: return &p->FocusFront; default: return &p->EdgeMode;
+        }
+    }
+    switch (which) {
+        case 0: return &settings3DS.StereoFade;      case 1: return &settings3DS.StereoHaze;
+        case 2: return &settings3DS.StereoBlur;      case 3: return &settings3DS.StereoFocusBack;
+        case 4: return &settings3DS.StereoFocusFront; default: return &settings3DS.StereoEdgeMode;
+    }
+}
+
 void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
     items.clear();
 
@@ -1032,38 +1057,125 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
 
     if (gpu3dsIs3DAvailable()) {
+        AddMenuHeader2(items, "Scene Profiles"_s);
+
+        if (s_stereoEditIdx >= settings3DS.StereoProfilesCount)
+            s_stereoEditIdx = -1;
+
+        std::vector<std::string> profNames;
+        profNames.push_back("Default");
+        for (int i = 0; i < settings3DS.StereoProfilesCount; i++)
+            profNames.push_back(settings3DS.StereoProfiles[i].Name);
+        profNames.push_back("+ New Profile");
+
+        AddMenuPicker(items, "  Editing Profile"_s,
+            "The Depth/Focus/Effects gauges below edit the selected profile.\n'+ New Profile' creates a copy of the current selection."_s,
+            makePickerOptions(profNames), s_stereoEditIdx + 1, DIALOG_TYPE_INFO, true,
+            [&menuTabs, &currentMenuTab]( int val ) {
+                int newCount = settings3DS.StereoProfilesCount;
+                if (val == newCount + 1) {
+                    // + New Profile: copy of the current selection
+                    if (newCount < STEREO_PROFILES_MAX) {
+                        S9xSettings3DS::SStereoProfile *p = &settings3DS.StereoProfiles[newCount];
+                        if (s_stereoEditIdx >= 0) {
+                            *p = settings3DS.StereoProfiles[s_stereoEditIdx];
+                        } else {
+                            for (int i = 0; i < 5; i++) p->Depth[i] = settings3DS.StereoDepth[i];
+                            p->Fade = settings3DS.StereoFade; p->Haze = settings3DS.StereoHaze;
+                            p->Blur = settings3DS.StereoBlur;
+                            p->FocusBack = settings3DS.StereoFocusBack;
+                            p->FocusFront = settings3DS.StereoFocusFront;
+                            p->EdgeMode = settings3DS.StereoEdgeMode;
+                        }
+                        snprintf(p->Name, sizeof(p->Name), "Profile %d", (newCount + 1) & 0xFF);
+                        settings3DS.StereoProfilesCount++;
+                        s_stereoEditIdx = newCount;
+                        settings3DS.isDirty = true;
+                    }
+                } else {
+                    s_stereoEditIdx = val - 1;
+                }
+                menu3dsMarkTabDirty(TAB_SETTINGS);
+            });
+
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+            if (s_stereoEditIdx < 0) {
+                menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Capture This Screen",
+                    "Select or create a profile first - captures bind the\ncurrent screen to the profile being edited.",
+                    Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+                menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+                return;
+            }
+            settings3dsStereoArmCapture(s_stereoEditIdx);
+            menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Capture This Screen",
+                "After resuming, keep the game on this screen for ~5\nseconds. The screen will then switch to this profile\nautomatically whenever it appears.",
+                Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+        }, MenuItemType::Action, "  Capture This Screen"_s, ""_s);
+
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            if (s_stereoEditIdx < 0) return;
+            SMenuTab dialogTab; bool isDialog = false;
+            bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+                "Delete Profile", "Remove this profile and its screen binds?", true, true);
+            if (!confirmed) return;
+            int del = s_stereoEditIdx;
+            for (int i = settings3DS.StereoBindsCount - 1; i >= 0; i--) {
+                if (settings3DS.StereoBinds[i].ProfileIdx == del) {
+                    for (int j = i; j < settings3DS.StereoBindsCount - 1; j++)
+                        settings3DS.StereoBinds[j] = settings3DS.StereoBinds[j + 1];
+                    settings3DS.StereoBindsCount--;
+                } else if (settings3DS.StereoBinds[i].ProfileIdx > del) {
+                    settings3DS.StereoBinds[i].ProfileIdx--;
+                }
+            }
+            for (int i = del; i < settings3DS.StereoProfilesCount - 1; i++)
+                settings3DS.StereoProfiles[i] = settings3DS.StereoProfiles[i + 1];
+            settings3DS.StereoProfilesCount--;
+            s_stereoEditIdx = -1;
+            settings3DS.isDirty = true;
+            menu3dsMarkTabDirty(TAB_SETTINGS);
+        }, MenuItemType::Action, "  Delete Profile"_s, ""_s);
+
+        {
+            char matchLine[48];
+            snprintf(matchLine, sizeof(matchLine), "  This screen matches: %s", settings3dsStereoActiveName());
+            items.emplace_back(nullptr, MenuItemType::Textarea, std::string(matchLine), ""_s);
+        }
+
         AddMenuHeader2(items, "Depth"_s);
 
         static const char *stereoNames[5] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites" };
         for (int l = 0; l < 5; l++) {
-            AddMenuGauge(items, stereoNames[l], -8, 8, settings3DS.StereoDepth[l],
-                [l]( int val ) { CheckAndUpdate( settings3DS.StereoDepth[l], val ); }, true, true);
+            AddMenuGauge(items, stereoNames[l], -8, 8, *stereoEditDepth(l),
+                [l]( int val ) { CheckAndUpdate( *stereoEditDepth(l), val ); }, true, true);
         }
         items.emplace_back(nullptr, MenuItemType::Textarea, "  + pops out of the screen, - sinks into it."_s, ""_s);
 
         AddMenuHeader2(items, "Focus"_s);
-        AddMenuGauge(items, "  Back"_s, -8, 0, settings3DS.StereoFocusBack,
-            []( int val ) { CheckAndUpdate( settings3DS.StereoFocusBack, val ); }, true);
-        AddMenuGauge(items, "  Front"_s, 0, 8, settings3DS.StereoFocusFront,
-            []( int val ) { CheckAndUpdate( settings3DS.StereoFocusFront, val ); }, true);
+        AddMenuGauge(items, "  Back"_s, -8, 0, *stereoEditField(3),
+            []( int val ) { CheckAndUpdate( *stereoEditField(3), val ); }, true);
+        AddMenuGauge(items, "  Front"_s, 0, 8, *stereoEditField(4),
+            []( int val ) { CheckAndUpdate( *stereoEditField(4), val ); }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Layers inside the Back..Front zone are untouched; effects"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  grow with the distance beyond it (gray depth values)."_s, ""_s);
 
         AddMenuHeader2(items, "Effects"_s);
-        AddMenuGauge(items, "  Fade"_s, 0, 8, settings3DS.StereoFade,
-            []( int val ) { CheckAndUpdate( settings3DS.StereoFade, val ); }, true);
+        AddMenuGauge(items, "  Fade"_s, 0, 8, *stereoEditField(0),
+            []( int val ) { CheckAndUpdate( *stereoEditField(0), val ); }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Darkens layers behind the focus zone."_s, ""_s);
-        AddMenuGauge(items, "  Haze"_s, 0, 8, settings3DS.StereoHaze,
-            []( int val ) { CheckAndUpdate( settings3DS.StereoHaze, val ); }, true);
+        AddMenuGauge(items, "  Haze"_s, 0, 8, *stereoEditField(1),
+            []( int val ) { CheckAndUpdate( *stereoEditField(1), val ); }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Fogs layers behind the focus zone."_s, ""_s);
-        AddMenuGauge(items, "  Blur"_s, 0, 8, settings3DS.StereoBlur,
-            []( int val ) { CheckAndUpdate( settings3DS.StereoBlur, val ); }, true);
+        AddMenuGauge(items, "  Blur"_s, 0, 8, *stereoEditField(2),
+            []( int val ) { CheckAndUpdate( *stereoEditField(2), val ); }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Smudges layers outside the zone, back and front."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Enabling it may cause small image artifacts."_s, ""_s);
         AddMenuPicker(items, "  Edge Cleanup"_s,
             "The per-layer parallax corrupts a few columns at the screen\nedges. Trim narrows the game window (scale kept); Zoom crops\nthem away, absorbed by the stretch; Off shows the raw edges."_s,
-            makePickerOptions({"Off", "Trim", "Zoom"}), settings3DS.StereoEdgeMode, DIALOG_TYPE_INFO, true,
-            []( int val ) { CheckAndUpdate( settings3DS.StereoEdgeMode, val ); });
+            makePickerOptions({"Off", "Trim", "Zoom"}), *stereoEditField(5), DIALOG_TYPE_INFO, true,
+            []( int val ) { CheckAndUpdate( *stereoEditField(5), val ); });
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Hides the screen-edge columns disturbed by the 3D shifts."_s, ""_s);
     }
         AddMenuDisabledOption(items, ""_s);
@@ -1544,6 +1656,7 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
 static const int stereoDepthDefault[5] = { 0, -2, -1, 0, 0 };
 static const char *stereoDepthKeys[5] = { "BG1", "BG2", "BG3", "BG4", "OBJ" };
 
+
 void settingsLoadStereo3D()
 {
     for (int i = 0; i < 5; i++)
@@ -1557,6 +1670,7 @@ void settingsLoadStereo3D()
     settings3DS.StereoProfilesCount = 0;
     settings3DS.StereoBindsCount = 0;
     settings3DS.StereoWatchAddr = -1;
+    s_stereoEditIdx = -1;
 
     char path[PATH_MAX];
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");

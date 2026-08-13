@@ -302,6 +302,40 @@ static void settings3dsStereoDefaultProfile(S9xSettings3DS::SStereoProfile *p)
 
 static int s_stereoActiveIdx = -1;   // -1 = default profile
 
+// capture state (settings3dsStereoArmCapture)
+static int s_capFrames = 0;
+static int s_capProfile = -1;
+static u64 s_capOr, s_capAnd, s_capOr2, s_capAnd2;
+static int s_capWatch;
+
+void settings3dsStereoArmCapture(int profileIdx)
+{
+    s_capProfile = profileIdx;
+    s_capFrames = 300;   // ~5s at 60fps
+    s_capOr = s_capOr2 = 0;
+    s_capAnd = s_capAnd2 = ~0ULL;
+    s_capWatch = -1;
+}
+
+const char *settings3dsStereoActiveName()
+{
+    if (s_stereoActiveIdx >= 0 && s_stereoActiveIdx < settings3DS.StereoProfilesCount)
+        return settings3DS.StereoProfiles[s_stereoActiveIdx].Name;
+    return "Default";
+}
+
+// per-byte mask: keep a register only if no bit of it flapped
+static u64 settings3dsCapMask(u64 orv, u64 andv)
+{
+    u64 mask = 0;
+    for (int i = 0; i < 8; i++) {
+        u64 byteMask = 0xFFULL << (i * 8);
+        if ((orv & byteMask) == (andv & byteMask))
+            mask |= byteMask;
+    }
+    return mask;
+}
+
 void settings3dsStereoApplyDefault()
 {
     S9xSettings3DS::SStereoProfile def;
@@ -348,6 +382,44 @@ void settings3dsStereoFrameTick()
             rr[0x2101], rr[0x2107], rr[0x2108], rr[0x2109], rr[0x210A], rr[0x210B], rr[0x210C]);
         s_lastSig = sig;
         s_lastSig2 = sig2;
+    }
+
+    // capture in progress: accumulate what stays stable on this scene
+    if (s_capFrames > 0) {
+        s_capOr |= sig;   s_capAnd &= sig;
+        s_capOr2 |= sig2; s_capAnd2 &= sig2;
+        if (settings3DS.StereoWatchAddr >= 0)
+            s_capWatch = Memory.RAM[settings3DS.StereoWatchAddr & 0x1FFFF];
+        if (--s_capFrames == 0 && s_capProfile >= 0 &&
+            s_capProfile < settings3DS.StereoProfilesCount) {
+            u64 mask = settings3dsCapMask(s_capOr, s_capAnd) & 0x00FFFFFFFFFFFFFFULL;
+            u64 mask2 = settings3dsCapMask(s_capOr2, s_capAnd2) & 0x00FFFFFFFFFFFFFFULL;
+            // drop any bind this scene currently matches (re-bind semantics)
+            for (int i = settings3DS.StereoBindsCount - 1; i >= 0; i--) {
+                const S9xSettings3DS::SStereoBind *b = &settings3DS.StereoBinds[i];
+                bool hits = ((s_capAnd ^ b->Sig) & b->Mask) == 0 &&
+                            ((s_capAnd2 ^ b->Sig2) & b->Mask2) == 0 &&
+                            (b->WatchVal < 0 || b->WatchVal == s_capWatch);
+                if (hits) {
+                    for (int j = i; j < settings3DS.StereoBindsCount - 1; j++)
+                        settings3DS.StereoBinds[j] = settings3DS.StereoBinds[j + 1];
+                    settings3DS.StereoBindsCount--;
+                }
+            }
+            if (settings3DS.StereoBindsCount < STEREO_BINDS_MAX) {
+                S9xSettings3DS::SStereoBind *b =
+                    &settings3DS.StereoBinds[settings3DS.StereoBindsCount++];
+                b->Sig = s_capAnd & mask;   b->Mask = mask;
+                b->Sig2 = s_capAnd2 & mask2; b->Mask2 = mask2;
+                b->WatchVal = s_capWatch;
+                b->ProfileIdx = s_capProfile;
+                settings3DS.isDirty = true;
+                log3dsWrite("[sig] captured -> %s (mask=%016llX watch=%02X)",
+                    settings3DS.StereoProfiles[s_capProfile].Name,
+                    (unsigned long long)mask, s_capWatch);
+            }
+            s_capProfile = -1;
+        }
     }
 
     // match against the binds (first hit wins); no hit -> default (-1)
