@@ -430,7 +430,7 @@ void settings3dsStereoFrameTick()
         if (s_capFrames % 60 == 0) {
             char msg[48];
             snprintf(msg, sizeof(msg), "Capturing screen: %ds...", s_capFrames / 60);
-            notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen, 900.0, msg);
+            notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen, 1400.0, msg);
         }
         if (--s_capFrames == 0 && s_capProfile >= 0 &&
             s_capProfile < settings3DS.StereoProfilesCount) {
@@ -460,6 +460,7 @@ void settings3dsStereoFrameTick()
                 snprintf(msg, sizeof(msg), "Screen captured: %s",
                     settings3DS.StereoProfiles[s_capProfile].Name);
                 notif3dsTrigger(Notif::Misc, Notif::Success, settings3DS.GameScreen, 2500.0, msg);
+                settings3DS.menuTabDirty[1] = true;   // TAB_SETTINGS: refresh 'This screen matches'
                 log3dsWrite("[sig] captured -> %s (mask=%016llX watch=%02X)",
                     settings3DS.StereoProfiles[s_capProfile].Name,
                     (unsigned long long)mask, s_capWatch);
@@ -489,6 +490,7 @@ void settings3dsStereoFrameTick()
                 for (int i = 0; i < 5; i++) s_fromDepths[i] = GPU3DS.stereoLayerDepth[i];
                 s_stereoActiveIdx = match;
                 s_lerpLeft = LERP_FRAMES;
+                settings3DS.menuTabDirty[1] = true;   // TAB_SETTINGS: refresh 'This screen matches'
                 log3dsWrite("[sig] profile -> %s",
                     match < 0 ? "Default" : settings3DS.StereoProfiles[match].Name);
             }
