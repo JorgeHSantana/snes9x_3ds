@@ -1084,6 +1084,16 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                         settings3DS.StereoProfilesCount++;
                         s_stereoEditIdx = newCount;
                         settings3DS.isDirty = true;
+
+                        // go straight into naming the new profile
+                        SwkbdState swkbd;
+                        char buf[16];
+                        swkbdInit(&swkbd, SWKBD_TYPE_QWERTY, 1, sizeof(buf) - 1);
+                        swkbdSetInitialText(&swkbd, p->Name);
+                        swkbdSetHintText(&swkbd, "Profile name");
+                        if (swkbdInputText(&swkbd, buf, sizeof(buf)) == SWKBD_BUTTON_CONFIRM && buf[0] != '\0') {
+                            snprintf(p->Name, sizeof(p->Name), "%s", buf);
+                        }
                     }
                 } else {
                     s_stereoEditIdx = val - 1;
@@ -1705,7 +1715,7 @@ void settingsLoadStereo3D()
     settings3DS.StereoBlur = 0;
     settings3DS.StereoFocusBack = -1;
     settings3DS.StereoFocusFront = 1;
-    settings3DS.StereoEdgeMode = 2;   // Zoom
+    settings3DS.StereoEdgeMode = 1;   // Trim
     settings3DS.StereoProfilesCount = 0;
     settings3DS.StereoBindsCount = 0;
     settings3DS.StereoWatchAddr = -1;
@@ -1742,7 +1752,7 @@ void settingsLoadStereo3D()
                 snprintf(p->Name, sizeof(p->Name), "%s", name);
                 for (int i = 0; i < 5; i++) p->Depth[i] = stereoDepthDefault[i];
                 p->Fade = p->Haze = p->Blur = 0;
-                p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 2;
+                p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1;
                 tDepth = p->Depth; tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
                 tEdge = &p->EdgeMode;

@@ -1022,7 +1022,9 @@ void gpu3dsBindTexture(SGPU_TEXTURE_ID textureId)
     SGPUTexture *texture = &GPU3DS.textures[textureId];
     
     // texture params are dynamic for main and mode7 texture
-    if (textureId == SNES_MAIN)
+    // (SNES_MAIN_RIGHT is the stereo right-eye copy of SNES_MAIN and must
+    // follow the same screen filter, or the right eye stays unfiltered)
+    if (textureId == SNES_MAIN || textureId == SNES_MAIN_RIGHT)
     {
         GPU_TEXTURE_FILTER_PARAM filter;
         if (screenshot.dirty) {
