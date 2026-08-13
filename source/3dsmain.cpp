@@ -1139,7 +1139,18 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             snprintf(matchLine, sizeof(matchLine), "  This screen matches: %s", settings3dsStereoActiveName());
             items.emplace_back(nullptr, MenuItemType::Textarea, std::string(matchLine), ""_s);
         }
+    }
 
+    AddMenuHeader2(items, "Enable / Disable Layers"_s);
+
+    static const char *layerNames[LAYER_BRIGHTNESS + 1] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites", "  Backdrop", "  Color Math", "  Brightness" };
+    for (int layer = LAYER_BG0; layer <= LAYER_BRIGHTNESS; layer++) {
+        AddMenuCheckbox(items, layerNames[layer], settings3DS.LayerEnabled[layer],
+            [layer]( int val ) { CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val ); });
+    }
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
+
+    if (gpu3dsIs3DAvailable()) {
         AddMenuHeader2(items, "Depth"_s);
 
         static const char *stereoNames[5] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites" };
@@ -1174,7 +1185,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             []( int val ) { CheckAndUpdate( *stereoEditField(5), val ); });
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Hides the screen-edge columns disturbed by the 3D shifts."_s, ""_s);
     }
-
     // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
     if (settings3DS.PaletteFix == 1)
     {
@@ -1196,14 +1206,10 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         AddMenuDisabledOption(items, ""_s);
     }
 
-    AddMenuHeader2(items, "Enable / Disable Layers"_s);
 
-    static const char *layerNames[LAYER_BRIGHTNESS + 1] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites", "  Backdrop", "  Color Math", "  Brightness" };
-    for (int layer = LAYER_BG0; layer <= LAYER_BRIGHTNESS; layer++) {
-        AddMenuCheckbox(items, layerNames[layer], settings3DS.LayerEnabled[layer],
-            [layer]( int val ) { CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val ); });
-    }
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
+
+
+
 
 
         AddMenuDisabledOption(items, ""_s);
