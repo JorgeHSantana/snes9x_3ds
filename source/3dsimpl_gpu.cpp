@@ -460,7 +460,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
             // per-layer stereo parallax + atmosphere (both neutral for
             // backdrop/color math/etc., whose depth entries are 0)
-            gpu3dsSetStereoParallax(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id]);
+            gpu3dsSetStereoParallax(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE);
             gpu3dsSetStereoLayerAtmosphere(id);
 
             int from = layer->sectionsOffset + (sub ? 0 : layer->sectionsByTarget[TARGET_SNES_SUB]);
@@ -474,7 +474,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // hazy layers draw 2 extra ghost passes shifted +-1px with
                 // reduced alpha (a cheap box blur: soft "smoky" edges)
                 float ghost = s_atmosGhostAlpha;
-                float baseParallax = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id];
+                float baseParallax = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
                 int passes = ghost > 0.0f ? 3 : 1;
 
                 for (int gp = 0; gp < passes; gp++) {

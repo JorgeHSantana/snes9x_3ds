@@ -772,7 +772,7 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 			// dim overlay + pause notification, placed ONE layer in front
 			// of the highest configured pop-out (full eye offset = depth 8
 			// was too far forward to read comfortably)
-			float msgDepth = GPU3DS.stereoMaxPop + 1.0f;
+			float msgDepth = (GPU3DS.stereoMaxPop + 1.0f) * STEREO_PARALLAX_SCALE;
 			if (msgDepth > IOD_MAX_PIXELS) msgDepth = IOD_MAX_PIXELS;
 			SGPUTexture *notifTexture = &GPU3DS.textures[UI_NOTIF_MSG];
 			int wx = notifTexture->tex.width - 1;
@@ -865,7 +865,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	// Edge Cleanup: source columns to hide per side (Trim and Zoom)
 	float edgeCropSrc = 0.0f;
 	if (GPU3DS.stereoEdgeMode >= 1 && iod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f)
-		edgeCropSrc = GPU3DS.stereoMaxAbs * (iod / IOD_MAX_PIXELS);
+		edgeCropSrc = GPU3DS.stereoMaxAbs * (iod / IOD_MAX_PIXELS) * STEREO_PARALLAX_SCALE;
 
 	// "Trim": physically narrow the game window by the corrupted columns.
 	// The window shrink is an integer, and the source crop is derived BACK
