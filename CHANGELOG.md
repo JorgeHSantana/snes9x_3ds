@@ -21,6 +21,10 @@ Notable changes to this project will be documented in this file.
   (Cache format bumped; the first visit after updating rescans once.)
 * Opening the menu now points "Editing Profile" at the scene profile the
   current screen matches, instead of the last profile edited.
+
+## Stable 2026-08-13 (efb1096)
+
+### Features
 * **Scene Profiles (experimental)**: per-screen 3D configurations that switch
   automatically. Capture a screen from the pause menu ("Capture This Screen"),
   and the emulator learns a PPU-register fingerprint (auto-masking blinking
