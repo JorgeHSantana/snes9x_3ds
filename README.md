@@ -95,6 +95,100 @@ Broad, risky, hard-to-review PRs may be closed or split into smaller changes. Pr
 
 AI note: I use AI assistants as part of my development workflow, including code review, debugging, planning, implementation and documentation. All changes are reviewed and adjusted by me before they are merged.
 
+## Stereoscopic 3D: configuration tutorial
+
+All of this lives in the pause menu under **Settings -> 3D STEREOSCOPIC
+SETTINGS** (New 3DS / New 2DS XL with the 3D slider open; on other models the
+emulator falls back to plain 2D). Everything you configure is saved per game
+to `sd:/3ds/snes9x_3ds/stereo3d/<game>.3d` — a small text file you can share
+with other people.
+
+### How depth works (-8 to +8)
+
+Each of the five SNES layers (BG1-BG4 and Sprites) has its own depth gauge:
+
+* **0** = the plane of the screen.
+* **Positive** values pop the layer **out toward you** (+8 = strongest).
+* **Negative** values sink it **into the screen** (-8 = deepest).
+
+The 3D slider scales the whole thing, so configure with the slider fully up
+and then use it to taste. Enhanced Resolution doubles the parallax
+granularity, giving noticeably smoother depth steps — worth turning on if the
+game runs well with it.
+
+### Configure the Default profile first
+
+**The golden rule: the Default profile must look right on MOST screens of the
+game** — normal gameplay above all. Scene Profiles exist for the few specific
+screens that need something different (title screen, menus, a world map).
+Doing it backwards — capturing profiles for everything and leaving Default
+misconfigured — multiplies the work and invites wrong-profile matches; see
+the warning in the next section.
+
+### The layer-by-layer method
+
+The reliable way to find each layer's depth:
+
+1. In **Enable / Disable Layers**, turn **everything off**.
+2. Turn **one layer on**, look at the game, and decide what it is (far
+   background? playfield? HUD?). Set its depth gauge accordingly.
+3. Turn the next layer on and repeat until all five are placed.
+
+Guidelines that hold for most games:
+
+* **Sprites at 0.** The player and enemies are what your eyes track; keeping
+  them at the screen plane is the comfortable choice. Exceptions: screens
+  where sprites are markers/cursors floating over a surface (world maps,
+  menus) — there a positive pop looks great.
+* The main playfield (usually BG1 or BG2) also close to 0.
+* Distant scenery on negative values, HUD/text layers at 0 or slightly
+  positive.
+* Small differences read better than extremes: a scene spread across -4..+2
+  usually looks deeper *and* more comfortable than one slammed to -8..+8.
+
+### Focus zone and the depth effects
+
+The **Focus Back / Focus Front** pair defines the "in focus" depth range
+(defaults -1..+1). Layers inside it are drawn clean. The three **Effects**
+gauges (0-8 each) are applied to layers **outside** the zone, growing
+linearly with the distance beyond its edge:
+
+* **Fade** darkens layers behind the zone (farther = darker).
+* **Haze** washes them out toward the horizon (atmospheric perspective).
+* **Blur** is a depth-of-field: it softens layers behind the zone **and**
+  layers popping out in front of it.
+
+So "how strong is the effect on this layer" = gauge value x how far the
+layer's depth sits from the focus zone. A layer at the zone's edge gets
+nothing; the farthest layer gets the full gauge. The depth gauges gray out
+in the menu when a layer sits outside the zone, as a visual cue.
+
+### Edge Cleanup
+
+The per-layer parallax disturbs the left and right screen borders (columns
+that only one eye can see). **Trim** (default) crops those columns; **Zoom**
+hides them by slightly enlarging the image; **Off** leaves them visible.
+
+### Scene Profiles: the exceptions
+
+When one specific screen needs its own depths (title with a big logo, a
+paused map, a menu), that's what Scene Profiles are for:
+
+1. Get the screen on the display, then open the menu. Under **Scene
+   Profiles**, use **Editing Profile -> + New Profile** (it copies the
+   current selection and asks for a name right away).
+2. Adjust the gauges — they always edit the selected profile.
+3. Select **Capture This Screen** and return to the game: the emulator
+   observes the screen for ~5 seconds and learns its fingerprint. From then
+   on, that 3D setup applies automatically whenever the screen shows up,
+   with a smooth transition.
+4. Captured the wrong thing, or a screen keeps matching wrongly? Show that
+   screen and use **Release This Screen** to send it back to Default.
+
+The "This screen matches:" line at the bottom of the section always tells
+you which profile the screen you paused on is using. Keep profiles few and
+purposeful — Default should remain the workhorse.
+
 ## Experimental: Scene Profiles (per-screen 3D)
 
 The Scene Profiles feature (Settings -> 3D Stereoscopic Settings) can bind
