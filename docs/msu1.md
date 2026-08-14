@@ -50,6 +50,30 @@ MSU-1 doesn't have its own menu section anymore — it's part of the pause menu'
 
 > **Disabling MSU-1 can mean silence, not a fallback.** Some hacks (mostly audio-only ones) removed their original SPC music entirely and rely on MSU-1 for all music. Turning "Enable MSU-1" off for those games doesn't restore the original soundtrack — it just goes quiet where music would play. Only disable MSU-1 on a hack you know still has working non-MSU audio.
 
+## MSU-1 Video FPS cap: what it saves — and what it cannot
+
+Lowering **MSU-1 Video FPS** gives a smaller gain than the setting suggests.
+Paced-out frames are genuinely cheap on the render side: the Bresenham pacer
+(`msu1_pace_step`, source/3dsimpl.cpp) sets `IPPU.RenderThisFrame = FALSE`
+before the frame runs, so the PPU render pass early-outs (gfx.cpp,
+ppuvsect.cpp) and the GPU side is skipped entirely — no layer passes, no
+composite.
+
+What can NOT be skipped: `S9xMainLoop()` runs in full on every frame. For
+MSU-1 FMV that is where most of the cost lives — the "video" is not a file
+the emulator decodes; it is the game itself streaming tiles from the data
+track into VRAM via DMA, inside the emulation. Skipping that would corrupt
+VRAM for the next presented frame and desync the game. Tiles uploaded during
+skipped frames also still get converted to 3DS textures on the next drawn
+frame — deferred, not eliminated.
+
+So the cap trims the render/GPU share of the frame cost; the emulation +
+streaming + amortized tile-conversion share is irreducible by design.
+Pairing the cap with regular frameskip does not change this (frameskip works
+the same way). If FMV performance ever needs another push, the lever is a
+cheaper emulation-side FMV path (e.g. cheaper VRAM-write/tile-cache
+invalidation during bursts), not more aggressive frame dropping.
+
 ## Known limitations (wave 1)
 
 * **DMA transfer mode 0 only.** DMA from the MSU-1 data port honors transfer mode 0 (single B-bus address) — the pattern audio hacks use. Multi-address transfer modes 1-4 (the patterns FMV hacks use to blast data into VRAM/WRAM) are not yet wired to the MSU-1 source; they come in wave 2 together with the data-throughput work.

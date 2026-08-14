@@ -254,6 +254,8 @@ to the single Default profile.
 * Set `In-Frame Palette Changes` to `Disabled Style 1` or `Disabled Style 2`
 * Set `SRAM Auto-Save Delay` to 60 seconds or disable it (SD Card speed is slow on 3DS)
 * Disable 3D and/or on-screen display settings
+* MSU-1 FMV: lowering `MSU-1 Video FPS` lightens rendering, but the
+  emulation-side streaming cost is irreducible (see [docs/msu1.md](docs/msu1.md))
 
 ### A game looks or sounds wrong. What can I try?
 
