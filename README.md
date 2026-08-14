@@ -41,7 +41,10 @@ Supported ROM formats:
 * `.fig`
 * `.bs`
 * `.bsx`
-* `.zip` (the first ROM inside is loaded; saves are keyed by the zip's name)
+* `.zip` (the first ROM inside is loaded; saves are keyed by the zip's name).
+  This also works for the single ROM inside an MSU-1 pack folder — but the
+  pack itself must stay a folder: audio/data tracks are streamed with random
+  seeks, which zip compression cannot serve.
 
 Configs, saves and imported assets are stored in `sd:/3ds/snes9x_3ds`.
 

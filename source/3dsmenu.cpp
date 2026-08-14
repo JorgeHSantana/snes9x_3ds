@@ -236,6 +236,8 @@ void menu3dsDrawItems(
         else if (currentTab->MenuItems[i].Type == MenuItemType::Action)
         {
             color = normalItemTextColor;
+            if (currentTab->MenuItems[i].TextColor != -1)
+                color = currentTab->MenuItems[i].TextColor;
             if (currentTab->SelectedItemIndex == i)
                 color = selectedItemTextColor;
             

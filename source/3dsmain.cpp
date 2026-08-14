@@ -2084,6 +2084,10 @@ int fillFileMenuEntries(std::vector<SMenuItem>& fileMenu, const char *selectedIt
             "", 
             99999
         );
+
+        // MSU pack entries stand out in blue (issue #29)
+        if (entry->Type == FileEntryType::VirtualFile)
+            fileMenu.back().TextColor = 0x529eeb;
     }
 
     return selectedItemIndex;

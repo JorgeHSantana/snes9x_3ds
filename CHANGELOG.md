@@ -21,6 +21,10 @@ Notable changes to this project will be documented in this file.
   (Cache format bumped; the first visit after updating rescans once.)
 * Opening the menu now points "Editing Profile" at the scene profile the
   current screen matches, instead of the last profile edited.
+* MSU-1 pack entries are shown in blue in the file browser, and the ROM
+  inside a pack folder may be a .zip (the pack itself stays a folder).
+* Changing In-Frame Palette Changes now shows/hides the ADVANCED SETTINGS
+  section (Reduce Layer Draws) immediately.
 
 ## Stable 2026-08-13 (efb1096)
 

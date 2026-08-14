@@ -161,6 +161,23 @@ TEST_CASE("a raw pcm is preferred over a flac with the same number")
     msu1_shutdown(st);
 }
 
+TEST_CASE("msu1_detect works when the pack's ROM is a .zip (issue #29)")
+{
+    std::string dir = make_tmpdir();
+    REQUIRE_FALSE(dir.empty());
+    // the zip's basename is what matters: FileLoader sets ROMFilename to the
+    // zip path, and msu1 strips the last extension to find "<base>.msu"
+    std::string rom = put_file(dir, "Game.zip", "PK", 2);
+    REQUIRE_FALSE(rom.empty());
+    put_file(dir, "Game.msu", "", 0);
+
+    CHECK(msu1_detect(rom.c_str()));
+
+    Msu1State st = {};
+    CHECK(msu1_init(st, rom.c_str()) == Msu1Result::Ok);
+    msu1_shutdown(st);
+}
+
 TEST_CASE("msu1_build_track_path_ext formats <base>-<N><ext>")
 {
     char out[64];
