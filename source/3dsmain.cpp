@@ -1266,7 +1266,8 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             SMenuTab dialogTab; bool isDialog = false;
             char path[PATH_MAX], bak[PATH_MAX];
             file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
-            file3dsGetRelatedPath(Memory.ROMFilename, bak, sizeof(bak), ".3d.bak", "stereo3d");
+            // hidden sibling folder keeps the shareable stereo3d/ clean
+            file3dsGetRelatedPath(Memory.ROMFilename, bak, sizeof(bak), ".3d", ".stereo3d-bak");
 
             settingsSaveStereo3D();
             bool ok = path[0] != '\0' && bak[0] != '\0' && stereoCopyFile(path, bak);
@@ -1280,7 +1281,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             SMenuTab dialogTab; bool isDialog = false;
             char path[PATH_MAX], bak[PATH_MAX];
             file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
-            file3dsGetRelatedPath(Memory.ROMFilename, bak, sizeof(bak), ".3d.bak", "stereo3d");
+            file3dsGetRelatedPath(Memory.ROMFilename, bak, sizeof(bak), ".3d", ".stereo3d-bak");
 
             if (bak[0] == '\0' || !IsFileExists(bak)) {
                 menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Restore 3D Settings Backup",

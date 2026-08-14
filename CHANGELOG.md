@@ -28,8 +28,9 @@ Notable changes to this project will be documented in this file.
 * New "Tools" block closing the 3D section: "Reset 3D Settings" (deletes
   every profile and screen bind and restores factory values, behind a
   confirmation; the game's WATCH byte is kept) plus "Backup 3D Settings" /
-  "Restore 3D Settings Backup" - snapshot the current 3D setup to
-  <game>.3d.bak before experimenting and bring it back at any time.
+  "Restore 3D Settings Backup" - snapshot the current 3D setup before
+  experimenting and bring it back at any time. Backups live in the hidden
+  .stereo3d-bak folder, keeping the shareable stereo3d/ folder clean.
 
 ## Stable 2026-08-13 (efb1096)
 

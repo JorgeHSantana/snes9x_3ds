@@ -59,7 +59,7 @@ bool file3dsInitialize() {
     
     log3dsWrite("check for required directories:");
 
-    const char* directories[] = { "", "configs", "saves", "savestates", "savestates/screenshots", "screenshots", ".dir_cache", "stereo3d" };
+    const char* directories[] = { "", "configs", "saves", "savestates", "savestates/screenshots", "screenshots", ".dir_cache", "stereo3d", ".stereo3d-bak" };
     char reqDir[128];
 
     for (const char* dir : directories) {
