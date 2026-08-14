@@ -766,6 +766,28 @@ const std::vector<SMenuItem>& makeOptionsForScreenFilter() {
 // which profile the stereo gauges edit: -1 = Default (the flat fields)
 static int s_stereoEditIdx = -1;
 void settingsResetStereo3D();
+void settingsLoadStereo3D();
+void settingsSaveStereo3D();
+
+// tiny copy helper for the .3d <-> .3d.bak snapshots (files are a few KB)
+static bool stereoCopyFile(const char *src, const char *dst)
+{
+    FILE *in = fopen(src, "rb");
+    if (!in) return false;
+    FILE *out = fopen(dst, "wb");
+    if (!out) { fclose(in); return false; }
+
+    char buf[1024];
+    size_t n;
+    bool ok = true;
+    while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
+        if (fwrite(buf, 1, n, out) != n) { ok = false; break; }
+    }
+    if (ferror(in)) ok = false;
+
+    fclose(in);
+    return fclose(out) == 0 && ok;
+}
 
 static int *stereoEditDepth(int layer) {
     if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount)
@@ -1240,6 +1262,47 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             menu3dsMarkTabDirty(TAB_SETTINGS);
         }, MenuItemType::Action, "  Reset 3D Settings"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Deletes every profile and restores factory values."_s, ""_s);
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+            char path[PATH_MAX], bak[PATH_MAX];
+            file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
+            file3dsGetRelatedPath(Memory.ROMFilename, bak, sizeof(bak), ".3d.bak", "stereo3d");
+
+            settingsSaveStereo3D();
+            bool ok = path[0] != '\0' && bak[0] != '\0' && stereoCopyFile(path, bak);
+            menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Backup 3D Settings",
+                ok ? "Snapshot saved. 'Restore 3D Settings Backup' brings\nit back at any time."
+                   : "Could not write the backup file.",
+                Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+        }, MenuItemType::Action, "  Backup 3D Settings"_s, ""_s);
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+            char path[PATH_MAX], bak[PATH_MAX];
+            file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
+            file3dsGetRelatedPath(Memory.ROMFilename, bak, sizeof(bak), ".3d.bak", "stereo3d");
+
+            if (bak[0] == '\0' || !IsFileExists(bak)) {
+                menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Restore 3D Settings Backup",
+                    "No backup found for this game yet.\nUse 'Backup 3D Settings' to create one.",
+                    Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+                menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+                return;
+            }
+
+            bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+                "Restore 3D Settings Backup",
+                "Replace the CURRENT 3D settings and profiles with\nthe backup snapshot?", true, true);
+            if (!confirmed) return;
+
+            if (path[0] != '\0' && stereoCopyFile(bak, path)) {
+                settingsLoadStereo3D();
+                settings3dsStereoApplyDefault();
+                settings3DS.isDirty = true;
+                menu3dsMarkTabDirty(TAB_SETTINGS);
+            }
+        }, MenuItemType::Action, "  Restore 3D Settings Backup"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Snapshot the current 3D setup before experimenting."_s, ""_s);
     }
 
 

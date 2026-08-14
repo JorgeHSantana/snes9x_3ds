@@ -25,9 +25,11 @@ Notable changes to this project will be documented in this file.
   inside a pack folder may be a .zip (the pack itself stays a folder).
 * Changing In-Frame Palette Changes now shows/hides the ADVANCED SETTINGS
   section (Reduce Layer Draws) immediately.
-* "Reset 3D Settings" in Scene Profiles: deletes every profile and screen
-  bind and restores the Default profile to factory values, behind a
-  confirmation dialog (the game's WATCH byte is kept).
+* New "Tools" block closing the 3D section: "Reset 3D Settings" (deletes
+  every profile and screen bind and restores factory values, behind a
+  confirmation; the game's WATCH byte is kept) plus "Backup 3D Settings" /
+  "Restore 3D Settings Backup" - snapshot the current 3D setup to
+  <game>.3d.bak before experimenting and bring it back at any time.
 
 ## Stable 2026-08-13 (efb1096)
 
