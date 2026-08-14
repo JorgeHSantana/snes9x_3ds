@@ -4,6 +4,14 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
+* New 3DS Clock control (Emulator tab): choose 804 MHz (full speed,
+  default - same behavior as before) or 268 MHz, which runs at Old 3DS
+  speed and lets you preview how a game would perform on that hardware.
+  Old 3DS/2DS models don't show the option. (#16)
+
+## Stable 2026-08-14 (a9813db)
+
+### Features
 * **Load ROMs from .zip archives**: the browser lists `.zip` files and the
   loader decompresses the first ROM inside (macOS junk entries are skipped).
   Saves and configs are keyed by the zip's basename, so they are shared with

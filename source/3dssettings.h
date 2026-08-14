@@ -170,6 +170,7 @@ typedef struct {
     int                 SecondScreenBgOpacity;
 
     bool                ShowFPS;
+    int                 Overclock;            // New 3DS clock: 0 = 268MHz (Old 3DS speed), 1 = 804MHz
 
     Setting::ScreenStretch ScreenStretch;
     Setting::ScreenFilter ScreenFilter;         // User preference for SNES_MAIN in stretched modes.

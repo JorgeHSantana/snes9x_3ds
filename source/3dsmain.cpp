@@ -537,6 +537,17 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     // 3D on/off and intensity are the physical slider's job: 0 = exact 2D,
     // anything above scales the effect analogically up to the full range.
 
+    // New 3DS clock control (issue #16); Old 3DS/2DS have nothing to switch
+    if (settings3DS.isNew3DS) {
+        AddMenuPicker(items, "  New 3DS Clock"_s,
+            "804 MHz is the New 3DS's full speed (recommended).\n268 MHz runs at Old 3DS speed - handy to preview how a\ngame would perform on that hardware."_s,
+            makePickerOptions({"268 MHz (Old 3DS speed)", "804 MHz (full speed)"}), settings3DS.Overclock, DIALOG_TYPE_INFO, true,
+            []( int val ) {
+                if (CheckAndUpdate(settings3DS.Overclock, val))
+                    osSetSpeedupEnable(val != 0);
+            });
+    }
+
     AddMenuDisabledOption(items, ""_s);
 
     AddMenuHeader1(items, "OTHERS"_s);
@@ -1880,6 +1891,7 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     config3dsReadWriteEnum(stream, writeMode, "UseGlobalEmuControlKeys=%d\n", &settings3DS.UseGlobalEmuControlKeys, 0, 1);
 
     config3dsReadWriteEnum(stream, writeMode, "ShowFPS=%d\n", &settings3DS.ShowFPS, 0, 1);
+    config3dsReadWriteEnum(stream, writeMode, "Overclock=%d\n", &settings3DS.Overclock, 0, 1);
 
     return true;
 }
@@ -3026,6 +3038,9 @@ int main()
     // load global config, overwrites defaults if file exists
     cfgFileAvailable[0] = settingsReadWriteFullListGlobal(false);
     settings3dsUpdate(false);
+
+    // honor the New 3DS clock preference (no-op on Old 3DS/2DS)
+    osSetSpeedupEnable(settings3DS.Overclock != 0);
 
     if (!emulatorInitialize()) {
         return emulatorFinalize();

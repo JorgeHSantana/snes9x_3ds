@@ -50,6 +50,7 @@ void settings3dsResetGlobalDefaults() {
     settings3DS.SecondScreenBgOpacity = OPACITY_STEPS / 2;
 
     settings3DS.ShowFPS = false;
+    settings3DS.Overclock = 1;   // New 3DS full speed by default (matches prior behavior)
 
     settings3DS.UseGlobalEmuControlKeys = true;
     settings3DS.UseGlobalBindCirclePad = true;
