@@ -1169,18 +1169,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
             menu3dsMarkTabDirty(TAB_SETTINGS);
         }, MenuItemType::Action, "  Release This Screen"_s, ""_s);
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
-            SMenuTab dialogTab; bool isDialog = false;
-            bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-                "Reset 3D Settings",
-                "Delete ALL profiles and their screen binds, and\nrestore the Default profile to factory values?", true, true);
-            if (!confirmed) return;
-
-            settingsResetStereo3D();
-            settings3dsStereoApplyDefault();
-            settings3DS.isDirty = true;
-            menu3dsMarkTabDirty(TAB_SETTINGS);
-        }, MenuItemType::Action, "  Reset 3D Settings"_s, ""_s);
 
 
 
@@ -1236,6 +1224,21 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             makePickerOptions({"Off", "Trim", "Zoom"}), *stereoEditField(5), DIALOG_TYPE_INFO, true,
             []( int val ) { CheckAndUpdate( *stereoEditField(5), val ); });
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Hides the screen-edge columns disturbed by the 3D shifts."_s, ""_s);
+
+        AddMenuDisabledOption(items, ""_s);
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+            bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+                "Reset 3D Settings",
+                "Delete ALL profiles and their screen binds, and\nrestore the Default profile to factory values?", true, true);
+            if (!confirmed) return;
+
+            settingsResetStereo3D();
+            settings3dsStereoApplyDefault();
+            settings3DS.isDirty = true;
+            menu3dsMarkTabDirty(TAB_SETTINGS);
+        }, MenuItemType::Action, "  Reset 3D Settings"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Deletes every profile and restores factory values."_s, ""_s);
     }
 
 
