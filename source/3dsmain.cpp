@@ -949,7 +949,12 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                   []( int val ) { CheckAndUpdate(settings3DS.FrameSync, static_cast<Setting::FrameSync>(val)); });
 
     AddMenuPicker(items, "  In-Frame Palette Changes"_s, "Try changing this if some colors in the game look off."_s, makeOptionsForInFramePaletteChanges(), settings3DS.PaletteFix, DIALOG_TYPE_INFO, true,
-                  []( int val ) { CheckAndUpdate( settings3DS.PaletteFix, val ); });
+                  []( int val ) {
+                      // rebuild the tab: the ADVANCED SETTINGS section
+                      // (Reduce Layer Draws) only exists while this is Enabled
+                      if (CheckAndUpdate( settings3DS.PaletteFix, val ))
+                          menu3dsMarkTabDirty(TAB_SETTINGS);
+                  });
 
     AddMenuCheckbox(items, "  Mode 7 Smoothing"_s, settings3DS.Mode7BilinearFilter,
         []( int val ) { CheckAndUpdateToggle( settings3DS.Mode7BilinearFilter, val ); });
