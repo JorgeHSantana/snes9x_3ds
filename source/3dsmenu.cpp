@@ -239,7 +239,9 @@ void menu3dsDrawItems(
             if (currentTab->MenuItems[i].TextColor != -1)
                 color = currentTab->MenuItems[i].TextColor;
             if (currentTab->SelectedItemIndex == i)
-                color = selectedItemTextColor;
+                color = currentTab->MenuItems[i].SelectedTextColor != -1
+                    ? currentTab->MenuItems[i].SelectedTextColor
+                    : selectedItemTextColor;
             
             ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, horizontalPadding, y, settings3DS.SecondScreenWidth - horizontalPadding, y + fontHeight, color, HALIGN_LEFT, currentTab->MenuItems[i].Text.c_str());
 

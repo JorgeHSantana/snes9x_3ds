@@ -76,9 +76,10 @@ public:
                                 // Type = Picker:
                                 //   Selected ID of Picker
 
-    // optional text color override for the unselected state
-    // (-1 = theme default; used e.g. to tint MSU pack entries in the browser)
+    // optional text color overrides (-1 = theme default; used e.g. to tint
+    // MSU pack entries in the browser: blue at rest, light blue under the cursor)
     int     TextColor = -1;
+    int     SelectedTextColor = -1;
 
     // workaround: we also use GaugeMinValue to determine if a picker should show its selected option in the menu or not.
     int     GaugeMinValue;
