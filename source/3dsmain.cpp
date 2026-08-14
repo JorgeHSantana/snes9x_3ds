@@ -556,7 +556,7 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     // hardware has nothing to configure, so the option only shows on New.
     if (settings3DS.isNew3DS) {
         AddMenuPicker(items, "  3DS Mode"_s,
-            "New 3DS mode runs at 804 MHz with the L2 cache on\n(recommended). Old 3DS mode (268 MHz, no L2) previews how\na game would perform on that hardware."_s,
+            "New = 804 MHz + L2 cache (recommended).\nOld = 268 MHz, previews Old 3DS performance."_s,
             makePickerOptions({"Old 3DS (268 MHz)", "New 3DS (804 MHz + L2)"}), settings3DS.Overclock, DIALOG_TYPE_INFO, true,
             []( int val ) {
                 if (CheckAndUpdate(settings3DS.Overclock, val))
