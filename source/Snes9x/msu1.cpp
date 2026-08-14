@@ -171,6 +171,7 @@ static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
 static bool g_defer_active = false;
 static bool g_defer_pending = false;
 static Msu1Snapshot g_defer_snap;
+static Msu1State* g_defer_state = nullptr;
 
 static void (*g_log_hook)(const char*) = nullptr;
 static uint32_t (*g_data_prefetch)(uint32_t, uint8_t*, uint32_t) = nullptr;
@@ -612,6 +613,7 @@ Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap)
     if (g_defer_active) {
         // rewind hold: latch only - the release applies the newest snapshot
         g_defer_snap = snap;
+        g_defer_state = &state;
         g_defer_pending = true;
         return Msu1Result::Ok;
     }
@@ -630,7 +632,10 @@ void msu1_set_restore_deferred(bool deferred)
     g_defer_active = deferred;
     if (!deferred && g_defer_pending) {
         g_defer_pending = false;
-        msu1_restore(MSU1, g_defer_snap);
+        if (g_defer_state != nullptr) {
+            msu1_restore(*g_defer_state, g_defer_snap);
+        }
+        g_defer_state = nullptr;
     }
 }
 
@@ -638,6 +643,7 @@ void msu1_restore_deferred_cancel(void)
 {
     g_defer_active = false;
     g_defer_pending = false;
+    g_defer_state = nullptr;
 }
 
 uint8_t S9xMSU1ReadPort(uint8_t port)               { return msu1_read_port(MSU1, port); }
