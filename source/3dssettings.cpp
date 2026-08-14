@@ -361,6 +361,37 @@ int settings3dsStereoActiveIndex()
     return -1;
 }
 
+// Read-only diagnostics for the Tools menu: what the matcher sees on the
+// screen you paused on, and which profile it picked (issue #33).
+void settings3dsStereoMatchInfo(char *out, size_t size)
+{
+    u8 *rr = Memory.FillRAM;
+    char watchLine[64];
+    if (settings3DS.StereoWatchAddr >= 0) {
+        snprintf(watchLine, sizeof(watchLine), "WATCH $7E%04X = %02X",
+            settings3DS.StereoWatchAddr & 0xFFFF,
+            Memory.RAM[settings3DS.StereoWatchAddr & 0x1FFFF]);
+    } else {
+        snprintf(watchLine, sizeof(watchLine), "WATCH: not set (WATCH= line in the .3d)");
+    }
+
+    snprintf(out, size,
+        "Matched profile: %s\n"
+        "PPU  2105=%02X TM=%02X TS=%02X 2130=%02X\n"
+        "     2131=%02X 2106=%02X 420C=%02X\n"
+        "VRAM 2101=%02X 2107=%02X 2108=%02X 2109=%02X\n"
+        "     210A=%02X 210B=%02X 210C=%02X\n"
+        "%s\n"
+        "Profiles: %d   Screen binds: %d",
+        settings3dsStereoActiveName(),
+        rr[0x2105], rr[0x212C], rr[0x212D], rr[0x2130],
+        rr[0x2131], rr[0x2106], rr[0x420C],
+        rr[0x2101], rr[0x2107], rr[0x2108], rr[0x2109],
+        rr[0x210A], rr[0x210B], rr[0x210C],
+        watchLine,
+        settings3DS.StereoProfilesCount, settings3DS.StereoBindsCount);
+}
+
 const char *settings3dsStereoActiveName()
 {
     if (s_stereoActiveIdx >= 0 && s_stereoActiveIdx < settings3DS.StereoProfilesCount)

@@ -25,6 +25,12 @@ Notable changes to this project will be documented in this file.
   inside a pack folder may be a .zip (the pack itself stays a folder).
 * Changing In-Frame Palette Changes now shows/hides the ADVANCED SETTINGS
   section (Reduce Layer Draws) immediately.
+* Tools: "Scene Matcher Info" shows what the scene matcher sees (PPU
+  signature, VRAM word, watch byte, matched profile) for debugging shared
+  .3d files; "Set as Global Default" saves the game's look as the starting
+  point for games without their own settings (default.3d - profiles never
+  go global); "Copy 3D Settings From..." imports another game's look
+  (profiles stay behind, the game's WATCH byte is kept).
 * New "Tools" block closing the 3D section: "Reset 3D Settings" (deletes
   every profile and screen bind and restores factory values, behind a
   confirmation; the game's WATCH byte is kept) plus "Backup 3D Settings" /

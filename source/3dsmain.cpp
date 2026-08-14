@@ -768,6 +768,7 @@ static int s_stereoEditIdx = -1;
 void settingsResetStereo3D();
 void settingsLoadStereo3D();
 void settingsSaveStereo3D();
+void settingsSaveStereo3DDefault();
 
 // tiny copy helper for the .3d <-> .3d.bak snapshots (files are a few KB)
 static bool stereoCopyFile(const char *src, const char *dst)
@@ -1251,17 +1252,103 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         AddMenuHeader2(items, "Tools"_s);
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
+            char info[512];
+            settings3dsStereoMatchInfo(info, sizeof(info));
+            menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Scene Matcher Info",
+                info, Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo,
+                makeOptionsForOk(), -1, false, 8);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+        }, MenuItemType::Action, "  Scene Matcher Info"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  What the matcher sees on the screen you paused on."_s, ""_s);
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
             bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-                "Reset 3D Settings",
-                "Delete ALL profiles and their screen binds, and\nrestore the Default profile to factory values?", true, true);
+                "Set as Global Default",
+                "Use this game's look (depths, focus, effects) as the\nstarting point for games without their own settings?", true, true);
             if (!confirmed) return;
 
-            settingsResetStereo3D();
+            settingsSaveStereo3DDefault();
+            menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Set as Global Default",
+                "Saved to stereo3d/default.3d. Games without a .3d\nfile now start from this look.",
+                Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+        }, MenuItemType::Action, "  Set as Global Default"_s, ""_s);
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+
+            char curPath[PATH_MAX];
+            file3dsGetRelatedPath(Memory.ROMFilename, curPath, sizeof(curPath), ".3d", "stereo3d");
+            const char *curBase = strrchr(curPath, '/');
+            curBase = curBase ? curBase + 1 : curPath;
+
+            char dirPath[PATH_MAX];
+            snprintf(dirPath, sizeof(dirPath), "%s/stereo3d", settings3DS.RootDir);
+
+            std::vector<std::string> files;
+            DIR *d = opendir(dirPath);
+            if (d) {
+                struct dirent *e;
+                while ((e = readdir(d)) != NULL) {
+                    if (e->d_name[0] == '.') continue;
+                    size_t len = strlen(e->d_name);
+                    if (len < 4 || strcasecmp(e->d_name + len - 3, ".3d") != 0) continue;
+                    if (strcasecmp(e->d_name, "default.3d") == 0) continue;
+                    if (strcmp(e->d_name, curBase) == 0) continue;
+                    files.push_back(e->d_name);
+                }
+                closedir(d);
+            }
+            std::sort(files.begin(), files.end());
+
+            if (files.empty()) {
+                menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Copy 3D Settings From",
+                    "No other game has 3D settings saved yet.",
+                    Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+                menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+                return;
+            }
+
+            std::vector<SMenuItem> fileItems;
+            for (size_t i = 0; i < files.size(); i++)
+                AddMenuDialogOption(fileItems, (int)i, files[i].substr(0, files[i].size() - 3), ""_s);
+
+            int idx = menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Copy 3D Settings From",
+                "Import another game's look as this game's settings.",
+                Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, fileItems, -1, true);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+            if (idx < 0 || idx >= (int)files.size()) return;
+
+            bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+                "Copy 3D Settings From",
+                "Replace this game's 3D settings with that look?\nThis game's profiles will be removed.", true, true);
+            if (!confirmed) return;
+
+            // import only the global look: profiles/binds/watch are
+            // per-game fingerprints and stay behind
+            char srcPath[PATH_MAX * 2];
+            snprintf(srcPath, sizeof(srcPath), "%s/%s", dirPath, files[idx].c_str());
+            FILE *in = fopen(srcPath, "r");
+            FILE *out = curPath[0] != '\0' ? fopen(curPath, "w") : NULL;
+            if (in && out) {
+                char line[96];
+                while (fgets(line, sizeof(line), in)) {
+                    if (strncmp(line, "PROFILE=", 8) == 0 ||
+                        strncmp(line, "WATCH=", 6) == 0 ||
+                        strncmp(line, "BIND=", 5) == 0)
+                        break;
+                    fputs(line, out);
+                }
+            }
+            if (in) fclose(in);
+            if (out) fclose(out);
+
+            int savedWatch = settings3DS.StereoWatchAddr;   // game metadata, keep
+            settingsLoadStereo3D();
+            settings3DS.StereoWatchAddr = savedWatch;
             settings3dsStereoApplyDefault();
             settings3DS.isDirty = true;
             menu3dsMarkTabDirty(TAB_SETTINGS);
-        }, MenuItemType::Action, "  Reset 3D Settings"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Deletes every profile and restores factory values."_s, ""_s);
+        }, MenuItemType::Action, "  Copy 3D Settings From..."_s, ""_s);
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             char path[PATH_MAX], bak[PATH_MAX];
@@ -1293,7 +1380,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
             bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
                 "Restore 3D Settings Backup",
-                "Replace the CURRENT 3D settings and profiles with\nthe backup snapshot?", true, true);
+                "This OVERWRITES all current 3D settings AND\nprofiles of this game with the snapshot. Restore?", true, true);
             if (!confirmed) return;
 
             if (path[0] != '\0' && stereoCopyFile(bak, path)) {
@@ -1304,6 +1391,19 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             }
         }, MenuItemType::Action, "  Restore 3D Settings Backup"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Snapshot the current 3D setup before experimenting."_s, ""_s);
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+            bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+                "Reset 3D Settings",
+                "Delete ALL profiles and their screen binds, and\nrestore the Default profile to factory values?", true, true);
+            if (!confirmed) return;
+
+            settingsResetStereo3D();
+            settings3dsStereoApplyDefault();
+            settings3DS.isDirty = true;
+            menu3dsMarkTabDirty(TAB_SETTINGS);
+        }, MenuItemType::Action, "  Reset 3D Settings"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Deletes every profile and restores factory values."_s, ""_s);
     }
 
 
@@ -1818,9 +1918,11 @@ void settingsLoadStereo3D()
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
 
     FILE *f = path[0] != '\0' ? fopen(path, "r") : NULL;
+    bool fallback = false;
     if (!f) {
         snprintf(path, sizeof(path), "%s/stereo3d/default.3d", settings3DS.RootDir);
         f = fopen(path, "r");
+        fallback = true;
     }
     if (!f) return;
 
@@ -1838,6 +1940,12 @@ void settingsLoadStereo3D()
     int v;
     unsigned long long sv, mv;
     while (fgets(line, sizeof(line), f)) {
+        // default.3d only carries the global look: profiles/binds/watch are
+        // per-game fingerprints and must never leak across games
+        if (fallback && (strncmp(line, "PROFILE=", 8) == 0 ||
+                         strncmp(line, "WATCH=", 6) == 0 ||
+                         strncmp(line, "BIND=", 5) == 0))
+            continue;
         if (sscanf(line, "PROFILE=%15[^\r\n]", name) == 1) {
             if (settings3DS.StereoProfilesCount < STEREO_PROFILES_MAX) {
                 S9xSettings3DS::SStereoProfile *p =
@@ -1897,15 +2005,8 @@ void settingsLoadStereo3D()
     fclose(f);
 }
 
-void settingsSaveStereo3D()
+static void settingsWriteStereo3DGlobals(FILE *f)
 {
-    char path[PATH_MAX];
-    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
-    if (path[0] == '\0') return;
-
-    FILE *f = fopen(path, "w");
-    if (!f) return;
-
     fprintf(f, "# snes9x_3ds stereoscopic 3D depths (-8..8): + pops out, - sinks in\n");
     for (int i = 0; i < 5; i++)
         fprintf(f, "%s=%d\n", stereoDepthKeys[i], settings3DS.StereoDepth[i]);
@@ -1919,6 +2020,32 @@ void settingsSaveStereo3D()
     fprintf(f, "FOCUSFRONT=%d\n", settings3DS.StereoFocusFront);
     fprintf(f, "# edge cleanup for parallax side columns: 0 off, 1 trim, 2 zoom\n");
     fprintf(f, "EDGEMODE=%d\n", settings3DS.StereoEdgeMode);
+}
+
+// Writes the current game's LOOK (depths/focus/effects/edge) as the global
+// default for games without their own .3d. Profiles/binds stay per-game.
+void settingsSaveStereo3DDefault()
+{
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/stereo3d/default.3d", settings3DS.RootDir);
+
+    FILE *f = fopen(path, "w");
+    if (!f) return;
+    fprintf(f, "# global default look - applied to games without their own .3d\n");
+    settingsWriteStereo3DGlobals(f);
+    fclose(f);
+}
+
+void settingsSaveStereo3D()
+{
+    char path[PATH_MAX];
+    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
+    if (path[0] == '\0') return;
+
+    FILE *f = fopen(path, "w");
+    if (!f) return;
+
+    settingsWriteStereo3DGlobals(f);
 
     // per-scene profiles + PPU-signature binds (issue #23). BIND bytes:
     // b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C; mask byte 00
