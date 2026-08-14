@@ -765,6 +765,7 @@ const std::vector<SMenuItem>& makeOptionsForScreenFilter() {
 
 // which profile the stereo gauges edit: -1 = Default (the flat fields)
 static int s_stereoEditIdx = -1;
+void settingsResetStereo3D();
 
 static int *stereoEditDepth(int layer) {
     if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount)
@@ -1168,6 +1169,18 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
             menu3dsMarkTabDirty(TAB_SETTINGS);
         }, MenuItemType::Action, "  Release This Screen"_s, ""_s);
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+            bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+                "Reset 3D Settings",
+                "Delete ALL profiles and their screen binds, and\nrestore the Default profile to factory values?", true, true);
+            if (!confirmed) return;
+
+            settingsResetStereo3D();
+            settings3dsStereoApplyDefault();
+            settings3DS.isDirty = true;
+            menu3dsMarkTabDirty(TAB_SETTINGS);
+        }, MenuItemType::Action, "  Reset 3D Settings"_s, ""_s);
 
 
 
@@ -1710,8 +1723,10 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
 static const int stereoDepthDefault[5] = { 0, -2, -1, 0, 0 };
 static const char *stereoDepthKeys[5] = { "BG1", "BG2", "BG3", "BG4", "OBJ" };
 
-
-void settingsLoadStereo3D()
+// Factory state: no profiles/binds, Default profile at its factory values.
+// Keeps StereoWatchAddr - the WATCH byte is file metadata about the game,
+// not a user setting, and it is painful to re-mine.
+void settingsResetStereo3D()
 {
     for (int i = 0; i < 5; i++)
         settings3DS.StereoDepth[i] = stereoDepthDefault[i];
@@ -1723,8 +1738,13 @@ void settingsLoadStereo3D()
     settings3DS.StereoEdgeMode = 1;   // Trim
     settings3DS.StereoProfilesCount = 0;
     settings3DS.StereoBindsCount = 0;
-    settings3DS.StereoWatchAddr = -1;
     s_stereoEditIdx = -1;
+}
+
+void settingsLoadStereo3D()
+{
+    settingsResetStereo3D();
+    settings3DS.StereoWatchAddr = -1;
 
     char path[PATH_MAX];
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
