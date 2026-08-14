@@ -167,6 +167,11 @@ void msu1_soft_reset(Msu1State& state)
 
 static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
 
+// rewind-hold deferred restore (see msu1.h)
+static bool g_defer_active = false;
+static bool g_defer_pending = false;
+static Msu1Snapshot g_defer_snap;
+
 static void (*g_log_hook)(const char*) = nullptr;
 static uint32_t (*g_data_prefetch)(uint32_t, uint8_t*, uint32_t) = nullptr;
 static bool g_frame_torn = false;
@@ -504,6 +509,7 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
 uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
 {
     if (out == nullptr || max_bytes == 0) { return 0; }
+    if (g_defer_active) { return 0; }   // rewinding: hold the music
     if (!state.enabled || !msu1_audio_ready(state)) { return 0; }
     if ((state.status & MSU1_FLAG_AUDIO_PLAYING) == 0) { return 0; }
 
@@ -603,12 +609,35 @@ static Msu1Result msu1_restore_locked(Msu1State& state, const Msu1Snapshot& snap
 
 Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap)
 {
+    if (g_defer_active) {
+        // rewind hold: latch only - the release applies the newest snapshot
+        g_defer_snap = snap;
+        g_defer_pending = true;
+        return Msu1Result::Ok;
+    }
+
     // Restore closes/reopens/seeks files the mixing thread may be reading;
     // fence it with the platform lock hooks (no-ops on host, see msu1.h).
     msu1_lock();
     Msu1Result result = msu1_restore_locked(state, snap);
     msu1_unlock();
     return result;
+}
+
+void msu1_set_restore_deferred(bool deferred)
+{
+    if (g_defer_active == deferred) { return; }
+    g_defer_active = deferred;
+    if (!deferred && g_defer_pending) {
+        g_defer_pending = false;
+        msu1_restore(MSU1, g_defer_snap);
+    }
+}
+
+void msu1_restore_deferred_cancel(void)
+{
+    g_defer_active = false;
+    g_defer_pending = false;
 }
 
 uint8_t S9xMSU1ReadPort(uint8_t port)               { return msu1_read_port(MSU1, port); }

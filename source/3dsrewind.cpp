@@ -11,6 +11,7 @@
 
 #include "Snes9x/snes9x.h"
 #include "Snes9x/snapshot.h"
+#include "Snes9x/msu1.h"
 
 // One uncompressed snapshot is ~450KB; 512KB slots leave headroom.
 // New 3DS affords ~24 seconds of rewind, Old 3DS ~4 seconds - the pool
@@ -23,6 +24,7 @@
 
 static RewindRing s_ring;
 static bool s_allocTried = false;
+static bool s_msuDeferred = false;
 static int  s_frameCounter = 0;
 static int  s_notifCooldown = 0;
 
@@ -52,6 +54,10 @@ void rewind3dsReset()
     if (s_ring.valid())
         s_ring.clear();
     s_frameCounter = 0;
+    if (s_msuDeferred) {
+        msu1_restore_deferred_cancel();   // never apply another game's snap
+        s_msuDeferred = false;
+    }
 }
 
 void rewind3dsFrameTick(bool rewindHeld)
@@ -65,6 +71,20 @@ void rewind3dsFrameTick(bool rewindHeld)
 
     s_frameCounter++;
     if (s_notifCooldown > 0) s_notifCooldown--;
+
+    // MSU-1 games: each rewind step would reopen/seek the audio track on
+    // SD and hitch. While the hotkey is held the MSU restore is deferred
+    // (music pauses); releasing applies the newest snapshot in one go.
+    if (rewindHeld && !s_msuDeferred && Settings.MSU1) {
+        msu1_set_restore_deferred(true);
+        s_msuDeferred = true;
+    } else if (!rewindHeld && s_msuDeferred) {
+        snd3dsDrainMixing();
+        msu1_set_restore_deferred(false);
+        snd3dsResumeMixing();
+        msu3dsOnEvent(Msu1Event::SavestateLoaded);
+        s_msuDeferred = false;
+    }
 
     if (rewindHeld) {
         if (s_frameCounter < REWIND_STEP_FRAMES) return;
@@ -87,7 +107,8 @@ void rewind3dsFrameTick(bool rewindHeld)
         bool ok = S9xUnfreezeGameMem(data, length);
         if (ok) {
             gpu3dsInitializeMode7Vertexes();
-            msu3dsOnEvent(Msu1Event::SavestateLoaded);
+            if (!s_msuDeferred)
+                msu3dsOnEvent(Msu1Event::SavestateLoaded);
         }
         snd3dsResumeMixing();
 

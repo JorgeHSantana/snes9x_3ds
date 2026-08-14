@@ -308,6 +308,19 @@ bool confirmDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std
     return result == 0;
 }
 
+// 3DS Mode (issue #16): New = 804 MHz + L2 cache, Old = 268 MHz without.
+// PTMSYSM drives both bits explicitly; osSetSpeedupEnable is the fallback.
+static void apply3dsMode(int mode)
+{
+    if (!settings3DS.isNew3DS) return;
+    if (R_SUCCEEDED(ptmSysmInit())) {
+        PTMSYSM_ConfigureNew3DSCPU(mode != 0 ? 3 : 0);   // bit0 clock, bit1 L2
+        ptmSysmExit();
+    } else {
+        osSetSpeedupEnable(mode != 0);
+    }
+}
+
 void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
     items.clear();
 
@@ -539,14 +552,15 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     // 3D on/off and intensity are the physical slider's job: 0 = exact 2D,
     // anything above scales the effect analogically up to the full range.
 
-    // New 3DS clock control (issue #16); Old 3DS/2DS have nothing to switch
+    // 3DS Mode (issue #16): one switch for clock + L2 cache. Old 3DS/2DS
+    // hardware has nothing to configure, so the option only shows on New.
     if (settings3DS.isNew3DS) {
-        AddMenuPicker(items, "  New 3DS Clock"_s,
-            "804 MHz is the New 3DS's full speed (recommended).\n268 MHz runs at Old 3DS speed - handy to preview how a\ngame would perform on that hardware."_s,
-            makePickerOptions({"268 MHz (Old 3DS speed)", "804 MHz (full speed)"}), settings3DS.Overclock, DIALOG_TYPE_INFO, true,
+        AddMenuPicker(items, "  3DS Mode"_s,
+            "New 3DS mode runs at 804 MHz with the L2 cache on\n(recommended). Old 3DS mode (268 MHz, no L2) previews how\na game would perform on that hardware."_s,
+            makePickerOptions({"Old 3DS (268 MHz)", "New 3DS (804 MHz + L2)"}), settings3DS.Overclock, DIALOG_TYPE_INFO, true,
             []( int val ) {
                 if (CheckAndUpdate(settings3DS.Overclock, val))
-                    osSetSpeedupEnable(val != 0);
+                    apply3dsMode(val);
             });
     }
 
@@ -3044,8 +3058,8 @@ int main()
     cfgFileAvailable[0] = settingsReadWriteFullListGlobal(false);
     settings3dsUpdate(false);
 
-    // honor the New 3DS clock preference (no-op on Old 3DS/2DS)
-    osSetSpeedupEnable(settings3DS.Overclock != 0);
+    // honor the 3DS Mode preference (no-op on Old 3DS/2DS)
+    apply3dsMode(settings3DS.Overclock);
 
     if (!emulatorInitialize()) {
         return emulatorFinalize();

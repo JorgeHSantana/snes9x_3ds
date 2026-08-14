@@ -100,6 +100,13 @@ uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes);
 void       msu1_capture(const Msu1State& state, Msu1Snapshot& out);
 Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap);
 
+// Rewind hold support: while deferred, msu1_restore only latches the
+// snapshot (no file I/O - each rewind step would reopen/seek SD files and
+// stutter) and audio reads return silence. Leaving deferred mode applies
+// the last latched snapshot for real. Cancel drops it without applying.
+void msu1_set_restore_deferred(bool deferred);
+void msu1_restore_deferred_cancel(void);
+
 // Cross-thread lock hooks (installed once by the platform, both or neither).
 // S9xMSU1WritePort takes them around writes that mutate files/status the
 // mixing thread reads concurrently (ports 3/5/6/7); msu1_restore takes them

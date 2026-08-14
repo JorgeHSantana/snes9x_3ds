@@ -4,15 +4,15 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
-* New 3DS Clock control (Emulator tab): choose 804 MHz (full speed,
-  default - same behavior as before) or 268 MHz, which runs at Old 3DS
-  speed and lets you preview how a game would perform on that hardware.
-  Old 3DS/2DS models don't show the option. (#16)
+* 3DS Mode (Emulator tab, New 3DS only): "New 3DS" runs at 804 MHz with
+  the L2 cache on (default - same behavior as before); "Old 3DS" drops to
+  268 MHz without L2, previewing how a game would perform on that
+  hardware. (#16)
 * **Rewind**: bind the new "Rewind (Hold)" hotkey (Controls tab) and hold
   it to rewind gameplay - about 24 seconds of history on New 3DS, ~4s on
   Old 3DS (snapshots every half second in RAM). Release to resume playing
-  from that point. Works with MSU-1 games (audio reseeks on each step).
-  (#12)
+  from that point. On MSU-1 games the music pauses while rewinding and
+  reseeks once on release, so the steps stay smooth. (#12)
 
 ## Stable 2026-08-14 (a9813db)
 
