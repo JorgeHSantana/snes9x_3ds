@@ -1226,6 +1226,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Hides the screen-edge columns disturbed by the 3D shifts."_s, ""_s);
 
         AddMenuDisabledOption(items, ""_s);
+        AddMenuHeader2(items, "Reset"_s);
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
