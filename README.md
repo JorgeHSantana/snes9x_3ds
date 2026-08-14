@@ -24,6 +24,7 @@ Feedback and bug reports are welcome.
 * Rich visual customization with thumbnails, themes, per-game backgrounds and overlays
 * Crop and overscan
 * Improved cheat management
+* Rewind: hold a mappable hotkey to rewind gameplay (~24s of history on New 3DS)
 * Extended hotkey options and screen swap support
 * Directory caching for faster ROM list loading
 

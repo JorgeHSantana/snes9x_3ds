@@ -16,6 +16,12 @@ static u32 lastKeysHeld = 0;
 static bool ignoreInput = false;
 static bool turboModeToggle = false;
 
+bool input3dsIsRewindHoldPressed()
+{
+    return (!settings3DS.UseGlobalEmuControlKeys && settings3DS.ButtonHotkeys[HOTKEY_REWIND_HOLD].IsHeld(currKeysHeld)) ||
+           (settings3DS.UseGlobalEmuControlKeys && settings3DS.GlobalButtonHotkeys[HOTKEY_REWIND_HOLD].IsHeld(currKeysHeld));
+}
+
 static bool input3dsIsFastForwardHoldPressed()
 {
     return (!settings3DS.UseGlobalEmuControlKeys && settings3DS.ButtonHotkeys[HOTKEY_FAST_FORWARD_HOLD].IsHeld(currKeysHeld)) ||

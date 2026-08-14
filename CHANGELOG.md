@@ -8,6 +8,11 @@ Notable changes to this project will be documented in this file.
   default - same behavior as before) or 268 MHz, which runs at Old 3DS
   speed and lets you preview how a game would perform on that hardware.
   Old 3DS/2DS models don't show the option. (#16)
+* **Rewind**: bind the new "Rewind (Hold)" hotkey (Controls tab) and hold
+  it to rewind gameplay - about 24 seconds of history on New 3DS, ~4s on
+  Old 3DS (snapshots every half second in RAM). Release to resume playing
+  from that point. Works with MSU-1 games (audio reseeks on each step).
+  (#12)
 
 ## Stable 2026-08-14 (a9813db)
 

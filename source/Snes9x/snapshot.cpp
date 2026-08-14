@@ -486,6 +486,39 @@ bool8 S9xFreezeGame (const char *filename)
     return (FALSE);
 }
 
+// Serialize the full machine state into a caller buffer (rewind ring).
+// Same shape as S9xFreezeGame, minus the file.
+bool8 S9xFreezeGameMem (uint8 *buffer, uint32 capacity, uint32 *lengthOut)
+{
+    BufferedFileWriter stream;
+
+    if (!stream.openMem(buffer, capacity))
+        return (FALSE);
+
+    S9xPrepareSoundForSnapshotSave (FALSE);
+    S9xFreezeToStream (stream);
+    S9xPrepareSoundForSnapshotSave (TRUE);
+
+    if (stream.memOverflowed())
+        return (FALSE);
+    if (lengthOut)
+        *lengthOut = (uint32) stream.memLength();
+    return (TRUE);
+}
+
+// STREAM is FILE* in this build, and unfreeze needs tell/seek - newlib's
+// fmemopen provides both over the ring slot.
+bool8 S9xUnfreezeGameMem (const uint8 *buffer, uint32 length)
+{
+    STREAM snapshot = fmemopen ((void *) buffer, length, "rb");
+    if (!snapshot)
+        return (FALSE);
+
+    int result = S9xUnfreezeFromStream (snapshot);
+    fclose (snapshot);
+    return (result == SUCCESS);
+}
+
 bool8 S9xLoadSnapshot (const char *filename)
 {
     return (S9xUnfreezeGame (filename));

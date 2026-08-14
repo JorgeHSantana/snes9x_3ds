@@ -15,6 +15,7 @@ u32 input3dsScanInputForEmulation();
 // Get the bitmap of keys currently held on by the user
 //---------------------------------------------------------
 u32 input3dsGetCurrentKeysHeld();
+bool input3dsIsRewindHoldPressed();
 
 // Recomputes TurboMode from toggle + hold state.
 // When game is not running, hold is ignored and notifications are suppressed.

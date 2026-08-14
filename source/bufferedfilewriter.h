@@ -9,8 +9,15 @@ class BufferedFileWriter {
     FILE* RawFilePointer;
     size_t Position;
 
+    // memory mode (rewind snapshots): write straight into a caller buffer,
+    // no FILE* and no g_fileBuffer involved
+    u8* MemBuffer;
+    size_t MemCapacity;
+    bool MemOverflow;
+
 public:
-    BufferedFileWriter() : RawFilePointer(NULL), Position(0) {
+    BufferedFileWriter() : RawFilePointer(NULL), Position(0),
+        MemBuffer(NULL), MemCapacity(0), MemOverflow(false) {
     }
 
     // safety: prevent copying
@@ -22,8 +29,20 @@ public:
     }
     
     explicit operator bool() const { 
-        return RawFilePointer != NULL; 
+        return RawFilePointer != NULL || MemBuffer != NULL; 
     }
+
+    bool openMem(void* buffer, size_t capacity) {
+        if (RawFilePointer || !buffer || capacity == 0) return false;
+        MemBuffer = (u8*)buffer;
+        MemCapacity = capacity;
+        MemOverflow = false;
+        Position = 0;
+        return true;
+    }
+
+    size_t memLength() const { return Position; }
+    bool memOverflowed() const { return MemOverflow; }
 
     FILE* get() const { 
         return RawFilePointer; 
@@ -48,6 +67,15 @@ public:
 
     // returns bytes written
     size_t write(const void* ptr, size_t count) {
+        if (MemBuffer) {
+            if (Position + count > MemCapacity) {
+                MemOverflow = true;
+                return 0;
+            }
+            memcpy(MemBuffer + Position, ptr, count);
+            Position += count;
+            return count;
+        }
         if (!RawFilePointer) return 0;
 
         u8* buffer = (u8*)g_fileBuffer;
@@ -85,6 +113,12 @@ public:
     }
 
     int close() {
+        if (MemBuffer) {
+            MemBuffer = NULL;
+            MemCapacity = 0;
+            Position = 0;
+            return 0;
+        }
         if (RawFilePointer) {
             flushBuffer();
             int rv = file3dsClose(RawFilePointer);

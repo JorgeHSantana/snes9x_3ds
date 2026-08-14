@@ -25,6 +25,10 @@ void S9xCloseSnapshotFile (STREAM file);
 
 bool8 S9xFreezeGame (const char *filename);
 bool8 S9xUnfreezeGame (const char *filename);
+
+// in-RAM variants for the rewind ring (issue #12)
+bool8 S9xFreezeGameMem (uint8 *buffer, uint32 capacity, uint32 *lengthOut);
+bool8 S9xUnfreezeGameMem (const uint8 *buffer, uint32 length);
 bool8 Snapshot (const char *filename);
 bool8 S9xLoadSnapshot (const char *filename);
 bool8 S9xSPCDump (const char *filename);

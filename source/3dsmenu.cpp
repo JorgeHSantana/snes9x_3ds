@@ -1434,6 +1434,11 @@ void menu3dsSetHotkeysData(const char* hotkeysData[HOTKEYS_COUNT][3]) {
                 hotkeysData[i][1]= "  Fast-Forward (Hold)";
                 hotkeysData[i][2]= "Fast-forward while this hotkey is held down.\nMay corrupt/freeze games on Old 3DS.";
                 break;
+            case HOTKEY_REWIND_HOLD:
+                hotkeysData[i][0]= "RewindHold";
+                hotkeysData[i][1]= "  Rewind (Hold)";
+                hotkeysData[i][2]= "Rewind gameplay while this hotkey is held down.\nNew 3DS stores ~24s, Old 3DS ~4s.";
+                break;
             default: 
                 hotkeysData[i][0]= ""; 
                 hotkeysData[i][1]= "  <empty>"; 

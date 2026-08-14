@@ -25,6 +25,7 @@
 #include "3dsinput.h"
 #include "3dssound.h"
 #include "3dsmsu.h"
+#include "3dsrewind.h"
 #include "3dsmsu_ndsp.h"
 #include "3dsgpu.h"
 #include "3dsimpl.h"
@@ -67,6 +68,7 @@ static const int hotkeyDisplayOrder[HOTKEYS_COUNT] = {
     HOTKEY_OPEN_MENU,
     HOTKEY_FAST_FORWARD_TOGGLE,
     HOTKEY_FAST_FORWARD_HOLD,
+    HOTKEY_REWIND_HOLD,
     HOTKEY_SWAP_CONTROLLERS,
     HOTKEY_SCREENSHOT,
     HOTKEY_QUICK_SAVE,
@@ -2145,6 +2147,7 @@ bool emulatorLoadRom()
     // therefore we always set ROMCRC32 to 0
     Memory.ROMCRC32 = 0;
     msu3dsOnEvent(Msu1Event::RomUnload);
+    rewind3dsReset();
     settings3DS.isRomLoaded = impl3dsLoadROM(romFileNameFullPath) && Memory.ROMCRC32;
 
     if (!settings3DS.isRomLoaded) {
@@ -2942,6 +2945,8 @@ void emulatorLoop()
         t3dsStartTimer(TIMER_RUN_ONE_FRAME);
         impl3dsRunOneFrame(firstFrame, skipDrawing);
         t3dsStopTimer(TIMER_RUN_ONE_FRAME);
+
+        rewind3dsFrameTick(input3dsIsRewindHoldPressed());
 
 
         if (g_menuProbeArmed && g_menuProbeCountdown > 0 && --g_menuProbeCountdown == 0) {
