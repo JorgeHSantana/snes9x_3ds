@@ -21,6 +21,7 @@ Generated 2026-08-08 from source analysis of the codebase at version **v1.61** (
 | [MSU-1 Support](msu1.md) | Usage, file naming, wave-1 limitations, hardware validation checklist |
 | [Project Meta](project-meta.md) | CI workflows, release process, contribution policy, known issues, licensing |
 | [Developer Gotchas](developer-gotchas.md) | Cross-cutting invariants and traps to know before changing code |
+| [**Code Audit**](code-audit.md) | Verified source-level defects, duplicated code and dead code, with fixes |
 
 ## Quick Facts
 
