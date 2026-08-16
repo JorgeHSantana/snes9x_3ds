@@ -36,8 +36,6 @@
 #define TIMELINE_REPEAT_DELAY_FRAMES  15
 #define TIMELINE_REPEAT_RATE_FRAMES   4
 
-static void timelineDrawBottomBar(const char *aLabel, const char *bLabel);
-
 // second-screen framebuffer write, same convention as 3dsui.cpp
 static inline void timelinePutPixel(u16 *fb, int x, int y, u16 color)
 {
@@ -121,62 +119,28 @@ static void timelineDrawFrame(int cursor, int shownBack)
         }
     }
 
-    // hints live in the menu-style bottom bar, contextual on A
-    timelineDrawBottomBar(shownBack == cursor ? "Resume" : "Show", "Back");
+    // hints in the menu's own bottom bar (same glyph icons), contextual on A
+    MenuButton buttons[] = {
+        { shownBack == cursor ? "Resume" : "Show", "\x0cc", 0x800d1d },
+        { "Back", "\x0cd", 0x999409 },
+    };
+    menu3dsDrawBottomBar(buttons, 2);
 }
 
-// bottom bar in the main menu's style: colored A/B chips + labels
-static void timelineDrawBottomBar(const char *aLabel, const char *bLabel)
+// Yes/No confirmation: the menu's real dialog rendering (draw-only - the
+// timeline keeps its own input loop, since the menu's modal machinery
+// cannot run outside the menu context). Same look as confirmDialog in
+// 3dsmain.cpp: warn color, Yes/No rows, dimmed backdrop above.
+static void timelineDrawDialog(int cursor, int shownBack, int selection)
 {
-    const Theme3ds &theme = Themes[static_cast<int>(settings3DS.Theme)];
-    int width = settings3DS.SecondScreenWidth;
+    timelineDrawFrame(cursor, shownBack);   // the dialog dims this backdrop
 
-    ui3dsDrawRect(0, 240 - 16, width, 240, theme.menuBottomBarColor);
-    ui3dsDrawRect(8, 240 - 14, 20, 240 - 2, 0xC93B33);
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 8, 240 - 13, 20, 240 - 2,
-        0xFFFFFF, HALIGN_CENTER, "A");
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 24, 240 - 13, 120, 240 - 2,
-        theme.menuBottomBarTextColor, HALIGN_LEFT, aLabel);
-    ui3dsDrawRect(126, 240 - 14, 138, 240 - 2, 0xE8A220);
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 126, 240 - 13, 138, 240 - 2,
-        0xFFFFFF, HALIGN_CENTER, "B");
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 142, 240 - 13, 240, 240 - 2,
-        theme.menuBottomBarTextColor, HALIGN_LEFT, bLabel);
-}
-
-// Yes/No confirmation drawn in the emulator's own dialog design (same
-// font, theme colors, accent bar and bottom-bar button hints), replicated
-// with the ui3ds primitives - the real menu dialog machinery cannot run
-// outside the menu context.
-static void timelineDrawDialog(int selection)
-{
-    const Theme3ds &theme = Themes[static_cast<int>(settings3DS.Theme)];
-    int width = settings3DS.SecondScreenWidth;
-
-    ui3dsSetViewport(0, 0, width, 240);
-    ui3dsSetTranslate(0, 0);
-    ui3dsDrawRect(0, 0, width, 240, theme.menuBackColor);
-
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 20, 60, width - 20, 74,
-        theme.normalItemTextColor, HALIGN_LEFT, "Rewind");
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 20, 84, width - 20, 98,
-        theme.normalItemDescriptionTextColor, HALIGN_LEFT,
-        "Resume the game from this moment?");
-
-    ui3dsDrawRect(0, 110, width, 114, theme.dialogColorInfo);
-
-    const char *options[2] = { "Yes", "No" };
-    for (int i = 0; i < 2; i++) {
-        int y0 = 126 + i * 22;
-        if (i == selection) {
-            ui3dsDrawRect(0, y0 - 4, width, y0 + 14, theme.selectedItemBackColor);
-        }
-        ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 20, y0, width - 20, y0 + 14,
-            i == selection ? theme.selectedItemTextColor : theme.normalItemTextColor,
-            HALIGN_LEFT, options[i]);
-    }
-
-    timelineDrawBottomBar("Select", "Back");
+    static const std::vector<SMenuItem> options = {
+        SMenuItem(nullptr, MenuItemType::Action, "Yes", "", 0),
+        SMenuItem(nullptr, MenuItemType::Action, "No",  "", 1),
+    };
+    menu3dsDrawStandaloneDialog("Rewind", "Resume the game from this moment?",
+        Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn, options, selection);
 }
 
 static void timelinePresent()
@@ -344,7 +308,7 @@ void rewind3dsTimelineShow()
             gpu3dsWaitForVBlank(settings3DS.GameScreen);
         } else {
             if (dialogOpen) {
-                timelineDrawDialog(dialogSel);
+                timelineDrawDialog(cursor, shownBack, dialogSel);
             } else {
                 timelineDrawFrame(cursor, shownBack);
             }

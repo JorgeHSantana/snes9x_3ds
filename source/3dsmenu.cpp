@@ -68,6 +68,35 @@ MenuButton bottomMenuButtons[] = {
     {"Page \x0d1", "\x0cf", 0x0d8014}
 };
 
+// One bottom-bar button: white backing rect + rounded icon glyph + label.
+// Returns the x where the next button starts. Shared by the menu proper
+// and by standalone modal screens (menu3dsDrawBottomBar).
+static int menu3dsDrawBottomBarButton(int posX, const MenuButton& button)
+{
+    const int buttonRightMargin = 5;
+    const int buttonLeftMargin = 10;
+    int buttonColor = settings3DS.Theme == Setting::Theme::Original ? 0x529eeb : 0x555555;
+    if (settings3DS.Theme == Setting::Theme::DarkMode) {
+        // multi color buttons for dark mode theme
+        buttonColor = button.color;
+    }
+    ui3dsDrawRect(posX + 2, SCREEN_HEIGHT - 13, posX + 9, SCREEN_HEIGHT - 5, 0xffffff);
+    posX = ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, posX, SCREEN_HEIGHT - 16, posX + 12, SCREEN_HEIGHT, buttonColor, HALIGN_LEFT, button.icon) + buttonRightMargin;
+    posX = ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, posX, SCREEN_HEIGHT - 17, posX + 100, SCREEN_HEIGHT, Themes[static_cast<int>(settings3DS.Theme)].menuBottomBarTextColor, HALIGN_LEFT, button.label) + buttonLeftMargin;
+    return posX;
+}
+
+// The menu's own bottom bar (background + buttons) for screens that live
+// outside the menu loop, e.g. the rewind timeline: same drawing code, so
+// it can never drift from the real thing.
+void menu3dsDrawBottomBar(const MenuButton* buttons, int count)
+{
+    ui3dsDrawRect(0, 220, settings3DS.SecondScreenWidth, SCREEN_HEIGHT, Themes[static_cast<int>(settings3DS.Theme)].menuBottomBarColor);
+    int posX = 10;
+    for (int i = 0; i < count; i++)
+        posX = menu3dsDrawBottomBarButton(posX, buttons[i]);
+}
+
 
 typedef enum {
     THUMB_GAME,
@@ -489,21 +518,11 @@ void menu3dsDrawMenu(std::vector<SMenuTab>& menuTabs, int& currentMenuTab, int m
         }
     }
     
-    int buttonRightMargin = 5;
-    int buttonLeftMargin = 10;
     int bottomMenuPosX = 10;
-    int buttonColor = settings3DS.Theme == Setting::Theme::Original ? 0x529eeb : 0x555555;
 
     for (const auto& button : bottomMenuButtons) {
-        if (settings3DS.Theme == Setting::Theme::DarkMode) {
-            // multi color buttons for dark mode theme
-            buttonColor = button.color;
-        }
-        
         if ((strcmp(button.label, "Options") != 0 && strcmp(button.label, "Page \x0d1") != 0) || menu3dsIsFileTab(currentMenuTab, menuTabs)) {
-            ui3dsDrawRect(bottomMenuPosX + 2, SCREEN_HEIGHT - 13, bottomMenuPosX + 9, SCREEN_HEIGHT - 5,0xffffff);
-            bottomMenuPosX = ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, bottomMenuPosX, SCREEN_HEIGHT - 16, bottomMenuPosX + 12, SCREEN_HEIGHT, buttonColor, HALIGN_LEFT,  button.icon) + buttonRightMargin;
-            bottomMenuPosX = ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, bottomMenuPosX, SCREEN_HEIGHT - 17, bottomMenuPosX + 100, SCREEN_HEIGHT, Themes[static_cast<int>(settings3DS.Theme)].menuBottomBarTextColor, HALIGN_LEFT, button.label) + buttonLeftMargin;
+            bottomMenuPosX = menu3dsDrawBottomBarButton(bottomMenuPosX, button);
         }
     }
 
@@ -633,6 +652,38 @@ void menu3dsDrawDialog(SMenuTab& dialogTab)
         dialogTextColor,
         dialogTextColor,
         offsetX);
+}
+
+// The menu's dialog, drawn outside the menu's modal loop (e.g. over the
+// rewind timeline). Same code path as menu3dsShowDialog at rest - layout,
+// colors, item rows, the dimmed backdrop above - but the caller owns input
+// and buffer flipping, so nothing of the menu's event machinery runs.
+void menu3dsDrawStandaloneDialog(const std::string& title, const std::string& dialogText, int newDialogBackColor, const std::vector<SMenuItem>& menuItems, int selectedIndex)
+{
+    dialogBackColor = newDialogBackColor;
+    dialogTextLines = -1;
+
+    SMenuTab dialogTab;
+    dialogTab.SetTitle(title);
+    dialogTab.DialogText.assign(dialogText);
+    dialogTab.MenuItems = menuItems;
+    dialogTab.FirstItemIndex = 0;
+    dialogTab.SelectedItemIndex = selectedIndex;
+
+    int topHeight, bottomHeight;
+    menu3dsGetDialogLayout(topHeight, bottomHeight);
+    int y = SCREEN_HEIGHT - topHeight - bottomHeight;
+
+    // what sits above the dialog dims, exactly like the menu behind its
+    // dialogs (menu3dsDrawEverything with dialogFrame = 0)
+    ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, y);
+    ui3dsSetTranslate(0, 0);
+    ui3dsDrawRect(0, 0, settings3DS.SecondScreenWidth, y, 0x000000, (float)ANIMATE_DIALOG_STEPS / 10);
+
+    ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, SCREEN_HEIGHT);
+    ui3dsSetTranslate(0, y);
+    menu3dsDrawDialog(dialogTab);
+    ui3dsSetTranslate(0, 0);
 }
 
 void menu3dsDrawEverything(int& currentMenuTab, std::vector<SMenuTab>& menuTabs) {
