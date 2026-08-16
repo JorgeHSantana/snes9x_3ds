@@ -1576,11 +1576,24 @@ uint32 prevConsoleJoyPad = 0;
 u32 prevConsoleButtonPressed[10];
 u32 buttons3dsPressed[10];
 
+#ifdef DETERMINISM_PROBE
+// determinism probe (disposable branch): scripted robot input replaces the
+// pads so two runs see byte-identical controller data
+extern bool g_probeJoypadActive;
+extern uint32 g_probeJoypadValue;
+#endif
+
 uint32 S9xReadJoypad (int which1_0_to_4)
 {
     if (which1_0_to_4 != 0) {
         return 0;
     }
+
+#ifdef DETERMINISM_PROBE
+    if (g_probeJoypadActive) {
+        return g_probeJoypadValue | 0x80000000;
+    }
+#endif
 
 	u32 keysHeld3ds = input3dsGetCurrentKeysHeld();
     u32 consoleJoyPad = 0;

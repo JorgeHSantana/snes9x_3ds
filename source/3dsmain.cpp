@@ -2882,6 +2882,10 @@ void updateProfilingOutput(int totalFrames)
 //   (which must be implemented for any new core)
 // for the execution of the frame.
 //----------------------------------------------------------
+#ifdef DETERMINISM_PROBE
+static void probeFrameTick(bool *skipDrawingNext);
+#endif
+
 void emulatorLoop()
 {
     // menu is currently rendered via software and may have configured the screen for
@@ -2971,6 +2975,11 @@ void emulatorLoop()
         long actualTicksThisFrame = (long)(svcGetSystemTick() - startFrameTick);
         skipDrawing = paceFrame(actualTicksThisFrame, totalFrames, snesFrameTotalActualTicks, snesFrameTotalAccurateTicks, snesFramesSkipped);
 
+#ifdef DETERMINISM_PROBE
+        // wall-clock-free render pattern while the probe runs
+        probeFrameTick(&skipDrawing);
+#endif
+
         // FPS display (~every second)
         float targetFps = (float)TICKS_PER_SEC / settings3DS.TicksPerFrame;
         if (++fpsFrameCount >= (int)targetFps)
@@ -3015,6 +3024,113 @@ void emulatorLoop()
 // straight into the ROM whose absolute path is the first line of
 // sdmc:/autoboot.txt. Absent/unreadable file = normal menu boot.
 static void msu1LogToFile(const char* message) { log3dsWrite("[msu1] %s", message); }
+
+#ifdef DETERMINISM_PROBE
+// ---------------------------------------------------------------------------
+// Determinism probe (issue #36 gating experiment, disposable branch).
+// Mode file sdmc:/probe_mode.txt selects the scenario:
+//   A - render every frame          (baseline)
+//   C - render every frame          (control: must equal A exactly)
+//   B - render every other frame    (does skip-vs-render leak into state?)
+// The robot holds a seeded pseudo-random pad combo for 8 frames at a time;
+// every 600 frames the state components are CRC-logged separately so a
+// divergence names its subsystem. 7200 frames (2 min emulated) then done.
+// ---------------------------------------------------------------------------
+#include <zlib.h>
+#include "Snes9x/apu.h"
+
+bool g_probeJoypadActive = false;
+uint32 g_probeJoypadValue = 0;
+
+static char s_probeMode = 0;
+static bool s_probeActive = false;
+static int  s_probeFrame = 0;
+static int  s_probeState = 0;        // 0 = not started, 1 = running, 2 = finished/disabled
+static uint32 s_probeLcg = 0x1234ABCDu;
+
+static uint32 probeLcgNext()
+{
+    s_probeLcg = s_probeLcg * 1664525u + 1013904223u;
+    return s_probeLcg;
+}
+
+static void probeLogCrcs()
+{
+    unsigned long cRam  = crc32(0L, Memory.RAM,     0x20000);
+    unsigned long cVram = crc32(0L, Memory.VRAM,    0x10000);
+    unsigned long cFill = crc32(0L, Memory.FillRAM, 0x8000);
+    unsigned long cSram = crc32(0L, Memory.SRAM,    0x20000);
+    unsigned long cApu  = crc32(0L, IAPU.RAM,       0x10000);
+    unsigned long cReg  = crc32(0L, (const Bytef *)&Registers, sizeof(Registers));
+    log3dsWrite("[probe] %c f=%05d RAM=%08lX VRAM=%08lX FILL=%08lX SRAM=%08lX APU=%08lX REG=%08lX MSU=%u/%u/%u",
+        s_probeMode, s_probeFrame, cRam, cVram, cFill, cSram, cApu, cReg,
+        (unsigned)MSU1.current_track, (unsigned)MSU1.audio_play_pos,
+        (unsigned)MSU1.data_pos);
+}
+
+static void probeStart()
+{
+    s_probeState = 2;   // one attempt; stays disabled unless everything works
+
+    FILE *f = fopen("sdmc:/probe_mode.txt", "r");
+    if (f == NULL) { return; }
+    int mode = fgetc(f);
+    (void)fclose(f);   // best-effort, read-only handle
+    if (mode != 'A' && mode != 'B' && mode != 'C') { return; }
+
+    // deterministic starting point, overriding whatever autoload did
+    if (!impl3dsLoadStateSlot(1)) {
+        log3dsWrite("[probe] slot 1 load failed - probe disabled");
+        return;
+    }
+
+    s_probeMode = (char)mode;
+    s_probeLcg = 0x1234ABCDu;
+    s_probeFrame = 0;
+    s_probeActive = true;
+    s_probeState = 1;
+    g_probeJoypadActive = true;
+    g_probeJoypadValue = 0;
+    log3dsWrite("[probe] mode %c started", s_probeMode);
+}
+
+// called right after each emulated frame; also decides the render pattern
+static void probeFrameTick(bool *skipDrawingNext)
+{
+    if (s_probeState == 0) { probeStart(); }
+    if (!s_probeActive) { return; }
+
+    // scenario-controlled, wall-clock-free render pattern
+    *skipDrawingNext = (s_probeMode == 'B') && ((s_probeFrame & 1) != 0);
+
+    if ((s_probeFrame % 8) == 0) {
+        uint32 r = probeLcgNext();
+        uint32 pad = 0;
+        if      (r & 0x01) { pad |= SNES_LEFT_MASK; }
+        else if (r & 0x02) { pad |= SNES_RIGHT_MASK; }
+        if      (r & 0x04) { pad |= SNES_UP_MASK; }
+        else if (r & 0x08) { pad |= SNES_DOWN_MASK; }
+        if (r & 0x10) { pad |= SNES_B_MASK; }
+        if (r & 0x20) { pad |= SNES_Y_MASK; }
+        if (r & 0x40) { pad |= SNES_A_MASK; }
+        if (r & 0x80) { pad |= SNES_X_MASK; }
+        if ((r & 0x3000) == 0x3000) { pad |= SNES_START_MASK; }
+        g_probeJoypadValue = pad;
+    }
+
+    s_probeFrame++;
+    if ((s_probeFrame % 600) == 0) { probeLogCrcs(); }
+
+    if (s_probeFrame >= 7200) {
+        probeLogCrcs();
+        log3dsWrite("[probe] mode %c DONE", s_probeMode);
+        s_probeActive = false;
+        s_probeState = 2;
+        g_probeJoypadActive = false;
+    }
+}
+#endif // DETERMINISM_PROBE
+
 
 
 static bool tryAutoBoot()
