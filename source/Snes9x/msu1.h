@@ -127,6 +127,11 @@ void msu1_set_log_hook(void (*log)(const char* message));
 // the other ports return values that are pure functions of state.
 void msu1_set_status_read_hook(void (*hook)(uint8_t value));
 
+// Optional override consulted BEFORE the read hook: a rewind replay
+// substitutes the recorded status values for the live ones (returns true
+// when it overrode). Overridden reads are not re-recorded.
+void msu1_set_status_override(bool (*override_fn)(uint8_t *value));
+
 // Formats and forwards to the log hook (no-op when the hook is null).
 // Public so platform-side MSU code can share the same diagnostics channel.
 void msu1_diag(const char* fmt, ...);

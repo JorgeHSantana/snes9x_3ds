@@ -252,6 +252,17 @@ void rewind3dsTimelineShow()
 
             if (down & KEY_B) break;
 
+            // Long jumps replay whole segments (v2): announce the wait in
+            // the pause bar so it reads as work, not a hang. The browse
+            // text re-triggers via the wording change below.
+            if ((down & (KEY_A | KEY_Y)) && shownBack != cursor
+                    && rewind3dsEstimateRestoreFrames(cursor) > 3 * 60) {
+                notif3dsTrigger(Notif::Paused, Notif::Type::Default,
+                    settings3DS.GameScreen, 3600000.0, "Loading...");
+                timelineRenderGameScreen(true);
+                overlayShown[0] = '\0';
+            }
+
             // Y previews only; A shows the frame AND asks in one press
             if (down & KEY_Y) {
                 timelineShowAt(cursor, shownBack);
@@ -297,6 +308,9 @@ void rewind3dsTimelineShow()
         if (countdownStep > 0) {
             gpu3dsWaitForVBlank(settings3DS.GameScreen);
         } else {
+            // v2: a bounded replay slice fills the tick nearest the cursor
+            // while the user reads the screen (no-op on the ring provider)
+            rewind3dsPrefetchStep(cursor);
             timelineDrawFrame(cursor, shownBack);
             timelinePresent();
         }

@@ -1584,6 +1584,11 @@ uint32 S9xReadJoypad (int which1_0_to_4)
         return 0;
     }
 
+    // replays re-execute recorded frames: the tape is the only input
+    if (rewind3dsReplayActive()) {
+        return 0x80000000 | rewind3dsReplayPad();
+    }
+
     // the timeline browses frozen states; pad input must not leak into
     // the single frames it renders
     if (rewind3dsTimelineActive()) {

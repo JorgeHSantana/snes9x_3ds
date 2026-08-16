@@ -56,4 +56,20 @@ void rewind3dsNotePad(uint32_t pad);
 // records the SD-timing-dependent values a replay must feed back
 void rewind3dsNoteMsuStatus(uint8_t value);
 
+// --- v2 window engine (degrau 3, New 3DS) -----------------------------------
+
+// while a replay re-executes tape frames, the joypad and MSU status port
+// are fed from the recording instead of live input/state
+bool     rewind3dsReplayActive();
+uint32_t rewind3dsReplayPad();
+bool     rewind3dsMsuStatusOverride(uint8_t *value);   // msu1_set_status_override
+
+// frames of replay a jump to 'back' would need right now (0 = resident,
+// -1 = unreachable); the timeline shows "Loading..." past a threshold
+int  rewind3dsEstimateRestoreFrames(int back);
+
+// bounded background replay slice toward the missing tick nearest to the
+// cursor; call once per timeline UI frame while browsing
+void rewind3dsPrefetchStep(int cursorBack);
+
 #endif

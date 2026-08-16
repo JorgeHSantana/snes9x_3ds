@@ -3136,6 +3136,7 @@ int main()
     // (log3dsWrite is a no-op otherwise) — menu boots included, not just autoboot.
     msu1_set_log_hook(msu1LogToFile);
     msu1_set_status_read_hook(rewind3dsNoteMsuStatus);
+    msu1_set_status_override(rewind3dsMsuStatusOverride);
     
     img3dsSetThumbMode();
     gfxSetDoubleBuffering(settings3DS.SecondScreen, true);
