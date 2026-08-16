@@ -530,6 +530,12 @@ int ui3dsDrawStringToTextureBold(u16 *textureBuffer, const char *text, int x, in
 
     u16 color_rgba4 = color32toRGBA4(color, 0);
 
+    // Normal glyphs (digits, '.') sit one row above the bold set's
+    // baseline - two in Arial, whose bold set sits one row lower - so the
+    // faux-bold fallback drops them onto the same baseline as the letters
+    // (the countdown's "3, 2, 1" rendered visibly high without this).
+    int yOff = (fontBitmap == fontBitmapArray[2]) ? 2 : 1;
+
     for (int i = 0; text[i] != 0; i++)
     {
         char c = text[i];
@@ -548,8 +554,8 @@ int ui3dsDrawStringToTextureBold(u16 *textureBuffer, const char *text, int x, in
         {
             // faux bold: same glyph at x and x+1, advance widened to sit
             // like the bespoke glyphs (their widths run 2-3px over normal)
-            ui3dsDrawRGBA4_CharToTexture(textureBuffer, c, x + 1, y, xMax, yMax, color_rgba4);
-            int w = ui3dsDrawRGBA4_CharToTexture(textureBuffer, c, x, y, xMax, yMax, color_rgba4);
+            ui3dsDrawRGBA4_CharToTexture(textureBuffer, c, x + 1, y + yOff, xMax, yMax, color_rgba4);
+            int w = ui3dsDrawRGBA4_CharToTexture(textureBuffer, c, x, y + yOff, xMax, yMax, color_rgba4);
             if (w == 0) break;
             x += w + 2;
         }
