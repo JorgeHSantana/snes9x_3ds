@@ -4,36 +4,36 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Fixes
-* Rewind no longer costs anything unless you map its hotkey: the snapshot
-  ring (24MB) and the twice-a-second captures used to run for everyone.
-  With the hotkey mapped, captures now prefer frames with vsync headroom
-  (forced at most every 2s), and in-RAM captures no longer disturb the
-  live audio channels - both sources of stutter and audio artifacts
-  reported on the first rewind build. Captures also hold the mixer
-  barrier, fixing single notes being swallowed at capture time in
-  Old 3DS mode (slower freezes crossed mixer passes).
+* Rewind recording got cheap and controllable: a new **Rewind:
+  Enabled/Disabled** setting (Emulator tab, enabled by default) governs
+  the feature - disabling frees the snapshot ring (24MB) and stops all
+  captures. Captures prefer frames with vsync headroom (forced at most
+  every 2s), no longer disturb the live audio channels, and hold the
+  mixer barrier - fixing the stutter, audio artifacts and swallowed
+  notes reported on the first rewind build.
 
 ### Features
 * **Rewind timeline**: press the Rewind hotkey (the hold gesture is gone)
   or pick Rewind in the Emulator menu to freeze the game and browse your
   history on a filmstrip of thumbnails with a dot strip and a "-12.5s"
-  label; the game screen dims with a pause-style overlay. A shows the
-  exact frame; A again asks Yes/No in the emulator's dialog style, and
-  Yes runs a "Resuming in 3..2..1" countdown on the game screen (step
-  length in Emulator -> Rewind Countdown, or off) while the bottom screen
-  returns to normal - the countdown cannot be cancelled. B goes back to
-  where you came from (game or menu). Loading a savestate resets the
-  recorded history. MSU-1 music stays paused while browsing and reseeks
-  once on resume.
+  label; the game screen dims with a pause-style overlay - same bold
+  lettering as "Press START to resume" (the fonts gained the missing bold
+  glyphs). Y previews the exact frame; A previews AND asks Yes/No using
+  the menu's real modal dialog, drawn over the dimmed timeline. Yes runs
+  a "Resuming in 3..2..1" countdown on the game screen (step length in
+  Emulator -> Rewind Countdown, or off) while the bottom screen returns
+  to normal - the countdown cannot be cancelled. B goes back to where you
+  came from (game or menu). Loading a savestate resets the recorded
+  history. MSU-1 music stays paused while browsing and reseeks once on
+  resume.
 * 3DS Mode (Emulator tab, New 3DS only): "New 3DS" runs at 804 MHz with
   the L2 cache on (default - same behavior as before); "Old 3DS" drops to
   268 MHz without L2, previewing how a game would perform on that
   hardware. (#16)
-* **Rewind**: bind the new "Rewind (Hold)" hotkey (Controls tab) and hold
-  it to rewind gameplay - about 24 seconds of history on New 3DS, ~4s on
-  Old 3DS (snapshots every half second in RAM). Release to resume playing
-  from that point. On MSU-1 games the music pauses while rewinding and
-  reseeks once on release, so the steps stay smooth. (#12)
+* **Rewind**: about 24 seconds of history on New 3DS, ~4s on Old 3DS
+  (snapshots every half second in RAM, adaptive). The Rewind hotkey
+  (Controls tab) opens the timeline; so does the Emulator menu, no
+  binding needed. (#12)
 
 ## Stable 2026-08-14 (a9813db)
 
