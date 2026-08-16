@@ -3027,6 +3027,16 @@ void emulatorLoop()
         if (rewind3dsTakeTimelineRequest()) {
             rewind3dsTimelineShow();
             firstFrame = true;   // repaint cleanly after the modal screen
+
+            // The modal session's wall time sits inside this iteration's
+            // startFrameTick window; left alone, paceFrame reads it as
+            // seconds of schedule debt and skips drawing until "caught
+            // up" - a frozen screen with audio running (field report
+            // 16/08). Resume on a fresh schedule instead.
+            snesFrameTotalActualTicks = 0;
+            snesFrameTotalAccurateTicks = 0;
+            snesFramesSkipped = 0;
+            startFrameTick = svcGetSystemTick();
         }
 
 

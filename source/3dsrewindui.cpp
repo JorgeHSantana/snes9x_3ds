@@ -119,13 +119,12 @@ static void timelineDrawFrame(int cursor, int shownBack)
         }
     }
 
-    // hints in the menu's own bottom bar, same glyphs and A/B/Y order
+    // hints in the menu's own bottom bar, same glyphs
     MenuButton buttons[] = {
         { "Resume", "\x0cc", 0x800d1d },
         { "Back",   "\x0cd", 0x999409 },
-        { "Show",   "\x0cf", 0x0d8014 },
     };
-    menu3dsDrawBottomBar(buttons, 3);
+    menu3dsDrawBottomBar(buttons, 2);
 }
 
 static void timelinePresent()
@@ -172,8 +171,8 @@ static void timelineShowFrame()
     impl3dsRunOneFrame(false, false, true);
 }
 
-// materialize the snapshot under the cursor on the game screen (Y, and
-// the first half of A)
+// materialize the snapshot under the cursor on the game screen (the
+// first half of A; the confirm dialog is the second)
 static bool timelineShowAt(int cursor, int &shownBack)
 {
     if (shownBack == cursor) return true;
@@ -255,7 +254,7 @@ void rewind3dsTimelineShow()
             // Long jumps replay whole segments (v2): announce the wait in
             // the pause bar so it reads as work, not a hang. The browse
             // text re-triggers via the wording change below.
-            if ((down & (KEY_A | KEY_Y)) && shownBack != cursor
+            if ((down & KEY_A) && shownBack != cursor
                     && rewind3dsEstimateRestoreFrames(cursor) > 3 * 60) {
                 notif3dsTrigger(Notif::Paused, Notif::Type::Default,
                     settings3DS.GameScreen, 3600000.0, "Loading...");
@@ -263,11 +262,7 @@ void rewind3dsTimelineShow()
                 overlayShown[0] = '\0';
             }
 
-            // Y previews only; A shows the frame AND asks in one press
-            if (down & KEY_Y) {
-                timelineShowAt(cursor, shownBack);
-            }
-
+            // A shows the frame AND asks in one press
             if ((down & KEY_A) && timelineShowAt(cursor, shownBack)) {
                 // the menu's own modal Yes/No dialog (3dsmain.cpp), with
                 // the timeline as its dimmed backdrop (issue #43)
