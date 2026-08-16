@@ -12,6 +12,8 @@
 #include "3dsgpu.h"
 #include "3dsinput.h"
 #include "3dsmenu.h"
+#include "3dsui_img.h"
+#include "3dsui_notif.h"
 
 // ---------------------------------------------------------------------------
 // Rewind timeline (issue #42): modal screen entered by tapping the Rewind
@@ -144,6 +146,33 @@ static void timelinePresent()
     gpu3dsWaitForVBlank(settings3DS.SecondScreen);
 }
 
+// recomposite the game screen from the retained textures - no emulation.
+// paused=true dims it (the pause-overlay look); notifications draw on top.
+static void timelineRenderGameScreen(bool dimmed)
+{
+    gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, false);
+    impl3dsSceneRender(true, dimmed);
+    gpu3dsFrameEnd();
+}
+
+// after the modal screen closes, the emulator's second-screen wallpaper
+// must come back (same 2-pass block emulatorLoop runs on entry) - without
+// this the timeline image stays frozen there and it looks like the screen
+// never closed
+static void timelineRestoreSecondScreen(GSPGPU_FramebufferFormat previousFormat)
+{
+    if (gfxGetScreenFormat(settings3DS.SecondScreen) != previousFormat) {
+        gfxSetScreenFormat(settings3DS.SecondScreen, previousFormat);
+        gpu3dsWaitForVBlank(settings3DS.SecondScreen);
+    }
+    for (int pass = 0; pass < 2; pass++) {
+        gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, false, true);
+            gpu3dsClearScreen(settings3DS.SecondScreen);
+            img3dsDrawBackground(UI_BG_SECOND);
+        gpu3dsFrameEnd();
+    }
+}
+
 // run exactly one emulated frame so the freshly restored state paints the
 // game screen; joypad reads return neutral while the timeline is active
 static void timelineShowFrame()
@@ -172,6 +201,8 @@ void rewind3dsTimelineShow()
     int cursor = 0;
     int shownBack = -1;        // -1 = game screen still shows the present
     bool committed = false;
+    int hintCooldown = 0;
+    int lastCountdownShown = 0;
 
     u32 lastHeld = 0xffffffff; // suppresses the entry press
     int repeatFrames = 0;
@@ -233,6 +264,28 @@ void rewind3dsTimelineShow()
             }
         }
 
+        // top screen: dimmed recomposite while browsing, undimmed during
+        // the countdown (the brightness change itself signals "about to go")
+        if (countdownStep > 0) {
+            if (countdownStep != lastCountdownShown) {
+                char msg[32];
+                snprintf(msg, sizeof(msg), "Resuming in %d", countdownStep);
+                notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen,
+                    900.0, msg);
+                lastCountdownShown = countdownStep;
+            }
+            timelineRenderGameScreen(false);
+        } else {
+            lastCountdownShown = 0;
+            if (--hintCooldown <= 0) {
+                notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen,
+                    1600.0, shownBack >= 0 ? "A: resume here    B: back"
+                                           : "A: show moment    B: back");
+                hintCooldown = 75;
+            }
+            timelineRenderGameScreen(true);
+        }
+
         timelineDrawFrame(cursor, shownBack, countdownStep);
         timelinePresent();
     }
@@ -247,11 +300,8 @@ void rewind3dsTimelineShow()
         }
     }
 
-    // restore the second screen for the emulator's own rendering
-    if (gfxGetScreenFormat(settings3DS.SecondScreen) != previousFormat) {
-        gfxSetScreenFormat(settings3DS.SecondScreen, previousFormat);
-        gpu3dsWaitForVBlank(settings3DS.SecondScreen);
-    }
+    notif3dsHide();
+    timelineRestoreSecondScreen(previousFormat);
     menu3dsSetScreenDirty(true, true);
 
     rewind3dsSetTimelineActive(false);
