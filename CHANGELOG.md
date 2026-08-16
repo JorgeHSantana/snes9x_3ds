@@ -14,6 +14,13 @@ Notable changes to this project will be documented in this file.
   Old 3DS mode (slower freezes crossed mixer passes).
 
 ### Features
+* **Rewind timeline**: tap the Rewind hotkey (holding still does the quick
+  rewind) to freeze the game and browse your last ~24s on a filmstrip of
+  thumbnails with a dot strip and a "-12.5s" label. First A shows the
+  exact frame on the game screen; A again resumes from it after a
+  cancellable 3..2..1 countdown (step length configurable in Emulator ->
+  Rewind Countdown, or off). B returns to the present at any stage.
+  MSU-1 music stays paused while browsing and reseeks once on resume.
 * 3DS Mode (Emulator tab, New 3DS only): "New 3DS" runs at 804 MHz with
   the L2 cache on (default - same behavior as before); "Old 3DS" drops to
   268 MHz without L2, previewing how a game would perform on that

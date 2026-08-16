@@ -1576,10 +1576,18 @@ uint32 prevConsoleJoyPad = 0;
 u32 prevConsoleButtonPressed[10];
 u32 buttons3dsPressed[10];
 
+#include "3dsrewind.h"
+
 uint32 S9xReadJoypad (int which1_0_to_4)
 {
     if (which1_0_to_4 != 0) {
         return 0;
+    }
+
+    // the timeline browses frozen states; pad input must not leak into
+    // the single frames it renders
+    if (rewind3dsTimelineActive()) {
+        return 0x80000000;
     }
 
 	u32 keysHeld3ds = input3dsGetCurrentKeysHeld();

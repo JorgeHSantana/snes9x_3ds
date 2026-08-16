@@ -564,6 +564,11 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             });
     }
 
+    AddMenuPicker(items, "  Rewind Countdown"_s,
+        "The 3..2..1 shown before play resumes from a rewound\nmoment, so your hands can get back to the controller."_s,
+        makePickerOptions({"Off", "250 ms steps", "500 ms steps", "1 s steps"}), settings3DS.RewindCountdown, DIALOG_TYPE_INFO, true,
+        []( int val ) { CheckAndUpdate(settings3DS.RewindCountdown, val); });
+
     AddMenuDisabledOption(items, ""_s);
 
     AddMenuHeader1(items, "OTHERS"_s);
@@ -1908,6 +1913,7 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
 
     config3dsReadWriteEnum(stream, writeMode, "ShowFPS=%d\n", &settings3DS.ShowFPS, 0, 1);
     config3dsReadWriteEnum(stream, writeMode, "Overclock=%d\n", &settings3DS.Overclock, 0, 1);
+    config3dsReadWriteEnum(stream, writeMode, "RewindCountdown=%d\n", &settings3DS.RewindCountdown, 0, 3);
 
     return true;
 }
@@ -2966,6 +2972,11 @@ void emulatorLoop()
             long ticksSoFar = (long)(svcGetSystemTick() - startFrameTick);
             bool frameHadHeadroom = ticksSoFar < (long)(settings3DS.TicksPerFrame * 3 / 4);
             rewind3dsFrameTick(input3dsIsRewindHoldPressed(), frameHadHeadroom);
+        }
+
+        if (rewind3dsTakeTimelineRequest()) {
+            rewind3dsTimelineShow();
+            firstFrame = true;   // repaint cleanly after the modal screen
         }
 
 

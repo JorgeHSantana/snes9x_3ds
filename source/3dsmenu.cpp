@@ -1436,8 +1436,8 @@ void menu3dsSetHotkeysData(const char* hotkeysData[HOTKEYS_COUNT][3]) {
                 break;
             case HOTKEY_REWIND_HOLD:
                 hotkeysData[i][0]= "RewindHold";
-                hotkeysData[i][1]= "  Rewind (Hold)";
-                hotkeysData[i][2]= "Rewind gameplay while this hotkey is held down.\nNew 3DS stores ~24s, Old 3DS ~4s.";
+                hotkeysData[i][1]= "  Rewind";
+                hotkeysData[i][2]= "Hold: rewind gameplay. Tap: open the rewind\ntimeline to pick an exact moment.";
                 break;
             default: 
                 hotkeysData[i][0]= ""; 

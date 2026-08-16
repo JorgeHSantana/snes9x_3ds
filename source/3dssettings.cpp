@@ -51,6 +51,7 @@ void settings3dsResetGlobalDefaults() {
 
     settings3DS.ShowFPS = false;
     settings3DS.Overclock = 1;   // New 3DS full speed by default (matches prior behavior)
+    settings3DS.RewindCountdown = 2;   // 500ms steps
 
     settings3DS.UseGlobalEmuControlKeys = true;
     settings3DS.UseGlobalBindCirclePad = true;
