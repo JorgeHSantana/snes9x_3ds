@@ -495,9 +495,19 @@ bool8 S9xFreezeGameMem (uint8 *buffer, uint32 capacity, uint32 *lengthOut)
     if (!stream.openMem(buffer, capacity))
         return (FALSE);
 
+    // S9xPrepareSoundForSnapshotSave canonicalizes the legacy channel
+    // fields for serialization, but it MUTATES live mixer state (count,
+    // envelopes, volume levels) - at rewind's capture cadence that is an
+    // audible artifact. Preserve the live channels around the
+    // canonicalize+freeze and restore them wholesale afterwards; the
+    // frozen block still gets canonical values.
+    static Channel savedChannels [NUM_CHANNELS];
+    memcpy (savedChannels, SoundData.channels, sizeof (savedChannels));
+
     S9xPrepareSoundForSnapshotSave (FALSE);
     S9xFreezeToStream (stream);
-    S9xPrepareSoundForSnapshotSave (TRUE);
+
+    memcpy (SoundData.channels, savedChannels, sizeof (savedChannels));
 
     if (stream.memOverflowed())
         return (FALSE);

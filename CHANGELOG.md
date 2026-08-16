@@ -3,6 +3,16 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
+### Fixes
+* Rewind no longer costs anything unless you map its hotkey: the snapshot
+  ring (24MB) and the twice-a-second captures used to run for everyone.
+  With the hotkey mapped, captures now prefer frames with vsync headroom
+  (forced at most every 2s), and in-RAM captures no longer disturb the
+  live audio channels - both sources of stutter and audio artifacts
+  reported on the first rewind build. Captures also hold the mixer
+  barrier, fixing single notes being swallowed at capture time in
+  Old 3DS mode (slower freezes crossed mixer passes).
+
 ### Features
 * 3DS Mode (Emulator tab, New 3DS only): "New 3DS" runs at 804 MHz with
   the L2 cache on (default - same behavior as before); "Old 3DS" drops to

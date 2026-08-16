@@ -37,20 +37,20 @@ struct RewindRing {
     bool full()  const { return count == slots; }
 
     // where the next snapshot should be serialized to
-    uint8_t *pushPtr() const {
+    uint8_t *push_ptr() const {
         return pool + (size_t)head * slotSize;
     }
 
-    // commit the snapshot serialized at pushPtr(); overwrites the oldest
+    // commit the snapshot serialized at push_ptr(); overwrites the oldest
     // entry once the ring is full
-    void pushCommit(uint32_t length) {
+    void push_commit(uint32_t length) {
         lengths[head] = length;
         head = (head + 1) % slots;
         if (count < slots) count++;
     }
 
     // newest snapshot (the one a rewind step restores); false when empty
-    bool popPeek(const uint8_t **data, uint32_t *length) const {
+    bool pop_peek(const uint8_t **data, uint32_t *length) const {
         if (count == 0) return false;
         int idx = (head - 1 + slots) % slots;
         *data = pool + (size_t)idx * slotSize;
@@ -58,8 +58,8 @@ struct RewindRing {
         return true;
     }
 
-    // consume the snapshot returned by popPeek
-    void popCommit() {
+    // consume the snapshot returned by pop_peek
+    void pop_commit() {
         if (count == 0) return;
         head = (head - 1 + slots) % slots;
         count--;

@@ -2964,7 +2964,13 @@ void emulatorLoop()
         impl3dsRunOneFrame(firstFrame, skipDrawing);
         t3dsStopTimer(TIMER_RUN_ONE_FRAME);
 
-        rewind3dsFrameTick(input3dsIsRewindHoldPressed());
+        {
+            // headroom = the frame used under 75% of its budget, leaving
+            // the capture to run where the CPU would have idled at vsync
+            long ticksSoFar = (long)(svcGetSystemTick() - startFrameTick);
+            bool frameHadHeadroom = ticksSoFar < (long)(settings3DS.TicksPerFrame * 3 / 4);
+            rewind3dsFrameTick(input3dsIsRewindHoldPressed(), frameHadHeadroom);
+        }
 
 
         if (g_menuProbeArmed && g_menuProbeCountdown > 0 && --g_menuProbeCountdown == 0) {
