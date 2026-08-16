@@ -39,6 +39,21 @@ static int dialogBackColor = 0x000000;
 
 static int dialogTextLines = -1; // -1 = fixed-height dialog
 
+// Issue #43: what the dialog dims behind itself defaults to the menu, but
+// a modal screen (rewind timeline) can substitute its own drawing so the
+// dialog appears over IT instead of over an unrelated menu
+static std::function<void()> dialogBackdropOverride;
+
+void menu3dsSetDialogBackdrop(const std::function<void()>& backdrop)
+{
+    dialogBackdropOverride = backdrop;
+}
+
+void menu3dsClearDialogBackdrop()
+{
+    dialogBackdropOverride = nullptr;
+}
+
 // Number of option rows a dialog shows at once (scroll window)
 static int menu3dsGetDialogVisibleItems()
 {
@@ -698,7 +713,15 @@ void menu3dsDrawEverything(SMenuTab& dialogTab, bool& isDialog, int& currentMenu
 
         ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, y);
         ui3dsSetTranslate(0, 0);
-        menu3dsDrawMenu(menuTabs, currentMenuTab, 0, 0);
+        if (dialogBackdropOverride) {
+            dialogBackdropOverride();
+            // the backdrop may have reset the clip; the dim must stop at
+            // the dialog's top edge like the menu path does
+            ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, y);
+            ui3dsSetTranslate(0, 0);
+        } else {
+            menu3dsDrawMenu(menuTabs, currentMenuTab, 0, 0);
+        }
         ui3dsDrawRect(0, 0, settings3DS.SecondScreenWidth, y, 0x000000, (float)(ANIMATE_DIALOG_STEPS - dialogFrame) / 10);
 
         ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, SCREEN_HEIGHT);

@@ -28,6 +28,48 @@ typedef struct
 static u8 *fontWidthArray[] = { fontTempestaWidth, fontRondaWidth, fontArialWidth };
 static u8 *fontBitmapArray[] = { fontTempestaBitmap, fontRondaBitmap, fontArialBitmap };
 
+// The fonts ship bold glyphs only for the letters of "Press START to
+// resume" (0x0e-0x1a, 2px strokes, x-height rows 6-11). The rewind
+// timeline's messages need more letters; these complete the set in the
+// same style, blitted into blank slots of all three fonts at init.
+// Arial's bespoke set sits one row lower, hence the y offset there.
+typedef struct {
+    u8 code;
+    u8 width;
+    u8 firstRow;
+    const char *rows[9];   // '8' = ink, '.' = blank, NULL-terminated
+} BoldGlyphDef;
+
+static const BoldGlyphDef boldGlyphDefs[] = {
+    { 0x1c, 4, 5, { "88", "88", "88", "88", "88", "88", "88", NULL } },                    // l
+    { 0x1d, 8, 6, { ".8888.", "88...8", "88....", "88....", "88...8", ".8888.", NULL } },  // c
+    { 0x1e, 8, 6, { ".8888.", "....88", ".88888", "88..88", "88..88", ".88888", NULL } },  // a
+    { 0x1f, 8, 6, { "88888.", "88..88", "88..88", "88..88", "88..88", "88..88", NULL } },  // n
+    { 0x81, 8, 5, { "88....", "88888.", "88..88", "88..88", "88..88", "88..88", "88888.", NULL } },  // b
+    { 0x8d, 9, 6, { "88...88", "88...88", "88.8.88", "88.8.88", "88.8.88", ".88.88.", NULL } },      // w
+    { 0x8f, 4, 4, { "88", "..", "88", "88", "88", "88", "88", "88", NULL } },              // i
+    { 0x90, 8, 6, { ".88888", "88..88", "88..88", "88..88", ".88888", "....88", ".8888.", NULL } },  // g
+};
+
+static void ui3dsInjectBoldGlyphs()
+{
+    for (int f = 0; f < 3; f++)
+    {
+        int yOff = (f == 2) ? 1 : 0;   // Arial baseline
+        for (const auto &def : boldGlyphDefs)
+        {
+            fontWidthArray[f][def.code] = def.width;
+            for (int r = 0; def.rows[r] != NULL; r++)
+            {
+                int y = def.firstRow + yOff + r;
+                for (int x = 0; def.rows[r][x] != '\0'; x++)
+                    fontBitmapArray[f][def.code * 256 + x + y * 16] =
+                        (def.rows[r][x] == '8') ? 8 : 0;
+            }
+        }
+    }
+}
+
 static u8 *fontBitmap;
 static u8 *fontWidth;
 static int fontHeight = FONT_HEIGHT;
@@ -77,6 +119,7 @@ void ui3dsPrepare()
         }
     }
 
+    ui3dsInjectBoldGlyphs();
     ui3dsSetFont();
     ui3dsSetScreenLayout();
 }
@@ -432,17 +475,84 @@ int ui3dsDrawStringToTexture(u16 *textureBuffer, const char *text, int x, int y,
 {
     if (!text || (x > xMax) || (y + fontHeight > yMax)) return x;
 
-    u16 color_rgba4 = color32toRGBA4(color, 0);    
+    u16 color_rgba4 = color32toRGBA4(color, 0);
     int i = 0;
-    
+
     while (text[i] != 0)
     {
         int w = ui3dsDrawRGBA4_CharToTexture(textureBuffer, text[i], x, y, xMax, yMax, color_rgba4);
-        
-        if (w == 0) break; 
+
+        if (w == 0) break;
 
         x += w;
         i++;
+    }
+
+    return x;
+}
+
+// The fonts carry bespoke bold glyphs only for the letters of "Press
+// START to resume" (0x0e-0x1a). The letters the timeline messages need
+// beyond that set are injected at init by ui3dsInjectBoldGlyphs into
+// blank slots, drawn in the same 2px-stroke style so mixed words align.
+static u8 ui3dsBoldGlyph(char c)
+{
+    switch (c) {
+        case 'S': return 0x0e;
+        case 'T': return 0x0f;
+        case 'A': return 0x10;
+        case 'R': return 0x11;
+        case 'P': return 0x13;
+        case 'r': return 0x14;
+        case 'e': return 0x15;
+        case 's': return 0x16;
+        case 't': return 0x17;
+        case 'o': return 0x18;
+        case 'u': return 0x19;
+        case 'm': return 0x1a;
+        case 'l': return 0x1c;
+        case 'c': return 0x1d;
+        case 'a': return 0x1e;
+        case 'n': return 0x1f;
+        case 'b': return 0x81;
+        case 'w': return 0x8d;
+        case 'i': return 0x8f;
+        case 'g': return 0x90;
+        default:  return 0;
+    }
+}
+
+// RGBA4 only, bold: the pause-bar style ("Press START to resume"), usable
+// for any text - the rewind timeline's messages render through this
+int ui3dsDrawStringToTextureBold(u16 *textureBuffer, const char *text, int x, int y, int xMax, int yMax, u32 color)
+{
+    if (!text || (x > xMax) || (y + fontHeight > yMax)) return x;
+
+    u16 color_rgba4 = color32toRGBA4(color, 0);
+
+    for (int i = 0; text[i] != 0; i++)
+    {
+        char c = text[i];
+        u8 bold = ui3dsBoldGlyph(c);
+        if (bold != 0)
+        {
+            int w = ui3dsDrawRGBA4_CharToTexture(textureBuffer, bold, x, y, xMax, yMax, color_rgba4);
+            if (w == 0) break;
+            x += w;
+        }
+        else if (c == ' ')
+        {
+            x += fontWidth[(u8)' '];
+        }
+        else
+        {
+            // faux bold: same glyph at x and x+1, advance widened to sit
+            // like the bespoke glyphs (their widths run 2-3px over normal)
+            ui3dsDrawRGBA4_CharToTexture(textureBuffer, c, x + 1, y, xMax, yMax, color_rgba4);
+            int w = ui3dsDrawRGBA4_CharToTexture(textureBuffer, c, x, y, xMax, yMax, color_rgba4);
+            if (w == 0) break;
+            x += w + 2;
+        }
     }
 
     return x;

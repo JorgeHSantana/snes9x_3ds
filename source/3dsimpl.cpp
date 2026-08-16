@@ -941,7 +941,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 // Executes one frame.
 //---------------------------------------------------------
 
-void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
+void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimmed)
 {
 	// per-scene 3D profiles (issue #23): match the PPU scene signature and
 	// swap the stereo config with hysteresis + lerp
@@ -1045,7 +1045,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame)
 
 		if (firstFrame || !skipDrawingFrame) {
 			t3dsStartTimer(TIMER_DRAW_SCENE);
-    		impl3dsSceneRender(firstFrame);
+    		impl3dsSceneRender(firstFrame, presentDimmed);
 			t3dsStopTimer(TIMER_DRAW_SCENE);
 		}
 	gpu3dsFrameEnd();

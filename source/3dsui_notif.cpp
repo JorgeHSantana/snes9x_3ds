@@ -59,7 +59,7 @@ static bool notif3dsInitTexture(SGPU_TEXTURE_ID id, int maxWidth, int maxHeight)
     return true;
 }
 
-static u16 notif3dsSyncTexture(SGPU_TEXTURE_ID id, const char *text, u32 color) {
+static u16 notif3dsSyncTexture(SGPU_TEXTURE_ID id, const char *text, u32 color, bool bold = false) {
     SGPUTexture *texture = &GPU3DS.textures[id];
     C3D_Tex *tex = &texture->tex;
     u16 *dst = (u16 *)g_texUploadBuffer;
@@ -75,7 +75,7 @@ static u16 notif3dsSyncTexture(SGPU_TEXTURE_ID id, const char *text, u32 color) 
     dst[(h - 2) * w + (w - 1)] = 0xFFFF;
     dst[(h - 2) * w + (w - 2)] = 0xFFFF;
 
-    u16 textWidth = ui3dsDrawStringToTexture(
+    u16 textWidth = (bold ? ui3dsDrawStringToTextureBold : ui3dsDrawStringToTexture)(
         dst, text,
         0, 0, tex->width, tex->height,
         color
@@ -120,7 +120,9 @@ static void notif3dsGetNotificationText(Notif::Event event, char* out, size_t bu
             snprintf(out, bufferSize, "Loaded - savestate may have broken audio");
             break;
         case Notif::Paused:
-            snprintf(out, bufferSize, "\x13\x14\x15\x16\x16 \x0e\x0f\x10\x11\x12 \x17\x18 \x14\x15\x16\x19\x1a\x15");
+            // rendered through the bold path in notif3dsSync (the bespoke
+            // bold glyphs plus faux bold for letters they don't cover)
+            snprintf(out, bufferSize, "Press START to resume");
             break;
         case Notif::Misc:
             snprintf(out, bufferSize, NOTIF_DEFAULT_ERROR);
@@ -241,7 +243,8 @@ void notif3dsTick() {
 
 void notif3dsSync() {
     if (notifMsg.event != Notif::None && notifMsg.dirty) {
-        notifMsg.textWidth = notif3dsSyncTexture(UI_NOTIF_MSG, notifMsg.text, notifMsg.textColor);
+        notifMsg.textWidth = notif3dsSyncTexture(UI_NOTIF_MSG, notifMsg.text, notifMsg.textColor,
+            notifMsg.event == Notif::Paused);
         notifMsg.dirty = false;
     }
 

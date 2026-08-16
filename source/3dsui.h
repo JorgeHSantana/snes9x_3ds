@@ -63,6 +63,7 @@ int ui3dsDrawStringWithNoWrapping(gfxScreen_t targetScreen, int x0, int y0, int 
 int ui3dsGetStringWidth(const char *s, int startPos = 0, int endPos = 0xffff);
 
 int ui3dsDrawStringToTexture(u16 *textureBuffer, const char *text, int x, int y, int xMax, int yMax, u32 color);
+int ui3dsDrawStringToTextureBold(u16 *textureBuffer, const char *text, int x, int y, int xMax, int yMax, u32 color);
 
 bool ui3dsInitialize();
 void ui3dsFinalize();

@@ -175,6 +175,11 @@ int menu3dsShowDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, 
 // the menu's bottom bar (background + glyph-icon buttons) for modal
 // screens that run outside the menu loop (rewind timeline)
 void menu3dsDrawBottomBar(const MenuButton* buttons, int count);
+
+// issue #43: substitute what dialogs dim behind themselves (default: the
+// menu). Set before menu3dsShowDialog, clear right after.
+void menu3dsSetDialogBackdrop(const std::function<void()>& backdrop);
+void menu3dsClearDialogBackdrop();
 void menu3dsShowRomLoadingDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, const std::string& title, const std::string& text, int dialogColor, const char* romName = nullptr);
 void menu3dsHideDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, bool fadeOut = true);
 

@@ -119,12 +119,13 @@ static void timelineDrawFrame(int cursor, int shownBack)
         }
     }
 
-    // hints in the menu's own bottom bar (same glyph icons), contextual on A
+    // hints in the menu's own bottom bar, same glyphs and A/B/Y order
     MenuButton buttons[] = {
-        { shownBack == cursor ? "Resume" : "Show", "\x0cc", 0x800d1d },
-        { "Back", "\x0cd", 0x999409 },
+        { "Resume", "\x0cc", 0x800d1d },
+        { "Back",   "\x0cd", 0x999409 },
+        { "Show",   "\x0cf", 0x0d8014 },
     };
-    menu3dsDrawBottomBar(buttons, 2);
+    menu3dsDrawBottomBar(buttons, 3);
 }
 
 static void timelinePresent()
@@ -163,10 +164,23 @@ static void timelineRestoreSecondScreen(GSPGPU_FramebufferFormat previousFormat)
 }
 
 // run exactly one emulated frame so the freshly restored state paints the
-// game screen; joypad reads return neutral while the timeline is active
+// game screen; joypad reads return neutral while the timeline is active.
+// The frame presents itself already dimmed - presenting bright and dimming
+// on the next loop pass flashed the screen (bug report 2026-08-16)
 static void timelineShowFrame()
 {
-    impl3dsRunOneFrame(false, false);
+    impl3dsRunOneFrame(false, false, true);
+}
+
+// materialize the snapshot under the cursor on the game screen (Y, and
+// the first half of A)
+static bool timelineShowAt(int cursor, int &shownBack)
+{
+    if (shownBack == cursor) return true;
+    if (!rewind3dsRestoreAt(cursor)) return false;
+    timelineShowFrame();
+    shownBack = cursor;
+    return true;
 }
 
 void rewind3dsTimelineShow()
@@ -238,25 +252,29 @@ void rewind3dsTimelineShow()
 
             if (down & KEY_B) break;
 
-            if (down & KEY_A) {
-                if (shownBack != cursor) {
-                    if (rewind3dsRestoreAt(cursor)) {
-                        timelineShowFrame();
-                        shownBack = cursor;
-                    }
-                } else {
-                    // the menu's own modal Yes/No dialog (3dsmain.cpp)
-                    if (rewind3dsConfirmResume()) {
-                        // the bottom screen returns to the wallpaper now;
-                        // the countdown lives on the game screen only
-                        timelineRestoreSecondScreen(previousFormat);
-                        bottomRestored = true;
-                        if (framesPerStep == 0) { committed = true; break; }
-                        countdownStep = 3;
-                        countdownFrames = 0;
-                    }
-                    lastHeld = 0xffffffff;   // swallow the dialog's last press
+            // Y previews only; A shows the frame AND asks in one press
+            if (down & KEY_Y) {
+                timelineShowAt(cursor, shownBack);
+            }
+
+            if ((down & KEY_A) && timelineShowAt(cursor, shownBack)) {
+                // the menu's own modal Yes/No dialog (3dsmain.cpp), with
+                // the timeline as its dimmed backdrop (issue #43)
+                menu3dsSetDialogBackdrop([cursor, shownBack]() {
+                    timelineDrawFrame(cursor, shownBack);
+                });
+                bool confirmed = rewind3dsConfirmResume();
+                menu3dsClearDialogBackdrop();
+                if (confirmed) {
+                    // the bottom screen returns to the wallpaper now; the
+                    // countdown lives on the game screen only
+                    timelineRestoreSecondScreen(previousFormat);
+                    bottomRestored = true;
+                    if (framesPerStep == 0) { committed = true; break; }
+                    countdownStep = 3;
+                    countdownFrames = 0;
                 }
+                lastHeld = 0xffffffff;   // swallow the dialog's last press
             }
         }
 

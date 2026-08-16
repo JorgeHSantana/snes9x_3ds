@@ -92,7 +92,10 @@ void impl3dsResetConsole();
 // frame is to be run just after the emulator has booted
 // up or returned from the menu.
 //---------------------------------------------------------
-void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame);
+// presentDimmed composites the finished frame with the pause-style dim
+// overlay (rewind timeline's "Show": no bright flash between the frame's
+// own present and the dimmed recomposite)
+void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimmed = false);
 
 // True when SPC has booted past IPL (ShowROM=0) but DSP still matches reset defaults
 bool impl3dsHasBrokenAudioStateSignature();
