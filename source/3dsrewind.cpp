@@ -6,7 +6,6 @@
 #include "3dssound.h"
 #include "3dsmsu.h"
 #include "3dsimpl_gpu.h"
-#include "3dsui_notif.h"
 #include "3dslog.h"
 
 #include "Snes9x/snes9x.h"
@@ -20,11 +19,7 @@
 #define REWIND_SLOTS_NEW3DS     48
 #define REWIND_SLOTS_OLD3DS     8
 #define REWIND_CAPTURE_FRAMES   30    // one snapshot every half second
-#define REWIND_STEP_FRAMES      10    // pop cadence while the hotkey is held
 #define REWIND_FORCE_GAP_FRAMES 120   // capture even without headroom after 2s
-#define REWIND_TAP_MAX_FRAMES   12    // released within this = tap = timeline
-#define REWIND_NOTIF_EMPTY_COOLDOWN_FRAMES  120
-#define REWIND_NOTIF_STEP_COOLDOWN_FRAMES   30
 
 // all state below is emu-thread only
 static RewindRing s_ring;
@@ -32,9 +27,9 @@ static bool s_allocTried = false;
 static bool s_msuDeferred = false;
 static int  s_frameCounter = 0;
 static int  s_framesSinceCapture = 0;
-static int  s_notifCooldown = 0;
-static int  s_heldFrames = 0;
+static bool s_wasHeld = false;
 static bool s_timelineRequested = false;
+static bool s_timelineFromMenu = false;
 static bool s_timelineActive = false;
 static uint32_t s_nowFrame = 0;        // emulated frames since ROM load
 
@@ -121,6 +116,15 @@ bool rewind3dsTakeTimelineRequest()
     return req;
 }
 
+// entry via the Emulator-menu action: B must return to the menu, not the game
+void rewind3dsRequestTimelineFromMenu()
+{
+    s_timelineRequested = true;
+    s_timelineFromMenu = true;
+}
+
+bool rewind3dsTimelineFromMenu() { return s_timelineFromMenu; }
+
 int rewind3dsCount() { return s_ring.valid() ? s_ring.count : 0; }
 uint32_t rewind3dsNowFrame() { return s_nowFrame; }
 
@@ -197,7 +201,7 @@ void rewind3dsReset()
     if (s_ring.valid())
         s_ring.clear();
     s_frameCounter = 0;
-    s_heldFrames = 0;
+    s_wasHeld = false;
     s_nowFrame = 0;
     s_timelineRequested = false;
     if (s_msuDeferred) {
@@ -218,64 +222,14 @@ void rewind3dsFrameTick(bool rewindHeld, bool frameHadHeadroom)
 
     s_nowFrame++;
     s_frameCounter++;
-    if (s_notifCooldown > 0) s_notifCooldown--;
 
-    // One hotkey, two gestures: a tap (released within TAP_MAX frames)
-    // opens the timeline; holding past it runs the quick rewind.
-    if (rewindHeld) {
-        s_heldFrames++;
-    } else {
-        if (s_heldFrames > 0 && s_heldFrames <= REWIND_TAP_MAX_FRAMES)
-            s_timelineRequested = true;
-        s_heldFrames = 0;
+    // The hold gesture is gone (docs/rewind-v2-spec.md): pressing the
+    // Rewind hotkey opens the timeline, period.
+    if (rewindHeld && !s_wasHeld) {
+        s_timelineRequested = true;
+        s_timelineFromMenu = false;
     }
-    bool holdRewind = s_heldFrames > REWIND_TAP_MAX_FRAMES;
-
-    // MSU-1 games: each rewind step would reopen/seek the audio track on
-    // SD and hitch. While the hotkey is held the MSU restore is deferred
-    // (music pauses); releasing applies the newest snapshot in one go.
-    if (holdRewind) {
-        rewind3dsMsuDeferBegin();
-    } else if (!rewindHeld && s_msuDeferred && !s_timelineActive) {
-        rewind3dsMsuDeferEnd();
-    }
-
-    if (holdRewind) {
-        if (s_frameCounter < REWIND_STEP_FRAMES) return;
-        s_frameCounter = 0;
-
-        const uint8_t *data;
-        uint32_t length;
-        if (!s_ring.pop_peek(&data, &length)) {
-            if (s_notifCooldown == 0) {
-                notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen,
-                    900.0, "No more rewind data");
-                s_notifCooldown = REWIND_NOTIF_EMPTY_COOLDOWN_FRAMES;
-            }
-            return;
-        }
-
-        // same fencing as a savestate load: the mixer must not touch the
-        // core while it is being unfrozen (msu1_restore reopens files)
-        snd3dsDrainMixing();
-        bool ok = S9xUnfreezeGameMem(data, length);
-        if (ok) {
-            gpu3dsInitializeMode7Vertexes();
-            if (!s_msuDeferred)
-                msu3dsOnEvent(Msu1Event::SavestateLoaded);
-        }
-        snd3dsResumeMixing();
-
-        if (ok) {
-            s_ring.pop_commit();
-            if (s_notifCooldown == 0) {
-                notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen,
-                    600.0, "\x11\x11 Rewinding");
-                s_notifCooldown = REWIND_NOTIF_STEP_COOLDOWN_FRAMES;
-            }
-        }
-        return;
-    }
+    s_wasHeld = rewindHeld;
 
     // Adaptive capture: prefer frames that finished with vsync headroom,
     // so the serialization lands where the CPU would have idled. A game

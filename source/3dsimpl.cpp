@@ -29,6 +29,7 @@
 #include "3dsui_img.h"
 #include "3dsinput.h"
 #include "3dsimpl.h"
+#include "3dsrewind.h"
 #include "3dsimpl_tilecache.h"
 #include "3dsimpl_gpu.h"
 
@@ -1162,6 +1163,7 @@ bool impl3dsLoadState(const char* filename)
 	{
 		gpu3dsInitializeMode7Vertexes();
 		msu3dsOnEvent(Msu1Event::SavestateLoaded);
+		rewind3dsReset();   // spec: any savestate load restarts the history
 	}
 	return success;
 }
@@ -1575,8 +1577,6 @@ void S9xSyncSpeed (void)
 uint32 prevConsoleJoyPad = 0;
 u32 prevConsoleButtonPressed[10];
 u32 buttons3dsPressed[10];
-
-#include "3dsrewind.h"
 
 uint32 S9xReadJoypad (int which1_0_to_4)
 {

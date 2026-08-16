@@ -15,6 +15,8 @@
 #include "3dsui_img.h"
 #include "3dsui_notif.h"
 
+#include "3dsthemes.h"
+
 // ---------------------------------------------------------------------------
 // Rewind timeline (issue #42): modal screen entered by tapping the Rewind
 // hotkey. The game stays frozen on its screen; the second screen draws a
@@ -33,6 +35,8 @@
 
 #define TIMELINE_REPEAT_DELAY_FRAMES  15
 #define TIMELINE_REPEAT_RATE_FRAMES   4
+
+static void timelineDrawBottomBar(const char *aLabel, const char *bLabel);
 
 // second-screen framebuffer write, same convention as 3dsui.cpp
 static inline void timelinePutPixel(u16 *fb, int x, int y, u16 color)
@@ -58,7 +62,7 @@ static void timelineDrawThumb(const uint8_t *thumb, int x0, int y0, int shrink)
     }
 }
 
-static void timelineDrawFrame(int cursor, int shownBack, int countdownStep)
+static void timelineDrawFrame(int cursor, int shownBack)
 {
     int width = settings3DS.SecondScreenWidth;
     int count = rewind3dsCount();
@@ -78,18 +82,6 @@ static void timelineDrawFrame(int cursor, int shownBack, int countdownStep)
     }
     ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 8, width, 22,
         TIMELINE_ACCENT_COLOR, HALIGN_CENTER, label);
-
-    // countdown phase replaces the filmstrip with the big number
-    if (countdownStep > 0) {
-        char big[8];
-        snprintf(big, sizeof(big), "%d", countdownStep);
-        ui3dsDrawRect(width / 2 - 40, 90, width / 2 + 40, 150, TIMELINE_PANEL_COLOR);
-        ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen,
-            0, 110, width, 130, TIMELINE_TEXT_COLOR, HALIGN_CENTER, big);
-        ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 200, width, 214,
-            TIMELINE_DIM_TEXT_COLOR, HALIGN_CENTER, "B: cancel");
-        return;
-    }
 
     // filmstrip: focused thumb centered, neighbours at half size.
     // "older" sits to the LEFT (like a film roll running rightwards).
@@ -129,14 +121,62 @@ static void timelineDrawFrame(int cursor, int shownBack, int countdownStep)
         }
     }
 
-    // status + hints
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 170, width, 184,
-        TIMELINE_TEXT_COLOR, HALIGN_CENTER,
-        shownBack == cursor ? "Showing this moment - A: resume here"
-                            : "A: show this moment");
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 200, width, 214,
-        TIMELINE_DIM_TEXT_COLOR, HALIGN_CENTER,
-        "< / >: navigate    B: back to present");
+    // hints live in the menu-style bottom bar, contextual on A
+    timelineDrawBottomBar(shownBack == cursor ? "Resume" : "Show", "Back");
+}
+
+// bottom bar in the main menu's style: colored A/B chips + labels
+static void timelineDrawBottomBar(const char *aLabel, const char *bLabel)
+{
+    const Theme3ds &theme = Themes[static_cast<int>(settings3DS.Theme)];
+    int width = settings3DS.SecondScreenWidth;
+
+    ui3dsDrawRect(0, 240 - 16, width, 240, theme.menuBottomBarColor);
+    ui3dsDrawRect(8, 240 - 14, 20, 240 - 2, 0xC93B33);
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 8, 240 - 13, 20, 240 - 2,
+        0xFFFFFF, HALIGN_CENTER, "A");
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 24, 240 - 13, 120, 240 - 2,
+        theme.menuBottomBarTextColor, HALIGN_LEFT, aLabel);
+    ui3dsDrawRect(126, 240 - 14, 138, 240 - 2, 0xE8A220);
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 126, 240 - 13, 138, 240 - 2,
+        0xFFFFFF, HALIGN_CENTER, "B");
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 142, 240 - 13, 240, 240 - 2,
+        theme.menuBottomBarTextColor, HALIGN_LEFT, bLabel);
+}
+
+// Yes/No confirmation drawn in the emulator's own dialog design (same
+// font, theme colors, accent bar and bottom-bar button hints), replicated
+// with the ui3ds primitives - the real menu dialog machinery cannot run
+// outside the menu context.
+static void timelineDrawDialog(int selection)
+{
+    const Theme3ds &theme = Themes[static_cast<int>(settings3DS.Theme)];
+    int width = settings3DS.SecondScreenWidth;
+
+    ui3dsSetViewport(0, 0, width, 240);
+    ui3dsSetTranslate(0, 0);
+    ui3dsDrawRect(0, 0, width, 240, theme.menuBackColor);
+
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 20, 60, width - 20, 74,
+        theme.normalItemTextColor, HALIGN_LEFT, "Rewind");
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 20, 84, width - 20, 98,
+        theme.normalItemDescriptionTextColor, HALIGN_LEFT,
+        "Resume the game from this moment?");
+
+    ui3dsDrawRect(0, 110, width, 114, theme.dialogColorInfo);
+
+    const char *options[2] = { "Yes", "No" };
+    for (int i = 0; i < 2; i++) {
+        int y0 = 126 + i * 22;
+        if (i == selection) {
+            ui3dsDrawRect(0, y0 - 4, width, y0 + 14, theme.selectedItemBackColor);
+        }
+        ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 20, y0, width - 20, y0 + 14,
+            i == selection ? theme.selectedItemTextColor : theme.normalItemTextColor,
+            HALIGN_LEFT, options[i]);
+    }
+
+    timelineDrawBottomBar("Select", "Back");
 }
 
 static void timelinePresent()
@@ -150,6 +190,7 @@ static void timelinePresent()
 // paused=true dims it (the pause-overlay look); notifications draw on top.
 static void timelineRenderGameScreen(bool dimmed)
 {
+    notif3dsSync();   // upload pending overlay text before the frame opens
     gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, false);
     impl3dsSceneRender(true, dimmed);
     gpu3dsFrameEnd();
@@ -198,11 +239,14 @@ void rewind3dsTimelineShow()
         gpu3dsWaitForVBlank(settings3DS.SecondScreen);
     }
 
+    bool fromMenu = rewind3dsTimelineFromMenu();
     int cursor = 0;
     int shownBack = -1;        // -1 = game screen still shows the present
     bool committed = false;
-    int hintCooldown = 0;
-    int lastCountdownShown = 0;
+    bool dialogOpen = false;
+    bool bottomRestored = false;
+    int  dialogSel = 1;        // matches the menu's confirm default: "No"
+    char overlayShown[40] = "";
 
     u32 lastHeld = 0xffffffff; // suppresses the entry press
     int repeatFrames = 0;
@@ -223,11 +267,29 @@ void rewind3dsTimelineShow()
         lastHeld = held;
 
         if (countdownStep > 0) {
-            if (down & KEY_B) {
-                countdownStep = 0;           // abort back to browsing
-            } else if (++countdownFrames >= framesPerStep) {
+            // point of no return: no input is read during the countdown
+            if (++countdownFrames >= framesPerStep) {
                 countdownFrames = 0;
                 if (--countdownStep == 0) { committed = true; break; }
+            }
+        } else if (dialogOpen) {
+            if (down & (KEY_DUP | KEY_UP | KEY_DDOWN | KEY_DOWN)) {
+                dialogSel = 1 - dialogSel;
+            }
+            if (down & KEY_B) {
+                dialogOpen = false;          // "No": back to the timeline
+            }
+            if (down & KEY_A) {
+                dialogOpen = false;
+                if (dialogSel == 0) {        // "Yes"
+                    // the bottom screen returns to the wallpaper now; the
+                    // countdown lives on the game screen only
+                    timelineRestoreSecondScreen(previousFormat);
+                    bottomRestored = true;
+                    if (framesPerStep == 0) { committed = true; break; }
+                    countdownStep = 3;
+                    countdownFrames = 0;
+                }
             }
         } else {
             bool navRepeat = false;
@@ -255,53 +317,59 @@ void rewind3dsTimelineShow()
                         timelineShowFrame();
                         shownBack = cursor;
                     }
-                } else if (framesPerStep == 0) {
-                    committed = true; break;
                 } else {
-                    countdownStep = 3;
-                    countdownFrames = 0;
+                    dialogOpen = true;
+                    dialogSel = 1;           // default "No", like the menu
                 }
             }
         }
 
-        // top screen: dimmed recomposite while browsing, undimmed during
-        // the countdown (the brightness change itself signals "about to go")
+        // top screen: the pause-overlay look (dimmed recomposite) with a
+        // centered persistent message in the pause style, re-triggered
+        // only when the wording changes
+        char overlay[40];
         if (countdownStep > 0) {
-            if (countdownStep != lastCountdownShown) {
-                char msg[32];
-                snprintf(msg, sizeof(msg), "Resuming in %d", countdownStep);
-                notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen,
-                    900.0, msg);
-                lastCountdownShown = countdownStep;
-            }
-            timelineRenderGameScreen(false);
+            snprintf(overlay, sizeof(overlay), "Resuming in %d...", countdownStep);
         } else {
-            lastCountdownShown = 0;
-            if (--hintCooldown <= 0) {
-                notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen,
-                    1600.0, shownBack >= 0 ? "A: resume here    B: back"
-                                           : "A: show moment    B: back");
-                hintCooldown = 75;
-            }
-            timelineRenderGameScreen(true);
+            snprintf(overlay, sizeof(overlay), "Select a moment below");
         }
+        if (strcmp(overlay, overlayShown) != 0) {
+            snprintf(overlayShown, sizeof(overlayShown), "%s", overlay);
+            notif3dsTrigger(Notif::Paused, Notif::Type::Default, settings3DS.GameScreen,
+                3600000.0, overlay);
+        }
+        timelineRenderGameScreen(true);
 
-        timelineDrawFrame(cursor, shownBack, countdownStep);
-        timelinePresent();
+        if (countdownStep > 0) {
+            gpu3dsWaitForVBlank(settings3DS.GameScreen);
+        } else {
+            if (dialogOpen) {
+                timelineDrawDialog(dialogSel);
+            } else {
+                timelineDrawFrame(cursor, shownBack);
+            }
+            timelinePresent();
+        }
     }
 
     if (committed) {
         // the shown state is the live state; drop the abandoned future
         rewind3dsRollbackTo(cursor);
-    } else if (shownBack >= 0 && havePresent) {
-        // cancel: put the present back and repaint it
-        if (rewind3dsRestorePresent()) {
-            timelineShowFrame();
+    } else {
+        // cancel (F0): reload the state saved on entry, always
+        if (havePresent && rewind3dsRestorePresent()) {
+            if (shownBack >= 0) timelineShowFrame();
+        }
+        // menu entry: B returns to the menu, not the game
+        if (fromMenu) {
+            GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
         }
     }
 
     notif3dsHide();
-    timelineRestoreSecondScreen(previousFormat);
+    if (!bottomRestored) {
+        timelineRestoreSecondScreen(previousFormat);
+    }
     menu3dsSetScreenDirty(true, true);
 
     rewind3dsSetTimelineActive(false);

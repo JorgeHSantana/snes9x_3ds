@@ -18,7 +18,9 @@ void rewind3dsReset();
 #define REWIND_THUMB_H      60
 #define REWIND_THUMB_BYTES  (REWIND_THUMB_W * REWIND_THUMB_H * 2)   // RGB565
 
-bool rewind3dsTakeTimelineRequest();      // tap gesture happened
+bool rewind3dsTakeTimelineRequest();      // hotkey press or menu action
+void rewind3dsRequestTimelineFromMenu();  // menu entry: B returns to the menu
+bool rewind3dsTimelineFromMenu();
 bool rewind3dsTimelineActive();           // joypad reads freeze while true
 void rewind3dsSetTimelineActive(bool active);
 

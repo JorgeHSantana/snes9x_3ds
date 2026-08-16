@@ -496,6 +496,23 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             }, hasState ? MenuItemType::Action : MenuItemType::Disabled, slotInfo, ""_s);
         }
         AddMenuDisabledOption(items, ""_s);
+
+        // Rewind timeline (docs/rewind-v2-spec.md): lives next to the
+        // save/load slots; B inside the timeline returns here
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            if (rewind3dsCount() == 0) {
+                SMenuTab dialogTab;
+                bool isDialog = false;
+                menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Rewind",
+                    "No rewind history yet. Map the Rewind hotkey\nin the Controls tab to record gameplay.",
+                    Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+                menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+                return;
+            }
+            rewind3dsRequestTimelineFromMenu();
+            GPU3DS.emulatorState = EMUSTATE_EMULATE;
+        }, MenuItemType::Action, "  Rewind"_s, ""_s);
+        AddMenuDisabledOption(items, ""_s);
     }
 
     AddMenuHeader1(items, "APPEARANCE"_s);
@@ -2923,6 +2940,11 @@ void emulatorLoop()
         // make sure to enable double buffering again when leaving emulatorLoop()
         consoleInit(settings3DS.SecondScreen, NULL);
         t3dsResetTimers();
+    }
+
+    // menu-triggered timeline opens before any frame runs
+    if (rewind3dsTakeTimelineRequest()) {
+        rewind3dsTimelineShow();
     }
 
     int totalFrames = 0;
