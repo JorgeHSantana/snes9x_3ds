@@ -504,7 +504,9 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 SMenuTab dialogTab;
                 bool isDialog = false;
                 menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Rewind",
-                    "No rewind history yet. Map the Rewind hotkey\nin the Controls tab to record gameplay.",
+                    settings3DS.RewindEnabled
+                        ? "No rewind history yet. Play for a moment\nand try again."
+                        : "Rewind is disabled. Enable it in this tab\nto record gameplay.",
                     Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
                 menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
                 return;
@@ -580,6 +582,11 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     apply3dsMode(val);
             });
     }
+
+    AddMenuPicker(items, "  Rewind"_s,
+        "Records gameplay so you can jump back to any recent\nmoment (Emulator tab or the Rewind hotkey). Disable\nto reclaim the memory and skip the captures."_s,
+        makePickerOptions({"Disabled", "Enabled"}), settings3DS.RewindEnabled, DIALOG_TYPE_INFO, true,
+        []( int val ) { CheckAndUpdate(settings3DS.RewindEnabled, val); });
 
     AddMenuPicker(items, "  Rewind Countdown"_s,
         "The 3..2..1 shown before play resumes from a rewound\nmoment, so your hands can get back to the controller."_s,
@@ -1931,6 +1938,7 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     config3dsReadWriteEnum(stream, writeMode, "ShowFPS=%d\n", &settings3DS.ShowFPS, 0, 1);
     config3dsReadWriteEnum(stream, writeMode, "Overclock=%d\n", &settings3DS.Overclock, 0, 1);
     config3dsReadWriteEnum(stream, writeMode, "RewindCountdown=%d\n", &settings3DS.RewindCountdown, 0, 3);
+    config3dsReadWriteEnum(stream, writeMode, "RewindEnabled=%d\n", &settings3DS.RewindEnabled, 0, 1);
 
     return true;
 }

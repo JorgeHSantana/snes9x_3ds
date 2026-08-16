@@ -38,17 +38,9 @@ static uint8_t  *s_thumbPool = nullptr;    // slots * REWIND_THUMB_BYTES, RGB565
 static uint8_t  *s_presentBuf = nullptr;   // the "present" snapshot while browsing
 static uint32_t  s_presentLen = 0;
 
-// The whole feature costs nothing until the user maps the hotkey: no
-// ring allocation, no captures. This is the etapa-0 gating - everyone
-// was paying 24MB + two ~450KB serializations per second for a feature
-// whose hotkey ships unbound.
-static bool rewind3dsHotkeyBound()
-{
-    const auto &hk = settings3DS.UseGlobalEmuControlKeys
-        ? settings3DS.GlobalButtonHotkeys[HOTKEY_REWIND_HOLD]
-        : settings3DS.ButtonHotkeys[HOTKEY_REWIND_HOLD];
-    return hk.MappingBitmasks[0] != 0;
-}
+// The feature is governed by the explicit Rewind setting (Emulator tab),
+// NOT by the hotkey being mapped - the menu's Rewind action must work
+// with no hotkey at all. Disabled = no ring allocation, no captures.
 
 static void rewind3dsAllocate()
 {
@@ -214,7 +206,7 @@ void rewind3dsFrameTick(bool rewindHeld, bool frameHadHeadroom)
 {
     if (!settings3DS.isRomLoaded) return;
     if (snd3DS.generateSilence) return;   // SRAM autosave in flight
-    if (!rewind3dsHotkeyBound()) return;  // unmapped = feature off = free
+    if (!settings3DS.RewindEnabled) return;   // disabled = free
 
     if (!s_allocTried)
         rewind3dsAllocate();

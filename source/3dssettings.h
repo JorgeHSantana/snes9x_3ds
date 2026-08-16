@@ -173,6 +173,7 @@ typedef struct {
     bool                ShowFPS;
     int                 Overclock;            // New 3DS clock: 0 = 268MHz (Old 3DS speed), 1 = 804MHz
     int                 RewindCountdown;      // timeline resume countdown: 0 off, 1 250ms, 2 500ms, 3 1s
+    int                 RewindEnabled;        // 0 = no captures, no RAM; 1 = recording on (menu + hotkey)
 
     Setting::ScreenStretch ScreenStretch;
     Setting::ScreenFilter ScreenFilter;         // User preference for SNES_MAIN in stretched modes.
