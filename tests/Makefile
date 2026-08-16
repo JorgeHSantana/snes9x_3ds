@@ -10,7 +10,7 @@ CORE_CXXFLAGS := $(CXXFLAGS) -fno-rtti -fno-exceptions
 
 # test sources (add new test_*.cpp here)
 TEST_SRCS := test_main.cpp test_stereo_sig.cpp \
-	test_dir_entries.cpp test_zip_select.cpp test_msu1_flac.cpp test_rewind_ring.cpp test_msu1_rewind_defer.cpp test_msu1_helpers.cpp test_msu1_lifecycle.cpp test_msu1_registers_data.cpp test_msu1_registers_audio.cpp test_msu1_audio.cpp test_msu_bridge.cpp test_msu_event_matrix.cpp test_msu1_snapshot.cpp test_msu1_lock_hooks.cpp test_msu1_data_bulk.cpp test_msu1_dma_offsets.cpp test_msu_prefetch.cpp test_msu_user_volume.cpp
+	test_dir_entries.cpp test_zip_select.cpp test_msu1_flac.cpp test_rewind_ring.cpp test_rewind_tape.cpp test_msu1_rewind_defer.cpp test_msu1_helpers.cpp test_msu1_lifecycle.cpp test_msu1_registers_data.cpp test_msu1_registers_audio.cpp test_msu1_audio.cpp test_msu_bridge.cpp test_msu_event_matrix.cpp test_msu1_snapshot.cpp test_msu1_lock_hooks.cpp test_msu1_data_bulk.cpp test_msu1_dma_offsets.cpp test_msu_prefetch.cpp test_msu_user_volume.cpp
 # production sources compiled for host (add msu1.cpp / 3dsmsu.cpp as they appear)
 CORE_SRCS := msu1.cpp 3dsmsu.cpp
 

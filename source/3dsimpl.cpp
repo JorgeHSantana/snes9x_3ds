@@ -1685,5 +1685,9 @@ uint32 S9xReadJoypad (int which1_0_to_4)
 
     prevConsoleJoyPad = consoleJoyPad;
 
+    // core boundary: this exact value is what the frame consumed, so it is
+    // what the rewind input tape records (v2 degrau 2)
+    rewind3dsNotePad(consoleJoyPad);
+
     return consoleJoyPad;
 }

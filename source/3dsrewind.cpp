@@ -2,6 +2,8 @@
 
 #include "3dsrewind.h"
 #include "3dsrewindring.h"
+#include "3dsrewindtape.h"
+#include "3dsrewindmeter.h"
 #include "3dssettings.h"
 #include "3dssound.h"
 #include "3dsmsu.h"
@@ -21,6 +23,11 @@
 #define REWIND_CAPTURE_FRAMES   30    // one snapshot every half second
 #define REWIND_FORCE_GAP_FRAMES 120   // capture even without headroom after 2s
 
+// Input tape (v2 degrau 2): 10 minutes of pads (4B/frame) plus MSU-1
+// status reads - ~176KB total, recording only, nothing replays it yet.
+#define REWIND_TAPE_FRAMES      (10 * 60 * 60)
+#define REWIND_TAPE_MSU_EVENTS  4096
+
 // all state below is emu-thread only
 static RewindRing s_ring;
 static bool s_allocTried = false;
@@ -37,6 +44,12 @@ static uint32_t s_nowFrame = 0;        // emulated frames since ROM load
 static uint8_t  *s_thumbPool = nullptr;    // slots * REWIND_THUMB_BYTES, RGB565 row-major
 static uint8_t  *s_presentBuf = nullptr;   // the "present" snapshot while browsing
 static uint32_t  s_presentLen = 0;
+
+// v2 recording (emu thread only): tape frame N = the frame that set
+// s_nowFrame to N; MSU events tag the frame being executed
+static RewindTape  s_tape;
+static RewindMeter s_meter;
+static uint32_t    s_lastPad = 0;
 
 // The feature is governed by the explicit Rewind setting (Emulator tab),
 // NOT by the hotkey being mapped - the menu's Rewind action must work
@@ -64,6 +77,20 @@ static void rewind3dsAllocate()
             log3dsWrite("[rewind] ring ready: %d slots (%d KB), ~%ds of gameplay",
                 slots, slots * (REWIND_SLOT_SIZE / 1024),
                 slots * REWIND_CAPTURE_FRAMES / 60);
+
+            // v2 tape rides along; losing it degrades nothing visible yet
+            uint32_t *padBuf = (uint32_t *)malloc(REWIND_TAPE_FRAMES * sizeof(uint32_t));
+            RewindTape::MsuRead *msuBuf = (RewindTape::MsuRead *)
+                malloc(REWIND_TAPE_MSU_EVENTS * sizeof(RewindTape::MsuRead));
+            if (padBuf && msuBuf) {
+                s_tape.init(padBuf, REWIND_TAPE_FRAMES, msuBuf, REWIND_TAPE_MSU_EVENTS);
+                s_tape.clear(s_nowFrame + 1);
+                log3dsWrite("[rewind] tape ready: %d frames, %d msu events",
+                    REWIND_TAPE_FRAMES, REWIND_TAPE_MSU_EVENTS);
+            } else {
+                free(padBuf); free(msuBuf);
+                log3dsWrite("[rewind] no memory for the input tape - recording without it");
+            }
             return;
         }
         slots /= 2;
@@ -164,7 +191,31 @@ bool rewind3dsRestoreAt(int back)
 
 void rewind3dsRollbackTo(int back)
 {
-    if (s_ring.valid()) s_ring.rollback_to(back);
+    if (!s_ring.valid()) return;
+
+    // the chosen moment becomes the present: the frame counter rewinds to
+    // its tag so future captures and tape frames continue from there
+    uint32_t tag = 0;
+    const uint8_t *data; uint32_t len;
+    if (s_ring.peek_at(back, &data, &len, &tag)) {
+        s_nowFrame = tag;
+        if (s_tape.valid())
+            s_tape.truncate_to(tag);
+    }
+    s_ring.rollback_to(back);
+}
+
+// --- v2 recording hooks -----------------------------------------------------
+
+void rewind3dsNotePad(uint32_t pad)
+{
+    s_lastPad = pad;
+}
+
+void rewind3dsNoteMsuStatus(uint8_t value)
+{
+    if (!s_tape.valid() || s_timelineActive || !settings3DS.RewindEnabled) return;
+    s_tape.note_msu(0, value);
 }
 
 // MSU-1 stays latched and silent while the timeline browses; the release
@@ -196,6 +247,10 @@ void rewind3dsReset()
     s_wasHeld = false;
     s_nowFrame = 0;
     s_timelineRequested = false;
+    if (s_tape.valid())
+        s_tape.clear(1);   // first executed frame will be frame 1
+    s_meter.reset();
+    s_lastPad = 0;
     if (s_msuDeferred) {
         msu1_restore_deferred_cancel();   // never apply another game's snap
         s_msuDeferred = false;
@@ -214,6 +269,11 @@ void rewind3dsFrameTick(bool rewindHeld, bool frameHadHeadroom)
 
     s_nowFrame++;
     s_frameCounter++;
+
+    // commit the executed frame's pad to the tape (v2 degrau 2: recording
+    // only - the ring below still drives every visible behavior)
+    if (s_tape.valid())
+        s_tape.push(s_lastPad);
 
     // The hold gesture is gone (docs/rewind-v2-spec.md): pressing the
     // Rewind hotkey opens the timeline, period.

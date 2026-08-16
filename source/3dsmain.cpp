@@ -3135,6 +3135,7 @@ int main()
     // msu1 diagnostics feed the session log whenever logging is enabled
     // (log3dsWrite is a no-op otherwise) — menu boots included, not just autoboot.
     msu1_set_log_hook(msu1LogToFile);
+    msu1_set_status_read_hook(rewind3dsNoteMsuStatus);
     
     img3dsSetThumbMode();
     gfxSetDoubleBuffering(settings3DS.SecondScreen, true);

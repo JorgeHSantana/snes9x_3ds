@@ -121,6 +121,12 @@ void msu1_set_lock_hooks(void (*lock)(void), void (*unlock)(void));
 // track-load outcomes through it; the platform forwards to its logger.
 void msu1_set_log_hook(void (*log)(const char* message));
 
+// Optional hook fired with every value the S-CPU reads from the STATUS
+// port (0x2000) of the console MSU1 instance. Status depends on SD/prefetch
+// timing, so the rewind input tape records it (docs/rewind-v2-spec.md A.1);
+// the other ports return values that are pure functions of state.
+void msu1_set_status_read_hook(void (*hook)(uint8_t value));
+
 // Formats and forwards to the log hook (no-op when the hook is null).
 // Public so platform-side MSU code can share the same diagnostics channel.
 void msu1_diag(const char* fmt, ...);

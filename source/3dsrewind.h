@@ -1,6 +1,8 @@
 #ifndef _3DSREWIND_H
 #define _3DSREWIND_H
 
+#include <stdint.h>
+
 // Rewind (issue #12): a ring of in-RAM savestates captured while playing,
 // popped back while the Rewind hotkey is held.
 
@@ -43,5 +45,15 @@ void rewind3dsTimelineShow();
 // the menu's real Yes/No dialog, runnable from the game context
 // (implemented in 3dsmain.cpp - it owns the menu tab globals)
 bool rewind3dsConfirmResume();
+
+// --- input tape (rewind v2 degrau 2, docs/rewind-v2-spec.md A.1) -----------
+
+// called by S9xReadJoypad with the effective (post-turbo) pad it returns;
+// the value is committed to the tape by the frame's rewind3dsFrameTick
+void rewind3dsNotePad(uint32_t pad);
+
+// MSU-1 status-port read hook (registered with msu1_set_status_read_hook):
+// records the SD-timing-dependent values a replay must feed back
+void rewind3dsNoteMsuStatus(uint8_t value);
 
 #endif

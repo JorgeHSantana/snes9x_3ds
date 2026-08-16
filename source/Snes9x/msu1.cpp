@@ -219,6 +219,9 @@ void msu1_set_data_prefetch(uint32_t (*read)(uint32_t pos, uint8_t* dst, uint32_
 { g_data_prefetch = read; }
 void msu1_set_log_hook(void (*log)(const char* message)) { g_log_hook = log; }
 
+static void (*g_status_read_hook)(uint8_t value) = nullptr;
+void msu1_set_status_read_hook(void (*hook)(uint8_t value)) { g_status_read_hook = hook; }
+
 void msu1_diag(const char* fmt, ...)
 {
     if (g_log_hook == nullptr) { return; }
@@ -651,7 +654,14 @@ void msu1_restore_deferred_cancel(void)
     g_defer_state = nullptr;
 }
 
-uint8_t S9xMSU1ReadPort(uint8_t port)               { return msu1_read_port(MSU1, port); }
+uint8_t S9xMSU1ReadPort(uint8_t port)
+{
+    uint8_t value = msu1_read_port(MSU1, port);
+    // console-instance status reads feed the rewind tape (SD-timing data)
+    if (port == 0 && g_status_read_hook)
+        g_status_read_hook(value);
+    return value;
+}
 
 void S9xMSU1WritePort(uint8_t port, uint8_t value)
 {
