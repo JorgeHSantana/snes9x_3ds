@@ -40,4 +40,8 @@ void rewind3dsMsuDeferEnd();              // apply latched MSU state in one go
 // the modal timeline screen itself (blocks until closed)
 void rewind3dsTimelineShow();
 
+// the menu's real Yes/No dialog, runnable from the game context
+// (implemented in 3dsmain.cpp - it owns the menu tab globals)
+bool rewind3dsConfirmResume();
+
 #endif

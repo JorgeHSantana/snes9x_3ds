@@ -127,22 +127,6 @@ static void timelineDrawFrame(int cursor, int shownBack)
     menu3dsDrawBottomBar(buttons, 2);
 }
 
-// Yes/No confirmation: the menu's real dialog rendering (draw-only - the
-// timeline keeps its own input loop, since the menu's modal machinery
-// cannot run outside the menu context). Same look as confirmDialog in
-// 3dsmain.cpp: warn color, Yes/No rows, dimmed backdrop above.
-static void timelineDrawDialog(int cursor, int shownBack, int selection)
-{
-    timelineDrawFrame(cursor, shownBack);   // the dialog dims this backdrop
-
-    static const std::vector<SMenuItem> options = {
-        SMenuItem(nullptr, MenuItemType::Action, "Yes", "", 0),
-        SMenuItem(nullptr, MenuItemType::Action, "No",  "", 1),
-    };
-    menu3dsDrawStandaloneDialog("Rewind", "Resume the game from this moment?",
-        Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn, options, selection);
-}
-
 static void timelinePresent()
 {
     impl3dsFlushScreen(settings3DS.SecondScreen, false, false);
@@ -207,9 +191,7 @@ void rewind3dsTimelineShow()
     int cursor = 0;
     int shownBack = -1;        // -1 = game screen still shows the present
     bool committed = false;
-    bool dialogOpen = false;
     bool bottomRestored = false;
-    int  dialogSel = 1;        // matches the menu's confirm default: "No"
     char overlayShown[40] = "";
 
     u32 lastHeld = 0xffffffff; // suppresses the entry press
@@ -235,25 +217,6 @@ void rewind3dsTimelineShow()
             if (++countdownFrames >= framesPerStep) {
                 countdownFrames = 0;
                 if (--countdownStep == 0) { committed = true; break; }
-            }
-        } else if (dialogOpen) {
-            if (down & (KEY_DUP | KEY_UP | KEY_DDOWN | KEY_DOWN)) {
-                dialogSel = 1 - dialogSel;
-            }
-            if (down & KEY_B) {
-                dialogOpen = false;          // "No": back to the timeline
-            }
-            if (down & KEY_A) {
-                dialogOpen = false;
-                if (dialogSel == 0) {        // "Yes"
-                    // the bottom screen returns to the wallpaper now; the
-                    // countdown lives on the game screen only
-                    timelineRestoreSecondScreen(previousFormat);
-                    bottomRestored = true;
-                    if (framesPerStep == 0) { committed = true; break; }
-                    countdownStep = 3;
-                    countdownFrames = 0;
-                }
             }
         } else {
             bool navRepeat = false;
@@ -282,8 +245,17 @@ void rewind3dsTimelineShow()
                         shownBack = cursor;
                     }
                 } else {
-                    dialogOpen = true;
-                    dialogSel = 1;           // default "No", like the menu
+                    // the menu's own modal Yes/No dialog (3dsmain.cpp)
+                    if (rewind3dsConfirmResume()) {
+                        // the bottom screen returns to the wallpaper now;
+                        // the countdown lives on the game screen only
+                        timelineRestoreSecondScreen(previousFormat);
+                        bottomRestored = true;
+                        if (framesPerStep == 0) { committed = true; break; }
+                        countdownStep = 3;
+                        countdownFrames = 0;
+                    }
+                    lastHeld = 0xffffffff;   // swallow the dialog's last press
                 }
             }
         }
@@ -307,11 +279,7 @@ void rewind3dsTimelineShow()
         if (countdownStep > 0) {
             gpu3dsWaitForVBlank(settings3DS.GameScreen);
         } else {
-            if (dialogOpen) {
-                timelineDrawDialog(cursor, shownBack, dialogSel);
-            } else {
-                timelineDrawFrame(cursor, shownBack);
-            }
+            timelineDrawFrame(cursor, shownBack);
             timelinePresent();
         }
     }

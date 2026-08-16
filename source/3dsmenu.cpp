@@ -654,38 +654,6 @@ void menu3dsDrawDialog(SMenuTab& dialogTab)
         offsetX);
 }
 
-// The menu's dialog, drawn outside the menu's modal loop (e.g. over the
-// rewind timeline). Same code path as menu3dsShowDialog at rest - layout,
-// colors, item rows, the dimmed backdrop above - but the caller owns input
-// and buffer flipping, so nothing of the menu's event machinery runs.
-void menu3dsDrawStandaloneDialog(const std::string& title, const std::string& dialogText, int newDialogBackColor, const std::vector<SMenuItem>& menuItems, int selectedIndex)
-{
-    dialogBackColor = newDialogBackColor;
-    dialogTextLines = -1;
-
-    SMenuTab dialogTab;
-    dialogTab.SetTitle(title);
-    dialogTab.DialogText.assign(dialogText);
-    dialogTab.MenuItems = menuItems;
-    dialogTab.FirstItemIndex = 0;
-    dialogTab.SelectedItemIndex = selectedIndex;
-
-    int topHeight, bottomHeight;
-    menu3dsGetDialogLayout(topHeight, bottomHeight);
-    int y = SCREEN_HEIGHT - topHeight - bottomHeight;
-
-    // what sits above the dialog dims, exactly like the menu behind its
-    // dialogs (menu3dsDrawEverything with dialogFrame = 0)
-    ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, y);
-    ui3dsSetTranslate(0, 0);
-    ui3dsDrawRect(0, 0, settings3DS.SecondScreenWidth, y, 0x000000, (float)ANIMATE_DIALOG_STEPS / 10);
-
-    ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, SCREEN_HEIGHT);
-    ui3dsSetTranslate(0, y);
-    menu3dsDrawDialog(dialogTab);
-    ui3dsSetTranslate(0, 0);
-}
-
 void menu3dsDrawEverything(int& currentMenuTab, std::vector<SMenuTab>& menuTabs) {
         ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, SCREEN_HEIGHT);
         ui3dsSetTranslate(0, 0);

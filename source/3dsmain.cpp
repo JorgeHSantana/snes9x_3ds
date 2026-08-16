@@ -2651,6 +2651,26 @@ void onDirectoryEntrySelected(
     }
 }
 
+// Rewind timeline (issue #42): the Yes/No confirmation is the menu's own
+// modal dialog, run from the game context. The tabs may not exist yet -
+// entering via hotkey on an autobooted game means showMenu() never built
+// them, and the dialog's backdrop draws menuTabs[currentMenuTab] (this
+// empty-vector access is what crashed the first attempt at reusing it).
+bool rewind3dsConfirmResume()
+{
+    int currentMenuTab = menu3dsGetLastSelectedTabIndex();
+    if (menuTabs.empty() || Memory.ROMCRC32 != lastLoadedRomCRC || menu3dsHasDirtyTabs())
+    {
+        setupMenu(currentMenuTab);
+        lastLoadedRomCRC = Memory.ROMCRC32;
+    }
+
+    SMenuTab dialogTab;
+    bool isDialog = false;
+    return confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+        "Rewind", "Resume the game from this moment?", true, true);
+}
+
 void showMenu() {
     static std::vector<SMenuItem> emptyCheats;
     int currentMenuTab = menu3dsGetLastSelectedTabIndex();
