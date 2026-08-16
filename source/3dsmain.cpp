@@ -2884,6 +2884,7 @@ void updateProfilingOutput(int totalFrames)
 //----------------------------------------------------------
 #ifdef DETERMINISM_PROBE
 static void probeFrameTick(bool *skipDrawingNext);
+bool probe3dsFlatOut();
 #endif
 
 void emulatorLoop()
@@ -2979,6 +2980,11 @@ void emulatorLoop()
             log3dsWrite("[menuprobe] entering menu");        }
 
         long actualTicksThisFrame = (long)(svcGetSystemTick() - startFrameTick);
+#ifdef DETERMINISM_PROBE
+        if (probe3dsFlatOut()) {
+            skipDrawing = true;   // replay-speed mode: no pacing, no vsync wait
+        } else
+#endif
         skipDrawing = paceFrame(actualTicksThisFrame, totalFrames, snesFrameTotalActualTicks, snesFrameTotalAccurateTicks, snesFramesSkipped);
 
 #ifdef DETERMINISM_PROBE
@@ -3053,6 +3059,13 @@ static bool s_probeActive = false;
 static int  s_probeFrame = 0;
 static int  s_probeState = 0;        // 0 = not started, 1 = running, 2 = finished/disabled
 static uint32 s_probeLcg = 0x1234ABCDu;
+static u64  s_probeStartTick = 0;
+
+// mode S: measure headless replay speed - no rendering, no vsync wait
+bool probe3dsFlatOut()
+{
+    return s_probeActive && s_probeMode == 'S';
+}
 
 static uint32 probeLcgNext()
 {
@@ -3082,7 +3095,7 @@ static void probeStart()
     if (f == NULL) { return; }
     int mode = fgetc(f);
     (void)fclose(f);   // best-effort, read-only handle
-    if (mode != 'A' && mode != 'B' && mode != 'C') { return; }
+    if (mode != 'A' && mode != 'B' && mode != 'C' && mode != 'S') { return; }
 
     // deterministic starting point, overriding whatever autoload did
     if (!impl3dsLoadStateSlot(1)) {
@@ -3097,6 +3110,7 @@ static void probeStart()
     s_probeState = 1;
     g_probeJoypadActive = true;
     g_probeJoypadValue = 0;
+    s_probeStartTick = svcGetSystemTick();
     log3dsWrite("[probe] mode %c started", s_probeMode);
 }
 
@@ -3107,7 +3121,9 @@ static void probeFrameTick(bool *skipDrawingNext)
     if (!s_probeActive) { return; }
 
     // scenario-controlled, wall-clock-free render pattern
-    *skipDrawingNext = (s_probeMode == 'B') && ((s_probeFrame & 1) != 0);
+    // (mode S never renders: that is the replay-speed condition)
+    *skipDrawingNext = (s_probeMode == 'S')
+        || ((s_probeMode == 'B') && ((s_probeFrame & 1) != 0));
 
     if ((s_probeFrame % 8) == 0) {
         uint32 r = probeLcgNext();
@@ -3125,7 +3141,17 @@ static void probeFrameTick(bool *skipDrawingNext)
     }
 
     s_probeFrame++;
-    if ((s_probeFrame % 600) == 0) { probeLogCrcs(); }
+    if ((s_probeFrame % 600) == 0) {
+        if (s_probeMode == 'S') {
+            u64 elapsed = svcGetSystemTick() - s_probeStartTick;
+            double wallSeconds = (double)elapsed / (double)TICKS_PER_SEC;
+            double speed = ((double)s_probeFrame / 60.0) / wallSeconds;
+            log3dsWrite("[probe] S f=%05d wall=%.2fs speed=%.2fx realtime",
+                s_probeFrame, wallSeconds, speed);
+        } else {
+            probeLogCrcs();
+        }
+    }
 
     if (s_probeFrame >= 7200) {
         probeLogCrcs();
