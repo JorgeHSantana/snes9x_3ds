@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <atomic>
 
 Msu1State MSU1 = {};
 
@@ -167,8 +168,12 @@ void msu1_soft_reset(Msu1State& state)
 
 static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
 
-// rewind-hold deferred restore (see msu1.h)
-static bool g_defer_active = false;
+// rewind-hold deferred restore (see msu1.h).
+// g_defer_active: written by the emu thread (msu1_set_restore_deferred /
+// cancel), read lock-free by the mixing thread in msu1_read_audio - a
+// single-word atomic, matching the snd3DS.generateSilence pattern. The
+// remaining defer state is emu-thread only.
+static std::atomic<bool> g_defer_active{false};
 static bool g_defer_pending = false;
 static Msu1Snapshot g_defer_snap;
 static Msu1State* g_defer_state = nullptr;
@@ -510,7 +515,7 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
 uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
 {
     if (out == nullptr || max_bytes == 0) { return 0; }
-    if (g_defer_active) { return 0; }   // rewinding: hold the music
+    if (g_defer_active.load(std::memory_order_relaxed)) { return 0; }   // rewinding: hold the music
     if (!state.enabled || !msu1_audio_ready(state)) { return 0; }
     if ((state.status & MSU1_FLAG_AUDIO_PLAYING) == 0) { return 0; }
 

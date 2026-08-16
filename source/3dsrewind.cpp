@@ -19,14 +19,31 @@
 #define REWIND_SLOT_SIZE        (512 * 1024)
 #define REWIND_SLOTS_NEW3DS     48
 #define REWIND_SLOTS_OLD3DS     8
-#define REWIND_CAPTURE_FRAMES   30   // one snapshot every half second
-#define REWIND_STEP_FRAMES      10   // pop cadence while the hotkey is held
+#define REWIND_CAPTURE_FRAMES   30    // one snapshot every half second
+#define REWIND_STEP_FRAMES      10    // pop cadence while the hotkey is held
+#define REWIND_FORCE_GAP_FRAMES 120   // capture even without headroom after 2s
+#define REWIND_NOTIF_EMPTY_COOLDOWN_FRAMES  120
+#define REWIND_NOTIF_STEP_COOLDOWN_FRAMES   30
 
+// all state below is emu-thread only
 static RewindRing s_ring;
 static bool s_allocTried = false;
 static bool s_msuDeferred = false;
 static int  s_frameCounter = 0;
+static int  s_framesSinceCapture = 0;
 static int  s_notifCooldown = 0;
+
+// The whole feature costs nothing until the user maps the hotkey: no
+// ring allocation, no captures. This is the etapa-0 gating - everyone
+// was paying 24MB + two ~450KB serializations per second for a feature
+// whose hotkey ships unbound.
+static bool rewind3dsHotkeyBound()
+{
+    const auto &hk = settings3DS.UseGlobalEmuControlKeys
+        ? settings3DS.GlobalButtonHotkeys[HOTKEY_REWIND_HOLD]
+        : settings3DS.ButtonHotkeys[HOTKEY_REWIND_HOLD];
+    return hk.MappingBitmasks[0] != 0;
+}
 
 static void rewind3dsAllocate()
 {
@@ -60,10 +77,11 @@ void rewind3dsReset()
     }
 }
 
-void rewind3dsFrameTick(bool rewindHeld)
+void rewind3dsFrameTick(bool rewindHeld, bool frameHadHeadroom)
 {
     if (!settings3DS.isRomLoaded) return;
     if (snd3DS.generateSilence) return;   // SRAM autosave in flight
+    if (!rewind3dsHotkeyBound()) return;  // unmapped = feature off = free
 
     if (!s_allocTried)
         rewind3dsAllocate();
@@ -92,11 +110,11 @@ void rewind3dsFrameTick(bool rewindHeld)
 
         const uint8_t *data;
         uint32_t length;
-        if (!s_ring.popPeek(&data, &length)) {
+        if (!s_ring.pop_peek(&data, &length)) {
             if (s_notifCooldown == 0) {
                 notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen,
                     900.0, "No more rewind data");
-                s_notifCooldown = 120;
+                s_notifCooldown = REWIND_NOTIF_EMPTY_COOLDOWN_FRAMES;
             }
             return;
         }
@@ -113,20 +131,29 @@ void rewind3dsFrameTick(bool rewindHeld)
         snd3dsResumeMixing();
 
         if (ok) {
-            s_ring.popCommit();
+            s_ring.pop_commit();
             if (s_notifCooldown == 0) {
                 notif3dsTrigger(Notif::Misc, Notif::Info, settings3DS.GameScreen,
                     600.0, "\x11\x11 Rewinding");
-                s_notifCooldown = 30;
+                s_notifCooldown = REWIND_NOTIF_STEP_COOLDOWN_FRAMES;
             }
         }
         return;
     }
 
+    // Adaptive capture: prefer frames that finished with vsync headroom,
+    // so the serialization lands where the CPU would have idled. A game
+    // with no slack still gets a forced snapshot every 2s - fewer rewind
+    // points instead of dropped frames.
+    s_framesSinceCapture++;
     if (s_frameCounter >= REWIND_CAPTURE_FRAMES) {
-        s_frameCounter = 0;
-        uint32 length = 0;   // snes9x's uint32 (int-based) != uint32_t here
-        if (S9xFreezeGameMem(s_ring.pushPtr(), s_ring.slotSize, &length))
-            s_ring.pushCommit(length);
+        bool force = s_framesSinceCapture >= REWIND_FORCE_GAP_FRAMES;
+        if (frameHadHeadroom || force) {
+            s_frameCounter = 0;
+            s_framesSinceCapture = 0;
+            uint32 length = 0;   // snes9x's uint32 (int-based) != uint32_t here
+            if (S9xFreezeGameMem(s_ring.push_ptr(), s_ring.slotSize, &length))
+                s_ring.push_commit(length);
+        }
     }
 }

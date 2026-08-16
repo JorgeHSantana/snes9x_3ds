@@ -17,8 +17,8 @@ static RewindRing makeRing(std::vector<uint8_t>& pool, std::vector<uint32_t>& le
 
 static void pushByte(RewindRing& r, uint8_t value, uint32_t length)
 {
-    memset(r.pushPtr(), value, length);
-    r.pushCommit(length);
+    memset(r.push_ptr(), value, length);
+    r.push_commit(length);
 }
 
 TEST_CASE("rewind ring: starts empty, pops nothing")
@@ -29,7 +29,7 @@ TEST_CASE("rewind ring: starts empty, pops nothing")
     CHECK(r.valid());
     CHECK(r.empty());
     const uint8_t* data; uint32_t len;
-    CHECK(!r.popPeek(&data, &len));
+    CHECK(!r.pop_peek(&data, &len));
 }
 
 TEST_CASE("rewind ring: pops newest first (LIFO)")
@@ -42,17 +42,17 @@ TEST_CASE("rewind ring: pops newest first (LIFO)")
     pushByte(r, 0xCC, 14);
 
     const uint8_t* data; uint32_t len;
-    REQUIRE(r.popPeek(&data, &len));
+    REQUIRE(r.pop_peek(&data, &len));
     CHECK(len == 14); CHECK(data[0] == 0xCC);
-    r.popCommit();
+    r.pop_commit();
 
-    REQUIRE(r.popPeek(&data, &len));
+    REQUIRE(r.pop_peek(&data, &len));
     CHECK(len == 12); CHECK(data[0] == 0xBB);
-    r.popCommit();
+    r.pop_commit();
 
-    REQUIRE(r.popPeek(&data, &len));
+    REQUIRE(r.pop_peek(&data, &len));
     CHECK(len == 10); CHECK(data[0] == 0xAA);
-    r.popCommit();
+    r.pop_commit();
 
     CHECK(r.empty());
 }
@@ -73,9 +73,9 @@ TEST_CASE("rewind ring: wraps by overwriting the oldest")
     const uint8_t* data; uint32_t len;
     uint8_t expected[3] = { 4, 3, 2 };
     for (int i = 0; i < 3; i++) {
-        REQUIRE(r.popPeek(&data, &len));
+        REQUIRE(r.pop_peek(&data, &len));
         CHECK(data[0] == expected[i]);
-        r.popCommit();
+        r.pop_commit();
     }
     CHECK(r.empty());
 }
@@ -90,15 +90,15 @@ TEST_CASE("rewind ring: play-after-rewind overwrites the popped branch")
     pushByte(r, 3, 8);
 
     const uint8_t* data; uint32_t len;
-    REQUIRE(r.popPeek(&data, &len));
-    r.popCommit();       // rewound past snapshot 3
+    REQUIRE(r.pop_peek(&data, &len));
+    r.pop_commit();       // rewound past snapshot 3
 
     pushByte(r, 9, 8);   // new timeline
 
-    REQUIRE(r.popPeek(&data, &len));
+    REQUIRE(r.pop_peek(&data, &len));
     CHECK(data[0] == 9);
-    r.popCommit();
-    REQUIRE(r.popPeek(&data, &len));
+    r.pop_commit();
+    REQUIRE(r.pop_peek(&data, &len));
     CHECK(data[0] == 2);
 }
 
@@ -113,7 +113,7 @@ TEST_CASE("rewind ring: clear drops everything, slots stay reusable")
 
     pushByte(r, 6, 4);
     const uint8_t* data; uint32_t len;
-    REQUIRE(r.popPeek(&data, &len));
+    REQUIRE(r.pop_peek(&data, &len));
     CHECK(len == 4);
     CHECK(data[0] == 6);
 }
