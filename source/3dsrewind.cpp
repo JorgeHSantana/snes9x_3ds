@@ -152,7 +152,18 @@ void rewind3dsFrameTick(bool rewindHeld, bool frameHadHeadroom)
             s_frameCounter = 0;
             s_framesSinceCapture = 0;
             uint32 length = 0;   // snes9x's uint32 (int-based) != uint32_t here
-            if (S9xFreezeGameMem(s_ring.push_ptr(), s_ring.slotSize, &length))
+
+            // Hold the mixer barrier for the freeze: the canonicalize+
+            // restore inside S9xFreezeGameMem must never be visible to a
+            // concurrent mix pass, or a channel loses a note (audible at
+            // 268MHz, where the freeze spans mixer callbacks). A blocked
+            // mixer just waits a few ms on queued NDSP buffers - unlike
+            // snd3dsDrainMixing, which would inject silence every capture.
+            LightLock_Lock(&snd3DS.snesAccessLock);
+            bool ok = S9xFreezeGameMem(s_ring.push_ptr(), s_ring.slotSize, &length);
+            LightLock_Unlock(&snd3DS.snesAccessLock);
+
+            if (ok)
                 s_ring.push_commit(length);
         }
     }
