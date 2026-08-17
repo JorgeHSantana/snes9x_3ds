@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "3dsrewind.h"
@@ -6,6 +7,7 @@
 #include "3dssound.h"
 #include "3dsmsu.h"
 #include "3dsimpl_gpu.h"
+#include "3dsui_notif.h"
 #include "3dslog.h"
 
 #include "Snes9x/snes9x.h"
@@ -37,6 +39,7 @@ static bool s_msuDeferred = false;
 static int  s_frameCounter = 0;
 static int  s_framesSinceCapture = 0;
 static int  s_holdFrames = 0;
+static uint32_t s_holdStartNow = 0;   // frame count when the live rewind engaged
 static bool s_timelineRequested = false;
 static bool s_timelineFromMenu = false;
 static bool s_timelineActive = false;
@@ -232,8 +235,10 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
     // a short TAP opens the timeline on release.
     if (rewindHeld) {
         s_holdFrames++;
-        if (s_holdFrames == 30)
+        if (s_holdFrames == 30) {
             rewind3dsMsuDeferBegin();
+            s_holdStartNow = s_nowFrame;
+        }
         if (s_holdFrames >= 30 && (s_holdFrames % 10) == 0
                 && s_ring.count > 0 && s_readBuf != nullptr) {
             uint32_t tag = 0;
@@ -243,10 +248,25 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
                 s_nowFrame = tag;
                 s_ring.pop_newest();
             }
+
+            // corner badge: << and how far the walk has gone
+            uint32_t back = (s_holdStartNow > s_nowFrame) ? s_holdStartNow - s_nowFrame : 0;
+            uint32_t ds = back / 6;   // deciseconds at 60fps
+            char msg[40];
+            if (ds >= 600)
+                snprintf(msg, sizeof(msg), "\x9d -%umin %u.%us",
+                    (unsigned)(ds / 600), (unsigned)((ds % 600) / 10), (unsigned)(ds % 10));
+            else
+                snprintf(msg, sizeof(msg), "\x9d -%u.%us",
+                    (unsigned)(ds / 10), (unsigned)(ds % 10));
+            notif3dsTrigger(Notif::Misc, Notif::Type::Default,
+                settings3DS.GameScreen, 3600000.0, msg);
         }
     } else {
-        if (s_holdFrames >= 30)
+        if (s_holdFrames >= 30) {
+            notif3dsHide();
             rewind3dsMsuDeferEnd();
+        }
         else if (s_holdFrames > 0) {
             s_timelineRequested = true;
             s_timelineFromMenu = false;
