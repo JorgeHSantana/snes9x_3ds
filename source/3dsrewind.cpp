@@ -239,12 +239,30 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             rewind3dsMsuDeferBegin();
             s_holdStartNow = s_nowFrame;
         }
-        if (s_holdFrames >= 30 && (s_holdFrames % 10) == 0
+        // The walk starts at 1x (one stored moment per capture interval)
+        // and accelerates the longer the button is held: 2x after 2s,
+        // 4x after 4s, then flat out (user design 17/08).
+        int walked = s_holdFrames - 30;
+        int phase = walked < 120 ? 0 : walked < 240 ? 1 : walked < 360 ? 2 : 3;
+        int stepInterval = REWIND_CAPTURE_FRAMES >> phase;
+        if (stepInterval < 5) stepInterval = 5;
+
+        if (s_holdFrames >= 30 && (walked % stepInterval) == 0
                 && s_ring.count > 0 && s_readBuf != nullptr) {
             uint32_t tag = 0;
             uint32_t len = s_ring.read_at(0, s_readBuf, REWIND_SLOT_SIZE);
-            if (len != 0 && s_ring.tag_at(0, &tag)
-                    && rewind3dsRestoreState(s_readBuf, len)) {
+
+            // mixer barrier, same reason as the capture (441a878): the
+            // unfreeze canonicalizes live channel state - a concurrent
+            // mix pass reading it mid-restore corrupts state (the MMX3
+            // Cx4 "INTERFACE REGISTER ERROR" field report, 17/08)
+            bool restored = false;
+            if (len != 0 && s_ring.tag_at(0, &tag)) {
+                LightLock_Lock(&snd3DS.snesAccessLock);
+                restored = rewind3dsRestoreState(s_readBuf, len);
+                LightLock_Unlock(&snd3DS.snesAccessLock);
+            }
+            if (restored) {
                 s_nowFrame = tag;
                 s_ring.pop_newest();
             }
