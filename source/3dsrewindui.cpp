@@ -150,8 +150,17 @@ static void timelineRenderGameScreen(bool dimmed)
 static void timelineRestoreSecondScreen(GSPGPU_FramebufferFormat previousFormat)
 {
     if (gfxGetScreenFormat(settings3DS.SecondScreen) != previousFormat) {
+        // black the RGB565 buffers out first: zero is black in every pixel
+        // format, so the switch never flashes the old image reinterpreted
+        // as garbage (field report 16/08); the wallpaper passes below
+        // repaint both buffers right away - no vblank wait in between
+        for (int i = 0; i < 2; i++) {
+            u16 fbw = 0, fbh = 0;
+            u8 *fb = gfxGetFramebuffer(settings3DS.SecondScreen, GFX_LEFT, &fbw, &fbh);
+            if (fb != NULL) memset(fb, 0, (size_t)fbw * fbh * 2);
+            gfxScreenSwapBuffers(settings3DS.SecondScreen, false);
+        }
         gfxSetScreenFormat(settings3DS.SecondScreen, previousFormat);
-        gpu3dsWaitForVBlank(settings3DS.SecondScreen);
     }
     for (int pass = 0; pass < 2; pass++) {
         gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, false, true);
