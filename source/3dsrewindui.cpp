@@ -378,7 +378,7 @@ void rewind3dsHoldShow()
     int captureFrames = rewind3dsCaptureIntervalFrames();
     char badge[40];
 
-    snprintf(badge, sizeof(badge), "\x9d");
+    snprintf(badge, sizeof(badge), "\x9d -0.0s");
     notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen,
         3600000.0, badge);
     timelineRenderGameScreen(true);
@@ -426,9 +426,13 @@ void rewind3dsHoldShow()
         snprintf(overlay, sizeof(overlay), "Resuming in %d...", step);
         notif3dsTrigger(Notif::Paused, Notif::Type::Default,
             settings3DS.GameScreen, 3600000.0, overlay);
-        timelineRenderGameScreen(true);
-        for (int f = 0; f < framesPerStep; f++)
+        // render every frame of the wait - vblank waits without presents
+        // in between return early and rushed the count (field report
+        // 17/08); this paces exactly like the timeline's countdown
+        for (int f = 0; f < framesPerStep; f++) {
+            timelineRenderGameScreen(true);
             gpu3dsWaitForVBlank(settings3DS.GameScreen);
+        }
     }
     if (framesPerStep > 0)
         notif3dsHide();
