@@ -95,8 +95,8 @@ static int menu3dsDrawBottomBarButton(int posX, const MenuButton& button)
         // multi color buttons for dark mode theme
         buttonColor = button.color;
     }
-    ui3dsDrawRect(posX + 2, SCREEN_HEIGHT - 13, posX + 9, SCREEN_HEIGHT - 5, 0xffffff);
-    posX = ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, posX, SCREEN_HEIGHT - 16, posX + 12, SCREEN_HEIGHT, buttonColor, HALIGN_LEFT, button.icon) + buttonRightMargin;
+    ui3dsDrawRect(posX + 2, SCREEN_HEIGHT - 15, posX + 9, SCREEN_HEIGHT - 7, 0xffffff);
+    posX = ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, posX, SCREEN_HEIGHT - 18, posX + 12, SCREEN_HEIGHT, buttonColor, HALIGN_LEFT, button.icon) + buttonRightMargin;
     posX = ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, posX, SCREEN_HEIGHT - 17, posX + 100, SCREEN_HEIGHT, Themes[static_cast<int>(settings3DS.Theme)].menuBottomBarTextColor, HALIGN_LEFT, button.label) + buttonLeftMargin;
     return posX;
 }

@@ -61,29 +61,37 @@ static void timelineDrawFrame(int cursor)
 
     // the menu's own palette, so the modal reads as part of the same UI
     const Theme3ds &theme = Themes[static_cast<int>(settings3DS.Theme)];
-    int accent = theme.accentColor;
+    int accent = 0x529eeb;   // user call 16/08: blue highlights in every theme
     int dotColor = theme.disabledItemTextColor;
 
     ui3dsSetViewport(0, 0, width, 240);
     ui3dsSetTranslate(0, 0);
     ui3dsDrawRect(0, 0, width, 240, theme.menuBackColor);
 
-    // header: how far back the cursor sits
+    // the menu's gray top bar crowns the screen (user mock 16/08)
+    ui3dsDrawRect(0, 0, width, 24, theme.menuTopBarColor);
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 6, width, 20,
+        0xFFFFFF, HALIGN_CENTER, "TIMELINE");
+
+    // how far back the cursor sits - shown under the dot strip, zero
+    // units hidden (e.g. "-2min 5s", "-5s 500ms", "-500ms")
     uint32_t tag = 0;
-    char label[48];
+    char label[48] = "";
     if (rewind3dsPeekInfo(cursor, &tag)) {
-        float secondsBack = (float)(rewind3dsNowFrame() - tag) / 60.0f;
-        snprintf(label, sizeof(label), "Rewind  -%.1fs", secondsBack);
-    } else {
-        snprintf(label, sizeof(label), "Rewind");
+        uint32_t ms = (uint32_t)((uint64_t)(rewind3dsNowFrame() - tag) * 1000 / 60);
+        uint32_t mn = ms / 60000, sec = (ms / 1000) % 60, rem = ms % 1000;
+        int n = snprintf(label, sizeof(label), "-");
+        if (mn > 0)  n += snprintf(label + n, sizeof(label) - n, "%umin ", (unsigned)mn);
+        if (sec > 0) n += snprintf(label + n, sizeof(label) - n, "%us ", (unsigned)sec);
+        if (rem > 0 || (mn == 0 && sec == 0))
+            n += snprintf(label + n, sizeof(label) - n, "%ums", (unsigned)rem);
+        if (label[n - 1] == ' ') label[n - 1] = '\0';
     }
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 8, width, 22,
-        theme.normalItemTextColor, HALIGN_CENTER, label);
 
     // filmstrip: focused thumb centered, neighbours at half size.
     // "older" sits to the LEFT (like a film roll running rightwards).
     int cx = width / 2;
-    int thumbY = 32;
+    int thumbY = 48;
     const uint8_t *thumb = rewind3dsThumb(cursor);
     if (thumb != NULL) {
         ui3dsDrawRect(cx - REWIND_THUMB_W / 2 - 2, thumbY - 2,
@@ -117,6 +125,9 @@ static void timelineDrawFrame(int cursor)
             }
         }
     }
+
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 190, width, 204,
+        theme.normalItemTextColor, HALIGN_CENTER, label);
 
     // hints in the menu's own bottom bar, same glyphs
     MenuButton buttons[] = {
