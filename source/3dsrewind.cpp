@@ -220,7 +220,7 @@ void rewind3dsReset()
     }
 }
 
-void rewind3dsFrameTick(bool rewindHeld, bool frameHadHeadroom)
+void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
 {
     if (!settings3DS.isRomLoaded) return;
     if (snd3DS.generateSilence) return;   // SRAM autosave in flight
@@ -241,14 +241,24 @@ void rewind3dsFrameTick(bool rewindHeld, bool frameHadHeadroom)
     }
     s_wasHeld = rewindHeld;
 
-    // Adaptive capture: prefer frames that finished with vsync headroom,
-    // so the serialization lands where the CPU would have idled. A game
-    // with no slack still gets a forced snapshot every 2s - fewer rewind
-    // points instead of dropped frames.
+    // Graduated capture patience (user design, 16/08): a due capture
+    // first insists on a really idle frame; the idleness bar lowers as
+    // the wait grows (50% -> 75% -> 90% of the frame budget), and at the
+    // configured limit (Capture Patience) it captures regardless - fewer
+    // perfect landing spots instead of a dried-up history.
     s_framesSinceCapture++;
     if (s_frameCounter >= REWIND_CAPTURE_FRAMES) {
-        bool force = s_framesSinceCapture >= REWIND_FORCE_GAP_FRAMES;
-        if (frameHadHeadroom || force) {
+        static const int patienceFrames[4] = { 60, 120, 240, 480 };
+        int waitLimit = patienceFrames[settings3DS.RewindMaxWait & 3];
+        int waited = s_frameCounter - REWIND_CAPTURE_FRAMES;
+
+        int loadBar;
+        if (waited >= waitLimit)              loadBar = 1000;   // force
+        else if (waited >= waitLimit * 2 / 3) loadBar = 90;
+        else if (waited >= waitLimit / 3)     loadBar = 75;
+        else                                  loadBar = 50;
+
+        if (frameLoadPercent <= loadBar) {
             s_frameCounter = 0;
             s_framesSinceCapture = 0;
             uint32 length = 0;   // snes9x's uint32 (int-based) != uint32_t here
@@ -270,6 +280,12 @@ void rewind3dsFrameTick(bool rewindHeld, bool frameHadHeadroom)
                 s_ring.push_commit(length, s_nowFrame);
                 rewind3dsCaptureThumb(
                     s_thumbPool + (size_t)s_ring.entry_pos(0) * REWIND_THUMB_BYTES);
+
+                // Max History ceiling (menu): drop whole oldest groups
+                if (settings3DS.RewindMaxWindow < 2) {
+                    int seconds = settings3DS.RewindMaxWindow == 0 ? 30 : 60;
+                    s_ring.trim_to(seconds * 60 / REWIND_CAPTURE_FRAMES);
+                }
             }
         }
     }

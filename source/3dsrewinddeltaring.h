@@ -209,6 +209,14 @@ public:
             pageSize, out, outCapacity);
     }
 
+    // Max History ceiling: drop whole oldest groups past maxEntries
+    void trim_to(int maxEntries)
+    {
+        if (maxEntries < 1) maxEntries = 1;
+        while (count > maxEntries)
+            dropOldestGroup();
+    }
+
     // keep 'back' as the newest entry, drop everything newer
     void rollback_to(int back)
     {

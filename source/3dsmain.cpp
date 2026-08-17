@@ -497,24 +497,6 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         }
         AddMenuDisabledOption(items, ""_s);
 
-        // Rewind timeline (docs/rewind-v2-spec.md): lives next to the
-        // save/load slots; B inside the timeline returns here
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
-            if (rewind3dsCount() == 0) {
-                SMenuTab dialogTab;
-                bool isDialog = false;
-                menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Rewind",
-                    settings3DS.RewindEnabled
-                        ? "No rewind history yet. Play for a moment\nand try again."
-                        : "Rewind is disabled. Enable it in this tab\nto record gameplay.",
-                    Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
-                menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
-                return;
-            }
-            rewind3dsRequestTimelineFromMenu();
-            GPU3DS.emulatorState = EMUSTATE_EMULATE;
-        }, MenuItemType::Action, "  Rewind"_s, ""_s);
-        AddMenuDisabledOption(items, ""_s);
     }
 
     AddMenuHeader1(items, "APPEARANCE"_s);
@@ -583,15 +565,47 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             });
     }
 
-    AddMenuPicker(items, "  Rewind"_s,
-        "Records gameplay so you can jump back to any recent\nmoment (Emulator tab or the Rewind hotkey). Disable\nto reclaim the memory and skip the captures."_s,
+    AddMenuDisabledOption(items, ""_s);
+    AddMenuHeader1(items, "REWIND"_s);
+
+    AddMenuPicker(items, "  Recording"_s,
+        "Records gameplay in the background so the timeline\ncan jump back to any recent moment. Disable to\nreclaim the memory and skip the captures."_s,
         makePickerOptions({"Disabled", "Enabled"}), settings3DS.RewindEnabled, DIALOG_TYPE_INFO, true,
         []( int val ) { CheckAndUpdate(settings3DS.RewindEnabled, val); });
 
-    AddMenuPicker(items, "  Rewind Countdown"_s,
+    AddMenuPicker(items, "  Max History"_s,
+        "How far back the timeline reaches. Maximum depends\non the console and the game: up to ~1.5 min on\nNew 3DS (0.5s steps), ~1 min on Old 3DS (2s steps)."_s,
+        makePickerOptions({"30 seconds", "1 minute", "Maximum"}), settings3DS.RewindMaxWindow, DIALOG_TYPE_INFO, true,
+        []( int val ) { CheckAndUpdate(settings3DS.RewindMaxWindow, val); });
+
+    AddMenuPicker(items, "  Capture Patience"_s,
+        "How long a due capture may wait for an idle frame.\nThe idleness bar lowers as the wait grows, and at\nthe limit the capture happens regardless."_s,
+        makePickerOptions({"1 second", "2 seconds", "4 seconds", "8 seconds"}), settings3DS.RewindMaxWait, DIALOG_TYPE_INFO, true,
+        []( int val ) { CheckAndUpdate(settings3DS.RewindMaxWait, val); });
+
+    AddMenuPicker(items, "  Resume Countdown"_s,
         "The 3..2..1 shown before play resumes from a rewound\nmoment, so your hands can get back to the controller."_s,
         makePickerOptions({"Off", "250 ms steps", "500 ms steps", "1 s steps"}), settings3DS.RewindCountdown, DIALOG_TYPE_INFO, true,
         []( int val ) { CheckAndUpdate(settings3DS.RewindCountdown, val); });
+
+    if (settings3DS.isRomLoaded) {
+        // B inside the timeline returns here (docs/rewind-v2-spec.md)
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            if (rewind3dsCount() == 0) {
+                SMenuTab dialogTab;
+                bool isDialog = false;
+                menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Rewind",
+                    settings3DS.RewindEnabled
+                        ? "No rewind history yet. Play for a moment\nand try again."
+                        : "Rewind is disabled. Enable it in this tab\nto record gameplay.",
+                    Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
+                menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+                return;
+            }
+            rewind3dsRequestTimelineFromMenu();
+            GPU3DS.emulatorState = EMUSTATE_EMULATE;
+        }, MenuItemType::Action, "  Open Timeline"_s, ""_s);
+    }
 
     AddMenuDisabledOption(items, ""_s);
 
@@ -1939,6 +1953,8 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     config3dsReadWriteEnum(stream, writeMode, "Overclock=%d\n", &settings3DS.Overclock, 0, 1);
     config3dsReadWriteEnum(stream, writeMode, "RewindCountdown=%d\n", &settings3DS.RewindCountdown, 0, 3);
     config3dsReadWriteEnum(stream, writeMode, "RewindEnabled=%d\n", &settings3DS.RewindEnabled, 0, 1);
+    config3dsReadWriteEnum(stream, writeMode, "RewindMaxWindow=%d\n", &settings3DS.RewindMaxWindow, 0, 2);
+    config3dsReadWriteEnum(stream, writeMode, "RewindMaxWait=%d\n", &settings3DS.RewindMaxWait, 0, 3);
 
     return true;
 }
@@ -3017,11 +3033,11 @@ void emulatorLoop()
         t3dsStopTimer(TIMER_RUN_ONE_FRAME);
 
         {
-            // headroom = the frame used under 75% of its budget, leaving
-            // the capture to run where the CPU would have idled at vsync
+            // frame load feeds the graduated capture patience: a due
+            // capture waits for an idle frame, relaxing its bar over time
             long ticksSoFar = (long)(svcGetSystemTick() - startFrameTick);
-            bool frameHadHeadroom = ticksSoFar < (long)(settings3DS.TicksPerFrame * 3 / 4);
-            rewind3dsFrameTick(input3dsIsRewindHoldPressed(), frameHadHeadroom);
+            int frameLoadPercent = (int)(ticksSoFar * 100 / (long)settings3DS.TicksPerFrame);
+            rewind3dsFrameTick(input3dsIsRewindHoldPressed(), frameLoadPercent);
         }
 
         if (rewind3dsTakeTimelineRequest()) {

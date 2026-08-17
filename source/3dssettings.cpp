@@ -53,6 +53,8 @@ void settings3dsResetGlobalDefaults() {
     settings3DS.Overclock = 1;   // New 3DS full speed by default (matches prior behavior)
     settings3DS.RewindCountdown = 2;   // 500ms steps
     settings3DS.RewindEnabled = 1;     // recording on out of the box (menu + hotkey)
+    settings3DS.RewindMaxWindow = 2;   // keep everything the pools can hold
+    settings3DS.RewindMaxWait = 1;     // wait up to 2s for an idle frame
 
     settings3DS.UseGlobalEmuControlKeys = true;
     settings3DS.UseGlobalBindCirclePad = true;
