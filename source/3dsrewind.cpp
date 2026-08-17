@@ -99,14 +99,15 @@ static void rewind3dsCaptureThumb(uint8_t *dst)
 
     int fbWidth = (settings3DS.GameScreen == GFX_TOP) ? 400 : 320;
     if (settings3DS.GameScreen == GFX_TOP && gfxIsWide()) { fbWidth = 800; }
-    int xStep = fbWidth / REWIND_THUMB_W;
-    int yStep = 240 / REWIND_THUMB_H;
 
+    // proportional sampling: integer steps (fbWidth / W) truncate when the
+    // thumb size does not divide the screen - 150 wide sampled only the
+    // top-left 75% of a 400px frame (field report 16/08, cropped thumbs)
     uint16_t *out = (uint16_t *)dst;
     for (int ty = 0; ty < REWIND_THUMB_H; ty++) {
         for (int tx = 0; tx < REWIND_THUMB_W; tx++) {
-            int x = tx * xStep;
-            int y = ty * yStep;
+            int x = tx * fbWidth / REWIND_THUMB_W;
+            int y = ty * 240 / REWIND_THUMB_H;
             u8 *px = fb + (x * 240 + (239 - y)) * 3;   // B,G,R
             out[ty * REWIND_THUMB_W + tx] = (uint16_t)(
                 ((px[2] & 0xF8) << 8) | ((px[1] & 0xFC) << 3) | (px[0] >> 3));
