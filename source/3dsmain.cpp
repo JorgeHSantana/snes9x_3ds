@@ -3051,6 +3051,15 @@ void emulatorLoop()
             rewind3dsFrameTick(input3dsIsRewindHoldPressed(), frameLoadPercent);
         }
 
+        if (rewind3dsTakeHoldRequest()) {
+            rewind3dsHoldShow();
+            firstFrame = true;
+            snesFrameTotalActualTicks = 0;
+            snesFrameTotalAccurateTicks = 0;
+            snesFramesSkipped = 0;
+            startFrameTick = svcGetSystemTick();
+        }
+
         if (rewind3dsTakeTimelineRequest()) {
             rewind3dsTimelineShow();
             firstFrame = true;   // repaint cleanly after the modal screen

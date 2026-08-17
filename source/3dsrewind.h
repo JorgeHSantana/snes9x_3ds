@@ -19,6 +19,10 @@ void rewind3dsReset();
 #define REWIND_THUMB_BYTES  (REWIND_THUMB_W * REWIND_THUMB_H * 2)   // RGB565
 
 bool rewind3dsTakeTimelineRequest();      // hotkey tapped or menu action
+bool rewind3dsTakeHoldRequest();          // hotkey held: live rewind modal
+bool rewind3dsHoldStepBack();             // one walk step (restore + consume)
+int  rewind3dsCaptureIntervalFrames();    // frames between stored moments
+void rewind3dsHoldShow();                 // the modal itself (3dsrewindui.cpp)
 void rewind3dsRequestTimelineFromMenu();  // menu entry: B returns to the menu
 bool rewind3dsTimelineFromMenu();
 bool rewind3dsTimelineActive();           // joypad reads freeze while true

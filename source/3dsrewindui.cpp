@@ -343,3 +343,82 @@ void rewind3dsTimelineShow()
     snd3dsResumeMixing();
     input3dsWaitForRelease();   // the confirming press must not reach the game
 }
+
+
+// Live rewind (hold, user design 17/08): the game FREEZES and dims like
+// the pause screen while stored moments walk back under the button -
+// one moment per capture interval at first (1x), accelerating the
+// longer the hold lasts. Releasing runs the configured 3..2..1 on the
+// frozen frame and play resumes from the shown moment.
+void rewind3dsHoldShow()
+{
+    if (rewind3dsCount() == 0) return;
+    if (GPU3DS.profilingMode != PROFILING_OFF) return;
+
+    snd3dsDrainMixing();
+    rewind3dsMsuDeferBegin();
+    rewind3dsSetTimelineActive(true);   // stepped frames read a neutral pad
+
+    uint32_t startNow = rewind3dsNowFrame();
+    int heldFrames = 0;
+    int captureFrames = rewind3dsCaptureIntervalFrames();
+    char badge[40];
+
+    snprintf(badge, sizeof(badge), "\x9d");
+    notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen,
+        3600000.0, badge);
+    timelineRenderGameScreen(true);
+
+    while (aptMainLoop() && GPU3DS.emulatorState != EMUSTATE_END) {
+        hidScanInput();
+        if (!input3dsIsRewindHoldPressed()) break;
+
+        heldFrames++;
+        int phase = heldFrames < 120 ? 0 : heldFrames < 240 ? 1
+                  : heldFrames < 360 ? 2 : 3;
+        int interval = captureFrames >> phase;
+        if (interval < 5) interval = 5;
+
+        if ((heldFrames % interval) == 0 && rewind3dsHoldStepBack()) {
+            uint32_t ds = (startNow - rewind3dsNowFrame()) / 6;
+            if (ds >= 600)
+                snprintf(badge, sizeof(badge), "\x9d -%umin %u.%us",
+                    (unsigned)(ds / 600), (unsigned)((ds % 600) / 10), (unsigned)(ds % 10));
+            else
+                snprintf(badge, sizeof(badge), "\x9d -%u.%us",
+                    (unsigned)(ds / 10), (unsigned)(ds % 10));
+            notif3dsTrigger(Notif::Misc, Notif::Type::Info,
+                settings3DS.GameScreen, 3600000.0, badge);
+            timelineShowFrame();   // paints the restored moment, dimmed
+        } else {
+            gpu3dsWaitForVBlank(settings3DS.GameScreen);
+        }
+    }
+
+    notif3dsHide();
+
+    // release: the configured countdown on the frozen dimmed frame
+    int framesPerStep = 0;
+    switch (settings3DS.RewindCountdown) {
+        case 0: framesPerStep = 0;  break;
+        case 1: framesPerStep = 15; break;
+        case 3: framesPerStep = 60; break;
+        default: framesPerStep = 30; break;
+    }
+    for (int step = 3; framesPerStep > 0 && step >= 1; step--) {
+        char overlay[40];
+        snprintf(overlay, sizeof(overlay), "Resuming in %d...", step);
+        notif3dsTrigger(Notif::Paused, Notif::Type::Default,
+            settings3DS.GameScreen, 3600000.0, overlay);
+        timelineRenderGameScreen(true);
+        for (int f = 0; f < framesPerStep; f++)
+            gpu3dsWaitForVBlank(settings3DS.GameScreen);
+    }
+    if (framesPerStep > 0)
+        notif3dsHide();
+
+    rewind3dsSetTimelineActive(false);
+    rewind3dsMsuDeferEnd();
+    snd3dsResumeMixing();
+    input3dsWaitForRelease();   // the release must not leak into the game
+}

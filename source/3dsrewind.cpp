@@ -39,7 +39,7 @@ static bool s_msuDeferred = false;
 static int  s_frameCounter = 0;
 static int  s_framesSinceCapture = 0;
 static int  s_holdFrames = 0;
-static uint32_t s_holdStartNow = 0;   // frame count when the live rewind engaged
+static bool s_holdRequested = false;
 static bool s_timelineRequested = false;
 static bool s_timelineFromMenu = false;
 static bool s_timelineActive = false;
@@ -49,6 +49,8 @@ static uint32_t s_nowFrame = 0;        // emulated frames since ROM load
 static uint8_t  *s_thumbPool = nullptr;    // slots * REWIND_THUMB_BYTES, RGB565 row-major
 static uint8_t  *s_presentBuf = nullptr;   // the "present" snapshot while browsing
 static uint32_t  s_presentLen = 0;
+
+static bool rewind3dsRestoreState(const uint8_t *data, uint32_t length);
 
 // The feature is governed by the explicit Rewind setting (Emulator tab),
 // NOT by the hotkey being mapped - the menu's Rewind action must work
@@ -128,6 +130,35 @@ bool rewind3dsTakeTimelineRequest()
     bool req = s_timelineRequested;
     s_timelineRequested = false;
     return req;
+}
+
+int rewind3dsCaptureIntervalFrames()
+{
+    return REWIND_CAPTURE_FRAMES;
+}
+
+bool rewind3dsTakeHoldRequest()
+{
+    bool req = s_holdRequested;
+    s_holdRequested = false;
+    return req;
+}
+
+// one step of the live walk: restore the newest stored moment under the
+// mixer barrier and consume it; false when history is exhausted
+bool rewind3dsHoldStepBack()
+{
+    if (!s_ring.valid() || s_ring.count == 0 || s_readBuf == nullptr) return false;
+    uint32_t tag = 0;
+    uint32_t len = s_ring.read_at(0, s_readBuf, REWIND_SLOT_SIZE);
+    if (len == 0 || !s_ring.tag_at(0, &tag)) return false;
+    LightLock_Lock(&snd3DS.snesAccessLock);
+    bool restored = rewind3dsRestoreState(s_readBuf, len);
+    LightLock_Unlock(&snd3DS.snesAccessLock);
+    if (!restored) return false;
+    s_nowFrame = tag;
+    s_ring.pop_newest();
+    return true;
 }
 
 // entry via the Emulator-menu action: B must return to the menu, not the game
@@ -215,6 +246,7 @@ void rewind3dsReset()
         s_ring.clear();
     s_frameCounter = 0;
     s_holdFrames = 0;
+    s_holdRequested = false;
     s_nowFrame = 0;
     s_timelineRequested = false;
     if (s_msuDeferred) {
@@ -229,71 +261,21 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
     if (snd3DS.generateSilence) return;   // SRAM autosave in flight
     if (!settings3DS.RewindEnabled) return;   // disabled = hotkey dead too
 
-    // Tap/hold hotkey - always combined (user call 17/08): HOLDING past
-    // half a second rewinds gameplay live (the classic gesture - walks
-    // one stored moment back every 10 frames while held, MSU latched);
-    // a short TAP opens the timeline on release.
+    // Tap/hold hotkey - always combined (user design 17/08): holding
+    // past half a second enters the live-rewind modal (game frozen,
+    // dimmed, countdown on release - rewind3dsHoldShow); a short tap
+    // opens the timeline on release.
     if (rewindHeld) {
         s_holdFrames++;
-        if (s_holdFrames == 30) {
-            rewind3dsMsuDeferBegin();
-            s_holdStartNow = s_nowFrame;
-        }
-        // The walk starts at 1x (one stored moment per capture interval)
-        // and accelerates the longer the button is held: 2x after 2s,
-        // 4x after 4s, then flat out (user design 17/08).
-        int walked = s_holdFrames - 30;
-        int phase = walked < 120 ? 0 : walked < 240 ? 1 : walked < 360 ? 2 : 3;
-        int stepInterval = REWIND_CAPTURE_FRAMES >> phase;
-        if (stepInterval < 5) stepInterval = 5;
-
-        if (s_holdFrames >= 30 && (walked % stepInterval) == 0
-                && s_ring.count > 0 && s_readBuf != nullptr) {
-            uint32_t tag = 0;
-            uint32_t len = s_ring.read_at(0, s_readBuf, REWIND_SLOT_SIZE);
-
-            // mixer barrier, same reason as the capture (441a878): the
-            // unfreeze canonicalizes live channel state - a concurrent
-            // mix pass reading it mid-restore corrupts state (the MMX3
-            // Cx4 "INTERFACE REGISTER ERROR" field report, 17/08)
-            bool restored = false;
-            if (len != 0 && s_ring.tag_at(0, &tag)) {
-                LightLock_Lock(&snd3DS.snesAccessLock);
-                restored = rewind3dsRestoreState(s_readBuf, len);
-                LightLock_Unlock(&snd3DS.snesAccessLock);
-            }
-            if (restored) {
-                s_nowFrame = tag;
-                s_ring.pop_newest();
-            }
-
-            // corner badge: << and how far the walk has gone
-            uint32_t back = (s_holdStartNow > s_nowFrame) ? s_holdStartNow - s_nowFrame : 0;
-            uint32_t ds = back / 6;   // deciseconds at 60fps
-            char msg[40];
-            if (ds >= 600)
-                snprintf(msg, sizeof(msg), "\x9d -%umin %u.%us",
-                    (unsigned)(ds / 600), (unsigned)((ds % 600) / 10), (unsigned)(ds % 10));
-            else
-                snprintf(msg, sizeof(msg), "\x9d -%u.%us",
-                    (unsigned)(ds / 10), (unsigned)(ds % 10));
-            notif3dsTrigger(Notif::Misc, Notif::Type::Info,
-                settings3DS.GameScreen, 3600000.0, msg);
-        }
+        if (s_holdFrames == 30)
+            s_holdRequested = true;
     } else {
-        if (s_holdFrames >= 30) {
-            notif3dsHide();
-            rewind3dsMsuDeferEnd();
-        }
-        else if (s_holdFrames > 0) {
+        if (s_holdFrames > 0 && s_holdFrames < 30) {
             s_timelineRequested = true;
             s_timelineFromMenu = false;
         }
         s_holdFrames = 0;
     }
-
-    // while rewinding, never capture (it would re-record the walk back)
-    if (s_holdFrames >= 30) return;
 
     if (!s_allocTried)
         rewind3dsAllocate();
