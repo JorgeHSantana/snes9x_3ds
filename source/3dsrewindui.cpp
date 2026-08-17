@@ -306,7 +306,13 @@ void rewind3dsTimelineShow()
     }
 
     notif3dsHide();
-    if (!bottomRestored) {
+    // Heading back to the MENU (Open Timeline -> B): the menu repaints the
+    // whole second screen on the very next frame and runs in the same
+    // RGB565 format the timeline uses - painting the wallpaper in between
+    // is the blink the field report describes (16/08). Only a return to
+    // the GAME needs the wallpaper back.
+    bool menuNext = !committed && fromMenu;
+    if (!bottomRestored && !menuNext) {
         timelineRestoreSecondScreen(previousFormat);
     }
     menu3dsSetScreenDirty(true, true);
