@@ -115,7 +115,7 @@ static void timelineDrawFrame(int cursor)
         if (spacing < 2) spacing = 2;
         int stripWidth = spacing * (count - 1);
         int xRight = width / 2 + stripWidth / 2;
-        int dotY = 150;
+        int dotY = 196;   // clear of the centered strip (73..167), label right below
         for (int i = 0; i < count; i++) {
             int x = xRight - i * spacing;   // i = frames back, rightmost = newest
             if (i == cursor) {
