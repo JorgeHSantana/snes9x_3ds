@@ -259,7 +259,7 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             else
                 snprintf(msg, sizeof(msg), "\x9d -%u.%us",
                     (unsigned)(ds / 10), (unsigned)(ds % 10));
-            notif3dsTrigger(Notif::Misc, Notif::Type::Default,
+            notif3dsTrigger(Notif::Misc, Notif::Type::Info,
                 settings3DS.GameScreen, 3600000.0, msg);
         }
     } else {
