@@ -2964,6 +2964,18 @@ void emulatorLoop()
 
     GPU3DSExt.render2x.enabled = settings3DS.EnhancedResolution != Setting::EnhancedResolution::Off;
 
+    // Menu-triggered timeline runs BEFORE any repaint: the menu image
+    // stays on the second screen until the timeline draws over it - the
+    // format switch and wallpaper below were the blink on the way in
+    // (field report 16/08). B inside the timeline goes back to the menu,
+    // and returning early skips the same repaints on the way out.
+    if (rewind3dsTakeTimelineRequest()) {
+        gpu3dsSetTopMode();
+        rewind3dsTimelineShow();
+        if (GPU3DS.emulatorState == EMUSTATE_PAUSEMENU)
+            return;
+    }
+
     // render one frame before lcd3dsSetEmulationRate below,
     // otherwise game screen glitches and real hardware freezes.
     if (gpu3dsSetTopMode()) {
@@ -2984,11 +2996,6 @@ void emulatorLoop()
         // make sure to enable double buffering again when leaving emulatorLoop()
         consoleInit(settings3DS.SecondScreen, NULL);
         t3dsResetTimers();
-    }
-
-    // menu-triggered timeline opens before any frame runs
-    if (rewind3dsTakeTimelineRequest()) {
-        rewind3dsTimelineShow();
     }
 
     int totalFrames = 0;
