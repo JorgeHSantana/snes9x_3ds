@@ -117,3 +117,38 @@ TEST_CASE("deltaring: rollback keeps the target and forces a fresh keyframe")
     f.play();
     CHECK(f.ring.at(0).kind == RewindDeltaRing::KIND_KEYFRAME);
 }
+
+TEST_CASE("deltaring: pop_newest consumes the walk and forces a keyframe next")
+{
+    RingFixture f;
+    for (int i = 0; i < 5; i++) f.play();
+    std::vector<uint8_t> fourth(f.state);   // state after capture 5 is f.state
+    // read state 4 before popping 5
+    REQUIRE(f.ring.read_at(1, f.out.data(), RingFixture::STATE) == RingFixture::STATE);
+    fourth = f.out;
+
+    f.ring.pop_newest();
+    CHECK(f.ring.count == 4);
+    REQUIRE(f.ring.read_at(0, f.out.data(), RingFixture::STATE) == RingFixture::STATE);
+    CHECK(f.out == fourth);                 // newest is now capture 4
+
+    f.play();                                // walk interrupted by new capture
+    CHECK(f.ring.at(0).kind == RewindDeltaRing::KIND_KEYFRAME);
+}
+
+TEST_CASE("deltaring: trim_to drops whole oldest groups, survivors decode")
+{
+    RingFixture f;
+    for (int i = 0; i < 12; i++) f.play();
+    int before = f.ring.count;
+    f.ring.trim_to(5);              // groups of 4 (INTERVAL): lands on 4
+    CHECK(f.ring.count <= 5);
+    CHECK(f.ring.count < before);
+
+    // a ceiling smaller than one group keeps the newest group whole
+    f.ring.trim_to(1);
+    CHECK(f.ring.count == 4);
+    CHECK(f.ring.at(f.ring.count - 1).kind == RewindDeltaRing::KIND_KEYFRAME);
+    for (int back = 0; back < f.ring.count; back++)
+        CHECK(f.ring.read_at(back, f.out.data(), RingFixture::STATE) == RingFixture::STATE);
+}

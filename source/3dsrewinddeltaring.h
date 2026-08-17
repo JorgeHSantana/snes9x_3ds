@@ -217,12 +217,19 @@ public:
         sinceKeyframe = keyframeInterval;   // next capture starts a fresh keyframe
     }
 
-    // Max History ceiling: drop whole oldest groups past maxEntries
+    // Max History ceiling: drop whole oldest groups past maxEntries -
+    // but never the newest group (a ceiling smaller than one group would
+    // otherwise empty the ring entirely; host test caught it)
     void trim_to(int maxEntries)
     {
         if (maxEntries < 1) maxEntries = 1;
-        while (count > maxEntries)
+        while (count > maxEntries) {
+            int kfCount = 0;
+            for (int i = 0; i < count; i++)
+                if (fifoAt(i).kind == KIND_KEYFRAME) kfCount++;
+            if (kfCount <= 1) break;
             dropOldestGroup();
+        }
     }
 
     // keep 'back' as the newest entry, drop everything newer

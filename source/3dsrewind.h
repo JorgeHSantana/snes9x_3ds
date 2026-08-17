@@ -22,6 +22,7 @@ bool rewind3dsTakeTimelineRequest();      // hotkey tapped or menu action
 bool rewind3dsTakeHoldRequest();          // hotkey held: live rewind modal
 bool rewind3dsHoldStepBack();             // one walk step (restore + consume)
 int  rewind3dsCaptureIntervalFrames();    // frames between stored moments
+int  rewind3dsEmulatedFps();              // 50 on PAL, 60 on NTSC
 void rewind3dsHoldShow();                 // the modal itself (3dsrewindui.cpp)
 void rewind3dsRequestTimelineFromMenu();  // menu entry: B returns to the menu
 bool rewind3dsTimelineFromMenu();

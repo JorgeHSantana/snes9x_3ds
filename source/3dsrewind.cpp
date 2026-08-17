@@ -39,6 +39,9 @@ static bool s_msuDeferred = false;
 static int  s_frameCounter = 0;
 static int  s_framesSinceCapture = 0;
 static int  s_holdFrames = 0;
+static uint32_t s_statCaptures = 0;    // calibration: issue #37 pageSize/K
+static uint32_t s_statDeltas = 0;
+static uint64_t s_statDeltaBytes = 0;
 static bool s_holdRequested = false;
 static bool s_timelineRequested = false;
 static bool s_timelineFromMenu = false;
@@ -135,6 +138,11 @@ bool rewind3dsTakeTimelineRequest()
 int rewind3dsCaptureIntervalFrames()
 {
     return REWIND_CAPTURE_FRAMES;
+}
+
+int rewind3dsEmulatedFps()
+{
+    return Settings.PAL ? 50 : 60;
 }
 
 bool rewind3dsTakeHoldRequest()
@@ -323,6 +331,25 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             }
             if (ok) {
                 s_ring.push_commit(length, s_nowFrame);
+
+                // calibration feed (log enabled only): real delta sizes
+                // and promotion rate decide pageSize/K for issue #37
+                s_statCaptures++;
+                if (s_ring.at(0).kind == RewindDeltaRing::KIND_DELTA) {
+                    s_statDeltas++;
+                    s_statDeltaBytes += s_ring.at(0).len;
+                }
+                if ((s_statCaptures % 64) == 0) {
+                    uint32_t first = 0, last = 0;
+                    s_ring.tag_at(0, &first);
+                    s_ring.tag_at(s_ring.count - 1, &last);
+                    log3dsWrite("[rewind] calib: %u caps, %u%% delta, avg %uKB, window %us (%d entries)",
+                        (unsigned)s_statCaptures,
+                        (unsigned)(s_statDeltas * 100 / s_statCaptures),
+                        (unsigned)(s_statDeltas ? s_statDeltaBytes / s_statDeltas / 1024 : 0),
+                        (unsigned)((first - last) / (uint32_t)rewind3dsEmulatedFps()),
+                        s_ring.count);
+                }
                 rewind3dsCaptureThumb(
                     s_thumbPool + (size_t)s_ring.entry_pos(0) * REWIND_THUMB_BYTES);
 

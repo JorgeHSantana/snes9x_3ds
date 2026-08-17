@@ -78,7 +78,8 @@ static void timelineDrawFrame(int cursor)
     uint32_t tag = 0;
     char label[48] = "";
     if (rewind3dsPeekInfo(cursor, &tag)) {
-        uint32_t ms = (uint32_t)((uint64_t)(rewind3dsNowFrame() - tag) * 1000 / 60);
+        uint32_t ms = (uint32_t)((uint64_t)(rewind3dsNowFrame() - tag) * 1000
+            / (uint32_t)rewind3dsEmulatedFps());
         uint32_t mn = ms / 60000, sec = (ms / 1000) % 60, rem = ms % 1000;
         int n = snprintf(label, sizeof(label), "-");
         if (mn > 0)  n += snprintf(label + n, sizeof(label) - n, "%umin ", (unsigned)mn);
@@ -350,6 +351,19 @@ void rewind3dsTimelineShow()
 // one moment per capture interval at first (1x), accelerating the
 // longer the hold lasts. Releasing runs the configured 3..2..1 on the
 // frozen frame and play resumes from the shown moment.
+// currKeysHeld only refreshes inside the emulation input scan, which the
+// frozen modal never runs - releasing the trigger never stopped the walk
+// (field bug 17/08). Read the pad directly instead.
+static bool timelineHoldHotkeyHeld()
+{
+    hidScanInput();
+    u32 held = hidKeysHeld();
+    const auto &hk = settings3DS.UseGlobalEmuControlKeys
+        ? settings3DS.GlobalButtonHotkeys[HOTKEY_REWIND_HOLD]
+        : settings3DS.ButtonHotkeys[HOTKEY_REWIND_HOLD];
+    return hk.IsHeld(held);
+}
+
 void rewind3dsHoldShow()
 {
     if (rewind3dsCount() == 0) return;
@@ -370,8 +384,7 @@ void rewind3dsHoldShow()
     timelineRenderGameScreen(true);
 
     while (aptMainLoop() && GPU3DS.emulatorState != EMUSTATE_END) {
-        hidScanInput();
-        if (!input3dsIsRewindHoldPressed()) break;
+        if (!timelineHoldHotkeyHeld()) break;
 
         heldFrames++;
         int phase = heldFrames < 120 ? 0 : heldFrames < 240 ? 1
@@ -379,8 +392,11 @@ void rewind3dsHoldShow()
         int interval = captureFrames >> phase;
         if (interval < 5) interval = 5;
 
-        if ((heldFrames % interval) == 0 && rewind3dsHoldStepBack()) {
-            uint32_t ds = (startNow - rewind3dsNowFrame()) / 6;
+        if ((heldFrames % interval) == 0) {
+            if (!rewind3dsHoldStepBack())
+                break;   // history exhausted: release into the countdown
+            uint32_t ds = (startNow - rewind3dsNowFrame()) * 10
+                / (uint32_t)rewind3dsEmulatedFps();
             if (ds >= 600)
                 snprintf(badge, sizeof(badge), "\x9d -%umin %u.%us",
                     (unsigned)(ds / 600), (unsigned)((ds % 600) / 10), (unsigned)(ds % 10));
@@ -390,7 +406,7 @@ void rewind3dsHoldShow()
             notif3dsTrigger(Notif::Misc, Notif::Type::Info,
                 settings3DS.GameScreen, 3600000.0, badge);
             timelineShowFrame();   // paints the restored moment, dimmed
-        } else {
+        } else if ((heldFrames % interval) != 0) {
             gpu3dsWaitForVBlank(settings3DS.GameScreen);
         }
     }

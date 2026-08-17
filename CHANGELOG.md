@@ -3,6 +3,33 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
+### Features
+* **Rewind reaches minutes, not seconds**: captures are stored as page
+  deltas against periodic keyframes (issue #37) - the same memory now
+  holds up to ~1.5min of history on New 3DS (0.5s steps) and ~1min on
+  Old 3DS (2s steps), instead of 24s/4s of full snapshots.
+* **Hold to rewind, tap for the timeline**: the Rewind hotkey combines
+  both. Holding freezes the game, dims the screen and walks stored
+  moments back under the button - real-time speed at first, then
+  accelerating - with a blue corner badge showing how far you have gone.
+  Releasing runs the configured countdown and play resumes. A short tap
+  opens the timeline instead.
+* **REWIND menu section** (Emulator tab): Recording on/off, Max History
+  (30s / 1min / Maximum), Capture Patience (how long a due capture waits
+  for an idle frame before pushing through) and Resume Countdown, plus
+  the Open Timeline action in-game.
+* **Timeline visual pass**: the menu's gray top bar with a TIMELINE
+  title, sharp 150x90 preview, dot strip and elapsed label (zero units
+  hidden: -2min 5s), blue highlights, battery + version in the bottom
+  bar, and no more screen blinks entering, leaving or confirming.
+
+### Fixes
+* Resuming from a rewound moment no longer freezes the screen for
+  seconds with audio running (the modal's wall time read as frame-pacing
+  debt and the loop skipped drawing to catch up).
+* MSU-1 music no longer carries the present's track into a restored
+  moment; timeline restores apply the real chip state.
+
 ### Fixes
 * Rewind recording got cheap and controllable: a new **Rewind:
   Enabled/Disabled** setting (Emulator tab, enabled by default) governs
