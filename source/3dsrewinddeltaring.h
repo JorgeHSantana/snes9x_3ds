@@ -179,6 +179,13 @@ public:
         sinceKeyframe = 1;
     }
 
+    // stable position of the entry in entries[] - callers key per-entry
+    // side data (thumbnails) off it, so evictions recycle positions
+    int entry_pos(int back) const
+    {
+        return (start + count - 1 - back) % entryCapacity;
+    }
+
     bool tag_at(int back, uint32_t *tag) const
     {
         if (!valid() || back < 0 || back >= count) return false;

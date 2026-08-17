@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
 #include "3dsrewind.h"
-#include "3dsrewindring.h"
+#include "3dsrewinddeltaring.h"
 #include "3dssettings.h"
 #include "3dssound.h"
 #include "3dsmsu.h"
@@ -12,20 +12,26 @@
 #include "Snes9x/snapshot.h"
 #include "Snes9x/msu1.h"
 
-// One uncompressed snapshot is ~450KB; 512KB slots leave headroom.
-// New 3DS affords ~24 seconds of rewind, Old 3DS ~4 seconds - the pool
-// allocation halves until it fits, so tight heaps degrade gracefully.
+// One uncompressed snapshot is ~450KB; 512KB keyframe slots leave
+// headroom. Most captures store as page deltas against the newest
+// keyframe (issue #37) - same RAM, many times the moments: roughly
+// 1.5min on New 3DS (0.5s steps) and 1.2min on Old (2s steps), versus
+// 24s/4s when every capture was a full state. Delta slots halve until
+// the pools fit, so tight heaps degrade to fewer moments, never failure.
 #define REWIND_SLOT_SIZE        (512 * 1024)
-#define REWIND_SLOTS_NEW3DS     48
-#define REWIND_SLOTS_OLD3DS     12    // 6MB attempt; halves if it won't fit
-// Old 3DS trades granularity for reach: stretching the capture interval
-// is its only lever - 12 slots x 2s = 24s of window instead of 8 x 0.5s
-// = 4s. New 3DS keeps 0.5s steps.
+#define REWIND_DELTA_SLOT_SIZE  (96 * 1024)
+#define REWIND_DELTA_PAGE       1024
+#define REWIND_KF_NEW3DS        8
+#define REWIND_KF_OLD3DS        4
+#define REWIND_DELTAS_NEW3DS    180
+#define REWIND_DELTAS_OLD3DS    32
+#define REWIND_KF_INTERVAL      20    // a keyframe at least every 20 captures
 #define REWIND_CAPTURE_FRAMES   (settings3DS.isNew3DS ? 30 : 120)
 #define REWIND_FORCE_GAP_FRAMES (REWIND_CAPTURE_FRAMES * 4)
 
 // all state below is emu-thread only
-static RewindRing s_ring;
+static RewindDeltaRing s_ring;
+static uint8_t *s_readBuf = nullptr;   // delta reads decode here before unfreeze
 static bool s_allocTried = false;
 static bool s_msuDeferred = false;
 static int  s_frameCounter = 0;
@@ -49,29 +55,38 @@ static void rewind3dsAllocate()
 {
     s_allocTried = true;
 
-    int slots = settings3DS.isNew3DS ? REWIND_SLOTS_NEW3DS : REWIND_SLOTS_OLD3DS;
-    while (slots >= 2) {
-        uint8_t *pool = (uint8_t *)malloc((size_t)slots * REWIND_SLOT_SIZE);
-        if (pool) {
-            uint32_t *lens = (uint32_t *)malloc(slots * sizeof(uint32_t));
-            if (!lens) { free(pool); break; }
-            uint32_t *tagsBuf = (uint32_t *)malloc(slots * sizeof(uint32_t));
-            if (!tagsBuf) { free(lens); free(pool); break; }
-            s_thumbPool = (uint8_t *)malloc((size_t)slots * REWIND_THUMB_BYTES);
-            if (!s_thumbPool) { free(tagsBuf); free(lens); free(pool); break; }
-            s_presentBuf = (uint8_t *)malloc(REWIND_SLOT_SIZE);
-            if (!s_presentBuf) { free(s_thumbPool); s_thumbPool = nullptr;
-                                 free(tagsBuf); free(lens); free(pool); break; }
-            memset(s_thumbPool, 0, (size_t)slots * REWIND_THUMB_BYTES);
-            s_ring.init(pool, lens, tagsBuf, slots, REWIND_SLOT_SIZE);
-            log3dsWrite("[rewind] ring ready: %d slots (%d KB), ~%ds of gameplay",
-                slots, slots * (REWIND_SLOT_SIZE / 1024),
-                slots * REWIND_CAPTURE_FRAMES / 60);
+    int kfSlots = settings3DS.isNew3DS ? REWIND_KF_NEW3DS : REWIND_KF_OLD3DS;
+    int deltaSlots = settings3DS.isNew3DS ? REWIND_DELTAS_NEW3DS : REWIND_DELTAS_OLD3DS;
+
+    while (deltaSlots >= 8) {
+        int entryCount = kfSlots + deltaSlots;
+        uint8_t *kfPool = (uint8_t *)malloc((size_t)kfSlots * REWIND_SLOT_SIZE);
+        uint8_t *deltaPool = (uint8_t *)malloc((size_t)deltaSlots * REWIND_DELTA_SLOT_SIZE);
+        RewindDeltaRing::Entry *entryBuf = (RewindDeltaRing::Entry *)
+            malloc(entryCount * sizeof(RewindDeltaRing::Entry));
+        s_thumbPool = (uint8_t *)malloc((size_t)entryCount * REWIND_THUMB_BYTES);
+        s_presentBuf = (uint8_t *)malloc(REWIND_SLOT_SIZE);
+        s_readBuf = (uint8_t *)malloc(REWIND_SLOT_SIZE);
+
+        if (kfPool && deltaPool && entryBuf && s_thumbPool && s_presentBuf && s_readBuf) {
+            memset(s_thumbPool, 0, (size_t)entryCount * REWIND_THUMB_BYTES);
+            s_ring.init(kfPool, kfSlots, REWIND_SLOT_SIZE,
+                        deltaPool, deltaSlots, REWIND_DELTA_SLOT_SIZE,
+                        entryBuf, entryCount,
+                        REWIND_DELTA_PAGE, REWIND_KF_INTERVAL);
+            log3dsWrite("[rewind] delta ring ready: %d keyframes + %d delta slots"
+                " (~%ds of gameplay at best)",
+                kfSlots, deltaSlots, entryCount * REWIND_CAPTURE_FRAMES / 60);
             return;
         }
-        slots /= 2;
+
+        free(kfPool); free(deltaPool); free(entryBuf);
+        free(s_thumbPool); s_thumbPool = nullptr;
+        free(s_presentBuf); s_presentBuf = nullptr;
+        free(s_readBuf); s_readBuf = nullptr;
+        deltaSlots /= 2;
     }
-    log3dsWrite("[rewind] not enough memory for a snapshot ring - disabled");
+    log3dsWrite("[rewind] not enough memory for the delta ring - disabled");
 }
 
 // 100x60 RGB565 miniature of the finished game screen, decimated straight
@@ -125,14 +140,13 @@ uint32_t rewind3dsNowFrame() { return s_nowFrame; }
 
 bool rewind3dsPeekInfo(int back, uint32_t *frameTag)
 {
-    const uint8_t *data; uint32_t len;
-    return s_ring.valid() && s_ring.peek_at(back, &data, &len, frameTag);
+    return s_ring.valid() && s_ring.tag_at(back, frameTag);
 }
 
 const uint8_t *rewind3dsThumb(int back)
 {
     if (!s_ring.valid() || back < 0 || back >= s_ring.count) return nullptr;
-    return s_thumbPool + (size_t)s_ring.slot_at(back) * REWIND_THUMB_BYTES;
+    return s_thumbPool + (size_t)s_ring.entry_pos(back) * REWIND_THUMB_BYTES;
 }
 
 bool rewind3dsCapturePresent()
@@ -160,9 +174,9 @@ bool rewind3dsRestorePresent()
 
 bool rewind3dsRestoreAt(int back)
 {
-    const uint8_t *data; uint32_t len, tag;
-    if (!s_ring.valid() || !s_ring.peek_at(back, &data, &len, &tag)) return false;
-    return rewind3dsRestoreState(data, len);
+    if (!s_ring.valid() || s_readBuf == nullptr) return false;
+    uint32_t len = s_ring.read_at(back, s_readBuf, REWIND_SLOT_SIZE);
+    return len != 0 && rewind3dsRestoreState(s_readBuf, len);
 }
 
 void rewind3dsRollbackTo(int back)
@@ -244,14 +258,17 @@ void rewind3dsFrameTick(bool rewindHeld, bool frameHadHeadroom)
             // 268MHz, where the freeze spans mixer callbacks). A blocked
             // mixer just waits a few ms on queued NDSP buffers - unlike
             // snd3dsDrainMixing, which would inject silence every capture.
-            LightLock_Lock(&snd3DS.snesAccessLock);
-            bool ok = S9xFreezeGameMem(s_ring.push_ptr(), s_ring.slotSize, &length);
-            LightLock_Unlock(&snd3DS.snesAccessLock);
-
+            uint8_t *staging = s_ring.push_ptr();
+            bool ok = false;
+            if (staging != nullptr) {
+                LightLock_Lock(&snd3DS.snesAccessLock);
+                ok = S9xFreezeGameMem(staging, REWIND_SLOT_SIZE, &length);
+                LightLock_Unlock(&snd3DS.snesAccessLock);
+            }
             if (ok) {
                 s_ring.push_commit(length, s_nowFrame);
                 rewind3dsCaptureThumb(
-                    s_thumbPool + (size_t)s_ring.slot_at(0) * REWIND_THUMB_BYTES);
+                    s_thumbPool + (size_t)s_ring.entry_pos(0) * REWIND_THUMB_BYTES);
             }
         }
     }
