@@ -91,7 +91,8 @@ static void timelineDrawFrame(int cursor)
     // filmstrip: focused thumb centered, neighbours at half size.
     // "older" sits to the LEFT (like a film roll running rightwards).
     int cx = width / 2;
-    int thumbY = 75;   // centers the 94px-tall set in the 24..220 usable band
+    int thumbY = 60;   // user mock 16/08: the whole group (strip+dots+label)
+                       // balances in the 24..220 band, not the strip alone
     const uint8_t *thumb = rewind3dsThumb(cursor);
     if (thumb != NULL) {
         ui3dsDrawRect(cx - REWIND_THUMB_W / 2 - 2, thumbY - 2,
@@ -115,7 +116,7 @@ static void timelineDrawFrame(int cursor)
         if (spacing < 2) spacing = 2;
         int stripWidth = spacing * (count - 1);
         int xRight = width / 2 + stripWidth / 2;
-        int dotY = 196;   // clear of the centered strip (73..167), label right below
+        int dotY = 175;
         for (int i = 0; i < count; i++) {
             int x = xRight - i * spacing;   // i = frames back, rightmost = newest
             if (i == cursor) {
@@ -126,7 +127,7 @@ static void timelineDrawFrame(int cursor)
         }
     }
 
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 204, width, 218,
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 190, width, 204,
         theme.normalItemTextColor, HALIGN_CENTER, label);
 
     // hints in the menu's own bottom bar, same glyphs
