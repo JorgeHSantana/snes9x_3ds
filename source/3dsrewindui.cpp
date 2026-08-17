@@ -60,7 +60,7 @@ static void timelineDrawThumb(const uint8_t *thumb, int x0, int y0, int shrink)
     }
 }
 
-static void timelineDrawFrame(int cursor, int shownBack)
+static void timelineDrawFrame(int cursor)
 {
     int width = settings3DS.SecondScreenWidth;
     int count = rewind3dsCount();
@@ -89,7 +89,7 @@ static void timelineDrawFrame(int cursor, int shownBack)
     if (thumb != NULL) {
         ui3dsDrawRect(cx - REWIND_THUMB_W / 2 - 2, thumbY - 2,
                       cx + REWIND_THUMB_W / 2 + 2, thumbY + REWIND_THUMB_H + 2,
-                      shownBack == cursor ? TIMELINE_ACCENT_COLOR : TIMELINE_DOT_COLOR);
+                      TIMELINE_ACCENT_COLOR);
         timelineDrawThumb(thumb, cx - REWIND_THUMB_W / 2, thumbY, 1);
     }
     const uint8_t *older = rewind3dsThumb(cursor + 1);
@@ -119,13 +119,12 @@ static void timelineDrawFrame(int cursor, int shownBack)
         }
     }
 
-    // hints in the menu's own bottom bar, same glyphs and A/B/Y order
+    // hints in the menu's own bottom bar, same glyphs
     MenuButton buttons[] = {
         { "Resume", "\x0cc", 0x800d1d },
         { "Back",   "\x0cd", 0x999409 },
-        { "Show",   "\x0cf", 0x0d8014 },
     };
-    menu3dsDrawBottomBar(buttons, 3);
+    menu3dsDrawBottomBar(buttons, 2);
 }
 
 static void timelinePresent()
@@ -172,17 +171,6 @@ static void timelineShowFrame()
     impl3dsRunOneFrame(false, false, true);
 }
 
-// materialize the snapshot under the cursor on the game screen (Y, and
-// the first half of A)
-static bool timelineShowAt(int cursor, int &shownBack)
-{
-    if (shownBack == cursor) return true;
-    if (!rewind3dsRestoreAt(cursor)) return false;
-    timelineShowFrame();
-    shownBack = cursor;
-    return true;
-}
-
 void rewind3dsTimelineShow()
 {
     if (rewind3dsCount() == 0) return;
@@ -203,8 +191,8 @@ void rewind3dsTimelineShow()
 
     bool fromMenu = rewind3dsTimelineFromMenu();
     int cursor = 0;
-    int shownBack = -1;        // -1 = game screen still shows the present
     bool committed = false;
+    bool stateDirty = false;   // a restore ran; cancel must reload the present
     bool bottomRestored = false;
     char overlayShown[40] = "";
 
@@ -252,29 +240,31 @@ void rewind3dsTimelineShow()
 
             if (down & KEY_B) break;
 
-            // Y previews only; A shows the frame AND asks in one press
-            if (down & KEY_Y) {
-                timelineShowAt(cursor, shownBack);
-            }
-
-            if ((down & KEY_A) && timelineShowAt(cursor, shownBack)) {
+            // A asks first (the doubled thumb is the preview); the state
+            // only loads AFTER Yes - browsing never touches the game
+            if (down & KEY_A) {
                 // the menu's own modal Yes/No dialog (3dsmain.cpp), with
                 // the timeline as its dimmed backdrop (issue #43)
-                menu3dsSetDialogBackdrop([cursor, shownBack]() {
-                    timelineDrawFrame(cursor, shownBack);
+                menu3dsSetDialogBackdrop([cursor]() {
+                    timelineDrawFrame(cursor);
                 });
                 bool confirmed = rewind3dsConfirmResume();
                 menu3dsClearDialogBackdrop();
-                if (confirmed) {
-                    // the bottom screen returns to the wallpaper now; the
-                    // countdown lives on the game screen only
-                    timelineRestoreSecondScreen(previousFormat);
-                    bottomRestored = true;
-                    if (framesPerStep == 0) { committed = true; break; }
-                    countdownStep = 3;
-                    countdownFrames = 0;
-                }
                 lastHeld = 0xffffffff;   // swallow the dialog's last press
+                if (confirmed) {
+                    stateDirty = true;
+                    if (rewind3dsRestoreAt(cursor)) {
+                        timelineShowFrame();
+                        // the bottom screen returns to the wallpaper now;
+                        // the countdown lives on the game screen only
+                        timelineRestoreSecondScreen(previousFormat);
+                        bottomRestored = true;
+                        if (framesPerStep == 0) { committed = true; break; }
+                        countdownStep = 3;
+                        countdownFrames = 0;
+                    }
+                    // restore failure: stay browsing; cancel reloads F0
+                }
             }
         }
 
@@ -297,7 +287,7 @@ void rewind3dsTimelineShow()
         if (countdownStep > 0) {
             gpu3dsWaitForVBlank(settings3DS.GameScreen);
         } else {
-            timelineDrawFrame(cursor, shownBack);
+            timelineDrawFrame(cursor);
             timelinePresent();
         }
     }
@@ -308,7 +298,7 @@ void rewind3dsTimelineShow()
     } else {
         // cancel (F0): reload the state saved on entry, always
         if (havePresent && rewind3dsRestorePresent()) {
-            if (shownBack >= 0) timelineShowFrame();
+            if (stateDirty) timelineShowFrame();
         }
         // menu entry: B returns to the menu, not the game
         if (fromMenu) {

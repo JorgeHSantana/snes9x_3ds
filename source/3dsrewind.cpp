@@ -17,9 +17,12 @@
 // allocation halves until it fits, so tight heaps degrade gracefully.
 #define REWIND_SLOT_SIZE        (512 * 1024)
 #define REWIND_SLOTS_NEW3DS     48
-#define REWIND_SLOTS_OLD3DS     8
-#define REWIND_CAPTURE_FRAMES   30    // one snapshot every half second
-#define REWIND_FORCE_GAP_FRAMES 120   // capture even without headroom after 2s
+#define REWIND_SLOTS_OLD3DS     12    // 6MB attempt; halves if it won't fit
+// Old 3DS trades granularity for reach: stretching the capture interval
+// is its only lever - 12 slots x 2s = 24s of window instead of 8 x 0.5s
+// = 4s. New 3DS keeps 0.5s steps.
+#define REWIND_CAPTURE_FRAMES   (settings3DS.isNew3DS ? 30 : 120)
+#define REWIND_FORCE_GAP_FRAMES (REWIND_CAPTURE_FRAMES * 4)
 
 // all state below is emu-thread only
 static RewindRing s_ring;
