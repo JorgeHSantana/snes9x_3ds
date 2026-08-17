@@ -71,11 +71,26 @@ void input3dsRefreshTurboMode(bool isInGame)
 // emulator loop. For all other purposes, you should
 // use the standard hidScanInput.
 //---------------------------------------------------------
+static u32 ignoreKeysMask = 0;
+
+// Ignore ONLY these keys until each is released - a modal's confirm
+// press must not leak into the game, but buttons the player already
+// holds to keep playing (the countdown exists for that) must flow
+// immediately. The blanket ignoreInput zeroed everything and locked the
+// pad for seconds after a rewind resume (field bug 17/08).
+void input3dsIgnoreKeysUntilRelease(u32 mask)
+{
+    ignoreKeysMask = mask;
+}
+
 u32 input3dsScanInputForEmulation()
 {
     hidScanInput();
     currKeysHeld = hidKeysHeld();
     u32 currentKeysUp = hidKeysUp();
+
+    ignoreKeysMask &= currKeysHeld;      // released bits stop being ignored
+    currKeysHeld &= ~ignoreKeysMask;
 
     if (ignoreInput) {
         if (currentKeysUp != 0 || currKeysHeld == 0) {

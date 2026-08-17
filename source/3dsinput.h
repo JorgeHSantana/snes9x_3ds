@@ -23,5 +23,6 @@ void input3dsRefreshTurboMode(bool isInGame);
 
 // Prevents the button used to exit the menu from being registered as game input
 void input3dsWaitForRelease();
+void input3dsIgnoreKeysUntilRelease(u32 mask);
 
 #endif

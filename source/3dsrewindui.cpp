@@ -342,7 +342,9 @@ void rewind3dsTimelineShow()
     rewind3dsSetTimelineActive(false);
     rewind3dsMsuDeferEnd();
     snd3dsResumeMixing();
-    input3dsWaitForRelease();   // the confirming press must not reach the game
+    // swallow only the modal's own keys; gameplay buttons already held
+    // during the countdown flow into the game immediately
+    input3dsIgnoreKeysUntilRelease(KEY_A | KEY_B);
 }
 
 
@@ -440,5 +442,5 @@ void rewind3dsHoldShow()
     rewind3dsSetTimelineActive(false);
     rewind3dsMsuDeferEnd();
     snd3dsResumeMixing();
-    input3dsWaitForRelease();   // the release must not leak into the game
+    // nothing to swallow: releasing the hotkey is what ended the modal
 }
