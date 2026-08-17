@@ -378,7 +378,7 @@ void rewind3dsHoldShow()
     int captureFrames = rewind3dsCaptureIntervalFrames();
     char badge[40];
 
-    snprintf(badge, sizeof(badge), "\x9d -0.0s");
+    snprintf(badge, sizeof(badge), "\x9d 0.0s");   // no minus on zero
     notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen,
         3600000.0, badge);
     timelineRenderGameScreen(true);
