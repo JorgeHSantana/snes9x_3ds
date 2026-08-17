@@ -36,7 +36,7 @@ static bool s_allocTried = false;
 static bool s_msuDeferred = false;
 static int  s_frameCounter = 0;
 static int  s_framesSinceCapture = 0;
-static bool s_wasHeld = false;
+static int  s_holdFrames = 0;
 static bool s_timelineRequested = false;
 static bool s_timelineFromMenu = false;
 static bool s_timelineActive = false;
@@ -211,7 +211,7 @@ void rewind3dsReset()
     if (s_ring.valid())
         s_ring.clear();
     s_frameCounter = 0;
-    s_wasHeld = false;
+    s_holdFrames = 0;
     s_nowFrame = 0;
     s_timelineRequested = false;
     if (s_msuDeferred) {
@@ -224,7 +224,38 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
 {
     if (!settings3DS.isRomLoaded) return;
     if (snd3DS.generateSilence) return;   // SRAM autosave in flight
-    if (!settings3DS.RewindEnabled) return;   // disabled = free
+    if (!settings3DS.RewindEnabled) return;   // disabled = hotkey dead too
+
+    // Tap/hold hotkey - always combined (user call 17/08): HOLDING past
+    // half a second rewinds gameplay live (the classic gesture - walks
+    // one stored moment back every 10 frames while held, MSU latched);
+    // a short TAP opens the timeline on release.
+    if (rewindHeld) {
+        s_holdFrames++;
+        if (s_holdFrames == 30)
+            rewind3dsMsuDeferBegin();
+        if (s_holdFrames >= 30 && (s_holdFrames % 10) == 0
+                && s_ring.count > 0 && s_readBuf != nullptr) {
+            uint32_t tag = 0;
+            uint32_t len = s_ring.read_at(0, s_readBuf, REWIND_SLOT_SIZE);
+            if (len != 0 && s_ring.tag_at(0, &tag)
+                    && rewind3dsRestoreState(s_readBuf, len)) {
+                s_nowFrame = tag;
+                s_ring.pop_newest();
+            }
+        }
+    } else {
+        if (s_holdFrames >= 30)
+            rewind3dsMsuDeferEnd();
+        else if (s_holdFrames > 0) {
+            s_timelineRequested = true;
+            s_timelineFromMenu = false;
+        }
+        s_holdFrames = 0;
+    }
+
+    // while rewinding, never capture (it would re-record the walk back)
+    if (s_holdFrames >= 30) return;
 
     if (!s_allocTried)
         rewind3dsAllocate();
@@ -235,12 +266,6 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
 
     // The hold gesture is gone (docs/rewind-v2-spec.md): pressing the
     // Rewind hotkey opens the timeline, period.
-    if (rewindHeld && !s_wasHeld) {
-        s_timelineRequested = true;
-        s_timelineFromMenu = false;
-    }
-    s_wasHeld = rewindHeld;
-
     // Graduated capture patience (user design, 16/08): a due capture
     // first insists on a really idle frame; the idleness bar lowers as
     // the wait grows (50% -> 75% -> 90% of the frame budget), and at the

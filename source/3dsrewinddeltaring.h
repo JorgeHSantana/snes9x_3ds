@@ -209,6 +209,14 @@ public:
             pageSize, out, outCapacity);
     }
 
+    // live rewind: consume the newest entry after restoring it
+    void pop_newest()
+    {
+        if (count == 0) return;
+        count--;
+        sinceKeyframe = keyframeInterval;   // next capture starts a fresh keyframe
+    }
+
     // Max History ceiling: drop whole oldest groups past maxEntries
     void trim_to(int maxEntries)
     {

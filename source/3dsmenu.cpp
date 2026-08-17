@@ -1486,7 +1486,7 @@ void menu3dsSetHotkeysData(const char* hotkeysData[HOTKEYS_COUNT][3]) {
             case HOTKEY_REWIND_HOLD:
                 hotkeysData[i][0]= "RewindHold";
                 hotkeysData[i][1]= "  Rewind";
-                hotkeysData[i][2]= "Opens the rewind timeline to jump back\nto any recorded moment.";
+                hotkeysData[i][2]= "Hold to rewind gameplay. Tap for the timeline\nwith every recorded moment.";
                 break;
             default: 
                 hotkeysData[i][0]= ""; 
