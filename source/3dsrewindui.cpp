@@ -26,12 +26,6 @@
 // resumes play from there. B returns to the present at any stage.
 // ---------------------------------------------------------------------------
 
-#define TIMELINE_BG_COLOR        0x101418
-#define TIMELINE_PANEL_COLOR     0x1C242C
-#define TIMELINE_ACCENT_COLOR    0x529eeb
-#define TIMELINE_TEXT_COLOR      0xCCCCCC
-#define TIMELINE_DIM_TEXT_COLOR  0x777777
-#define TIMELINE_DOT_COLOR       0x555555
 
 #define TIMELINE_REPEAT_DELAY_FRAMES  15
 #define TIMELINE_REPEAT_RATE_FRAMES   4
@@ -65,9 +59,14 @@ static void timelineDrawFrame(int cursor)
     int width = settings3DS.SecondScreenWidth;
     int count = rewind3dsCount();
 
+    // the menu's own palette, so the modal reads as part of the same UI
+    const Theme3ds &theme = Themes[static_cast<int>(settings3DS.Theme)];
+    int accent = theme.accentColor;
+    int dotColor = theme.disabledItemTextColor;
+
     ui3dsSetViewport(0, 0, width, 240);
     ui3dsSetTranslate(0, 0);
-    ui3dsDrawRect(0, 0, width, 240, TIMELINE_BG_COLOR);
+    ui3dsDrawRect(0, 0, width, 240, theme.menuBackColor);
 
     // header: how far back the cursor sits
     uint32_t tag = 0;
@@ -79,26 +78,26 @@ static void timelineDrawFrame(int cursor)
         snprintf(label, sizeof(label), "Rewind");
     }
     ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 8, width, 22,
-        TIMELINE_ACCENT_COLOR, HALIGN_CENTER, label);
+        theme.normalItemTextColor, HALIGN_CENTER, label);
 
     // filmstrip: focused thumb centered, neighbours at half size.
     // "older" sits to the LEFT (like a film roll running rightwards).
     int cx = width / 2;
-    int thumbY = 60;
+    int thumbY = 32;
     const uint8_t *thumb = rewind3dsThumb(cursor);
     if (thumb != NULL) {
         ui3dsDrawRect(cx - REWIND_THUMB_W / 2 - 2, thumbY - 2,
                       cx + REWIND_THUMB_W / 2 + 2, thumbY + REWIND_THUMB_H + 2,
-                      TIMELINE_ACCENT_COLOR);
+                      accent);
         timelineDrawThumb(thumb, cx - REWIND_THUMB_W / 2, thumbY, 1);
     }
     const uint8_t *older = rewind3dsThumb(cursor + 1);
     if (older != NULL) {
-        timelineDrawThumb(older, cx - REWIND_THUMB_W / 2 - 62, thumbY + 15, 2);
+        timelineDrawThumb(older, cx - REWIND_THUMB_W / 2 - 58, thumbY + 30, 3);
     }
     const uint8_t *newer = rewind3dsThumb(cursor - 1);
     if (newer != NULL) {
-        timelineDrawThumb(newer, cx + REWIND_THUMB_W / 2 + 12, thumbY + 15, 2);
+        timelineDrawThumb(newer, cx + REWIND_THUMB_W / 2 + 8, thumbY + 30, 3);
     }
 
     // dot strip: newest on the right, cursor highlighted
@@ -112,9 +111,9 @@ static void timelineDrawFrame(int cursor)
         for (int i = 0; i < count; i++) {
             int x = xRight - i * spacing;   // i = frames back, rightmost = newest
             if (i == cursor) {
-                ui3dsDrawRect(x - 2, dotY - 3, x + 3, dotY + 4, TIMELINE_ACCENT_COLOR);
+                ui3dsDrawRect(x - 2, dotY - 3, x + 3, dotY + 4, accent);
             } else {
-                ui3dsDrawRect(x, dotY - 1, x + 2, dotY + 2, TIMELINE_DOT_COLOR);
+                ui3dsDrawRect(x, dotY - 1, x + 2, dotY + 2, dotColor);
             }
         }
     }

@@ -23,7 +23,7 @@
 #define REWIND_DELTA_PAGE       1024
 #define REWIND_KF_NEW3DS        8
 #define REWIND_KF_OLD3DS        4
-#define REWIND_DELTAS_NEW3DS    180
+#define REWIND_DELTAS_NEW3DS    160
 #define REWIND_DELTAS_OLD3DS    32
 #define REWIND_KF_INTERVAL      20    // a keyframe at least every 20 captures
 #define REWIND_CAPTURE_FRAMES   (settings3DS.isNew3DS ? 30 : 120)

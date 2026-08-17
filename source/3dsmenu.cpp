@@ -101,6 +101,61 @@ static int menu3dsDrawBottomBarButton(int posX, const MenuButton& button)
     return posX;
 }
 
+// Battery gauge + version string in the bottom bar, shared by the menu
+// proper and standalone modal screens (rewind timeline).
+void menu3dsDrawBatteryAndVersion()
+{
+    //battery display
+    const int maxBatteryLevel = 5;
+    const int battLevelWidth = 3;
+    const int battFullLevelWidth = (maxBatteryLevel) * battLevelWidth + 1;
+    const int battBorderWidth = 1;
+    const int battY1 = 227;
+    const int battY2 = 234;
+    const int battX2 = settings3DS.SecondScreenWidth - 10;
+    const int battHeadWidth = 2;
+    const int battHeadSpacing = 1;
+
+    // battery positive end
+    ui3dsDrawRect(
+        battX2 - battFullLevelWidth - battBorderWidth - battHeadWidth, 
+        battY1 + battHeadSpacing, 
+        battX2 - battFullLevelWidth - battBorderWidth, 
+        battY2 - battHeadSpacing, 
+        Themes[static_cast<int>(settings3DS.Theme)].selectedTabTextColor, 1.0f);
+    // battery body
+    ui3dsDrawRect(
+        battX2 - battFullLevelWidth - battBorderWidth, 
+        battY1 - battBorderWidth, 
+        battX2 + battBorderWidth, 
+        battY2 + battBorderWidth, 
+        Themes[static_cast<int>(settings3DS.Theme)].selectedTabTextColor, 1.0f);
+    // battery's empty insides
+    ui3dsDrawRect(
+        battX2 - battFullLevelWidth, 
+        battY1, 
+        battX2, 
+        battY2, 
+        Themes[static_cast<int>(settings3DS.Theme)].menuBottomBarColor, 1.0f);
+        
+    if(currentChargeState) {
+        ui3dsDrawRect(
+            battX2-battFullLevelWidth + 1, battY1 + 1, 
+            battX2 - 1, battY2 - 1, Themes[static_cast<int>(settings3DS.Theme)].accentColor, 1.0f);
+    } else {
+        u8 batteryLevel = currentBatteryLevel;
+        if (batteryLevel > 5) batteryLevel = 5;
+        for (int i = 0; i < batteryLevel; i++)
+        {
+            ui3dsDrawRect(
+                battX2-battLevelWidth*(i+1), battY1 + 1, 
+                battX2-battLevelWidth*(i) - 1, battY2 - 1, Themes[static_cast<int>(settings3DS.Theme)].accentColor, 1.0f);
+        }
+    }
+    const int rightEdge = battX2 - battFullLevelWidth - battBorderWidth - 6;
+    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 97, SCREEN_HEIGHT - 17, rightEdge, SCREEN_HEIGHT, Themes[static_cast<int>(settings3DS.Theme)].menuBottomBarTextColor, HALIGN_RIGHT, settings3dsGetAppVersion("v", GPU3DS.isReal3DS ? "" : "e"));
+}
+
 // The menu's own bottom bar (background + buttons) for screens that live
 // outside the menu loop, e.g. the rewind timeline: same drawing code, so
 // it can never drift from the real thing.
@@ -110,6 +165,7 @@ void menu3dsDrawBottomBar(const MenuButton* buttons, int count)
     int posX = 10;
     for (int i = 0; i < count; i++)
         posX = menu3dsDrawBottomBarButton(posX, buttons[i]);
+    menu3dsDrawBatteryAndVersion();
 }
 
 
@@ -485,54 +541,6 @@ void menu3dsDrawMenu(std::vector<SMenuTab>& menuTabs, int& currentMenuTab, int m
         }
     }
 
-    //battery display
-    const int maxBatteryLevel = 5;
-    const int battLevelWidth = 3;
-    const int battFullLevelWidth = (maxBatteryLevel) * battLevelWidth + 1;
-    const int battBorderWidth = 1;
-    const int battY1 = 227;
-    const int battY2 = 234;
-    const int battX2 = settings3DS.SecondScreenWidth - 10;
-    const int battHeadWidth = 2;
-    const int battHeadSpacing = 1;
-
-    // battery positive end
-    ui3dsDrawRect(
-        battX2 - battFullLevelWidth - battBorderWidth - battHeadWidth, 
-        battY1 + battHeadSpacing, 
-        battX2 - battFullLevelWidth - battBorderWidth, 
-        battY2 - battHeadSpacing, 
-        Themes[static_cast<int>(settings3DS.Theme)].selectedTabTextColor, 1.0f);
-    // battery body
-    ui3dsDrawRect(
-        battX2 - battFullLevelWidth - battBorderWidth, 
-        battY1 - battBorderWidth, 
-        battX2 + battBorderWidth, 
-        battY2 + battBorderWidth, 
-        Themes[static_cast<int>(settings3DS.Theme)].selectedTabTextColor, 1.0f);
-    // battery's empty insides
-    ui3dsDrawRect(
-        battX2 - battFullLevelWidth, 
-        battY1, 
-        battX2, 
-        battY2, 
-        Themes[static_cast<int>(settings3DS.Theme)].menuBottomBarColor, 1.0f);
-        
-    if(currentChargeState) {
-        ui3dsDrawRect(
-            battX2-battFullLevelWidth + 1, battY1 + 1, 
-            battX2 - 1, battY2 - 1, Themes[static_cast<int>(settings3DS.Theme)].accentColor, 1.0f);
-    } else {
-        u8 batteryLevel = currentBatteryLevel;
-        if (batteryLevel > 5) batteryLevel = 5;
-        for (int i = 0; i < batteryLevel; i++)
-        {
-            ui3dsDrawRect(
-                battX2-battLevelWidth*(i+1), battY1 + 1, 
-                battX2-battLevelWidth*(i) - 1, battY2 - 1, Themes[static_cast<int>(settings3DS.Theme)].accentColor, 1.0f);
-        }
-    }
-    
     int bottomMenuPosX = 10;
 
     for (const auto& button : bottomMenuButtons) {
@@ -541,8 +549,7 @@ void menu3dsDrawMenu(std::vector<SMenuTab>& menuTabs, int& currentMenuTab, int m
         }
     }
 
-    const int rightEdge = battX2 - battFullLevelWidth - battBorderWidth - 6;
-    ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 97, SCREEN_HEIGHT - 17, rightEdge, SCREEN_HEIGHT, Themes[static_cast<int>(settings3DS.Theme)].menuBottomBarTextColor, HALIGN_RIGHT, settings3dsGetAppVersion("v", GPU3DS.isReal3DS ? "" : "e"));
+    menu3dsDrawBatteryAndVersion();
     
     int maxItems = MENU_HEIGHT;
     int menuStartY = 29;

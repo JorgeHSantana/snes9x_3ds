@@ -175,6 +175,7 @@ int menu3dsShowDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, 
 // the menu's bottom bar (background + glyph-icon buttons) for modal
 // screens that run outside the menu loop (rewind timeline)
 void menu3dsDrawBottomBar(const MenuButton* buttons, int count);
+void menu3dsDrawBatteryAndVersion();
 
 // issue #43: substitute what dialogs dim behind themselves (default: the
 // menu). Set before menu3dsShowDialog, clear right after.

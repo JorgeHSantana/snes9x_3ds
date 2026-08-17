@@ -14,8 +14,8 @@ void rewind3dsReset();
 
 // --- timeline (3dsrewindui.cpp) --------------------------------------------
 
-#define REWIND_THUMB_W      100
-#define REWIND_THUMB_H      60
+#define REWIND_THUMB_W      150
+#define REWIND_THUMB_H      90
 #define REWIND_THUMB_BYTES  (REWIND_THUMB_W * REWIND_THUMB_H * 2)   // RGB565
 
 bool rewind3dsTakeTimelineRequest();      // hotkey press or menu action
