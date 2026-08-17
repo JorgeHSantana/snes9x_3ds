@@ -2691,8 +2691,12 @@ bool rewind3dsConfirmResume()
 
     SMenuTab dialogTab;
     bool isDialog = false;
+    // hideAfter=false: the hide animation draws the real MENU behind the
+    // fading dialog - the blink to the main menu on Yes (field report
+    // 16/08). The timeline repaints the whole screen right after either
+    // answer, so the dialog can simply vanish under it.
     return confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-        "Rewind", "Resume the game from this moment?", true, true);
+        "Rewind", "Resume the game from this moment?", true, false);
 }
 
 void showMenu() {
