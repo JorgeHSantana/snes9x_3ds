@@ -43,24 +43,26 @@ static inline void timelinePutPixel(u16 *fb, int x, int y, u16 color)
 }
 
 // blit a REWIND_THUMB_W x REWIND_THUMB_H RGB565 row-major thumb, decimated
-// by 'shrink' (1 = full size, 2 = half)
-static void timelineDrawThumb(const uint8_t *thumb, int x0, int y0, int shrink)
+// by 'shrink' (1 = full size, 2 = half); zoom magnifies each source pixel
+// (2 = double size - the focused thumb is the only preview now, so it
+// earns the screen space)
+static void timelineDrawThumb(const uint8_t *thumb, int x0, int y0, int shrink, int zoom = 1)
 {
     u16 *fb = (u16 *)gfxGetFramebuffer(settings3DS.SecondScreen, GFX_LEFT, NULL, NULL);
     if (fb == NULL || thumb == NULL) return;
 
     const uint16_t *src = (const uint16_t *)thumb;
-    int w = REWIND_THUMB_W / shrink;
-    int h = REWIND_THUMB_H / shrink;
+    int w = (REWIND_THUMB_W / shrink) * zoom;
+    int h = (REWIND_THUMB_H / shrink) * zoom;
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
             timelinePutPixel(fb, x0 + x, y0 + y,
-                src[(y * shrink) * REWIND_THUMB_W + (x * shrink)]);
+                src[(y / zoom * shrink) * REWIND_THUMB_W + (x / zoom * shrink)]);
         }
     }
 }
 
-static void timelineDrawFrame(int cursor, int shownBack)
+static void timelineDrawFrame(int cursor)
 {
     int width = settings3DS.SecondScreenWidth;
     int count = rewind3dsCount();
@@ -81,24 +83,25 @@ static void timelineDrawFrame(int cursor, int shownBack)
     ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, 0, 8, width, 22,
         TIMELINE_ACCENT_COLOR, HALIGN_CENTER, label);
 
-    // filmstrip: focused thumb centered, neighbours at half size.
+    // filmstrip: the focused thumb doubled (the deciding preview - the
+    // frame only materializes AFTER Yes), neighbours at half size.
     // "older" sits to the LEFT (like a film roll running rightwards).
     int cx = width / 2;
-    int thumbY = 60;
+    int thumbY = 38;
     const uint8_t *thumb = rewind3dsThumb(cursor);
     if (thumb != NULL) {
-        ui3dsDrawRect(cx - REWIND_THUMB_W / 2 - 2, thumbY - 2,
-                      cx + REWIND_THUMB_W / 2 + 2, thumbY + REWIND_THUMB_H + 2,
-                      shownBack == cursor ? TIMELINE_ACCENT_COLOR : TIMELINE_DOT_COLOR);
-        timelineDrawThumb(thumb, cx - REWIND_THUMB_W / 2, thumbY, 1);
+        ui3dsDrawRect(cx - REWIND_THUMB_W - 2, thumbY - 2,
+                      cx + REWIND_THUMB_W + 2, thumbY + REWIND_THUMB_H * 2 + 2,
+                      TIMELINE_ACCENT_COLOR);
+        timelineDrawThumb(thumb, cx - REWIND_THUMB_W, thumbY, 1, 2);
     }
     const uint8_t *older = rewind3dsThumb(cursor + 1);
     if (older != NULL) {
-        timelineDrawThumb(older, cx - REWIND_THUMB_W / 2 - 62, thumbY + 15, 2);
+        timelineDrawThumb(older, cx - REWIND_THUMB_W - 58, thumbY + 45, 2);
     }
     const uint8_t *newer = rewind3dsThumb(cursor - 1);
     if (newer != NULL) {
-        timelineDrawThumb(newer, cx + REWIND_THUMB_W / 2 + 12, thumbY + 15, 2);
+        timelineDrawThumb(newer, cx + REWIND_THUMB_W + 8, thumbY + 45, 2);
     }
 
     // dot strip: newest on the right, cursor highlighted
@@ -108,7 +111,7 @@ static void timelineDrawFrame(int cursor, int shownBack)
         if (spacing < 2) spacing = 2;
         int stripWidth = spacing * (count - 1);
         int xRight = width / 2 + stripWidth / 2;
-        int dotY = 150;
+        int dotY = 172;
         for (int i = 0; i < count; i++) {
             int x = xRight - i * spacing;   // i = frames back, rightmost = newest
             if (i == cursor) {
@@ -171,17 +174,6 @@ static void timelineShowFrame()
     impl3dsRunOneFrame(false, false, true);
 }
 
-// materialize the snapshot under the cursor on the game screen (the
-// first half of A; the confirm dialog is the second)
-static bool timelineShowAt(int cursor, int &shownBack)
-{
-    if (shownBack == cursor) return true;
-    if (!rewind3dsRestoreAt(cursor)) return false;
-    timelineShowFrame();
-    shownBack = cursor;
-    return true;
-}
-
 void rewind3dsTimelineShow()
 {
     if (rewind3dsCount() == 0) return;
@@ -202,9 +194,9 @@ void rewind3dsTimelineShow()
 
     bool fromMenu = rewind3dsTimelineFromMenu();
     int cursor = 0;
-    int shownBack = -1;        // -1 = game screen still shows the present
     bool committed = false;
     bool bottomRestored = false;
+    bool stateDirty = false;   // a restore ran; cancel must reload the present
     char overlayShown[40] = "";
 
     u32 lastHeld = 0xffffffff; // suppresses the entry press
@@ -251,36 +243,39 @@ void rewind3dsTimelineShow()
 
             if (down & KEY_B) break;
 
-            // Long jumps replay whole segments (v2): announce the wait in
-            // the pause bar so it reads as work, not a hang. The browse
-            // text re-triggers via the wording change below.
-            if ((down & KEY_A) && shownBack != cursor
-                    && rewind3dsEstimateRestoreFrames(cursor) > 3 * 60) {
-                notif3dsTrigger(Notif::Paused, Notif::Type::Default,
-                    settings3DS.GameScreen, 3600000.0, "Loading...");
-                timelineRenderGameScreen(true);
-                overlayShown[0] = '\0';
-            }
-
-            // A shows the frame AND asks in one press
-            if ((down & KEY_A) && timelineShowAt(cursor, shownBack)) {
+            // A asks first (the doubled thumb is the preview); the state
+            // only loads AFTER Yes - browsing never touches the game
+            // (field request 16/08: "Loading" belongs after the choice)
+            if (down & KEY_A) {
                 // the menu's own modal Yes/No dialog (3dsmain.cpp), with
                 // the timeline as its dimmed backdrop (issue #43)
-                menu3dsSetDialogBackdrop([cursor, shownBack]() {
-                    timelineDrawFrame(cursor, shownBack);
+                menu3dsSetDialogBackdrop([cursor]() {
+                    timelineDrawFrame(cursor);
                 });
                 bool confirmed = rewind3dsConfirmResume();
                 menu3dsClearDialogBackdrop();
-                if (confirmed) {
-                    // the bottom screen returns to the wallpaper now; the
-                    // countdown lives on the game screen only
-                    timelineRestoreSecondScreen(previousFormat);
-                    bottomRestored = true;
-                    if (framesPerStep == 0) { committed = true; break; }
-                    countdownStep = 3;
-                    countdownFrames = 0;
-                }
                 lastHeld = 0xffffffff;   // swallow the dialog's last press
+                if (confirmed) {
+                    // long jumps replay whole segments (v2): announce it
+                    if (rewind3dsEstimateRestoreFrames(cursor) > 60) {
+                        notif3dsTrigger(Notif::Paused, Notif::Type::Default,
+                            settings3DS.GameScreen, 3600000.0, "Loading...");
+                        overlayShown[0] = '\0';
+                        timelineRenderGameScreen(true);
+                    }
+                    stateDirty = true;
+                    if (rewind3dsRestoreAt(cursor)) {
+                        timelineShowFrame();
+                        // the bottom screen returns to the wallpaper now;
+                        // the countdown lives on the game screen only
+                        timelineRestoreSecondScreen(previousFormat);
+                        bottomRestored = true;
+                        if (framesPerStep == 0) { committed = true; break; }
+                        countdownStep = 3;
+                        countdownFrames = 0;
+                    }
+                    // restore failure: stay browsing; cancel reloads F0
+                }
             }
         }
 
@@ -306,7 +301,7 @@ void rewind3dsTimelineShow()
             // v2: a bounded replay slice fills the tick nearest the cursor
             // while the user reads the screen (no-op on the ring provider)
             rewind3dsPrefetchStep(cursor);
-            timelineDrawFrame(cursor, shownBack);
+            timelineDrawFrame(cursor);
             timelinePresent();
         }
     }
@@ -317,7 +312,7 @@ void rewind3dsTimelineShow()
     } else {
         // cancel (F0): reload the state saved on entry, always
         if (havePresent && rewind3dsRestorePresent()) {
-            if (shownBack >= 0) timelineShowFrame();
+            if (stateDirty) timelineShowFrame();
         }
         // menu entry: B returns to the menu, not the game
         if (fromMenu) {

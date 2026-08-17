@@ -549,6 +549,13 @@ void rewind3dsNoteMsuStatus(uint8_t value)
 // applies the last restored snapshot's audio in one go
 void rewind3dsMsuDeferBegin()
 {
+    // v2 must NOT defer: a deferred restore only latches - the live chip
+    // keeps the present's registers, replays run on that wrong state, and
+    // the stale latch gets applied over the correctly materialized moment
+    // at commit ("scene B's music at scene A", field report 16/08). Here
+    // restores are one-per-confirm, so the real MSU restore is affordable;
+    // the paused mixer already guarantees silence while browsing.
+    if (s_v2) return;
     if (!s_msuDeferred && Settings.MSU1) {
         msu1_set_restore_deferred(true);
         s_msuDeferred = true;
@@ -557,6 +564,12 @@ void rewind3dsMsuDeferBegin()
 
 void rewind3dsMsuDeferEnd()
 {
+    if (s_v2) {
+        // resync the platform bridge to whatever state the timeline left
+        if (Settings.MSU1)
+            msu3dsOnEvent(Msu1Event::SavestateLoaded);
+        return;
+    }
     if (s_msuDeferred) {
         snd3dsDrainMixing();
         msu1_set_restore_deferred(false);
