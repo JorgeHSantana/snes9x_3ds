@@ -21,9 +21,13 @@
 // allocation halves until it fits, so tight heaps degrade gracefully.
 #define REWIND_SLOT_SIZE        (512 * 1024)
 #define REWIND_SLOTS_NEW3DS     48
-#define REWIND_SLOTS_OLD3DS     8
-#define REWIND_CAPTURE_FRAMES   30    // one snapshot every half second
-#define REWIND_FORCE_GAP_FRAMES 120   // capture even without headroom after 2s
+#define REWIND_SLOTS_OLD3DS     12    // 6MB attempt; halves if it won't fit
+// Old 3DS trades granularity for reach: with replay unproven there (v2
+// stays off until the mode-S probe measures >=1x), stretching the ring's
+// capture interval is the only lever - 12 slots x 2s = 24s of window
+// instead of 8 x 0.5s = 4s. New 3DS keeps 0.5s for the v2-failed fallback.
+#define REWIND_CAPTURE_FRAMES   (settings3DS.isNew3DS ? 30 : 120)
+#define REWIND_FORCE_GAP_FRAMES (REWIND_CAPTURE_FRAMES * 4)
 
 // Input tape (v2): 10 minutes of pads (4B/frame) plus MSU-1 status reads.
 #define REWIND_TAPE_FRAMES      (10 * 60 * 60)
