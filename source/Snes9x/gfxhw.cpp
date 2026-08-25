@@ -71,6 +71,11 @@ bool WindowingEnabled[241];
 
 int16 layerVerticesCount[5];
 
+// M7-line VBO count at the start of the current section. The sub->main
+// vertex reuse below may only redraw vertices built by THIS section;
+// reusing an earlier section's lines redraws them with stale matrix data.
+static int32 m7SectionVertexBase = 0;
+
 // used to build up section state that gets stored for later via gpu3dsCommitLayerSection
 SGPURenderState renderState;
 
@@ -3093,6 +3098,18 @@ void S9xDrawBackgroundMode7Hardware(int bg, bool8 sub, int depth, int alphaTestA
 	else
 		alphaTest = GFX.r2131 & 0x40 ? ALPHA_TEST_GTE_0_5 : ALPHA_TEST_GTE_1_0;
 	
+	// The sub screen is drawn before the main screen. When this section's
+	// sub-screen pass already built the Mode 7 line vertices, redraw those
+	// same vertices instead of walking every scanline again (mirrors the
+	// regular-BG reuse path). Guarded by the section base count so vertices
+	// from an earlier section are never reused.
+	if (layerVerticesCount[bg] > m7SectionVertexBase)
+	{
+		S9xCommitMode7LayerSection(true, bg, sub, SNES_MODE7_FULL, alphaTest);
+
+		return;
+	}
+
 	int hiShift = GPU3DSExt.render2x.enabled ? 1 : 0;
 
 	for (int Y = (int)LayerRender.startY[bg]; Y <= (int)GFX.EndY; Y++)
@@ -3821,6 +3838,7 @@ void S9xUpdateScreenHardware ()
 	layerVerticesCount[LAYER_BG2] = -1;
 	layerVerticesCount[LAYER_BG3] = -1;
 	layerVerticesCount[LAYER_OBJ] = -1;
+	m7SectionVertexBase = GPU3DS.vertices[VBO_SCENE_MODE7_LINE].count;
 
 	bool isLastSection = GFX.EndY >= (uint32)(PPU.ScreenHeight - 1);
     if (isLastSection)
