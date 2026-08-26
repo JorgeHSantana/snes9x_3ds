@@ -248,6 +248,24 @@ void rewind3dsMsuDeferEnd()
     }
 }
 
+// Frees the ring and every timeline buffer. The Recording toggle promises
+// "Disable to reclaim the memory" - this is that promise; app exit calls it
+// too. The next enabled frame re-allocates from scratch.
+void rewind3dsFinalize()
+{
+    if (s_ring.valid()) {
+        free(s_ring.kfPool);
+        free(s_ring.deltaPool);
+        free(s_ring.entries);
+    }
+    s_ring = RewindDeltaRing{};
+    free(s_thumbPool);  s_thumbPool = nullptr;
+    free(s_presentBuf); s_presentBuf = nullptr;
+    free(s_readBuf);    s_readBuf = nullptr;
+    s_presentLen = 0;
+    s_allocTried = false;
+}
+
 void rewind3dsReset()
 {
     if (s_ring.valid())

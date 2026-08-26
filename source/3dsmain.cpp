@@ -571,7 +571,10 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     AddMenuPicker(items, "  Recording"_s,
         "Records gameplay in the background so the timeline\ncan jump back to any recent moment. Disable to\nreclaim the memory and skip the captures."_s,
         makePickerOptions({"Disabled", "Enabled"}), settings3DS.RewindEnabled, DIALOG_TYPE_INFO, true,
-        []( int val ) { CheckAndUpdate(settings3DS.RewindEnabled, val); });
+        []( int val ) {
+            if (CheckAndUpdate(settings3DS.RewindEnabled, val) && !settings3DS.RewindEnabled)
+                rewind3dsFinalize();   // the tooltip's "reclaim the memory"
+        });
 
     AddMenuPicker(items, "  Max History"_s,
         "How far back the timeline reaches. Maximum depends\non the console and the game: up to ~1.5 min on\nNew 3DS (0.5s steps), ~1 min on Old 3DS (2s steps)."_s,
@@ -2868,6 +2871,7 @@ int emulatorFinalize()
     if (snd3DS.audioType == 2) snd3dsDrainMixing();
 
     msu3dsOnEvent(Msu1Event::AppExit);
+    rewind3dsFinalize();
     msu3dsNdspUninstall();
 
     snd3dsFinalize();
