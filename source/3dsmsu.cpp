@@ -340,6 +340,13 @@ namespace {
 
 constexpr uint32_t AUDIO_READAHEAD_SCRATCH = 32 * 1024;
 
+// host tests have no svcGetSystemTick; a zero clock just mutes timing logs
+#ifdef _3DS
+static inline uint64_t ra_ticks(void) { return svcGetSystemTick(); }
+#else
+static inline uint64_t ra_ticks(void) { return 0; }
+#endif
+
 struct AudioReadahead {
     MsuAudioRing ring;
     void (*lock)(void);
@@ -514,6 +521,8 @@ void msu3dsAudioReadaheadTick(void)
             memcpy(g_audio_ra.open_path, path, sizeof(g_audio_ra.open_path));
             g_audio_ra.decoder_pos = UINT32_MAX;
         }
+        msu1_diag("readahead adopt: pos %u%s", (unsigned)g_audio_ra.pos,
+                  g_audio_ra.flac != nullptr ? " (flac)" : "");
     }
     if (!want) { return; }
 
@@ -533,7 +542,15 @@ void msu3dsAudioReadaheadTick(void)
         if (stream_changed || chunk == 0) { break; }
 
         if (g_audio_ra.decoder_pos != ppos) {
-            if (!ra_decoder_seek(ppos)) {
+            uint64_t seekT0 = ra_ticks();
+            bool sought = ra_decoder_seek(ppos);
+            uint32_t seekMs = (uint32_t)((ra_ticks() - seekT0) / 268123u);
+            if (seekMs >= 50 || !sought) {
+                msu1_diag("readahead seek to %u: %ums%s",
+                          (unsigned)ppos, (unsigned)seekMs,
+                          sought ? "" : " FAILED");
+            }
+            if (!sought) {
                 ra_lock();
                 g_audio_ra.ring.producer_ok = false;
                 ra_unlock();
