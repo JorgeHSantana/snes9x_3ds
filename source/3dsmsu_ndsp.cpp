@@ -118,4 +118,9 @@ void msu3dsNdspUninstall(void)
     msu3dsFinalize();
     if (g_staging   != nullptr) { linearFree(g_staging);   g_staging   = nullptr; }
     if (g_pcm_block != nullptr) { linearFree(g_pcm_block); g_pcm_block = nullptr; }
+    if (g_prefetch_ring != nullptr) {
+        msu3dsDataPrefetchInit(nullptr, 0);   // detach before the free
+        free(g_prefetch_ring);
+        g_prefetch_ring = nullptr;
+    }
 }
