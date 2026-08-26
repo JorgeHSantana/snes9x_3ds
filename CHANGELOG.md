@@ -24,6 +24,12 @@ Notable changes to this project will be documented in this file.
   bar, and no more screen blinks entering, leaving or confirming.
 
 ### Fixes
+* **Old 3DS speed regression fixed** (issue #54, e.g. Super Mario Kart):
+  two independent causes found by hardware profiling. The Mode 7
+  sub-to-main vertex reuse lost in an upstream fix is restored with a
+  per-section guard (~1.2ms/frame back), and the audio mixer's syscore
+  budget is per-game again - 30% baseline, 45% only while an MSU-1 title
+  is loaded (~1.6ms/frame back in every other game).
 * Resuming from a rewound moment no longer freezes the screen for
   seconds with audio running (the modal's wall time read as frame-pacing
   debt and the loop skipped drawing to catch up).
