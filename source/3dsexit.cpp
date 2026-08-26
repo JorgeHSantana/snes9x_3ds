@@ -28,8 +28,14 @@ void handleAptHook(APT_HookType hook, void* param)
                     S9xAutoSaveSRAM();
                 }
 
-                GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
-                input3dsRefreshTurboMode(false);
+                // HOME parks in the pause menu; closing the lid resumes
+                // play seamlessly on wake instead (issue #45) - waking
+                // into the dimmed menu backdrop read as a dark screen.
+                // SRAM is saved either way, just above.
+                if (hook == APTHOOK_ONSUSPEND) {
+                    GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
+                    input3dsRefreshTurboMode(false);
+                }
             }
 
             break;
@@ -39,6 +45,11 @@ void handleAptHook(APT_HookType hook, void* param)
             snd3dsApplyCpuLimit();
             GPU3DS.gameScreenBufferDesync = true;
             menu3dsSetScreenDirty(true, true);
+            if (GPU3DS.emulatorState == EMUSTATE_EMULATE) {
+                // lid wake with no menu trip: restore what sleep tore down
+                lcd3dsSetEmulationRate(settings3DS.TicksPerFrame);
+                snd3dsStartPlaying();
+            }
             break;
         default:
             break;
