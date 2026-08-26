@@ -130,6 +130,20 @@ void msu1_diag(const char* fmt, ...);
 // direct (position-corrected) fread. Installed by the platform bridge.
 void msu1_set_data_prefetch(uint32_t (*read)(uint32_t pos, uint8_t* dst, uint32_t count));
 
+// Optional decoded-audio prefetch source (default null; issue #55). When
+// set, audio reads are served from it at the logical play position and the
+// core's own decoder goes cold: loop seam, play and restore update
+// positions only (no decoder seek), and a short read pads silence without
+// touching the stall budget while *alive is true. Installed by the
+// platform bridge when its read-ahead producer is running.
+void msu1_set_audio_prefetch(uint32_t (*read)(uint32_t pos, uint8_t* dst, uint32_t count, bool* alive));
+
+// Optional notification that the audio stream changed (track load, play,
+// pause, restore, reset, shutdown). Runs on the emulation thread with the
+// SNES lock held - the platform snapshots MSU1 state and wakes its
+// producer; the hook must not call back into the core.
+void msu1_set_audio_notify(void (*fn)(const Msu1State* state));
+
 // FMV tear tracking: large VRAM DMAs landing inside the visible frame mark
 // it torn; the platform holds the previous presented frame instead of
 // showing a half-uploaded video frame (blink/pink-tile suppression).

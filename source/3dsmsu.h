@@ -35,5 +35,18 @@ void     msu3dsDataPrefetchLocks(void (*lock)(void), void (*unlock)(void));
 void     msu3dsDataPrefetchFill(void);
 uint32_t msu3dsDataPrefetchRead(uint32_t pos, uint8_t* dst, uint32_t count);
 void     msu3dsFillAudio(void);                 // mixing thread, under snesAccessLock
+
+// Decoded-audio read-ahead (issue #55). Storage is caller-owned; null/0
+// disables and leaves the core on its direct-decode path. Init installs the
+// msu1 audio prefetch + notify hooks; Stop uninstalls them and closes the
+// producer's decoder. Tick is the producer: it adopts stream changes and
+// decodes into the ring - on 3DS it runs on its own thread (below the
+// mixer's priority) so loop seeks never stall mixing; host tests call it
+// directly. Locks are leaf hooks like the data ring's.
+void     msu3dsAudioReadaheadInit(uint8_t* storage, uint32_t capacity);
+void     msu3dsAudioReadaheadLocks(void (*lock)(void), void (*unlock)(void));
+void     msu3dsAudioReadaheadTick(void);
+void     msu3dsAudioReadaheadStop(void);
+uint32_t msu3dsAudioReadaheadRead(uint32_t pos, uint8_t* dst, uint32_t count, bool* alive);
 uint32_t msu3dsGetUnderrunCount(void);
 bool     msu3dsIsMuted(void);                   // exposed for tests/diagnostics

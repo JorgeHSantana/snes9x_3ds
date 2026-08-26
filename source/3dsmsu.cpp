@@ -1,6 +1,14 @@
 #include "3dsmsu.h"
+#include "3dsmsuring.h"
 #include <atomic>
 #include <cstring>
+
+#define DR_FLAC_NO_OGG
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include "vendor/dr_flac.h"
+#pragma GCC diagnostic pop
 
 namespace {
 struct BridgeState {
@@ -316,5 +324,243 @@ void msu3dsOnEvent(Msu1Event event)
             return;
         case Msu1Event::AppExit:       msu3dsFinalize(); return;
         case Msu1Event::Count:         return;
+    }
+}
+
+
+//---------------------------------------------------------------------------
+// Decoded-audio read-ahead (issue #55). The producer owns its OWN decoder
+// on the current track file - the msu1 core's decoder goes cold while the
+// prefetch hook is installed - so loop seeks (hundreds of ms on FLAC) run
+// here, never under snesAccessLock and never on the mixer thread. The ring
+// lock is a LEAF like the data ring's: both critical sections are
+// memcpy/index-sized, and the producer takes no other lock.
+//---------------------------------------------------------------------------
+namespace {
+
+constexpr uint32_t AUDIO_READAHEAD_SCRATCH = 32 * 1024;
+
+struct AudioReadahead {
+    MsuAudioRing ring;
+    void (*lock)(void);
+    void (*unlock)(void);
+
+    // adopt request: written by the notify hook (emu thread, SNES lock
+    // held), consumed by the tick. Guarded by the leaf lock.
+    bool     adopt_pending;
+    bool     want_stream;    // a playable track is loaded
+    bool     is_flac;
+    uint32_t size;           // bytes past header
+    uint32_t loop_bytes;
+    uint32_t pos;            // play position at notify time
+    char     path[MSU1_MAX_BASE_PATH + 16];
+
+    // producer-owned; tick thread only
+    FILE*    pcm;
+    drflac*  flac;
+    uint32_t decoder_pos;    // logical pos the decoder reads next (UINT32_MAX = unknown)
+    char     open_path[MSU1_MAX_BASE_PATH + 16];
+    uint8_t  scratch[AUDIO_READAHEAD_SCRATCH];
+};
+AudioReadahead g_audio_ra = {};
+
+inline void ra_lock(void)   { if (g_audio_ra.lock)   { g_audio_ra.lock(); } }
+inline void ra_unlock(void) { if (g_audio_ra.unlock) { g_audio_ra.unlock(); } }
+
+void ra_close_decoder(void)
+{
+    if (g_audio_ra.pcm != nullptr)  { fclose(g_audio_ra.pcm); g_audio_ra.pcm = nullptr; }
+    if (g_audio_ra.flac != nullptr) { drflac_close(g_audio_ra.flac); g_audio_ra.flac = nullptr; }
+    g_audio_ra.open_path[0] = '\0';
+    g_audio_ra.decoder_pos = UINT32_MAX;
+}
+
+// Snapshot the audio stream for the producer. Runs on the emulation thread
+// with the SNES lock held (msu1's notify contract), so reading MSU1 here is
+// safe; only the leaf lock guards the handoff to the tick thread.
+void ra_on_stream_change(const Msu1State* st)
+{
+    bool ready = st->enabled
+        && (st->audio_file != nullptr || st->audio_flac != nullptr)
+        && st->audio_size > 0;
+    char path[sizeof(g_audio_ra.path)];
+    path[0] = '\0';
+    if (ready) {
+        const char* ext = (st->audio_flac != nullptr) ? ".flac" : ".pcm";
+        if (!msu1_build_track_path_ext(st->base_path, st->current_track,
+                                       ext, path, sizeof(path))) {
+            ready = false;
+        }
+    }
+    ra_lock();
+    g_audio_ra.adopt_pending = true;
+    g_audio_ra.want_stream   = ready;
+    g_audio_ra.is_flac       = st->audio_flac != nullptr;
+    g_audio_ra.size          = st->audio_size;
+    g_audio_ra.loop_bytes    = st->audio_loop_point * MSU1_BYTES_PER_SAMPLE;
+    g_audio_ra.pos           = st->audio_play_pos;
+    memcpy(g_audio_ra.path, path, sizeof(path));
+    if (ready) {
+        // rebase the window at the new position; the consumer serves
+        // silence (alive) until the producer lands data here
+        g_audio_ra.ring.reset(g_audio_ra.pos, g_audio_ra.size, g_audio_ra.loop_bytes);
+    } else {
+        g_audio_ra.ring.reset(0, 0, 0);
+        g_audio_ra.ring.producer_ok = false;
+    }
+    ra_unlock();
+}
+
+// Producer decoder positioning; monolithic seeks are fine on this thread.
+bool ra_decoder_seek(uint32_t pos)
+{
+    if (g_audio_ra.flac != nullptr) {
+        if (drflac_seek_to_pcm_frame(g_audio_ra.flac,
+                pos / MSU1_BYTES_PER_SAMPLE) == DRFLAC_FALSE) { return false; }
+    } else if (g_audio_ra.pcm != nullptr) {
+        if (fseek(g_audio_ra.pcm,
+                  (long)(MSU1_PCM_HEADER_SIZE + pos), SEEK_SET) != 0) { return false; }
+    } else {
+        return false;
+    }
+    g_audio_ra.decoder_pos = pos;
+    return true;
+}
+
+uint32_t ra_decoder_read(uint8_t* dst, uint32_t bytes)
+{
+    if (g_audio_ra.flac != nullptr) {
+        drflac_uint64 frames = bytes / MSU1_BYTES_PER_SAMPLE;
+        if (frames == 0) { return 0; }
+        drflac_uint64 got = drflac_read_pcm_frames_s16(g_audio_ra.flac, frames,
+                                                       (drflac_int16*)dst);
+        return (uint32_t)(got * MSU1_BYTES_PER_SAMPLE);
+    }
+    if (g_audio_ra.pcm != nullptr) {
+        return (uint32_t)fread(dst, 1, bytes, g_audio_ra.pcm);
+    }
+    return 0;
+}
+
+} // namespace
+
+void msu3dsAudioReadaheadLocks(void (*lock)(void), void (*unlock)(void))
+{
+    g_audio_ra.lock = lock;
+    g_audio_ra.unlock = unlock;
+}
+
+void msu3dsAudioReadaheadInit(uint8_t* storage, uint32_t capacity)
+{
+    ra_close_decoder();
+    g_audio_ra.ring.init(storage, capacity);
+    g_audio_ra.adopt_pending = false;
+    g_audio_ra.want_stream = false;
+    if (g_audio_ra.ring.valid()) {
+        msu1_set_audio_prefetch(msu3dsAudioReadaheadRead);
+        msu1_set_audio_notify(ra_on_stream_change);
+    }
+}
+
+void msu3dsAudioReadaheadStop(void)
+{
+    msu1_set_audio_prefetch(nullptr);
+    msu1_set_audio_notify(nullptr);
+    ra_close_decoder();
+    ra_lock();
+    g_audio_ra.ring.init(nullptr, 0);
+    ra_unlock();
+}
+
+uint32_t msu3dsAudioReadaheadRead(uint32_t pos, uint8_t* dst, uint32_t count, bool* alive)
+{
+    ra_lock();
+    uint32_t got = g_audio_ra.ring.serve(pos, dst, count, alive);
+    ra_unlock();
+    return got;
+}
+
+void msu3dsAudioReadaheadTick(void)
+{
+    if (!g_audio_ra.ring.valid()) { return; }
+
+    ra_lock();
+    bool adopt = g_audio_ra.adopt_pending;
+    g_audio_ra.adopt_pending = false;
+    bool want = g_audio_ra.want_stream;
+    bool is_flac = g_audio_ra.is_flac;
+    char path[sizeof(g_audio_ra.path)];
+    memcpy(path, g_audio_ra.path, sizeof(path));
+    ra_unlock();
+
+    if (adopt) {
+        if (!want) {
+            ra_close_decoder();
+            return;
+        }
+        if (strcmp(g_audio_ra.open_path, path) != 0) {
+            ra_close_decoder();
+            if (is_flac) {
+                g_audio_ra.flac = drflac_open_file(path, NULL);
+            } else {
+                g_audio_ra.pcm = fopen(path, "rb");
+            }
+            if (g_audio_ra.pcm == nullptr && g_audio_ra.flac == nullptr) {
+                ra_lock();
+                g_audio_ra.ring.producer_ok = false;
+                ra_unlock();
+                return;
+            }
+            memcpy(g_audio_ra.open_path, path, sizeof(g_audio_ra.open_path));
+            g_audio_ra.decoder_pos = UINT32_MAX;
+        }
+    }
+    if (!want) { return; }
+
+    // Fill until the ring is full or the consumer resets under us. Each
+    // chunk is seam-bounded by the ring, so the decoder jump to the loop
+    // point happens exactly once per lap - here, off the mixer thread.
+    while (true) {
+        ra_lock();
+        // A notify landed mid-fill: the decoder no longer matches the
+        // stream, so every further byte it produces would be the OLD
+        // track tagged with NEW positions. Stop; the next tick adopts.
+        bool stream_changed = g_audio_ra.adopt_pending;
+        uint32_t chunk = g_audio_ra.ring.producer_chunk(AUDIO_READAHEAD_SCRATCH);
+        uint32_t ppos  = g_audio_ra.ring.prod_pos;
+        uint32_t gen   = g_audio_ra.ring.gen;
+        ra_unlock();
+        if (stream_changed || chunk == 0) { break; }
+
+        if (g_audio_ra.decoder_pos != ppos) {
+            if (!ra_decoder_seek(ppos)) {
+                ra_lock();
+                g_audio_ra.ring.producer_ok = false;
+                ra_unlock();
+                break;
+            }
+        }
+        uint32_t got = ra_decoder_read(g_audio_ra.scratch, chunk);
+        if (got == 0) {
+            // short file or persistent decode error: the stream cannot
+            // reach audio_size, so stall the track out honestly
+            ra_lock();
+            if (g_audio_ra.ring.gen == gen) { g_audio_ra.ring.producer_ok = false; }
+            ra_unlock();
+            break;
+        }
+        g_audio_ra.decoder_pos += got;
+
+        ra_lock();
+        if (g_audio_ra.ring.gen == gen) {
+            g_audio_ra.ring.append(g_audio_ra.scratch, got);
+            g_audio_ra.ring.producer_ok = true;
+            // the append may have wrapped prod_pos at the seam; the next
+            // loop iteration sees decoder_pos != prod_pos and seeks
+        } else {
+            // consumer reset raced this chunk: drop it and resync
+            g_audio_ra.decoder_pos = UINT32_MAX;
+        }
+        ra_unlock();
     }
 }

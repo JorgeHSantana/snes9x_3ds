@@ -27,6 +27,27 @@ SSND3DS snd3DS;
 static u32  oldCpuLimit      = UINT32_MAX;
 static bool oldCpuLimitSaved = false;
 
+// MSU-1 audio read-ahead (issue #55): the producer decodes on this thread,
+// below the mixer's priority on the same core, so FLAC loop seeks stall
+// neither the mixer nor the emulation core. 384KB of ring = ~2.2s of PCM,
+// deep enough to play through the worst observed loop seek.
+#define SND3DS_MSU_READAHEAD_BYTES  (384 * 1024)
+static LightLock msuRaLock;
+static Thread    msuRaThread = NULL;
+static volatile bool terminateMsuRaThread = false;
+static uint8_t*  msuRaStorage = NULL;
+static void msuRaLockFn(void)   { LightLock_Lock(&msuRaLock); }
+static void msuRaUnlockFn(void) { LightLock_Unlock(&msuRaLock); }
+
+static void msuRaThreadFn(void*)
+{
+    while (!terminateMsuRaThread)
+    {
+        msu3dsAudioReadaheadTick();
+        svcSleepThread(8 * 1000 * 1000LL);
+    }
+}
+
 static u32 snd3dsO3dsCpuLimit()
 {
     return Settings.MSU1 ? SND3DS_O3DS_CPU_LIMIT_MSU : SND3DS_O3DS_CPU_LIMIT;
@@ -372,6 +393,30 @@ bool snd3dsInitialize()
         return false;
     }
 
+    LightLock_Init(&msuRaLock);
+    msu3dsAudioReadaheadLocks(msuRaLockFn, msuRaUnlockFn);
+    msuRaStorage = (uint8_t*)malloc(SND3DS_MSU_READAHEAD_BYTES);
+    if (msuRaStorage != NULL)
+    {
+        msu3dsAudioReadaheadInit(msuRaStorage, SND3DS_MSU_READAHEAD_BYTES);
+        terminateMsuRaThread = false;
+        msuRaThread = threadCreate(msuRaThreadFn, NULL, 0x4000, 0x28, coreId, false);
+        if (msuRaThread == NULL)
+        {
+            // no producer = no prefetch hook: the core keeps its
+            // direct-decode path, today's behavior
+            msu3dsAudioReadaheadStop();
+            free(msuRaStorage);
+            msuRaStorage = NULL;
+            log3dsWrite("MSU read-ahead thread unavailable, direct decode");
+        }
+        else
+        {
+            log3dsWrite("MSU read-ahead ready: %dKB ring on core %d",
+                        SND3DS_MSU_READAHEAD_BYTES / 1024, coreId);
+        }
+    }
+
     // Signal once to make the mixer fill+queue all wavebufs
     LightEvent_Signal(&snd3DS.ndspFrameEvent);
 
@@ -388,6 +433,8 @@ bool snd3dsInitialize()
 //---------------------------------------------------------
 void snd3dsFinalize()
 {
+    terminateMsuRaThread = true;   // joined below, after the mixer stops
+
     snd3DS.terminateMixingThread = true;
 
     // Wake the mixer so it observes terminateMixingThread and exits,
@@ -400,6 +447,21 @@ void snd3dsFinalize()
         threadJoin(snd3DS.mixingThread, 1000 * 1000000);
         threadFree(snd3DS.mixingThread);
         snd3DS.mixingThread = NULL;
+    }
+
+    // Producer teardown only after the mixer is gone: the mixer's fill
+    // path reads the ring through the msu1 prefetch hook until it exits.
+    if (msuRaThread)
+    {
+        threadJoin(msuRaThread, 1000 * 1000000);
+        threadFree(msuRaThread);
+        msuRaThread = NULL;
+    }
+    if (msuRaStorage != NULL)
+    {
+        msu3dsAudioReadaheadStop();
+        free(msuRaStorage);
+        msuRaStorage = NULL;
     }
 
     if (snd3DS.audioType == 2)

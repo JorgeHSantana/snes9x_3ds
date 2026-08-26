@@ -139,6 +139,8 @@ Msu1Result msu1_init(Msu1State& state, const char* rom_path)
     return Msu1Result::Ok;
 }
 
+static void msu1_audio_notify(const Msu1State& state);
+
 void msu1_shutdown(Msu1State& state)
 {
     if (state.data_file != nullptr)  { fclose(state.data_file); }
@@ -147,6 +149,7 @@ void msu1_shutdown(Msu1State& state)
     void (*saved_cb)(void) = state.volume_changed_cb;   // survives ROM switches
     state = Msu1State{};
     state.volume_changed_cb = saved_cb;
+    msu1_audio_notify(state);
 }
 
 void msu1_soft_reset(Msu1State& state)
@@ -164,6 +167,7 @@ void msu1_soft_reset(Msu1State& state)
     if (state.data_file != nullptr) { fseek(state.data_file, 0, SEEK_SET); state.data_file_pos = 0; }
     state.data_pos = 0;
     // keeps: data_file, data_size, enabled, base_path, volume, volume_changed_cb
+    msu1_audio_notify(state);
 }
 
 static const uint8_t MSU1_ID[6] = { 'S', '-', 'M', 'S', 'U', '1' };
@@ -180,6 +184,10 @@ static Msu1State* g_defer_state = nullptr;
 
 static void (*g_log_hook)(const char*) = nullptr;
 static uint32_t (*g_data_prefetch)(uint32_t, uint8_t*, uint32_t) = nullptr;
+static uint32_t (*g_audio_prefetch)(uint32_t, uint8_t*, uint32_t, bool*) = nullptr;
+static void (*g_audio_notify)(const Msu1State*) = nullptr;
+static void msu1_audio_notify(const Msu1State& state)
+{ if (g_audio_notify != nullptr) { g_audio_notify(&state); } }
 static bool g_frame_torn = false;
 void msu1_mark_frame_torn(void) { g_frame_torn = true; }
 static uint32_t g_visible_vram_writes = 0;
@@ -217,6 +225,9 @@ bool msu1_consume_frame_torn(void)
 }
 void msu1_set_data_prefetch(uint32_t (*read)(uint32_t pos, uint8_t* dst, uint32_t count))
 { g_data_prefetch = read; }
+void msu1_set_audio_prefetch(uint32_t (*read)(uint32_t pos, uint8_t* dst, uint32_t count, bool* alive))
+{ g_audio_prefetch = read; }
+void msu1_set_audio_notify(void (*fn)(const Msu1State* state)) { g_audio_notify = fn; }
 void msu1_set_log_hook(void (*log)(const char* message)) { g_log_hook = log; }
 
 void msu1_diag(const char* fmt, ...)
@@ -459,6 +470,7 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
         case 5:
             state.track_latch = (uint16_t)((state.track_latch & 0x00FFu) | ((uint16_t)value << 8));
             msu1_load_track(state, state.track_latch);
+            msu1_audio_notify(state);
             return;
         case 6:
             if ((state.volume == 0) != (value == 0)) {
@@ -492,6 +504,7 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
                     state.resume_track = state.current_track;
                     state.resume_pos   = state.audio_play_pos;
                 }
+                msu1_audio_notify(state);
                 return;
             }
             // play: bit 2 resumes the stored position when it belongs to this
@@ -502,10 +515,16 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
                 && state.resume_pos <= state.audio_size) {
                 start_pos = state.resume_pos;
             }
-            if (msu1_audio_seek(state, start_pos)) {
+            // With the read-ahead active the core decoder stays cold: the
+            // producer does the (possibly expensive) positioning off-thread.
+            bool seek_ok = (g_audio_prefetch != nullptr)
+                ? (start_pos <= state.audio_size)
+                : msu1_audio_seek(state, start_pos);
+            if (seek_ok) {
                 state.audio_play_pos = start_pos;
                 state.status |= MSU1_FLAG_AUDIO_PLAYING;
             }
+            msu1_audio_notify(state);
             return;
         }
         default: return;
@@ -530,7 +549,8 @@ uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
                 }
                 uint32_t loop_bytes = state.audio_loop_point * MSU1_BYTES_PER_SAMPLE;
                 if (loop_bytes >= state.audio_size) { loop_bytes = 0; }   // defensive clamp
-                if (!msu1_audio_seek(state, loop_bytes)) {
+                if (g_audio_prefetch == nullptr
+                    && !msu1_audio_seek(state, loop_bytes)) {
                     state.status &= (uint8_t)~MSU1_FLAG_AUDIO_PLAYING;
                     break;
                 }
@@ -543,14 +563,27 @@ uint32_t msu1_read_audio(Msu1State& state, uint8_t* out, uint32_t max_bytes)
         }
         uint32_t chunk = max_bytes - written;
         if (chunk > remaining_in_track) { chunk = remaining_in_track; }
-        size_t got = msu1_audio_read_bytes(state, out + written, chunk);
+        size_t got;
+        bool prefetch_alive = false;
+        if (g_audio_prefetch != nullptr) {
+            got = g_audio_prefetch(state.audio_play_pos, out + written, chunk,
+                                   &prefetch_alive);
+        } else {
+            got = msu1_audio_read_bytes(state, out + written, chunk);
+        }
         if (got == 0) {
+            // Read-ahead catching up (track start, seek, loop refill): pad
+            // silence without burning the stall budget - the producer is
+            // alive and lands the data within a few fills.
+            if (g_audio_prefetch != nullptr && prefetch_alive) { break; }
             // Transient read failure (SD latency spike / hiccup): keep the
             // track alive, resync the stream, and let the caller pad silence.
             // Only a persistent failure stops playback.
             state.audio_read_stalls++;
-            if (state.audio_file != nullptr) { clearerr(state.audio_file); }
-            msu1_audio_seek(state, state.audio_play_pos);
+            if (g_audio_prefetch == nullptr) {
+                if (state.audio_file != nullptr) { clearerr(state.audio_file); }
+                msu1_audio_seek(state, state.audio_play_pos);
+            }
             if (state.audio_read_stalls == 1) {
                 msu1_diag("track %u: audio read stall at %u/%u",
                           (unsigned)state.current_track,
@@ -602,14 +635,16 @@ static Msu1Result msu1_restore_locked(Msu1State& state, const Msu1Snapshot& snap
     if ((state.status & MSU1_FLAG_AUDIO_ERROR) != 0) {
         return Msu1Result::FileMissing;
     }
-    if (snap.audio_play_pos <= state.audio_size
-        && msu1_audio_seek(state, snap.audio_play_pos)) {
+    bool pos_ok = (snap.audio_play_pos <= state.audio_size)
+        && (g_audio_prefetch != nullptr || msu1_audio_seek(state, snap.audio_play_pos));
+    if (pos_ok) {
         state.audio_play_pos = snap.audio_play_pos;
         state.status |= (uint8_t)(snap.status
                         & (MSU1_FLAG_AUDIO_PLAYING | MSU1_FLAG_AUDIO_REPEAT));
     }
     // invalid position: track stays loaded but stopped (defensive)
     if (state.volume_changed_cb != nullptr) { state.volume_changed_cb(); }
+    msu1_audio_notify(state);
     return Msu1Result::Ok;
 }
 
