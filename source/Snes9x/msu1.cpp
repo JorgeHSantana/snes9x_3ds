@@ -630,8 +630,15 @@ static Msu1Result msu1_restore_locked(Msu1State& state, const Msu1Snapshot& snap
         state.data_file_pos = dpos;
     }
 
-    // audio stream: reload the saved track from disk
-    msu1_load_track(state, snap.current_track);
+    // audio stream: reload from disk only when the track really changed -
+    // rewind restores overwhelmingly land on the same track, and reopening
+    // a FLAC there costs an audible gap (issue #55). Same track loaded =
+    // just clear the play bits like a fresh load would.
+    if (snap.current_track != state.current_track || !msu1_audio_ready(state)) {
+        msu1_load_track(state, snap.current_track);
+    } else {
+        state.status &= (uint8_t)~(MSU1_FLAG_AUDIO_PLAYING | MSU1_FLAG_AUDIO_REPEAT);
+    }
     if ((state.status & MSU1_FLAG_AUDIO_ERROR) != 0) {
         return Msu1Result::FileMissing;
     }

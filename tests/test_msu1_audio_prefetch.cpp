@@ -140,6 +140,26 @@ TEST_CASE("play validates the resume position without seeking the decoder")
     CHECK(buf[0] == pat(32));
 }
 
+TEST_CASE("same-track restore keeps the decoder handle open")
+{
+    TrackFixture t;   // no prefetch hook: the direct-decode path
+    REQUIRE(t.ok);
+    msu1_write_port(t.st, 7, 0x03);
+    uint8_t buf[64] = {};
+    CHECK(msu1_read_audio(t.st, buf, 24) == 24);
+
+    Msu1Snapshot snap = {};
+    msu1_capture(t.st, snap);
+    FILE* handle_before = t.st.audio_file;
+    REQUIRE(handle_before != nullptr);
+
+    CHECK(msu1_restore(t.st, snap) == Msu1Result::Ok);
+    CHECK(t.st.audio_file == handle_before);   // no reopen on same track
+    CHECK(t.st.audio_play_pos == 24);
+    CHECK((t.st.status & MSU1_FLAG_AUDIO_PLAYING) != 0);
+    CHECK(msu1_read_audio(t.st, buf, 8) == 8);
+}
+
 TEST_CASE("snapshot restore keeps its position with the prefetch active")
 {
     PrefetchGuard hook;
