@@ -1440,7 +1440,9 @@ void S9xAutoSaveSRAM (void)
 	file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".srm", "saves");
 
 	if (path[0] != '\0') {
+		u64 t0 = svcGetSystemTick();
 		Memory.SaveSRAM (path);
+		log3dsWrite("[sram] autosave: %ums", (unsigned)((svcGetSystemTick() - t0) / 268123));
 	}
 
     // instead of starting NDSP, we continue to mix 

@@ -87,10 +87,13 @@ void config3dsReadWriteInt32(BufferedFileWriter& stream, bool writeMode,
     }
     else
     {
-        // safe skip: provide a dummy to discard the read value
+        // safe skip: provide a dummy to discard the read value.
+        // A literal/comment format assigns nothing - fscanf returns 0 on a
+        // full match there, so requiring 1 would flag every comment line.
         int dummy = 0;
         int itemsRead = fscanf(stream.get(), format, &dummy);
-        if (itemsRead != 1) {
+        int expected = strchr(format, '%') ? 1 : 0;
+        if (itemsRead != expected) {
             config3dsLogParseMismatchOnce(format);
         }
     }
@@ -159,7 +162,8 @@ void config3dsReadWriteString(BufferedFileWriter& stream, bool writeMode,
         // CONFIG_BUF_SIZE should be large enough to hold whatever line we are skipping
         char dummy[CONFIG_BUF_SIZE];
         int itemsRead = fscanf(stream.get(), readFormat, dummy);
-        if (itemsRead != 1) {
+        int expected = strchr(readFormat, '%') ? 1 : 0;
+        if (itemsRead != expected) {
             config3dsLogParseMismatchOnce(readFormat);
         }
     }

@@ -322,6 +322,7 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             // 268MHz, where the freeze spans mixer callbacks). A blocked
             // mixer just waits a few ms on queued NDSP buffers - unlike
             // snd3dsDrainMixing, which would inject silence every capture.
+            u64 capStartTick = svcGetSystemTick();
             uint8_t *staging = s_ring.push_ptr();
             bool ok = false;
             if (staging != nullptr) {
@@ -331,6 +332,15 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             }
             if (ok) {
                 s_ring.push_commit(length, s_nowFrame);
+
+                // A capture that outruns the frame budget is a visible
+                // stutter - name it in the log so field reports can tell
+                // capture spikes from SRAM/SD writes.
+                uint32_t capMs = (uint32_t)((svcGetSystemTick() - capStartTick) / 268123);
+                if (capMs >= 8)
+                    log3dsWrite("[rewind] capture slow: %ums (%s, %uKB)", capMs,
+                        s_ring.at(0).kind == RewindDeltaRing::KIND_DELTA ? "delta" : "keyframe",
+                        (unsigned)(s_ring.at(0).len / 1024));
 
                 // calibration feed (log enabled only): real delta sizes
                 // and promotion rate decide pageSize/K for issue #37
