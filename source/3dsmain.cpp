@@ -2243,6 +2243,10 @@ bool emulatorLoadRom()
 
     settings3dsUpdate(true);
 
+    // MSU-1 games raise the mixer's syscore budget (FLAC decode); everyone
+    // else keeps the small share - see SND3DS_O3DS_CPU_LIMIT (issue #54).
+    snd3dsApplyCpuLimit();
+
     // reset hotkeys that conflict with the active circle pad binding
     bool cpadBound = settings3DS.UseGlobalButtonMappings ? settings3DS.GlobalBindCirclePad : settings3DS.BindCirclePad;
     for (int i = 0; i < HOTKEYS_COUNT; ++i)

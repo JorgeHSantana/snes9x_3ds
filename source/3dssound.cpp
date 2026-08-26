@@ -17,11 +17,20 @@
 
 SSND3DS snd3DS;
 
-// O3DS/O2DS syscore (core1) CPU budget for the mixing thread
-#define SND3DS_O3DS_CPU_LIMIT  45
+// O3DS/O2DS syscore (core1) CPU budget for the mixing thread.
+// The baseline must stay low: the OS serves GSP/vblank from the same core,
+// and a bigger app share stalls the emulation core ~1.5ms/frame (issue #54).
+// MSU-1 games get the larger share - FLAC decoding runs on the mixer thread.
+#define SND3DS_O3DS_CPU_LIMIT      30
+#define SND3DS_O3DS_CPU_LIMIT_MSU  45
 
 static u32  oldCpuLimit      = UINT32_MAX;
 static bool oldCpuLimitSaved = false;
+
+static u32 snd3dsO3dsCpuLimit()
+{
+    return Settings.MSU1 ? SND3DS_O3DS_CPU_LIMIT_MSU : SND3DS_O3DS_CPU_LIMIT;
+}
 static const int waveBufCounts[3] = { 4, 8, 16 };
 
 static inline int snd3dsWaveBufCountFromSetting()
@@ -340,7 +349,7 @@ bool snd3dsInitialize()
             APT_GetAppCpuTimeLimit(&oldCpuLimit);
 
             // core1 (syscore) via APT_SetAppCpuTimeLimit, fallback to core0
-            if (R_SUCCEEDED(APT_SetAppCpuTimeLimit(SND3DS_O3DS_CPU_LIMIT)))
+            if (R_SUCCEEDED(APT_SetAppCpuTimeLimit(snd3dsO3dsCpuLimit())))
             {
                 coreId = 1;
                 oldCpuLimitSaved = true;
@@ -348,7 +357,7 @@ bool snd3dsInitialize()
             else
                 coreId = 0;
 
-            log3dsWrite("snd3dsInit - SetAppCpuTimeLimit: %u (old: %u)", SND3DS_O3DS_CPU_LIMIT, oldCpuLimit);
+            log3dsWrite("snd3dsInit - SetAppCpuTimeLimit: %u (old: %u)", snd3dsO3dsCpuLimit(), oldCpuLimit);
         }
     }
 
@@ -415,7 +424,7 @@ void snd3dsFinalize()
 void snd3dsApplyCpuLimit()
 {
     if (oldCpuLimitSaved)
-        APT_SetAppCpuTimeLimit(SND3DS_O3DS_CPU_LIMIT);
+        APT_SetAppCpuTimeLimit(snd3dsO3dsCpuLimit());
 }
 
 void snd3dsRestoreCpuLimit()
