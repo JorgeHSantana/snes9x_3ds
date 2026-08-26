@@ -54,7 +54,9 @@ void settings3dsResetGlobalDefaults() {
     settings3DS.RewindCountdown = 2;   // 500ms steps
     settings3DS.RewindEnabled = 1;     // recording on out of the box (menu + hotkey)
     settings3DS.RewindMaxWindow = 2;   // keep everything the pools can hold
-    settings3DS.RewindMaxWait = 1;     // wait up to 2s for an idle frame
+    // Old 3DS runs closer to the frame budget, so a due capture rarely finds
+    // an idle frame quickly - give it the full 8s before forcing (issue #50).
+    settings3DS.RewindMaxWait = settings3DS.isNew3DS ? 1 : 3;
 
     settings3DS.UseGlobalEmuControlKeys = true;
     settings3DS.UseGlobalBindCirclePad = true;
