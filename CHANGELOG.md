@@ -4,6 +4,10 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
+* **MSU-1 audio read-ahead** (issue #55): a producer thread decodes FLAC
+  into a ~2s ring ahead of playback, so the mixer only copies samples.
+  Loops play gapless - the loop seek that used to gap the audio for up to
+  0.4s now runs off the hot path - and track changes stay clean.
 * **Rewind reaches minutes, not seconds**: captures are stored as page
   deltas against periodic keyframes (issue #37) - the same memory now
   holds up to ~1.5min of history on New 3DS (0.5s steps) and ~1min on
