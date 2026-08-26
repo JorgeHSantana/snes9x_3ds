@@ -24,6 +24,11 @@ Notable changes to this project will be documented in this file.
   bar, and no more screen blinks entering, leaving or confirming.
 
 ### Fixes
+* **Rewind captures no longer stutter the game** (issue #55): a capture
+  used to wait for the audio mixer's lock - tens of ms while MSU-1 FLAC
+  decodes, hundreds at a loop seek. It now retries next frame instead of
+  waiting, so captures always land in a lock-free window. Slow captures
+  and SRAM autosaves also log their duration for field diagnosis.
 * **Old 3DS speed regression fixed** (issue #54, e.g. Super Mario Kart):
   two independent causes found by hardware profiling. The Mode 7
   sub-to-main vertex reuse lost in an upstream fix is restored with a
