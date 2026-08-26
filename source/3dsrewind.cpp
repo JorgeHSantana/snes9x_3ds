@@ -237,6 +237,20 @@ void rewind3dsMsuDeferBegin()
     }
 }
 
+// Early apply for the resume countdown (user idea, 27/08): commits the
+// rewound MSU snapshot NOW so the read-ahead producer spends the 3-2-1
+// seeking the FLAC to the restored position - the music is already
+// flowing when play resumes. Mixing stays drained on purpose (the frozen
+// game must not sound during the count); the modal exit resumes it.
+void rewind3dsMsuApplyEarly()
+{
+    if (!s_msuDeferred) { return; }
+    snd3dsDrainMixing();
+    msu1_set_restore_deferred(false);
+    msu3dsOnEvent(Msu1Event::SavestateLoaded);
+    s_msuDeferred = false;
+}
+
 void rewind3dsMsuDeferEnd()
 {
     if (s_msuDeferred) {

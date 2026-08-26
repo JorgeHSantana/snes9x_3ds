@@ -282,6 +282,7 @@ void rewind3dsTimelineShow()
                         bottomRestored = true;
                         if (framesPerStep == 0) { committed = true; break; }
                         countdownStep = 3;
+                rewind3dsMsuApplyEarly();   // producer seeks during the count
                         countdownFrames = 0;
                     }
                     // restore failure: stay browsing; cancel reloads F0
@@ -423,6 +424,7 @@ void rewind3dsHoldShow()
         case 3: framesPerStep = 60; break;
         default: framesPerStep = 30; break;
     }
+    rewind3dsMsuApplyEarly();   // producer seeks during the count
     for (int step = 3; framesPerStep > 0 && step >= 1; step--) {
         char overlay[40];
         snprintf(overlay, sizeof(overlay), "Resuming in %d...", step);

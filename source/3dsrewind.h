@@ -12,6 +12,7 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent);
 // drops all snapshots (call when a different ROM is loaded)
 void rewind3dsReset();
 void rewind3dsFinalize();
+void rewind3dsMsuApplyEarly();
 
 // --- timeline (3dsrewindui.cpp) --------------------------------------------
 
