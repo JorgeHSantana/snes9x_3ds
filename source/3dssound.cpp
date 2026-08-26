@@ -20,9 +20,13 @@ SSND3DS snd3DS;
 // O3DS/O2DS syscore (core1) CPU budget for the mixing thread.
 // The baseline must stay low: the OS serves GSP/vblank from the same core,
 // and a bigger app share stalls the emulation core ~1.5ms/frame (issue #54).
-// MSU-1 games get the larger share - FLAC decoding runs on the mixer thread.
+// With the read-ahead producer decoding FLAC off the hot path, MSU-1 no
+// longer needs a larger share either: field-tested on Old 3DS (issue #55,
+// MMX3 Zero Project FLAC) - steady playback and loops run clean at 30, the
+// only blips being one-off ring adoptions at track change. Raise the MSU
+// value again if slow SD cards prove otherwise.
 #define SND3DS_O3DS_CPU_LIMIT      30
-#define SND3DS_O3DS_CPU_LIMIT_MSU  45
+#define SND3DS_O3DS_CPU_LIMIT_MSU  30
 
 static u32  oldCpuLimit      = UINT32_MAX;
 static bool oldCpuLimitSaved = false;
