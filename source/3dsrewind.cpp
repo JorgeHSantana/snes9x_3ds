@@ -312,23 +312,34 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
         else                                  loadBar = 50;
 
         if (frameLoadPercent <= loadBar) {
-            s_frameCounter = 0;
-            s_framesSinceCapture = 0;
             uint32 length = 0;   // snes9x's uint32 (int-based) != uint32_t here
 
             // Hold the mixer barrier for the freeze: the canonicalize+
             // restore inside S9xFreezeGameMem must never be visible to a
             // concurrent mix pass, or a channel loses a note (audible at
-            // 268MHz, where the freeze spans mixer callbacks). A blocked
-            // mixer just waits a few ms on queued NDSP buffers - unlike
-            // snd3dsDrainMixing, which would inject silence every capture.
+            // 268MHz, where the freeze spans mixer callbacks).
+            //
+            // TRY-lock, never wait: the mixer holds this lock for tens of
+            // ms while decoding MSU FLAC (hundreds at a loop seek), and a
+            // capture that waits stalls the whole game for that long
+            // (issue #55 field logs: lock 15-40ms typical, 385ms worst).
+            // A capture is opportunistic by design - on a busy mixer the
+            // schedule is left untouched so it retries next frame.
             u64 capStartTick = svcGetSystemTick();
             uint8_t *staging = s_ring.push_ptr();
             bool ok = false;
+            bool mixerBusy = false;
             if (staging != nullptr) {
-                LightLock_Lock(&snd3DS.snesAccessLock);
-                ok = S9xFreezeGameMem(staging, REWIND_SLOT_SIZE, &length);
-                LightLock_Unlock(&snd3DS.snesAccessLock);
+                if (LightLock_TryLock(&snd3DS.snesAccessLock) == 0) {
+                    ok = S9xFreezeGameMem(staging, REWIND_SLOT_SIZE, &length);
+                    LightLock_Unlock(&snd3DS.snesAccessLock);
+                } else {
+                    mixerBusy = true;
+                }
+            }
+            if (!mixerBusy) {
+                s_frameCounter = 0;
+                s_framesSinceCapture = 0;
             }
             if (ok) {
                 s_ring.push_commit(length, s_nowFrame);
