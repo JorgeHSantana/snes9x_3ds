@@ -3293,7 +3293,15 @@ void CMemory::ApplySpeedHackPatches()
 		if (allMatches)
 		{
 			*SNESGameFixes.SpeedHackSA1Address[n] = 0x42;
-			//printf ("Patched main: %x\n", SNESGameFixes.SpeedHackSA1SNESAddress[n]);
+			msu1_diag("SA1 speedhack applied at %06X",
+			          (unsigned)SNESGameFixes.SpeedHackSA1SNESAddress[n]);
+		}
+		else
+		{
+			// Translations and ROM hacks shift these bytes silently - the
+			// game then runs unhacked and slow (issue #57, DBZ HD pt-BR)
+			msu1_diag("SA1 speedhack SKIPPED at %06X (bytes differ)",
+			          (unsigned)SNESGameFixes.SpeedHackSA1SNESAddress[n]);
 		}
 	}
 
