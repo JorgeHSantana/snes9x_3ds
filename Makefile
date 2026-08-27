@@ -338,7 +338,7 @@ $(OUTPUT_FILE).3dsx : $(OUTPUT_FILE).elf $(_3DSXDEPS)
 	$(_3DSXTOOL) $< $@ $(_3DSXFLAGS)
 	@echo built ... $(notdir $@)
 
-$(OUTPUT_FILE).smdh : $(APP_ICON_IMAGE)
+$(OUTPUT_FILE).smdh : $(APP_ICON_IMAGE) $(TOPDIR)/$(APP_INFO)
 	@$(SMDHTOOL) --create "$(APP_TITLE)" "$(APP_DESCRIPTION)" "$(APP_AUTHOR)" $(APP_ICON_IMAGE) $@
 	@echo built ... $(notdir $@)
 
