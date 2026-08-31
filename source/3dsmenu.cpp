@@ -1414,6 +1414,48 @@ void menu3dsShowRomLoadingDialog(SMenuTab& dialogTab, bool& isDialog, int& curre
     }
 }
 
+// Compact busy dialog with a live progress bar (issue #64 downloads).
+// First call fades in; later calls just repaint bar and text - cheap
+// enough to run from a transfer callback.
+void menu3dsShowProgressDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, const std::string& title, const std::string& text, int dialogColor, int percent)
+{
+    const int dialogHeight = 96;
+
+    dialogBackColor = dialogColor;
+    dialogItemCount = 0;
+
+    SMenuTab *currentTab = &dialogTab;
+    currentTab->SetTitle(title);
+    currentTab->DialogText.assign(text);
+    currentTab->MenuItems.clear();
+    currentTab->FirstItemIndex = 0;
+    currentTab->SelectedItemIndex = 0;
+
+    int loadingDialogSteps = ANIMATE_DIALOG_STEPS;
+    int firstFrame = isDialog ? loadingDialogSteps : 0;
+    isDialog = true;
+
+    for (int f = firstFrame; f <= loadingDialogSteps; f++)
+    {
+        if (!aptMainLoop()) break;
+        menu3dsDrawLoadingDialog(dialogTab, currentMenuTab, menuTabs, f, dialogHeight, 0, loadingDialogSteps);
+
+        if (percent >= 0 && f == loadingDialogSteps)
+        {
+            // bar inside the dialog, under the text
+            int barX0 = 32, barX1 = settings3DS.SecondScreenWidth - 32;
+            int barY0 = dialogHeight - 26, barY1 = dialogHeight - 16;
+            int fill = barX0 + ((barX1 - barX0) * (percent > 100 ? 100 : percent)) / 100;
+            ui3dsSetTranslate(0, SCREEN_HEIGHT - dialogHeight);
+            ui3dsDrawRect(barX0, barY0, barX1, barY1, 0x000000, 0.35f);
+            if (fill > barX0)
+                ui3dsDrawRect(barX0, barY0, fill, barY1, 0xffffff, 0.9f);
+            ui3dsSetTranslate(0, 0);
+        }
+        menu3dsSwapBuffersAndWaitForVBlank();
+    }
+}
+
 void menu3dsHideDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, bool fadeOut)
 {
     if (!isDialog) {

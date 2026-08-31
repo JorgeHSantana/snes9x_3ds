@@ -122,6 +122,7 @@ static const char* apply3dsx(const char* url,
 {
     char self[512], temp[528], old[528];
     own3dsxPath(self, sizeof(self));
+    log3dsWrite("[upd] self path: '%s'", self);
     if (self[0] == 0)
         return "cannot locate the running .3dsx";
     snprintf(temp, sizeof(temp), "%s.upd", self);
@@ -137,22 +138,59 @@ static const char* apply3dsx(const char* url,
     }
 
     remove(old);
-    if (rename(self, old) != 0)
+    if (rename(self, old) == 0)
     {
-        static char stageErr[64];
-        snprintf(stageErr, sizeof(stageErr),
-                 "could not stage the old version (errno %d)", errno);
-        remove(temp);
-        return stageErr;
-    }
-    if (rename(temp, self) != 0)
-    {
+        if (rename(temp, self) == 0)
+        {
+            remove(old);
+            log3dsWrite("[upd] replaced %s", self);
+            return NULL;
+        }
         rename(old, self);      // roll back, keep a working emulator
-        remove(temp);
-        return "could not replace the .3dsx";
     }
-    remove(old);
-    log3dsWrite("[upd] replaced %s", self);
+    log3dsWrite("[upd] stage rename failed (errno %d), copy fallback: %s",
+                errno, self);
+
+    // Fallback: overwrite the file in place. Refuse if the path does not
+    // exist - writing would create a stray file and update nothing.
+    FILE* probe = fopen(self, "rb");
+    if (probe == NULL)
+    {
+        static char whereErr[96];
+        snprintf(whereErr, sizeof(whereErr),
+                 "running .3dsx not found: %.64s", self);
+        remove(temp);
+        return whereErr;
+    }
+    fclose(probe);
+
+    FILE* src = fopen(temp, "rb");
+    FILE* dst = fopen(self, "wb");
+    bool copied = (src != NULL && dst != NULL);
+    if (copied)
+    {
+        static unsigned char xfer[64 * 1024];
+        size_t got;
+        while ((got = fread(xfer, 1, sizeof(xfer), src)) > 0)
+        {
+            if (fwrite(xfer, 1, got, dst) != got)
+            {
+                copied = false;
+                break;
+            }
+        }
+    }
+    if (src != NULL) fclose(src);
+    if (dst != NULL) fclose(dst);
+    remove(temp);
+    if (!copied)
+    {
+        static char copyErr[96];
+        snprintf(copyErr, sizeof(copyErr),
+                 "could not overwrite: %.56s (errno %d)", self, errno);
+        return copyErr;
+    }
+    log3dsWrite("[upd] replaced by copy: %s", self);
     return NULL;
 }
 

@@ -911,6 +911,36 @@ static int *stereoEditField(int which) {
 static Update3dsCheck s_pendingAutoUpdate;
 static bool s_hasPendingAutoUpdate = false;
 
+// Live download feedback: the transfer callback repaints the progress
+// dialog every couple of percent.
+struct UpdateProgressUi
+{
+    SMenuTab* dialogTab;
+    bool* isDialog;
+    int* currentMenuTab;
+    std::vector<SMenuTab>* menuTabs;
+    int color;
+    int lastPct;
+};
+
+static bool updateProgressCb(void* user, unsigned done, unsigned total)
+{
+    UpdateProgressUi* ui = (UpdateProgressUi*)user;
+    if (total == 0)
+        return true;                    // no size yet - keep downloading
+    int pct = (int)((unsigned long long)done * 100u / total);
+    if (pct - ui->lastPct >= 2 || (pct == 100 && ui->lastPct != 100))
+    {
+        ui->lastPct = pct;
+        char line[64];
+        snprintf(line, sizeof(line), "Downloading the new build... %d%%", pct);
+        menu3dsShowProgressDialog(*ui->dialogTab, *ui->isDialog,
+            *ui->currentMenuTab, *ui->menuTabs, "Updating", line,
+            ui->color, pct);
+    }
+    return true;
+}
+
 // Offers 'chk' (a completed, update-available check), then downloads and
 // applies on consent. Runs inside the menu loop like any Action handler.
 static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab,
@@ -957,10 +987,12 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
                        "Update Available", text, true, true, 3))
         return;
 
-    menu3dsShowRomLoadingDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-        "Updating", "Downloading the new build...\nThis takes a minute on a slow connection.",
-        infoColor);
-    const char* err = updater3dsApply(chk.release, NULL, NULL);
+    menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+        "Updating", "Downloading the new build... 0%", infoColor, 0);
+    UpdateProgressUi progressUi = { &dialogTab, &isDialog, &currentMenuTab,
+                                    &menuTabs, infoColor, 0 };
+    const char* err = updater3dsApply(chk.release, updateProgressCb,
+                                      &progressUi);
     menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
 
     if (err != NULL)

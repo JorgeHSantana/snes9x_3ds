@@ -181,6 +181,7 @@ void menu3dsDrawBatteryAndVersion();
 // menu). Set before menu3dsShowDialog, clear right after.
 void menu3dsSetDialogBackdrop(const std::function<void()>& backdrop);
 void menu3dsClearDialogBackdrop();
+void menu3dsShowProgressDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, const std::string& title, const std::string& text, int dialogColor, int percent);
 void menu3dsShowRomLoadingDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, const std::string& title, const std::string& text, int dialogColor, const char* romName = nullptr);
 void menu3dsHideDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, bool fadeOut = true);
 
