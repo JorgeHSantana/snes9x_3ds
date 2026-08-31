@@ -274,7 +274,8 @@ typedef struct {
                                                // (BG0-3, OBJ, Backdrop, Color Math, Brightness).
                                                // All true by default.
 
-    int                 StereoDepth[5];        // Stereoscopic 3D depth per layer (BG1-4, Sprites),
+    int                 StereoDepth[5];        // Stereoscopic 3D depth per layer
+    int                 StereoDepthP1[5];      // priority-1 depth per layer (issue #60) (BG1-4, Sprites),
                                                // -8..+8: + pops out of the screen, - sinks into it.
                                                // Saved to sd:/3ds/snes9x_3ds/stereo3d/<rom>.3d
                                                // (shareable), NOT to the regular config.
@@ -297,6 +298,7 @@ typedef struct {
     struct SStereoProfile {
         char Name[16];
         int  Depth[5];
+        int  DepthP1[5];   // per-priority split (issue #60); mirrors Depth until edited
         int  Fade, Haze, Blur;
         int  FocusBack, FocusFront;
         int  EdgeMode;

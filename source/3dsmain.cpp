@@ -883,6 +883,12 @@ static bool stereoCopyFile(const char *src, const char *dst)
     return fclose(out) == 0 && ok;
 }
 
+static int *stereoEditDepthP1(int layer) {
+    if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount)
+        return &settings3DS.StereoProfiles[s_stereoEditIdx].DepthP1[layer];
+    return &settings3DS.StereoDepthP1[layer];
+}
+
 static int *stereoEditDepth(int layer) {
     if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount)
         return &settings3DS.StereoProfiles[s_stereoEditIdx].Depth[layer];
@@ -1497,6 +1503,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                             *p = settings3DS.StereoProfiles[s_stereoEditIdx];
                         } else {
                             for (int i = 0; i < 5; i++) p->Depth[i] = settings3DS.StereoDepth[i];
+                            for (int i = 0; i < 5; i++) p->DepthP1[i] = settings3DS.StereoDepthP1[i];
                             p->Fade = settings3DS.StereoFade; p->Haze = settings3DS.StereoHaze;
                             p->Blur = settings3DS.StereoBlur;
                             p->FocusBack = settings3DS.StereoFocusBack;
@@ -1610,12 +1617,22 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     if (gpu3dsIs3DAvailable()) {
         AddMenuHeader2(items, "Depth"_s);
 
-        static const char *stereoNames[5] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites" };
-        for (int l = 0; l < 5; l++) {
-            AddMenuGauge(items, stereoNames[l], -8, 8, *stereoEditDepth(l),
+        static const char *stereoNamesP0[4] = { "  BG1 Prio 0", "  BG2 Prio 0", "  BG3 Prio 0", "  BG4 Prio 0" };
+        static const char *stereoNamesP1[4] = { "  BG1 Prio 1", "  BG2 Prio 1", "  BG3 Prio 1", "  BG4 Prio 1" };
+        for (int l = 0; l < 4; l++) {
+            AddMenuGauge(items, stereoNamesP0[l], -8, 8, *stereoEditDepth(l),
                 [l]( int val ) { CheckAndUpdate( *stereoEditDepth(l), val ); }, true, true);
+            AddMenuGauge(items, stereoNamesP1[l], -8, 8, *stereoEditDepthP1(l),
+                [l]( int val ) { CheckAndUpdate( *stereoEditDepthP1(l), val ); }, true, true);
         }
+        AddMenuGauge(items, "  Sprites"_s, -8, 8, *stereoEditDepth(4),
+            []( int val ) {
+                CheckAndUpdate( *stereoEditDepth(4), val );
+                CheckAndUpdate( *stereoEditDepthP1(4), val );
+            }, true, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  + pops out of the screen, - sinks into it."_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Prio 0/1: a BG's two tile priorities can sit at"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  different depths (e.g. floor vs. detail planes)."_s, ""_s);
 
         AddMenuHeader2(items, "Focus"_s);
         AddMenuGauge(items, "  Back"_s, -8, 0, *stereoEditField(3),
@@ -2293,8 +2310,10 @@ static const char *stereoDepthKeys[5] = { "BG1", "BG2", "BG3", "BG4", "OBJ" };
 // not a user setting, and it is painful to re-mine.
 void settingsResetStereo3D()
 {
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 5; i++) {
         settings3DS.StereoDepth[i] = stereoDepthDefault[i];
+        settings3DS.StereoDepthP1[i] = stereoDepthDefault[i];
+    }
     settings3DS.StereoFade = 0;
     settings3DS.StereoHaze = 0;
     settings3DS.StereoBlur = 0;
@@ -2326,6 +2345,7 @@ void settingsLoadStereo3D()
     // keys route to the "current target": the flat default fields, or the
     // profile opened by the last PROFILE= line (issue #23)
     int *tDepth = settings3DS.StereoDepth;
+    int *tDepthP1 = settings3DS.StereoDepthP1;
     int *tFade = &settings3DS.StereoFade;
     int *tHaze = &settings3DS.StereoHaze;
     int *tBlur = &settings3DS.StereoBlur;
@@ -2349,9 +2369,11 @@ void settingsLoadStereo3D()
                     &settings3DS.StereoProfiles[settings3DS.StereoProfilesCount++];
                 snprintf(p->Name, sizeof(p->Name), "%s", name);
                 for (int i = 0; i < 5; i++) p->Depth[i] = stereoDepthDefault[i];
+                for (int i = 0; i < 5; i++) p->DepthP1[i] = stereoDepthDefault[i];
                 p->Fade = p->Haze = p->Blur = 0;
                 p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1;
-                tDepth = p->Depth; tFade = &p->Fade; tHaze = &p->Haze;
+                tDepth = p->Depth; tDepthP1 = p->DepthP1;
+                tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
                 tEdge = &p->EdgeMode;
             }
@@ -2381,10 +2403,16 @@ void settingsLoadStereo3D()
             continue;
         }
         for (int i = 0; i < 5; i++) {
-            char fmt[16];
+            char fmt[20];
             snprintf(fmt, sizeof(fmt), "%s=%%d", stereoDepthKeys[i]);
+            if (sscanf(line, fmt, &v) == 1) {
+                v = v < -8 ? -8 : (v > 8 ? 8 : v);
+                tDepth[i] = v;
+                tDepthP1[i] = v;    // mirrored until a P1 key overrides
+            }
+            snprintf(fmt, sizeof(fmt), "%sP1=%%d", stereoDepthKeys[i]);
             if (sscanf(line, fmt, &v) == 1)
-                tDepth[i] = v < -8 ? -8 : (v > 8 ? 8 : v);
+                tDepthP1[i] = v < -8 ? -8 : (v > 8 ? 8 : v);
         }
         if (sscanf(line, "FADE=%d", &v) == 1)
             *tFade = v < 0 ? 0 : (v > 8 ? 8 : v);
@@ -2407,6 +2435,8 @@ static void settingsWriteStereo3DGlobals(FILE *f)
     fprintf(f, "# snes9x_3ds stereoscopic 3D depths (-8..8): + pops out, - sinks in\n");
     for (int i = 0; i < 5; i++)
         fprintf(f, "%s=%d\n", stereoDepthKeys[i], settings3DS.StereoDepth[i]);
+    for (int i = 0; i < 5; i++)
+        fprintf(f, "%sP1=%d\n", stereoDepthKeys[i], settings3DS.StereoDepthP1[i]);
     fprintf(f, "# effects apply only outside the focus zone [FOCUSBACK..FOCUSFRONT],\n");
     fprintf(f, "# growing linearly with the distance to the zone edge (0..8 each):\n");
     fprintf(f, "# fade darkens / haze fogs behind it, blur smudges in both directions\n");
@@ -2452,6 +2482,8 @@ void settingsSaveStereo3D()
         fprintf(f, "PROFILE=%s\n", p->Name);
         for (int i = 0; i < 5; i++)
             fprintf(f, "%s=%d\n", stereoDepthKeys[i], p->Depth[i]);
+        for (int i = 0; i < 5; i++)
+            fprintf(f, "%sP1=%d\n", stereoDepthKeys[i], p->DepthP1[i]);
         fprintf(f, "FADE=%d\nHAZE=%d\nBLUR=%d\n", p->Fade, p->Haze, p->Blur);
         fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\n",
             p->FocusBack, p->FocusFront, p->EdgeMode);
