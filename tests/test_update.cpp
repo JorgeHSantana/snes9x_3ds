@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "3dsupdate.h"
 #include <cstring>
+#include <cstdio>
 
 // Fixtures mirror the real GitHub API shape: top-level "name" (release
 // title) appears before the assets array, and each asset object carries
