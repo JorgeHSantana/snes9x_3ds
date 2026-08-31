@@ -368,10 +368,16 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
     }
 
     if (state->shader == SPROGRAM_TILES &&
-        (shaderUpdated || GPU3DS.stereoParallaxApplied != GPU3DS.stereoParallax)) {
+        shaderUpdated) {
+        // resync after a shader bind: same triple and same composite key
+        // as gpu3dsSetStereoParallax3 - a second writer with the old
+        // single-float semantics zeroed P1/boundary and killed the 3D
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD],
-            GPU3DS.stereoParallax, 0.0f, 0.0f, 0.0f);
-        GPU3DS.stereoParallaxApplied = GPU3DS.stereoParallax;
+            GPU3DS.stereoParallax, GPU3DS.stereoParallaxP1,
+            GPU3DS.stereoParallaxBnd, 0.0f);
+        GPU3DS.stereoParallaxApplied = GPU3DS.stereoParallax +
+            GPU3DS.stereoParallaxP1 * 1024.0f +
+            GPU3DS.stereoParallaxBnd * 1048576.0f;
     }
 
     if (shaderUpdated && state->shader == SPROGRAM_MODE7) {

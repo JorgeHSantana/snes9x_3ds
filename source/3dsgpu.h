@@ -286,8 +286,10 @@ typedef struct
     // stereo layer parallax (SNES px per depth plane) for the CURRENT eye's
     // layer pass; 0 when 3D is off. applied* mirrors what the tiles shader
     // uniform last received (re-sent on change or shader rebind).
-    float                       stereoParallax;
-    float                       stereoParallaxApplied;
+    float                       stereoParallax;      // current P0 shift
+    float                       stereoParallaxP1;    // current P1 shift
+    float                       stereoParallaxBnd;   // current plane boundary
+    float                       stereoParallaxApplied;   // composite dedup key
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
     // false when the optional right-eye VRAM texture failed to allocate;
@@ -440,6 +442,8 @@ static inline void gpu3dsWaitForVBlank(gfxScreen_t screen) {
 static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary)
 {
     GPU3DS.stereoParallax = p0;
+    GPU3DS.stereoParallaxP1 = p1;
+    GPU3DS.stereoParallaxBnd = boundary;
     float key = p0 + p1 * 1024.0f + boundary * 1048576.0f;
     if (GPU3DS.stereoParallaxApplied == key)
         return;
