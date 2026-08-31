@@ -468,8 +468,13 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // mixed per-section rounding - half the layer moves, half
             // stays. One rounded value keeps the layer a single block.
             // Trade-off: the slider now steps through few discrete 3D
-            // levels. The continuous form below is kept for a possible
-            // return (e.g. half-pixel steps in the 512px render mode):
+            // levels. The continuous form below is kept for reference,
+            // but NEVER uncomment it as-is - raw fractional shifts bring
+            // the layer-splitting back. The working return path is
+            // quantizing in RENDER space: in the 512px mode half a SNES
+            // pixel is a whole render pixel, so rounding to 0.5 steps
+            // there doubles the slider levels with zero splitting (and
+            // the edge crop below must round the same way).
             // gpu3dsSetStereoParallax(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE);
             gpu3dsSetStereoParallax(roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE));
             gpu3dsSetStereoLayerAtmosphere(id);
