@@ -4,6 +4,13 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
+* **Self-updater** (issue #64): the emulator updates itself from the menu.
+  Settings tab > Updates: pick the channel (Stable or Nightly), check on
+  demand, or enable "Check on Startup" to be offered new builds on boot.
+  A 3DSX install replaces its own file on the SD card; a CIA install goes
+  through the system installer - both take effect on the next launch.
+  Downloads are verified (header + size) before anything is touched, and
+  a failed update never harms the running version.
 * **MSU-1 audio read-ahead** (issue #55): a producer thread decodes FLAC
   into a ~2s ring ahead of playback, so the mixer only copies samples.
   Loops play gapless - the loop seek that used to gap the audio for up to

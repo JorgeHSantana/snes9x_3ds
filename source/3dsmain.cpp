@@ -26,6 +26,8 @@
 #include "3dssound.h"
 #include "3dsmsu.h"
 #include "3dsrewind.h"
+#include "3dsupdater.h"
+#include "3dsupdatenet.h"
 #include "3dsmsu_ndsp.h"
 #include "3dsgpu.h"
 #include "3dsimpl.h"
@@ -884,6 +886,111 @@ static int *stereoEditField(int which) {
     }
 }
 
+//----------------------------------------------------------------------
+// Self-updater UI (issue #64). The check result from the boot-time auto
+// check parks here until showMenu can put a dialog on screen.
+//----------------------------------------------------------------------
+static Update3dsCheck s_pendingAutoUpdate;
+static bool s_hasPendingAutoUpdate = false;
+
+// Offers 'chk' (a completed, update-available check), then downloads and
+// applies on consent. Runs inside the menu loop like any Action handler.
+static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab,
+                            const Update3dsCheck& chk)
+{
+    SMenuTab dialogTab;
+    bool isDialog = false;
+    int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
+
+    char text[256];
+    snprintf(text, sizeof(text),
+             "%s\n\nThis build: %s\nNew build:  %s\n\nDownload and install now?%s",
+             chk.release.title, updater3dsRunningSha(), chk.release.sha,
+             updater3dsIsCia() ? "" :
+             "\n(The .3dsx on the SD card will be replaced.)");
+    if (!confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+                       "Update Available", text, true, true))
+        return;
+
+    menu3dsShowRomLoadingDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+        "Updating", "Downloading the new build...\nThis takes a minute on a slow connection.",
+        infoColor);
+    const char* err = updater3dsApply(chk.release, NULL, NULL);
+    menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+
+    if (err != NULL)
+    {
+        char msg[192];
+        snprintf(msg, sizeof(msg),
+                 "The update could not be applied:\n%s\n\nNothing was changed - "
+                 "the emulator you are running is intact.", err);
+        menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+            "Update Failed", msg,
+            Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn,
+            makeOptionsForOk());
+        menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+        return;
+    }
+
+    if (confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+            "Update Installed",
+            updater3dsIsCia()
+                ? "The new version is installed and runs on the\nnext launch. Exit the emulator now?"
+                : "The .3dsx was replaced and runs on the next\nlaunch. Exit the emulator now?",
+            true, true))
+    {
+        GPU3DS.emulatorState = EMUSTATE_END;
+    }
+}
+
+// "Check for Updates Now" - the interactive path.
+static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMenuTab)
+{
+    SMenuTab dialogTab;
+    bool isDialog = false;
+    int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
+
+    menu3dsShowRomLoadingDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+        "Updates", "Checking for updates...", infoColor);
+    Update3dsCheck chk;
+    if (update3dsNetInit())
+        updater3dsCheck(settings3DS.UpdateChannel, chk);
+    else
+    {
+        memset(&chk, 0, sizeof(chk));
+        snprintf(chk.error, sizeof(chk.error), "network unavailable");
+    }
+    menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+
+    if (!chk.ok)
+    {
+        char msg[160];
+        snprintf(msg, sizeof(msg), "Could not check for updates:\n%s", chk.error);
+        menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+            "Updates", msg,
+            Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn,
+            makeOptionsForOk());
+        menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+        return;
+    }
+
+    if (!chk.updateAvailable)
+    {
+        char msg[160];
+        snprintf(msg, sizeof(msg),
+                 "You are on the latest %s build (%s).",
+                 settings3DS.UpdateChannel == UPDATE3DS_CHANNEL_NIGHTLY
+                     ? "nightly" : "stable",
+                 updater3dsRunningSha());
+        menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+            "Updates", msg, infoColor, makeOptionsForOk());
+        menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+        return;
+    }
+
+    menuOfferUpdate(menuTabs, currentMenuTab, chk);
+}
+
 void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
     items.clear();
 
@@ -1479,6 +1586,24 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Deletes every profile and restores factory values."_s, ""_s);
     }
 
+    AddMenuDisabledOption(items, ""_s);
+    AddMenuHeader2(items, "Updates"_s);
+    {
+        char buildLine[64];
+        snprintf(buildLine, sizeof(buildLine), "  This build: %s (%s)",
+                 updater3dsRunningSha(), updater3dsIsCia() ? "CIA" : "3DSX");
+        items.emplace_back(nullptr, MenuItemType::Textarea, std::string(buildLine), ""_s);
+    }
+    AddMenuPicker(items, "  Update Channel"_s,
+        "Stable: tested releases, recommended.\nNightly: the newest build of every change -\nfor testing, may be unstable."_s,
+        makePickerOptions({"Stable", "Nightly"}), settings3DS.UpdateChannel, DIALOG_TYPE_INFO, true,
+        []( int val ) { CheckAndUpdate( settings3DS.UpdateChannel, val ); });
+    AddMenuCheckbox(items, "  Check on Startup"_s, settings3DS.UpdateAutoCheck,
+        []( int val ) { CheckAndUpdateToggle( settings3DS.UpdateAutoCheck, val ); });
+    items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+        menuCheckForUpdates(menuTabs, currentMenuTab);
+    }, MenuItemType::Action, "  Check for Updates Now"_s, ""_s);
+
 
 
 
@@ -1888,6 +2013,11 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     
     config3dsReadWriteEnum(stream, writeMode, "Font=%d\n", &settings3DS.Font, 0, 2);
     config3dsReadWriteEnum(stream, writeMode, "LogFileEnabled=%d\n", &settings3DS.LogFileEnabled, 0, 1);
+
+    if (writeMode || detectedConfigVersion >= 2.2f) {
+        config3dsReadWriteInt32(stream, writeMode, "UpdateChannel=%d\n", &settings3DS.UpdateChannel, 0, 1);
+        config3dsReadWriteEnum(stream, writeMode, "UpdateAutoCheck=%d\n", &settings3DS.UpdateAutoCheck, 0, 1);
+    }
 
     char formatBuf[64];
     snprintf(formatBuf, sizeof(formatBuf), "DefaultDir=%%%zu[^\n]\n", sizeof(settings3DS.defaultDir) - 1);
@@ -2734,6 +2864,12 @@ void showMenu() {
     bool runNextGame = false;
     SMenuTab dialogTab;
 
+    // boot-time auto check found a new build: offer it before anything else
+    if (s_hasPendingAutoUpdate) {
+        s_hasPendingAutoUpdate = false;
+        menuOfferUpdate(menuTabs, currentMenuTab, s_pendingAutoUpdate);
+    }
+
     if (g_menuProbeActive) {
         g_menuProbeActive = false;
         g_menuProbeCountdown = 600;          // re-arm the next round-trip
@@ -3194,7 +3330,21 @@ int main()
     gfxSetDoubleBuffering(settings3DS.SecondScreen, true);
 
     GPU3DS.emulatorState = tryAutoBoot() ? EMUSTATE_EMULATE : EMUSTATE_PAUSEMENU;
-    
+
+    // Boot-time auto update check (issue #64): only on a menu boot - an
+    // autobooted game should never wait on the network. The result parks
+    // in s_pendingAutoUpdate; showMenu offers it once dialogs exist.
+    if (GPU3DS.emulatorState == EMUSTATE_PAUSEMENU && settings3DS.UpdateAutoCheck)
+    {
+        menu3dsShowSplashMessage("Checking for updates");
+        if (update3dsNetInit())
+        {
+            updater3dsCheck(settings3DS.UpdateChannel, s_pendingAutoUpdate);
+            s_hasPendingAutoUpdate = s_pendingAutoUpdate.ok &&
+                                     s_pendingAutoUpdate.updateAvailable;
+        }
+    }
+
     while (aptMainLoop() && GPU3DS.emulatorState != EMUSTATE_END) {
         switch (GPU3DS.emulatorState) {
             case EMUSTATE_PAUSEMENU:
@@ -3211,7 +3361,8 @@ int main()
     log3dsWrite("==== EXIT emulator ====");
 
     menu3dsShowSplashMessage("Saving & Exiting");
-    
+
+    update3dsNetExit();
     settingsSave(settings3DS.isRomLoaded);
     impl3dsSaveStateAuto();
     impl3dsSaveCheats();

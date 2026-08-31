@@ -140,6 +140,7 @@ CPPFILES	:= Snes9x/cpuexec.cpp Snes9x/sa1cpu.cpp Snes9x/sa1.cpp \
 			png_utils.cpp 3dsutils.cpp 3dsmain.cpp 3dsmenu.cpp 3dsmsu.cpp 3dsrewind.cpp 3dsrewindui.cpp 3dsmsu_ndsp.cpp 3dstimer.cpp \
 			3dsgpu.cpp 3dssound.cpp 3dsfont.cpp 3dsui.cpp 3dsui_notif.cpp 3dsui_img.cpp 3dsexit.cpp \
 			3dsconfig.cpp 3dsfiles.cpp 3dsinput.cpp 3dslcd.cpp \
+			3dsupdate.cpp 3dsupdatenet.cpp 3dsupdater.cpp \
 			3dsimpl.cpp 3dsimpl_tilecache.cpp 3dsimpl_gpu.cpp 3dsthemes.cpp 3dssettings.cpp \
 			3dslog.cpp
 SFILES             := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
@@ -238,41 +239,54 @@ $(CITRO3D_LIB):
 	@echo ""
 
 
-all : $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+all : buildsha $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 
-3dsx : $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+3dsx : buildsha $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $@
 
 
-cia : $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+cia : buildsha $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $@
 
 
-3ds : $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+3ds : buildsha $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $@
 
 
-elf : $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+elf : buildsha $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $@
 
 
-citra : $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+citra : buildsha $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $@
 
 
-3dslink : $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+3dslink : buildsha $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $@
 
 
-release : $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+release : buildsha $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile OPT_FLAGS="$(RELEASE_OPT_FLAGS)" $@
 
 
 $(BUILD):
 	@mkdir -p $@
 	@mkdir -p $@/Snes9x
+
+# Embed the running build's short git sha for the self-updater (issue #64).
+# Write-if-changed so a new commit only rebuilds the files that include it;
+# BUILD_GIT_SHA=xxxxxxx overrides for environments without a usable git.
+.PHONY: buildsha
+buildsha:
+	@mkdir -p $(BUILD)
+	@sha="$(BUILD_GIT_SHA)"; \
+	 if [ -z "$$sha" ]; then sha=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo 0000000); fi; \
+	 printf '#define BUILD_GIT_SHA "%s"\n' "$$sha" > $(BUILD)/3dsbuildsha.h.tmp; \
+	 if cmp -s $(BUILD)/3dsbuildsha.h.tmp $(BUILD)/3dsbuildsha.h 2>/dev/null; then \
+	   rm $(BUILD)/3dsbuildsha.h.tmp; \
+	 else mv $(BUILD)/3dsbuildsha.h.tmp $(BUILD)/3dsbuildsha.h; fi
 
 
 $(GFXBUILD):

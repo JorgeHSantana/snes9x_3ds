@@ -156,6 +156,10 @@ typedef struct {
     bool LogFileEnabled;    // Write logs to sdmc:/3ds/snes9x_3ds/debug_<APP_VERSION>_session.log
     int CurrentSaveSlot;    // remember last used save slot (1 - 5)
 
+    // --- SELF-UPDATER (issue #64) ---
+    int UpdateChannel;      // 0 = stable releases, 1 = nightly builds
+    bool UpdateAutoCheck;   // check for a new build when the emulator starts
+
     // --- FILE MENU ---
     char defaultDir[PATH_MAX];
     char lastSelectedDir[PATH_MAX];
