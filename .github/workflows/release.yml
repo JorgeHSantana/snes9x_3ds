@@ -34,7 +34,7 @@ jobs:
       - name: Build .cia/.3dsx (devkitARM container)
         run: |
           docker run --rm -v "$PWD":/snes9x_3ds -w /snes9x_3ds \
-            devkitpro/devkitarm bash -c "make clean && make release"
+            devkitpro/devkitarm bash -c "make clean && make release BUILD_GIT_SHA=${GITHUB_SHA::7}"
           ls -la output/snes9x_3ds.cia output/snes9x_3ds.3dsx
 
       - name: Backfill release notes (idempotent)
