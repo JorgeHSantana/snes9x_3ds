@@ -1462,6 +1462,18 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         AddMenuDisabledOption(items, ""_s);
     }
 
+    // Stereoscopic 3D lives in its own tab (issue #61); leave a signpost
+    if (gpu3dsIs3DAvailable() && settings3DS.isRomLoaded) {
+        AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Moved to the 3D tab (press R)."_s, ""_s);
+    }
+
+    AddMenuDisabledOption(items, ""_s);
+};
+
+void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
+    items.clear();
+
     AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
     items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s, ""_s);
     AddMenuDisabledOption(items, ""_s);
@@ -1794,15 +1806,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Deletes every profile and restores factory values."_s, ""_s);
     }
 
-
-
-
-
-
-
-
-
-        AddMenuDisabledOption(items, ""_s);
+    AddMenuDisabledOption(items, ""_s);
 };
 
 void makeControlsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
@@ -2753,8 +2757,12 @@ static void fileMenuIdleTick() {
 
 void setupMenu(int& currentMenuTab) {
     menu3dsSetIdleCallback(fileMenuIdleTick);
-    int requiredTabs = settings3DS.isRomLoaded ? 5 : 2;
-    int fileMenuTabIndex = settings3DS.isRomLoaded ? 4 : 1;
+    // the 3D tab only exists with a game loaded on 3D-capable hardware;
+    // it sits between Cheats and Load Game so every existing positional
+    // TAB_* comparison stays valid (TAB_3D == position 4)
+    bool tab3d = settings3DS.isRomLoaded && gpu3dsIs3DAvailable();
+    int requiredTabs = settings3DS.isRomLoaded ? (tab3d ? 6 : 5) : 2;
+    int fileMenuTabIndex = requiredTabs - 1;
     bool isFirstRun = menuTabs.empty();
     bool requiredTabsChanged = menuTabs.size() != static_cast<size_t>(requiredTabs);
     bool romChanged = !isFirstRun && Memory.ROMCRC32 != lastLoadedRomCRC;
@@ -2767,7 +2775,9 @@ void setupMenu(int& currentMenuTab) {
 
     const char* tabsStart[] = { "Emulator", "Load Game" };
     const char* tabsGame[] = { "Emulator", "Settings", "Controls", "Cheats", "Load Game" };
-    const char** tabs = settings3DS.isRomLoaded ? tabsGame : tabsStart;
+    const char* tabsGame3d[] = { "Emulator", "Settings", "Controls", "Cheats", "3D", "Load Game" };
+    const char** tabs = settings3DS.isRomLoaded ? (tab3d ? tabsGame3d : tabsGame)
+                                                : tabsStart;
 
     for (int i = 0; i < requiredTabs; i++) {
         if (i != fileMenuTabIndex) {
@@ -2790,6 +2800,9 @@ void setupMenu(int& currentMenuTab) {
                     break;
                 case 3:
                     makeCheatMenu(menuTabs[i].MenuItems);
+                    break;
+                case TAB_3D:
+                    makeStereo3dMenu(menuTabs[i].MenuItems, menuTabs, currentMenuTab);
                     break;
             }
 
