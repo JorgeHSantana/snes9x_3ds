@@ -16,6 +16,7 @@
 S9xSettings3DS settings3DS;
 
 void settings3dsResetGlobalDefaults() {
+    settings3DS.StereoShiftMode = 0;   // discrete: whole pixels (global preference)
     settings3DS.RootDir = "sdmc:/3ds/snes9x_3ds";
     
     memset(settings3DS.defaultDir, 0, sizeof(settings3DS.defaultDir));
@@ -428,7 +429,8 @@ void settings3dsStereoApplyDefault()
     for (int i = 0; i < 5; i++) depths[i] = (float)p->Depth[i];
     for (int i = 0; i < 5; i++) depthsP1[i] = (float)p->DepthP1[i];
     settings3dsStereoApplyValues(depths, depthsP1, (float)p->Fade, (float)p->Haze,
-        (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront, p->EdgeMode);
+        (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
+        settings3DS.StereoEdgeMode);   // edge is game-global (Jorge's UX)
 }
 
 // called once per emulated frame while in-game
@@ -573,7 +575,7 @@ static float s_fromDepthsP1[5];
         for (int i = 0; i < 5; i++)
             fx[i] = s_fromFx[i] + (fx[i] - s_fromFx[i]) * t;
         settings3dsStereoApplyValues(depths, depthsP1, fx[0], fx[1], fx[2], fx[3], fx[4],
-            p->EdgeMode);
+            settings3DS.StereoEdgeMode);
     }
 }
 

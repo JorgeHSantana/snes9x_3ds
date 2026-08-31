@@ -1479,6 +1479,24 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     AddMenuDisabledOption(items, ""_s);
 
     if (gpu3dsIs3DAvailable()) {
+        AddMenuHeader2(items, "Settings"_s);
+        AddMenuPicker(items, "  Slider Response"_s,
+            "Discrete: shifts snap to whole pixels - layers always move\nas one solid block, but the slider steps through few levels.\nContinuous: smooth analog response; at partial slider a layer\ncan visibly split. At FULL slider both modes are identical."_s,
+            makePickerOptions({"Discrete (solid layers)", "Continuous (smooth)"}),
+            settings3DS.StereoShiftMode, DIALOG_TYPE_INFO, true,
+            []( int val ) { CheckAndUpdate( settings3DS.StereoShiftMode, val ); });
+        AddMenuPicker(items, "  Edge Cleanup"_s,
+            "The per-layer parallax corrupts a few columns at the screen\nedges. Trim narrows the game window (scale kept); Zoom crops\nthem away, absorbed by the stretch; Off shows the raw edges.\nApplies to the whole game - every layer, every profile."_s,
+            makePickerOptions({"Off", "Trim", "Zoom"}), settings3DS.StereoEdgeMode, DIALOG_TYPE_INFO, true,
+            []( int val ) {
+                if (CheckAndUpdate( settings3DS.StereoEdgeMode, val )) {
+                    settings3DS.isDirty = true;
+                    settings3dsStereoApplyDefault();
+                    menu3dsSetScreenDirty();
+                }
+            });
+        AddMenuDisabledOption(items, ""_s);
+
         AddMenuHeader2(items, "Scene Profiles"_s);
 
         if (s_stereoEditIdx >= settings3DS.StereoProfilesCount)
@@ -1634,12 +1652,6 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Prio 0/1: a BG's two tile priorities can sit at"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  different depths (e.g. floor vs. detail planes)."_s, ""_s);
 
-        AddMenuPicker(items, "  Slider Response"_s,
-            "Discrete: shifts snap to whole pixels - layers always move\nas one solid block, but the slider steps through few levels.\nContinuous: smooth analog response; at partial slider a layer\ncan visibly split (fractional pixels)."_s,
-            makePickerOptions({"Discrete (solid layers)", "Continuous (smooth)"}),
-            settings3DS.StereoShiftMode, DIALOG_TYPE_INFO, true,
-            []( int val ) { CheckAndUpdate( settings3DS.StereoShiftMode, val ); });
-
         AddMenuHeader2(items, "Focus"_s);
         AddMenuGauge(items, "  Back"_s, -8, 0, *stereoEditField(3),
             []( int val ) { CheckAndUpdate( *stereoEditField(3), val ); }, true);
@@ -1659,11 +1671,6 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             []( int val ) { CheckAndUpdate( *stereoEditField(2), val ); }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Smudges layers outside the zone, back and front."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Enabling it may cause small image artifacts."_s, ""_s);
-        AddMenuPicker(items, "  Edge Cleanup"_s,
-            "The per-layer parallax corrupts a few columns at the screen\nedges. Trim narrows the game window (scale kept); Zoom crops\nthem away, absorbed by the stretch; Off shows the raw edges."_s,
-            makePickerOptions({"Off", "Trim", "Zoom"}), *stereoEditField(5), DIALOG_TYPE_INFO, true,
-            []( int val ) { CheckAndUpdate( *stereoEditField(5), val ); });
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Hides the screen-edge columns disturbed by the 3D shifts."_s, ""_s);
 
         AddMenuDisabledOption(items, ""_s);
         AddMenuHeader2(items, "Tools"_s);
@@ -2324,7 +2331,7 @@ void settingsResetStereo3D()
         settings3DS.StereoDepth[i] = stereoDepthDefault[i];
         settings3DS.StereoDepthP1[i] = stereoDepthDefault[i];
     }
-    settings3DS.StereoShiftMode = 0;   // discrete: whole pixels
+
     settings3DS.StereoFade = 0;
     settings3DS.StereoHaze = 0;
     settings3DS.StereoBlur = 0;
