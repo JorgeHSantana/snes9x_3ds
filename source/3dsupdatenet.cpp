@@ -1,14 +1,24 @@
+// Self-updater HTTP shell over curl + mbedtls (issue #64).
+//
+// The console's own SSL module cannot complete a TLS handshake with
+// GitHub any more (its cipher suites predate GitHub's ECDHE-only policy;
+// field-confirmed as httpc error d8a0a03c on an Old 3DS), so this links
+// its own TLS stack - the same route Universal-Updater takes. curl also
+// follows the release-asset CDN redirects for us.
+
 #include <3ds.h>
+#include <curl/curl.h>
+#include <malloc.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "3dsupdatenet.h"
 #include "3dslog.h"
 
-#define NET_MAX_REDIRECTS   8
-#define NET_CHUNK_SIZE      (64 * 1024)
+#define SOC_BUFFER_SIZE  0x100000     // SOC service requirement: 1MB, 4K-aligned
 
 static bool netReady = false;
+static u32* socBuffer = NULL;
 static char netLastError[96] = "";
 
 const char* update3dsNetLastError()
@@ -16,10 +26,10 @@ const char* update3dsNetLastError()
     return netLastError;
 }
 
-static void netFail(const char* stage, Result rc)
+static void netFail(const char* stage, CURLcode code)
 {
-    snprintf(netLastError, sizeof(netLastError), "%s (%08lx)", stage,
-             (unsigned long)rc);
+    snprintf(netLastError, sizeof(netLastError), "%s (%d %s)", stage,
+             (int)code, curl_easy_strerror(code));
     log3dsWrite("[upd] %s", netLastError);
 }
 
@@ -27,87 +37,73 @@ bool update3dsNetInit()
 {
     if (netReady)
         return true;
-    // 0 = default shared-memory size for the service's buffers
-    netReady = R_SUCCEEDED(httpcInit(0));
-    if (!netReady)
-        log3dsWrite("[upd] httpcInit failed");
-    return netReady;
+
+    socBuffer = (u32*)memalign(0x1000, SOC_BUFFER_SIZE);
+    if (socBuffer == NULL)
+    {
+        snprintf(netLastError, sizeof(netLastError), "soc buffer alloc");
+        return false;
+    }
+    Result rc = socInit(socBuffer, SOC_BUFFER_SIZE);
+    if (R_FAILED(rc))
+    {
+        snprintf(netLastError, sizeof(netLastError), "socInit (%08lx)",
+                 (unsigned long)rc);
+        log3dsWrite("[upd] %s", netLastError);
+        free(socBuffer);
+        socBuffer = NULL;
+        return false;
+    }
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    netReady = true;
+    return true;
 }
 
 void update3dsNetExit()
 {
-    if (netReady)
-        httpcExit();
+    if (!netReady)
+        return;
+    curl_global_cleanup();
+    socExit();
+    free(socBuffer);
+    socBuffer = NULL;
     netReady = false;
 }
 
-// Opens 'url' following redirects; on success the context is live and
-// ready to download from. Returns NULL or a static error string.
-static const char* netOpen(httpcContext* ctx, const char* url)
+// Common transfer setup. The console has no usable CA store, so peer
+// verification stays off - integrity is re-checked by the image verify.
+static void netSetup(CURL* c, const char* url)
 {
-    char current[UPDATE3DSNET_URL_BUF];
-    snprintf(current, sizeof(current), "%s", url);
+    curl_easy_setopt(c, CURLOPT_URL, url);
+    curl_easy_setopt(c, CURLOPT_USERAGENT, "snes9x_3ds-updater");
+    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(c, CURLOPT_MAXREDIRS, 8L);
+    curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 15L);
+    curl_easy_setopt(c, CURLOPT_LOW_SPEED_LIMIT, 128L);
+    curl_easy_setopt(c, CURLOPT_LOW_SPEED_TIME, 20L);
+    curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(c, CURLOPT_BUFFERSIZE, 65536L);
+    curl_easy_setopt(c, CURLOPT_FAILONERROR, 1L);
+}
 
-    for (int hop = 0; hop < NET_MAX_REDIRECTS; hop++)
-    {
-        Result rc = httpcOpenContext(ctx, HTTPC_METHOD_GET, current, 1);
-        if (R_FAILED(rc))
-        {
-            netFail("open", rc);
-            return "connection open failed";
-        }
+struct MemSink
+{
+    char*  buf;
+    size_t cap;
+    size_t len;
+};
 
-        // GitHub's cert chain is not in the console's store; standard
-        // homebrew practice. Integrity is re-checked by the image verify.
-        httpcSetSSLOpt(ctx, SSLCOPT_DisableVerify);
-        httpcSetKeepAlive(ctx, HTTPC_KEEPALIVE_DISABLED);
-        httpcAddRequestHeaderField(ctx, "User-Agent", "snes9x_3ds-updater");
-        httpcAddRequestHeaderField(ctx, "Accept",
-                                   "application/vnd.github+json, */*");
-
-        rc = httpcBeginRequest(ctx);
-        if (R_FAILED(rc))
-        {
-            netFail("request", rc);
-            httpcCloseContext(ctx);
-            return "request failed";
-        }
-
-        u32 status = 0;
-        rc = httpcGetResponseStatusCode(ctx, &status);
-        if (R_FAILED(rc))
-        {
-            netFail("response", rc);
-            httpcCloseContext(ctx);
-            return "no response";
-        }
-
-        if (status == 301 || status == 302 || status == 303 ||
-            status == 307 || status == 308)
-        {
-            char loc[UPDATE3DSNET_URL_BUF] = "";
-            rc = httpcGetResponseHeader(ctx, "Location", loc, sizeof(loc));
-            httpcCloseContext(ctx);
-            if (R_FAILED(rc) || loc[0] == 0)
-                return "redirect without location";
-            snprintf(current, sizeof(current), "%s", loc);
-            continue;
-        }
-
-        if (status != 200)
-        {
-            httpcCloseContext(ctx);
-            snprintf(netLastError, sizeof(netLastError), "http status %lu",
-                     (unsigned long)status);
-            log3dsWrite("[upd] http status %lu for %.60s",
-                        (unsigned long)status, current);
-            return (status == 403 || status == 429) ? "rate limited, try later"
-                 : (status == 404) ? "release not found"
-                                   : "unexpected http status";
-        }
-        return NULL;
-    }
-    return "too many redirects";
+static size_t memWrite(char* data, size_t size, size_t nmemb, void* user)
+{
+    MemSink* sink = (MemSink*)user;
+    size_t n = size * nmemb;
+    if (sink->len + n > sink->cap - 1)
+        n = sink->cap - 1 - sink->len;          // truncate, keep going
+    memcpy(sink->buf + sink->len, data, n);
+    sink->len += n;
+    return size * nmemb;
 }
 
 int update3dsNetFetchApi(const char* path, char* buf, size_t bufSize)
@@ -118,34 +114,75 @@ int update3dsNetFetchApi(const char* path, char* buf, size_t bufSize)
     char url[UPDATE3DSNET_URL_BUF];
     snprintf(url, sizeof(url), "https://api.github.com%s", path);
 
-    httpcContext ctx;
-    const char* err = netOpen(&ctx, url);
-    if (err != NULL)
+    CURL* c = curl_easy_init();
+    if (c == NULL)
+        return -1;
+
+    MemSink sink = { buf, bufSize, 0 };
+    netSetup(c, url);
+    struct curl_slist* headers =
+        curl_slist_append(NULL, "Accept: application/vnd.github+json");
+    curl_easy_setopt(c, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, memWrite);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &sink);
+
+    CURLcode code = curl_easy_perform(c);
+    long status = 0;
+    curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(c);
+
+    if (code != CURLE_OK)
     {
-        log3dsWrite("[upd] api fetch: %s", err);
+        if (code == CURLE_HTTP_RETURNED_ERROR)
+            snprintf(netLastError, sizeof(netLastError), "http status %ld",
+                     status);
+        else
+            netFail("api", code);
         return -2;
     }
+    buf[sink.len] = 0;
+    return (int)sink.len;
+}
 
-    u32 total = 0;
-    Result rc;
-    do
-    {
-        u32 got = 0;
-        rc = httpcDownloadData(&ctx, (u8*)buf + total,
-                               (u32)(bufSize - 1 - total), &got);
-        total += got;
-        if (total >= bufSize - 1)
-            break;                       // payload larger than our buffer
-    } while (rc == (Result)HTTPC_RESULTCODE_DOWNLOADPENDING);
+struct FileSink
+{
+    FILE*    f;
+    unsigned done;
+    bool   (*progress)(void* user, unsigned done, unsigned total);
+    void*    user;
+    unsigned total;
+    bool     writeError;
+    bool     cancelled;
+};
 
-    httpcCloseContext(&ctx);
-    if (R_FAILED(rc) && rc != (Result)HTTPC_RESULTCODE_DOWNLOADPENDING)
+static size_t fileWrite(char* data, size_t size, size_t nmemb, void* user)
+{
+    FileSink* sink = (FileSink*)user;
+    size_t n = size * nmemb;
+    if (fwrite(data, 1, n, sink->f) != n)
     {
-        netFail("api read", rc);
-        return -3;
+        sink->writeError = true;
+        return 0;                               // aborts the transfer
     }
-    buf[total] = 0;
-    return (int)total;
+    sink->done += n;
+    if (sink->progress != NULL &&
+        !sink->progress(sink->user, sink->done, sink->total))
+    {
+        sink->cancelled = true;
+        return 0;
+    }
+    return n;
+}
+
+static int xferInfo(void* user, curl_off_t dltotal, curl_off_t dlnow,
+                    curl_off_t, curl_off_t)
+{
+    FileSink* sink = (FileSink*)user;
+    if (dltotal > 0)
+        sink->total = (unsigned)dltotal;
+    (void)dlnow;
+    return 0;
 }
 
 const char* update3dsNetDownload(const char* url, const char* destPath,
@@ -156,60 +193,59 @@ const char* update3dsNetDownload(const char* url, const char* destPath,
     if (!netReady)
         return "network not initialized";
 
-    httpcContext ctx;
-    const char* err = netOpen(&ctx, url);
-    if (err != NULL)
-        return err;
-
-    u32 total = 0;
-    httpcGetDownloadSizeState(&ctx, NULL, &total);
-
     FILE* f = fopen(destPath, "wb");
     if (f == NULL)
-    {
-        httpcCloseContext(&ctx);
         return "cannot create file on sd";
+
+    CURL* c = curl_easy_init();
+    if (c == NULL)
+    {
+        fclose(f);
+        remove(destPath);
+        return "curl init failed";
     }
 
-    static u8 chunk[NET_CHUNK_SIZE];
-    u32 done = 0;
-    Result rc;
-    do
-    {
-        u32 got = 0;
-        rc = httpcDownloadData(&ctx, chunk, sizeof(chunk), &got);
-        if (got > 0 && fwrite(chunk, 1, got, f) != got)
-        {
-            fclose(f);
-            httpcCloseContext(&ctx);
-            remove(destPath);
-            return "sd write failed (card full?)";
-        }
-        done += got;
-        if (progress != NULL && !progress(user, done, total))
-        {
-            fclose(f);
-            httpcCloseContext(&ctx);
-            remove(destPath);
-            return "cancelled";
-        }
-    } while (rc == (Result)HTTPC_RESULTCODE_DOWNLOADPENDING);
+    FileSink sink = { f, 0, progress, user, 0, false, false };
+    netSetup(c, url);
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, fileWrite);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &sink);
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, xferInfo);
+    curl_easy_setopt(c, CURLOPT_XFERINFODATA, &sink);
+    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
 
+    CURLcode code = curl_easy_perform(c);
+    long status = 0;
+    curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+    curl_easy_cleanup(c);
     fclose(f);
-    httpcCloseContext(&ctx);
 
-    if (R_FAILED(rc))
+    if (sink.cancelled)
     {
         remove(destPath);
-        log3dsWrite("[upd] download failed: %08lx", (unsigned long)rc);
+        return "cancelled";
+    }
+    if (sink.writeError)
+    {
+        remove(destPath);
+        return "sd write failed (card full?)";
+    }
+    if (code != CURLE_OK)
+    {
+        remove(destPath);
+        if (code == CURLE_HTTP_RETURNED_ERROR)
+        {
+            snprintf(netLastError, sizeof(netLastError), "http status %ld",
+                     status);
+            return "unexpected http status";
+        }
+        netFail("download", code);
         return "download interrupted";
     }
-    if (total != 0 && done != total)
+    if (sink.total != 0 && sink.done != sink.total)
     {
         remove(destPath);
         return "download incomplete";
     }
-    log3dsWrite("[upd] downloaded %lu bytes -> %s", (unsigned long)done,
-                destPath);
+    log3dsWrite("[upd] downloaded %u bytes -> %s", sink.done, destPath);
     return NULL;
 }

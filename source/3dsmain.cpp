@@ -623,10 +623,6 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                  updater3dsRunningSha(), updater3dsIsCia() ? "CIA" : "3DSX");
         items.emplace_back(nullptr, MenuItemType::Textarea, std::string(buildLine), ""_s);
     }
-    AddMenuPicker(items, "  Update Channel"_s,
-        "Stable: tested releases, recommended.\nNightly: the newest build of every change -\nfor testing, may be unstable."_s,
-        makePickerOptions({"Stable", "Nightly"}), settings3DS.UpdateChannel, DIALOG_TYPE_INFO, true,
-        []( int val ) { CheckAndUpdate( settings3DS.UpdateChannel, val ); });
     AddMenuCheckbox(items, "  Check on Startup"_s, settings3DS.UpdateAutoCheck,
         []( int val ) { CheckAndUpdateToggle( settings3DS.UpdateAutoCheck, val ); });
     items.emplace_back([&menuTabs, &currentMenuTab](int val) {
@@ -948,7 +944,7 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
         menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Update Failed", msg,
             Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn,
-            makeOptionsForOk());
+            makeOptionsForOk(), -1, true, 4);
         menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
         return;
     }
@@ -969,6 +965,19 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
     bool isDialog = false;
     int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
 
+    std::vector<SMenuItem> channelItems;
+    AddMenuDialogOption(channelItems, UPDATE3DS_CHANNEL_STABLE,
+                        "Stable (Recommended)"_s, "Tested releases"_s);
+    AddMenuDialogOption(channelItems, UPDATE3DS_CHANNEL_NIGHTLY,
+                        "Nightly"_s, "Newest build, may be unstable"_s);
+    int channel = menu3dsShowDialog(dialogTab, isDialog, currentMenuTab,
+        menuTabs, "Updates", "Update from which channel?", infoColor,
+        channelItems, settings3DS.UpdateChannel, true, 2);
+    menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+    if (channel < 0)
+        return;
+    CheckAndUpdate(settings3DS.UpdateChannel, channel);
+
     menu3dsShowRomLoadingDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
         "Updates", "Checking for updates...", infoColor);
     Update3dsCheck chk;
@@ -988,7 +997,7 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
         menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Updates", msg,
             Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn,
-            makeOptionsForOk());
+            makeOptionsForOk(), -1, true, 3);
         menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
         return;
     }
@@ -1002,7 +1011,7 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
                      ? "nightly" : "stable",
                  updater3dsRunningSha());
         menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-            "Updates", msg, infoColor, makeOptionsForOk());
+            "Updates", msg, infoColor, makeOptionsForOk(), -1, true, 2);
         menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
         return;
     }
