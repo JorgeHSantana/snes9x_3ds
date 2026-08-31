@@ -279,6 +279,11 @@ typedef struct {
     int                 StereoDepthOBJHi[2];   // sprite priority 2/3 depths (issue #60;
                                                // priorities 0/1 ride [4] of the two
                                                // arrays above, like the BGs)
+    int                 StereoFillGaps;        // 1 = fill the strip a BG's two priorities
+                                               // uncover when their depths split, by drawing
+                                               // the priority-0 tiles a second time at the
+                                               // priority-1 shift behind the real passes
+                                               // (issue #70, rcmz's 'Fill background gaps')
     int                 StereoShiftMode;       // 0 = discrete (whole pixels, solid layers)
                                                // 1 = continuous (smooth slider, may split layers) (BG1-4, Sprites),
                                                // -8..+8: + pops out of the screen, - sinks into it.

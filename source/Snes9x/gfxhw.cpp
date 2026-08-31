@@ -715,11 +715,15 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
 	bool variantPossible,
 	int prio, int depth0, int depth1,
 	int32 snesTile, int32 screenX, int32 screenY,
-	int32 startLine, int32 height, bool stretchedTy)
+	int32 startLine, int32 height, bool stretchedTy,
+	// horizontal slice of the 8px tile (issue #70's priority-gap fill
+	// draws partial extensions); the defaults keep every other caller
+	// emitting the full tile exactly as before
+	int32 sliceX0 = 0, int32 sliceX1 = 8)
 {
     uint32 TileAddr = BG.TileAddress + ((snesTile & 0x3ff) << tileShift);
 
-	// Bug fix: overflow in Dragon Ball Budoten 3 
+	// Bug fix: overflow in Dragon Ball Budoten 3
 	// (this was accidentally removed while optimizing for this 3DS port)
 	TileAddr &= 0xff00ffff;		// hope the compiler generates a BIC instruction.
 
@@ -800,14 +804,14 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
 	// Render tile
 	//
 	int hiShift = GPU3DSExt.render2x.enabled ? 1 : 0;
-	int x0 = screenX << hiShift;
+	int x0 = (screenX + sliceX0) << hiShift;
 	int y0 = screenY + (prio == 0 ? depth0 : depth1);
-	int x1 = x0 + (8 << hiShift);
+	int x1 = (screenX + sliceX1) << hiShift;
 	int y1 = y0 + height;
 
-	int tx0 = 0;
+	int tx0 = sliceX0;
 	int ty0 = startLine >> 3;
-	int tx1 = 8;
+	int tx1 = sliceX1;
 	int ty1 = stretchedTy ? (ty0 + 1) : (ty0 + height); // // +1: nearest-neighbour floors all rows to ty0
 
 	gpu3dsAddTileVertexes(
@@ -1684,6 +1688,30 @@ inline void __attribute__((always_inline)) S9xDrawBackgroundHardwarePriority0Inl
 
 			int tilesToDraw = sX == 0 ? 32 : 33;
 
+			// A background stores one tile per cell, so giving its two tile
+			// priorities different depths slides those cells apart and
+			// uncovers a strip with nothing behind it (issue #70). Extending
+			// the nearest priority-0 tile across each boundary fills that
+			// strip with the continuation of whatever it belonged to - on
+			// both sides, because the two eyes pull apart in opposite
+			// directions and share this geometry. Only when priority 0 sits
+			// further back: the extension draws at P0's depth plane, so any
+			// overshoot hides behind opaque P1 tiles. (Ported from rcmz's
+			// 'Fill background gaps'.)
+			int fillWidth = 0;
+			if (settings3DS.StereoFillGaps &&
+				GPU3DS.stereoLayerDepth[bg] < GPU3DS.stereoLayerDepthP1[bg]) {
+				float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
+				fillWidth = (int)ceilf(slider *
+					(GPU3DS.stereoLayerDepthP1[bg] - GPU3DS.stereoLayerDepth[bg]));
+				if (fillWidth > 16) fillWidth = 16;
+			}
+
+			int32 fillTile = 0;
+			bool haveFillTile = false;
+			int fillForward = 0;    // cells still to extend into after a low-priority run
+			int highRun = 0;        // consecutive high-priority cells seen so far
+
 			// Middle, unclipped tiles
 			//Count = Width - Count;
 			//int Middle = Count >> 3;
@@ -1698,7 +1726,7 @@ inline void __attribute__((always_inline)) S9xDrawBackgroundHardwarePriority0Inl
 				//if (tpriority == priority)
 				{
 					int32 modifiedTile;
-					
+
 					if (tileSize == 8) {
 						modifiedTile = Tile;
 					} else {
@@ -1718,6 +1746,51 @@ inline void __attribute__((always_inline)) S9xDrawBackgroundHardwarePriority0Inl
 						variantPossible,
 						tpriority, depth0, depth1,
 						modifiedTile, sX, sY, VirtAlign, Lines, stretchedTy);
+
+					if (fillWidth)
+					{
+						if (tpriority == 0)
+						{
+							// Extend back over the high-priority cells just passed.
+							for (int back = 1; back * 8 - 8 < fillWidth && back <= highRun; back++)
+							{
+								int32 width = fillWidth - (back - 1) * 8;
+								if (width > 8) width = 8;
+
+								S9xDrawBGFullTileHardwareInline(
+									tileSize, tileShift, paletteShift, paletteMask, startPalette, directColourMode,
+									variantPossible,
+									0, depth0, depth1,
+									modifiedTile, sX - back * 8, sY, VirtAlign, Lines, stretchedTy,
+									8 - width, 8);
+							}
+
+							fillTile = modifiedTile;
+							haveFillTile = true;
+							fillForward = (fillWidth + 7) >> 3;
+							highRun = 0;
+						}
+						else
+						{
+							// Extend the last priority-0 tile forward into this run.
+							if (fillForward > 0 && haveFillTile)
+							{
+								int32 width = fillWidth - highRun * 8;
+								if (width > 8) width = 8;
+
+								S9xDrawBGFullTileHardwareInline(
+									tileSize, tileShift, paletteShift, paletteMask, startPalette, directColourMode,
+									variantPossible,
+									0, depth0, depth1,
+									fillTile, sX, sY, VirtAlign, Lines, stretchedTy,
+									0, width);
+
+								fillForward--;
+							}
+
+							highRun++;
+						}
+					}
 				}
 
 				if (tileSize == 8)

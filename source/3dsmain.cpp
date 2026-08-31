@@ -1573,6 +1573,16 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     menu3dsSetScreenDirty();
                 }
             });
+        AddMenuCheckbox(items, "  Fill Priority Gaps"_s, settings3DS.StereoFillGaps != 0,
+            []( int val ) {
+                int v = val ? 1 : 0;
+                if (CheckAndUpdate( settings3DS.StereoFillGaps, v )) {
+                    settings3DS.isDirty = true;
+                    stereo3dRestorePausedLook();   // live, like the layer toggles
+                }
+            });
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Splitting a BG's two priorities uncovers a strip that"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  belongs to neither; this paints it with the far one."_s, ""_s);
         AddMenuDisabledOption(items, ""_s);
 
         AddMenuHeader2(items, "Scene Profiles"_s);
@@ -2334,6 +2344,10 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
 
     if (writeMode || detectedConfigVersion >= 2.3f) {
         config3dsReadWriteInt32(stream, writeMode, "StereoShiftMode=%d\n", &settings3DS.StereoShiftMode, 0, 1);
+    }
+
+    if (writeMode || detectedConfigVersion >= 2.4f) {
+        config3dsReadWriteInt32(stream, writeMode, "StereoFillGaps=%d\n", &settings3DS.StereoFillGaps, 0, 1);
     }
 
     char formatBuf[64];
