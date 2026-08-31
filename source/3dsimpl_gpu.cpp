@@ -639,20 +639,18 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // the ghost offset is fractional (1..3px growing with the
                 // blur level), and a fractional shift rasterizes with mixed
                 // per-section rounding - the #65 split, showing here as
-                // torn/doubled pixels at some blur levels. Discrete mode
-                // rounds the COMPOSED shift so each ghost still lands a
-                // whole pixel away from the base pass.
+                // torn/doubled pixels at some blur levels. The COMPOSED
+                // ghost shift is therefore rounded in BOTH slider modes
+                // (Jorge's call): Continuous exists for the analog feel of
+                // layer placement, but a smear distance gains nothing from
+                // a fraction - only the tear.
                 float ghostShift[4][2];
                 for (int t = 0; t < 4; t++) {
-                    ghostShift[t][0] = tierShift[t] + s_atmosGhostOffset;
-                    ghostShift[t][1] = tierShift[t] - s_atmosGhostOffset;
-                    if (settings3DS.StereoShiftMode == 0) {
-                        ghostShift[t][0] = roundf(ghostShift[t][0]);
-                        ghostShift[t][1] = roundf(ghostShift[t][1]);
-                        // never collapse onto the crisp base pass
-                        if (ghostShift[t][0] == tierShift[t]) ghostShift[t][0] += 1.0f;
-                        if (ghostShift[t][1] == tierShift[t]) ghostShift[t][1] -= 1.0f;
-                    }
+                    ghostShift[t][0] = roundf(tierShift[t] + s_atmosGhostOffset);
+                    ghostShift[t][1] = roundf(tierShift[t] - s_atmosGhostOffset);
+                    // never collapse onto the crisp base pass
+                    if (ghostShift[t][0] == tierShift[t]) ghostShift[t][0] += 1.0f;
+                    if (ghostShift[t][1] == tierShift[t]) ghostShift[t][1] -= 1.0f;
                 }
 
                 for (int gp = 0; gp < passes; gp++) {
