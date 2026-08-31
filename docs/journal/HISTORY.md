@@ -100,3 +100,6 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
 | 64 | Updater integrado | FECHADA | Entregue e validado em hardware (primeira OTA do fork): curl+mbedtls, worker thread, canais isolados, janela de 10min no auto-check |
 | 65 | Deslocamento fracionário racha camadas | ABERTA | Causa-raiz: slider contínuo × arredondamento por seção; fix: roundf por camada + edge crop coerente + opção Discrete/Continuous; aguarda validação p/ fechar |
 | 66 | Update falha com jogo carregado | ABERTA | Proposta na issue: savestate temporário no SD → liberar ROM → update → reload no fim/erro |
+| 67 | 3dsmain.cpp virou monólito | ABERTA | Decompor em módulos, 1 por PR; começar pelo loader/saver .3d (destrava testes do parser) |
+| 68 | Core legado sem rede de proteção | ABERTA | Caracterização nos pontos tocados: funções puras testadas p/ macros de stereo, harness de hash determinístico p/ bisects |
+| 69 | Funil de validação = 1 humano + hardware | ABERTA | Harness de screenshot-diff no Azahar, savestates versionados, checklist de hardware, probe builds documentados |
