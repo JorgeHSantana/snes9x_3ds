@@ -2,7 +2,7 @@
 
 ## Overview
 
-This fork by [JorgeHSantana](https://github.com/JorgeHSantana/snes9x_3ds) adds **MSU-1 support** (CD-quality music and full-motion video streaming, with optional FLAC-compressed packs) and **per-layer stereoscopic 3D** (each SNES layer at its own depth, with automatic per-screen Scene Profiles) on top of [matbo87](https://github.com/matbo87/snes9x_3ds)'s modernized fork of the legacy snes9x_3ds codebase by [bubble2k](https://github.com/bubble2k16/snes9x_3ds).
+This fork by [JorgeHSantana](https://github.com/JorgeHSantana/snes9x_3ds) adds **MSU-1 support** (CD-quality music and full-motion video streaming, with optional FLAC-compressed packs), **per-layer stereoscopic 3D** (every SNES layer — and each tile priority inside it — at its own depth, with a live in-menu editor and automatic per-screen Scene Profiles), **minutes of rewind** and a **built-in self-updater**, on top of [matbo87](https://github.com/matbo87/snes9x_3ds)'s modernized fork of the legacy snes9x_3ds codebase by [bubble2k](https://github.com/bubble2k16/snes9x_3ds).
 It builds with current devkitARM, libctru and citro3d releases (as of June 2026). Optional assets are available in the dedicated asset repository: [snes9x_3ds-assets](https://github.com/matbo87/snes9x_3ds-assets).
 
 It works on all 2DS and 3DS models.
@@ -15,8 +15,10 @@ Feedback and bug reports are welcome.
 * MSU-1 support: CD-quality music packs and FMV playback, with per-game MSU-1 volume and video FPS settings
 * Compressed MSU-1 audio: `.flac` tracks play when the raw `.pcm` is absent (roughly half the SD space, still lossless)
 * MSU-1 pack folders show up as single game entries in the file browser; ROMs also load from `.zip`
-* Stereoscopic 3D with per-layer depth (BG1-4 + sprites), focus zone with distance effects (fade, haze, depth-of-field blur), Edge Cleanup, and Enhanced Resolution rendering
+* Stereoscopic 3D with per-layer **and per-priority** depth: each BG's two tile priorities and each of the four sprite priorities get their own gauge, plus a focus zone with distance effects (fade, haze, depth-of-field blur), Edge Cleanup, and Enhanced Resolution rendering — all with zero extra draw calls (Old 3DS friendly)
+* Live 3D editor in a dedicated **3D Stereo** tab: focusing a gauge spotlights exactly its tiles on the top screen, values move the paused frame in real time, and holding Y previews the full scene
 * Scene Profiles (experimental): capture a screen and its own 3D configuration is applied automatically whenever that screen shows up
+* Self-updater: check and install new builds (Stable or Nightly channel) from inside the emulator, with optional check-on-boot
 * File browser with instant cached listings that self-refresh in the background when SD contents change
 * Improved rendering for HDMA-heavy games and mosaic effects
 * SNES refresh rate matching (60.1 Hz for NTSC, 50 Hz for PAL)
@@ -24,14 +26,16 @@ Feedback and bug reports are welcome.
 * Rich visual customization with thumbnails, themes, per-game backgrounds and overlays
 * Crop and overscan
 * Improved cheat management
-* Rewind: hold a mappable hotkey to rewind gameplay (~24s of history on New 3DS)
-* Extended hotkey options and screen swap support
+* Rewind with **minutes** of history (page-delta storage: ~1.5min on New 3DS, ~1min on Old): hold the hotkey to rewind live, tap it for a browsable timeline of thumbnails
+* 3DS Mode (New 3DS): drop to 268 MHz to preview how a game would run on an Old 3DS
+* Extended hotkey options, controller port swap (P1/P2) and screen swap support
 * Directory caching for faster ROM list loading
 
 ## Setup
 
 * A modded 3DS is required; DSP firmware (`3ds/dspfirm.cdc`) is needed for sound output.
 * Install via [Universal Updater](https://universal-team.net/projects/universal-updater.html), or install the latest `.cia` from [Releases](https://github.com/JorgeHSantana/snes9x_3ds/releases).
+* After the first install the emulator keeps itself current: see [Updating the emulator](#updating-the-emulator).
 * Optional: download asset packs from [snes9x_3ds-assets releases](https://github.com/matbo87/snes9x_3ds-assets/releases).
 
 ROMs can be stored in any folder.
@@ -90,7 +94,7 @@ Bundled binary provenance is documented in `makerom/BINARY_SOURCES.md`.
 
 ## Development and Contributions
 
-New work usually lands on `develop` first. Merges to `master` create build artifacts via GitHub Actions. Tagged GitHub [releases](https://github.com/matbo87/snes9x_3ds/releases) are the official stable releases.
+New work lands on feature branches and is published to the `nightly` channel via GitHub Actions; tagged GitHub [releases](https://github.com/JorgeHSantana/snes9x_3ds/releases) are the stable line. Both channels are served to consoles by the in-emulator updater.
 
 Community PRs are welcome. For larger changes, a short issue first is appreciated.
 Please keep PRs focused and test on hardware where possible.
@@ -99,26 +103,95 @@ Broad, risky, hard-to-review PRs may be closed or split into smaller changes. Pr
 
 AI note: I use AI assistants as part of my development workflow, including code review, debugging, planning, implementation and documentation. All changes are reviewed and adjusted by me before they are merged.
 
+## Updating the emulator
+
+The emulator updates itself — no PC or Universal Updater needed after the
+first install. In the pause menu, **Emulator tab -> UPDATES**:
+
+* **Channel**: **Stable** (recommended) gets the tagged releases; **Nightly**
+  gets every development build. The auto-check never crosses channels — a
+  Stable install is only ever offered Stable updates.
+* **Check for Updates** looks for a newer build right away and shows what
+  changed before asking to install. **Check on Startup** does the same
+  automatically on boot.
+* A **3DSX** install replaces its own file on the SD card; a **CIA** install
+  goes through the system installer. Both take effect on the next launch.
+  Downloads are verified before anything is touched — a failed or cancelled
+  update (B cancels) never harms the running version.
+* For now, update **without a game loaded** (from the ROM list): updating
+  mid-game is unreliable and is being reworked (issue #66).
+
+## Rewind: how to use
+
+Bind the Rewind hotkey in the **Controls** tab (the Emulator menu also has an
+"Open Timeline" action, no binding needed).
+
+* **Hold** the hotkey: the game freezes, dims, and walks back through the
+  stored moments while you hold — real-time speed at first, then
+  accelerating, with a corner badge showing how far back you are. Release,
+  and after a short countdown play resumes from that moment.
+* **Tap** the hotkey: a timeline opens instead — a filmstrip of thumbnails
+  with a dot strip and an elapsed label. **Y** previews the exact frame,
+  **A** previews and asks to confirm (then the countdown runs), **B** goes
+  back to where you came from.
+* Settings live in **Emulator tab -> REWIND**: Recording on/off (disabling
+  frees the history memory), Max History, Capture Patience and the Resume
+  Countdown length.
+* History: up to ~1.5 minutes on New 3DS (0.5s steps) and ~1 minute on Old
+  3DS (2s steps). Loading a savestate resets the recorded history.
+
 ## Stereoscopic 3D: configuration tutorial
 
-All of this lives in the pause menu under **Settings -> 3D STEREOSCOPIC
-SETTINGS** (New 3DS / New 2DS XL with the 3D slider open; on other models the
-emulator falls back to plain 2D). Everything you configure is saved per game
-to `sd:/3ds/snes9x_3ds/stereo3d/<game>.3d` — a small text file you can share
+All of this lives in the pause menu's dedicated **3D Stereo** tab (it appears
+between Settings and Controls when a game is loaded on a 3D-capable model —
+New 3DS / New 2DS XL with the 3D slider open; on other models the emulator
+falls back to plain 2D). Everything you configure is saved per game to
+`sd:/3ds/snes9x_3ds/stereo3d/<game>.3d` — a small text file you can share
 with other people.
 
 ### How depth works (-8 to +8)
 
-Each of the five SNES layers (BG1-BG4 and Sprites) has its own depth gauge:
+Every depth plane has its own gauge: each background layer's two tile
+priorities (**BG1-BG4, Prio 0 / Prio 1**) and the four sprite priorities
+(**Sprites Prio 0-3**):
 
 * **0** = the plane of the screen.
-* **Positive** values pop the layer **out toward you** (+8 = strongest).
+* **Positive** values pop the plane **out toward you** (+8 = strongest).
 * **Negative** values sink it **into the screen** (-8 = deepest).
+
+Why priorities? A single BG often carries two things at once — the floor at
+priority 0 and detail drawn over the player at priority 1, say — and now
+each can sit at its own depth. Sprites likewise: many games put the HUD, the
+player and background props on different sprite priorities. **Start simple:
+set a layer's two priorities to the same value** (that's the default — old
+`.3d` files load that way too) and only split them when the live spotlight
+shows you two groups of tiles that deserve different depths.
 
 The 3D slider scales the whole thing, so configure with the slider fully up
 and then use it to taste. Enhanced Resolution doubles the parallax
 granularity, giving noticeably smoother depth steps — worth turning on if the
 game runs well with it.
+
+### The live editor
+
+The gauges edit the actual paused frame, live on the top screen:
+
+* **Focusing a gauge spotlights its tiles**: everything else dims to 30%,
+  and only the tiles that gauge controls stay bright — so you can *see*
+  what "BG2 Prio 1" actually is in this scene before deciding its depth.
+* **Moving the value moves the layer in real time** (open the 3D slider
+  while editing and watch the depth change as you press left/right).
+* **Hold Y** to peek at the full scene with your current values, no
+  spotlight. The bottom bar shows the Y "View" button while the tab is
+  active.
+* The **Enable / Disable Layers** toggles also apply live — useful to
+  isolate a layer completely when the spotlight isn't enough.
+* Leaving the gauges brings the normal paused look back.
+
+**Slider Response** (in the tab's Settings section): **Discrete** (default)
+snaps every shift to whole pixels so layers always move as one solid block;
+**Continuous** keeps the analog slider feel but a layer can visibly split at
+partial slider positions. At full slider both are identical.
 
 ### Configure the Default profile first
 
@@ -131,12 +204,14 @@ the warning in the next section.
 
 ### The layer-by-layer method
 
-The reliable way to find each layer's depth:
+The reliable way to place each plane, using the spotlight:
 
-1. In **Enable / Disable Layers**, turn **everything off**.
-2. Turn **one layer on**, look at the game, and decide what it is (far
-   background? playfield? HUD?). Set its depth gauge accordingly.
-3. Turn the next layer on and repeat until all five are placed.
+1. Walk down the depth gauges one by one. The spotlight shows exactly which
+   tiles each gauge owns — decide what that content is (far background?
+   playfield? HUD?) and set the depth accordingly.
+2. Hold **Y** now and then to judge the whole scene together.
+3. A gauge whose spotlight shows nothing simply has no tiles on this screen
+   — leave it alone (or check another scene before deciding).
 
 Guidelines that hold for most games:
 
@@ -172,6 +247,8 @@ in the menu when a layer sits outside the zone, as a visual cue.
 The per-layer parallax disturbs the left and right screen borders (columns
 that only one eye can see). **Trim** (default) crops those columns; **Zoom**
 hides them by slightly enlarging the image; **Off** leaves them visible.
+The setting lives in the tab's Settings section and applies to the whole
+game — every layer, every Scene Profile.
 
 ### Scene Profiles: the exceptions
 
@@ -195,7 +272,7 @@ purposeful — Default should remain the workhorse.
 
 ## Experimental: Scene Profiles (per-screen 3D)
 
-The Scene Profiles feature (Settings -> 3D Stereoscopic Settings) can bind
+The Scene Profiles feature (3D Stereo tab) can bind
 different 3D configurations to individual screens of a game (title, menus,
 gameplay), switching automatically as scenes change. **This is experimental**:
 scene detection relies on PPU register fingerprints and an optional WRAM
@@ -315,9 +392,10 @@ See:
 * The Snes9x team for the SNES emulator core, and the libretro Snes9x core maintainers for ongoing reference work
 * bubble2k, original author of [snes9x_3ds](https://github.com/bubble2k16/snes9x_3ds), for creating the excellent base this fork builds on
 * matbo87, whose [modernized fork](https://github.com/matbo87/snes9x_3ds) (current toolchain, NDSP audio, UI overhaul) is the direct base of this one
-* [JorgeHSantana](https://github.com/JorgeHSantana) — MSU-1 support, FLAC packs, per-layer stereoscopic 3D, Scene Profiles, zip loading and the other features of this fork
+* [JorgeHSantana](https://github.com/JorgeHSantana) — MSU-1 support, FLAC packs, per-layer/per-priority stereoscopic 3D with the live editor, Scene Profiles, rewind v2, the self-updater, zip loading and the other features of this fork
 * [dr_flac](https://github.com/mackron/dr_libs) by David Reid (public domain) for FLAC decoding, and [doctest](https://github.com/doctest/doctest) for the host test suite
-* Wyatt-James for his [snes9x_3ds fork](https://github.com/Wyatt-James/snes9x_3ds); this fork adapts a few safety, audio and stability fixes from his work
+* Wyatt-James for his [snes9x_3ds fork](https://github.com/Wyatt-James/snes9x_3ds); this fork adapts safety, audio and stability fixes plus his SuperFX dispatch speedups
+* rcmz's [parallax 3D fork](https://github.com/rcmz/snes9x-3ds-parallax-3d) — his per-priority depth slots and live layer preview shaped this fork's takes on both ideas (implemented differently here, shader-side, for Old 3DS performance); his real Mode 7 perspective remains on our wishlist
 * ramzinouri's [snes9x_3ds fork](https://github.com/ramzinouri/snes9x_3ds) inspired the image border/background and theme support
 * willjow's [snes9x_3ds fork](https://github.com/willjow/snes9x_3ds) revived the project after development had gone quiet
 * Tyler Sanders for the first stereoscopic 3D attempt (snes9x_3ds_3D); the stereo 3D work in this fork started from his phase-1 shader groundwork
