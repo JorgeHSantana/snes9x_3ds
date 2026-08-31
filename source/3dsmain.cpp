@@ -618,8 +618,9 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
 
     AddMenuHeader1(items, "UPDATES"_s);
     {
-        char buildLine[64];
-        snprintf(buildLine, sizeof(buildLine), "  This build: %s (%s)",
+        char buildLine[80];
+        snprintf(buildLine, sizeof(buildLine), "%s%s, %s)",
+                 settings3dsGetAppVersion("  This build: v", " ("),
                  updater3dsRunningSha(), updater3dsIsCia() ? "CIA" : "3DSX");
         items.emplace_back(nullptr, MenuItemType::Textarea, std::string(buildLine), ""_s);
     }
@@ -919,13 +920,19 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     bool isDialog = false;
     int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
 
+    bool nightly = strcmp(chk.release.tag, "nightly-latest") == 0;
     char date[16];
     update3dsReleaseDate(chk.release, date, sizeof(date));
-    char text[96];
-    snprintf(text, sizeof(text),
-             "%s > %s%s%s%s\nDownload and install now?",
-             updater3dsRunningSha(), chk.release.sha,
-             date[0] != 0 ? " (" : "", date, date[0] != 0 ? ")" : "");
+    char text[128];
+    if (nightly)
+        snprintf(text, sizeof(text),
+                 "%s > %s%s%s%s\nDownload and install now?",
+                 updater3dsRunningSha(), chk.release.sha,
+                 date[0] != 0 ? " (" : "", date, date[0] != 0 ? ")" : "");
+    else
+        snprintf(text, sizeof(text),
+                 "Stable %.40s\nDownload and install now?",
+                 date[0] != 0 ? date : chk.release.title);
     if (!confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
                        "Update Available", text, true, true))
         return;
@@ -1005,11 +1012,13 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
     if (!chk.updateAvailable)
     {
         char msg[160];
-        snprintf(msg, sizeof(msg),
-                 "You are on the latest %s build (%s).",
-                 settings3DS.UpdateChannel == UPDATE3DS_CHANNEL_NIGHTLY
-                     ? "nightly" : "stable",
-                 updater3dsRunningSha());
+        if (settings3DS.UpdateChannel == UPDATE3DS_CHANNEL_NIGHTLY)
+            snprintf(msg, sizeof(msg),
+                     "You are on the latest nightly build (%s).",
+                     updater3dsRunningSha());
+        else
+            snprintf(msg, sizeof(msg),
+                     "You are on the latest stable build.");
         menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Updates", msg, infoColor, makeOptionsForOk(), -1, true, 2);
         menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
