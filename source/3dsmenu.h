@@ -120,6 +120,7 @@ public:
 
 class SMenuTab {
 public:
+    int TabId = -1;             // TAB_* logical id; -1 = Load Game (position-free)
     std::vector<SMenuItem> MenuItems;
     std::string SubTitle;
     std::string Title;

@@ -1521,7 +1521,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 } else {
                     s_stereoEditIdx = val - 1;
                 }
-                menu3dsMarkTabDirty(TAB_SETTINGS);
+                menu3dsMarkTabDirty(TAB_3D);
             });
 
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
@@ -1535,7 +1535,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             if (swkbdInputText(&swkbd, buf, sizeof(buf)) == SWKBD_BUTTON_CONFIRM && buf[0] != '\0') {
                 snprintf(p->Name, sizeof(p->Name), "%s", buf);
                 settings3DS.isDirty = true;
-                menu3dsMarkTabDirty(TAB_SETTINGS);
+                menu3dsMarkTabDirty(TAB_3D);
             }
         }, MenuItemType::Action, "  Rename Profile"_s, ""_s);
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
@@ -1559,7 +1559,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             settings3DS.StereoProfilesCount--;
             s_stereoEditIdx = -1;
             settings3DS.isDirty = true;
-            menu3dsMarkTabDirty(TAB_SETTINGS);
+            menu3dsMarkTabDirty(TAB_3D);
         }, MenuItemType::Action, "  Delete Profile"_s, ""_s);
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
@@ -1584,7 +1584,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                         : "This screen has no profile bound to it.",
                 Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
             menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
-            menu3dsMarkTabDirty(TAB_SETTINGS);
+            menu3dsMarkTabDirty(TAB_3D);
         }, MenuItemType::Action, "  Release This Screen"_s, ""_s);
 
 
@@ -1741,7 +1741,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             settings3DS.StereoWatchAddr = savedWatch;
             settings3dsStereoApplyDefault();
             settings3DS.isDirty = true;
-            menu3dsMarkTabDirty(TAB_SETTINGS);
+            menu3dsMarkTabDirty(TAB_3D);
         }, MenuItemType::Action, "  Copy 3D Settings From..."_s, ""_s);
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
@@ -1781,7 +1781,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 settingsLoadStereo3D();
                 settings3dsStereoApplyDefault();
                 settings3DS.isDirty = true;
-                menu3dsMarkTabDirty(TAB_SETTINGS);
+                menu3dsMarkTabDirty(TAB_3D);
             }
         }, MenuItemType::Action, "  Restore 3D Settings Backup"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Snapshot the current 3D setup before experimenting."_s, ""_s);
@@ -1795,7 +1795,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             settingsResetStereo3D();
             settings3dsStereoApplyDefault();
             settings3DS.isDirty = true;
-            menu3dsMarkTabDirty(TAB_SETTINGS);
+            menu3dsMarkTabDirty(TAB_3D);
         }, MenuItemType::Action, "  Reset 3D Settings"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Deletes every profile and restores factory values."_s, ""_s);
     }
@@ -2767,32 +2767,40 @@ void setupMenu(int& currentMenuTab) {
         menuTabs.resize(requiredTabs);
     }
 
-    const char* tabsStart[] = { "Emulator", "Load Game" };
-    const char* tabsGame[] = { "Emulator", "Settings", "Controls", "Cheats", "Load Game" };
-    const char* tabsGame3d[] = { "Emulator", "Settings", "Controls", "Cheats", "3D Stereo", "Load Game" };
+    // tabs are identified by TAB_* ids, not positions - 3D Stereo sits
+    // beside Settings and shifts Controls/Cheats without breaking anything
+    const char* tabsStart[]  = { "Emulator", "Load Game" };
+    const int   idsStart[]   = { TAB_EMULATOR, -1 };
+    const char* tabsGame[]   = { "Emulator", "Settings", "Controls", "Cheats", "Load Game" };
+    const int   idsGame[]    = { TAB_EMULATOR, TAB_SETTINGS, TAB_CONTROLS, TAB_CHEATS, -1 };
+    const char* tabsGame3d[] = { "Emulator", "Settings", "3D Stereo", "Controls", "Cheats", "Load Game" };
+    const int   idsGame3d[]  = { TAB_EMULATOR, TAB_SETTINGS, TAB_3D, TAB_CONTROLS, TAB_CHEATS, -1 };
     const char** tabs = settings3DS.isRomLoaded ? (tab3d ? tabsGame3d : tabsGame)
                                                 : tabsStart;
+    const int*   ids  = settings3DS.isRomLoaded ? (tab3d ? idsGame3d : idsGame)
+                                                : idsStart;
 
     for (int i = 0; i < requiredTabs; i++) {
+        menuTabs[i].TabId = ids[i];
         if (i != fileMenuTabIndex) {
-            // skip clean tabs
-            if (!(requiredTabsChanged || romChanged) && !settings3DS.menuTabDirty[i])
+            // skip clean tabs (dirty flags are id-indexed)
+            if (!(requiredTabsChanged || romChanged) && !settings3DS.menuTabDirty[ids[i]])
                 continue;
 
             menuTabs[i].SetTitle(tabs[i]);
             menuTabs[i].SubTitle.clear();
 
-            switch (i) {
-                case 0:
+            switch (ids[i]) {
+                case TAB_EMULATOR:
                     makeEmulatorMenu(menuTabs[i].MenuItems, menuTabs, currentMenuTab);
                     break;
-                case 1:
+                case TAB_SETTINGS:
                     makeOptionMenu(menuTabs[i].MenuItems, menuTabs, currentMenuTab);
                     break;
-                case 2:
+                case TAB_CONTROLS:
                     makeControlsMenu(menuTabs[i].MenuItems, menuTabs, currentMenuTab);
                     break;
-                case 3:
+                case TAB_CHEATS:
                     makeCheatMenu(menuTabs[i].MenuItems);
                     break;
                 case TAB_3D:
@@ -3044,7 +3052,7 @@ void showMenu() {
         int activeIdx = settings3dsStereoActiveIndex();
         if (activeIdx != s_stereoEditIdx) {
             s_stereoEditIdx = activeIdx;
-            menu3dsMarkTabDirty(TAB_SETTINGS);
+            menu3dsMarkTabDirty(TAB_3D);
         }
     }
 

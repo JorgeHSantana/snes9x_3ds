@@ -540,7 +540,7 @@ void menu3dsDrawMenu(std::vector<SMenuTab>& menuTabs, int& currentMenuTab, int m
         }
 
         // draw indicator when game has (active) cheats
-        if (i == TAB_CHEATS && cheatsTotal > 0) {
+        if (menuTabs[i].TabId == TAB_CHEATS && cheatsTotal > 0) {
             int offsetX = settings3DS.SecondScreen == GFX_TOP ? 19 : 14;
             ui3dsDrawStringWithNoWrapping(settings3DS.SecondScreen, xRight - offsetX, yTextTop - 3, xRight, yCurrentTabBoxTop, cheatsActive > 0 ? accentColor : color, HALIGN_LEFT, "\x95");        
         }
@@ -710,7 +710,7 @@ void menu3dsDrawEverything(SMenuTab& dialogTab, bool& isDialog, int& currentMenu
         // wait until animationFinished = true, to prevent stutter due to png decoding
         bool showSlotScreenshot = !menuItemsFrame && !isScrolling && animationFinished
             && settings3DS.SaveStateScreenshots
-            && currentMenuTab == TAB_EMULATOR;
+            && menuTabs[currentMenuTab].TabId == TAB_EMULATOR;
 
         if (showThumb)
             menu3dsUpdateThumb(&menuTabs[currentMenuTab], THUMB_GAME);
@@ -873,7 +873,7 @@ SMenuTab *menu3dsAnimateTab(SMenuTab& dialogTab, bool& isDialog, int& currentMen
             menu3dsSwapBuffersAndWaitForVBlank();
         }
     }
-    if (settings3DS.SaveStateScreenshots && currentMenuTab == TAB_EMULATOR) {
+    if (settings3DS.SaveStateScreenshots && menuTabs[currentMenuTab].TabId == TAB_EMULATOR) {
         secondScreenDirty = true;
     }
 
@@ -1058,7 +1058,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
                 else
                     currentTab->MenuItems[currentTab->SelectedItemIndex].SetValue(0);
 
-                if (currentMenuTab == TAB_CHEATS) {
+                if (menuTabs[currentMenuTab].TabId == TAB_CHEATS) {
                     menu3dsSetCheatsCount(currentTab->MenuItems[0],
                         setEnabled ? ++cheatsActive : --cheatsActive, cheatsTotal);
                 }
