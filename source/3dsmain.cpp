@@ -1707,7 +1707,14 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     static const char *layerNames[LAYER_BRIGHTNESS + 1] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites", "  Backdrop", "  Color Math", "  Brightness" };
     for (int layer = LAYER_BG0; layer <= LAYER_BRIGHTNESS; layer++) {
         AddMenuCheckbox(items, layerNames[layer], settings3DS.LayerEnabled[layer],
-            [layer]( int val ) { CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val ); });
+            [layer]( int val ) {
+                if (CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val )
+                    && settings3DS.isRomLoaded && gpu3dsIs3DAvailable()) {
+                    // live: repaint the paused frame so the toggle shows
+                    // immediately (the replay skips disabled layers)
+                    stereo3dRestorePausedLook();
+                }
+            });
     }
     items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
 

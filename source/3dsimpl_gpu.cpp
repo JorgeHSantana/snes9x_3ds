@@ -385,14 +385,17 @@ void gpu3dsSetStereoPreviewHighlight(int layerId, int prio)
     s_atmosLastColor = 1;               // poison the dedup so envs re-apply
 }
 
-static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id)
+// forceOthers: treat this layer as "one of the others" (dimmed) even when
+// it is the highlighted one - the spotlight's base pass uses it so the
+// whole layer stays visible under the bright redraw of the edited priority
+static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id, bool forceOthers = false)
 {
     if (s_previewHighlightLayer >= 0)
     {
         s_atmosGhostAlpha = 0.0f;
         s_atmosGhostOffset = 0.0f;
         u32 color = 0xFFFFFFFF;                     // highlighted: untouched
-        if ((int)id != s_previewHighlightLayer)
+        if ((int)id != s_previewHighlightLayer || forceOthers)
             color = 0xB4000000;                     // others: 70% toward black
         if (color == s_atmosLastColor)
             return;
@@ -499,6 +502,13 @@ void gpu3dsDrawLayers(SLayerList *list) {
             LAYER_ID id = list->layersByTarget[i][j];
             SLayer *layer = &list->layers[id];
 
+            // honor the diagnostic layer toggles at replay time too, so
+            // the 3D editor's paused preview reflects them live. In
+            // gameplay a disabled layer generates no vertices, so this
+            // skip changes nothing there.
+            if ((int)id <= LAYER_BRIGHTNESS && !settings3DS.LayerEnabled[id])
+                continue;
+
             // per-layer stereo parallax + atmosphere (both neutral for
             // backdrop/color math/etc., whose depth entries are 0).
             // Rounded to a whole SNES pixel (issue #65): the slider is a
@@ -534,26 +544,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     for (int t = 0; t < 4; t++) tierShift[t] = roundf(tierShift[t]);
                 gpu3dsSetStereoParallax3(tierShift[0], tierShift[1], tierBnd01);
                 gpu3dsSetStereoParallaxHi(tierShift[2], tierShift[3], tierBnd12, tierBnd23);
-
-                // spotlighting one PRIORITY hides its siblings in-shader
-                // (issue #61 polish): the TexEnv dim can't split a draw,
-                // and the tile TEV takes RGB straight from the texture,
-                // so the shader zeroes the siblings' vertex alpha and the
-                // NE_ZERO alpha test discards those tiles entirely
-                float dim[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-                if (s_previewHighlightLayer == (int)id &&
-                    s_previewHighlightPrio >= 0 && id <= LAYER_OBJ) {
-                    if (id == LAYER_OBJ) {
-                        for (int t = 0; t < 4; t++)
-                            dim[t] = (t == s_previewHighlightPrio) ? 1.0f : 0.0f;
-                    } else {
-                        if (s_previewHighlightPrio == 0) dim[1] = 0.0f;
-                        else                             dim[0] = 0.0f;
-                    }
-                }
-                gpu3dsSetStereoPrioDim4(dim[0], dim[1], dim[2], dim[3]);
             }
-            gpu3dsSetStereoLayerAtmosphere(id);
 
             int from = layer->sectionsOffset + (sub ? 0 : layer->sectionsByTarget[TARGET_SNES_SUB]);
             int to = from + layer->sectionsByTarget[i];
@@ -561,6 +552,36 @@ void gpu3dsDrawLayers(SLayerList *list) {
             if (to <= from) continue;
 
             GPU3DS.currentRenderState.depthTest = id < LAYER_OBJ ? SGPU_STATE_ENABLED : SGPU_STATE_DISABLED;
+
+            // spotlighting one PRIORITY (issue #61 polish): the whole
+            // layer must stay visible, dimmed like the rest of the scene,
+            // with only the edited priority at full brightness. The TexEnv
+            // dim can't split a draw and the tile TEV ignores vertex RGB,
+            // so the layer draws twice: first whole and dimmed, then only
+            // the edited priority redrawn bright on top (the other tiers'
+            // vertex alpha goes to 0 and the NE_ZERO alpha test discards
+            // them; depth GEQUAL lets the equal-depth redraw win, and the
+            // OBJ layer draws with no depth test at all). Preview-only
+            // cost - gameplay never sets a highlight.
+            bool spotlight = s_previewHighlightLayer == (int)id &&
+                s_previewHighlightPrio >= 0 && id <= LAYER_OBJ;
+            int spotlightPasses = spotlight ? 2 : 1;
+
+            for (int sp = 0; sp < spotlightPasses; sp++) {
+            if (!spotlight) {
+                gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
+                gpu3dsSetStereoLayerAtmosphere(id);
+            } else if (sp == 0) {
+                // base pass: every priority, dimmed like the other layers
+                gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
+                gpu3dsSetStereoLayerAtmosphere(id, true);
+            } else {
+                // bright pass: only the edited priority survives
+                float dim[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                dim[s_previewHighlightPrio & 3] = 1.0f;
+                gpu3dsSetStereoPrioDim4(dim[0], dim[1], dim[2], dim[3]);
+                gpu3dsSetStereoLayerAtmosphere(id);
+            }
 
             if (id < LAYER_BACKDROP) {
                 // hazy layers draw 2 extra ghost passes shifted +-1px with
@@ -601,6 +622,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
             else {
                 gpu3dsDrawVerticalSectionLayer(layer, from, to);
             }
+            }   // spotlight passes
         }
     }
 
