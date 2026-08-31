@@ -2769,7 +2769,7 @@ void setupMenu(int& currentMenuTab) {
 
     const char* tabsStart[] = { "Emulator", "Load Game" };
     const char* tabsGame[] = { "Emulator", "Settings", "Controls", "Cheats", "Load Game" };
-    const char* tabsGame3d[] = { "Emulator", "Settings", "Controls", "Cheats", "3D", "Load Game" };
+    const char* tabsGame3d[] = { "Emulator", "Settings", "Controls", "Cheats", "3D Stereo", "Load Game" };
     const char** tabs = settings3DS.isRomLoaded ? (tab3d ? tabsGame3d : tabsGame)
                                                 : tabsStart;
 
