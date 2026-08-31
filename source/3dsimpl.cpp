@@ -1076,27 +1076,44 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 // CURRENT stereo values (issue #61's live editor) - the same replay the
 // right-eye pass does every frame - optionally spotlighting one layer.
 // Presents to the game screen; the menu keeps owning the bottom one.
-void impl3dsStereoPreviewFrame(int highlightLayer)
+void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
+                               bool pausedLook)
 {
     if (!settings3DS.isRomLoaded)
         return;
-    gpu3dsSetStereoPreviewHighlight(highlightLayer);
-    gpu3dsFrameBegin(0, true);
-    float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
-    GPU3DS.stereoRightPass = false;
-    GPU3DS.stereoEyeIOD = slider;
-    GPU3DS.appliedRenderState.target = TARGET_UNSET;
-    gpu3dsDrawSnesScreen();
-    if (slider != 0.0f) {
-        GPU3DS.stereoRightPass = true;
-        GPU3DS.stereoEyeIOD = -slider;
+    if (pausedLook) {
+        // same trigger/sync/hide dance the menu's own pause render does:
+        // the caption texture only draws while the Paused notif is armed
+        notif3dsTrigger(Notif::Event::Paused, Notif::Type::Default, settings3DS.GameScreen);
+        notif3dsSync();
+    }
+    gpu3dsSetStereoPreviewHighlight(highlightLayer, highlightPrio);
+    // two passes fill BOTH framebuffers of the double-buffered game
+    // screen - a single one shows only on the right swap parity, which
+    // read as "sometimes it works" in the field
+    for (int buf = 0; buf < 2; buf++) {
+        gpu3dsFrameBegin(0, true);
+        float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
+        GPU3DS.stereoRightPass = false;
+        GPU3DS.stereoEyeIOD = slider;
         GPU3DS.appliedRenderState.target = TARGET_UNSET;
         gpu3dsDrawSnesScreen();
-        GPU3DS.stereoRightPass = false;
+        if (slider != 0.0f) {
+            GPU3DS.stereoRightPass = true;
+            GPU3DS.stereoEyeIOD = -slider;
+            GPU3DS.appliedRenderState.target = TARGET_UNSET;
+            gpu3dsDrawSnesScreen();
+            GPU3DS.stereoRightPass = false;
+        }
+        // pausedLook routes through the same presentation the pause
+        // uses - dim and "Press START to resume" - so leaving the
+        // editor restores the exact stage it found (no notif involved)
+        impl3dsSceneRender(false, pausedLook);
+        gpu3dsFrameEnd();
     }
-    impl3dsSceneRender(false, false);
-    gpu3dsFrameEnd();
-    gpu3dsSetStereoPreviewHighlight(-1);
+    gpu3dsSetStereoPreviewHighlight(-1, -1);
+    if (pausedLook)
+        notif3dsHide();
     GPU3DS.appliedRenderState.target = TARGET_UNSET;   // menu re-applies its own
 }
 

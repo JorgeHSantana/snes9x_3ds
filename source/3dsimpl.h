@@ -190,4 +190,5 @@ void impl3dsSceneRender(bool firstFrame, bool paused = false);
 #endif
 
 // 3D-tab live editor preview (issue #61)
-void impl3dsStereoPreviewFrame(int highlightLayer);
+void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
+                               bool pausedLook);

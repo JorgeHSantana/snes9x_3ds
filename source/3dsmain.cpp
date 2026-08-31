@@ -1483,9 +1483,7 @@ static float s_stereoPrevSlider = -1.0f;
 static void stereo3dRestorePausedLook()
 {
     settings3dsStereoApplyDefault();
-    impl3dsStereoPreviewFrame(-1);
-    notif3dsTrigger(Notif::Paused, Notif::Type::Default,
-        settings3DS.GameScreen, 3600000.0, NULL);
+    impl3dsStereoPreviewFrame(-1, -1, true);
 }
 
 // runs once per menu frame (idle): with the 3D tab focused on a depth
@@ -1511,9 +1509,12 @@ static void stereo3dIdleTick()
         ? menuTabs[curTab].SelectedItemIndex - s_stereoGaugeFirst : -1;
     bool inGauges = rel >= 0 && rel < 9;
     int layer = !inGauges ? -1 : (rel < 8 ? rel / 2 : 4);
+    int prio  = !inGauges ? -1 : (rel < 8 ? rel % 2 : -1);
 
     bool peek = (hidKeysHeld() & KEY_Y) != 0;   // menu loop already scanned
     int wantHighlight = (inGauges && !peek) ? layer : -1;
+    int wantPrio = (inGauges && !peek) ? prio : -1;
+    int wantKey = wantHighlight * 4 + wantPrio;
     float slider = osGet3DSliderState();
 
     if (!inGauges) {
@@ -1527,17 +1528,17 @@ static void stereo3dIdleTick()
     }
 
     bool redraw = s_stereoPreviewDirty
-        || wantHighlight != s_stereoPrevHighlight
+        || wantKey != s_stereoPrevHighlight
         || slider != s_stereoPrevSlider;
     if (!redraw)
         return;
 
     settings3dsStereoApplyProfile(s_stereoEditIdx);
-    impl3dsStereoPreviewFrame(wantHighlight);
+    impl3dsStereoPreviewFrame(wantHighlight, wantPrio, false);
     settings3dsStereoMarkReapply();
     s_stereoPreviewShown = true;
     s_stereoPreviewDirty = false;
-    s_stereoPrevHighlight = wantHighlight;
+    s_stereoPrevHighlight = wantKey;
     s_stereoPrevSlider = slider;
 }
 

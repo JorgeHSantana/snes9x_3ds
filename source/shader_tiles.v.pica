@@ -4,6 +4,11 @@
 .fvec       textureOffset        ; #5
                                  ; x = texture offset (0.0 or 1.0 for mode5/6 hi-res flipping)
 .fvec       stereoIOD            ; #6 - Inter-ocular distance for horizontal parallax
+.fvec       stereoDim            ; #7 - (dimP0, dimP1) editor spotlight alpha multipliers
+                                 ;      (the tile TEV replaces RGB from TEXTURE0 but
+                                 ;      modulates alpha with the vertex color, so the
+                                 ;      spotlight hides the sibling priority via the
+                                 ;      alpha test instead of dimming its RGB)
 
 ; Constants
 .constf c_base          (0, 1, 2, 8)    ; (x, y, z, w)
@@ -100,11 +105,16 @@ draw:
     ; shifts equal and boundary 0 this collapses to the flat behaviour,
     ; an exact no-op in 2D.
     mov     r1.xyz, stereoIOD.xyz
+    mov     r2.xy, stereoDim.xy
     cmp     r0.z, ge, ge, r1.z          ; plane >= boundary -> keep P1
     jmpc    cmp.x, parallax_apply
     mov     r1.y, r1.x                  ; below boundary -> P0 takes its seat
+    mov     r2.y, r2.x                  ; ...and P0's spotlight dim with it
 parallax_apply:
     add     r0.x, r1.y, r0.x
+    mul     r11.w, r2.y, r11.w          ; editor spotlight: sibling priority's
+                                        ; alpha goes to 0 (alpha test discards
+                                        ; it); 1.0 in gameplay = exact no-op
     mov     outpos, r0
     mov     outtex, r10
     mov     outcol, r11

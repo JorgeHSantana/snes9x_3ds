@@ -378,6 +378,12 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
         GPU3DS.stereoParallaxApplied = GPU3DS.stereoParallax +
             GPU3DS.stereoParallaxP1 * 1024.0f +
             GPU3DS.stereoParallaxBnd * 1048576.0f;
+        // 0.0 is a legitimate dim here (the editor's alpha-hide), so the
+        // fields are seeded to 1.0 at init instead of special-cased
+        C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_DIM],
+            GPU3DS.stereoPrioDimP0, GPU3DS.stereoPrioDimP1, 0.0f, 0.0f);
+        GPU3DS.stereoPrioDimApplied = GPU3DS.stereoPrioDimP0 +
+            GPU3DS.stereoPrioDimP1 * 1024.0f;
     }
 
     if (shaderUpdated && state->shader == SPROGRAM_MODE7) {
@@ -487,6 +493,12 @@ bool gpu3dsClearScreen(gfxScreen_t screen, bool isTopStereo) {
 bool gpu3dsInitialize()
 {
     memset(&GPU3DS, 0, sizeof(GPU3DS)); // wipe everything to 0/NULL/false
+
+    // spotlight dims are multiplicative: their neutral value is 1, not 0
+    // (0 is a real value - it alpha-hides a priority in the 3D editor)
+    GPU3DS.stereoPrioDimP0 = 1.0f;
+    GPU3DS.stereoPrioDimP1 = 1.0f;
+    GPU3DS.stereoPrioDimApplied = 1.0f + 1024.0f;
 
 	vramFree(vramAlloc(0)); // vramInit()
     GPU3DS.vramTotal = vramSpaceFree();
@@ -851,6 +863,7 @@ bool gpu3dsInitializeShaderUniformLocations()
     
      // used by shader_tiles (v) and shader_mode7 (v) for stereo parallax
     GPU3DS.shaderULocs[ULOC_STEREO_IOD] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoIOD");
+    GPU3DS.shaderULocs[ULOC_STEREO_DIM] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoDim");
 
 	bool uLocsInvalid = false;
 

@@ -930,7 +930,12 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
         }
 
         if (!isDialog && menuIdleCallback)
+        {
+            // tab switches mutate currentMenuTab inside this loop, so the
+            // entry-time snapshot goes stale without this refresh
+            s_currentTabForIdle = currentMenuTab;
             menuIdleCallback();
+        }
 
         hidScanInput();
         thisKeysHeld = hidKeysHeld();

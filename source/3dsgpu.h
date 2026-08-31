@@ -83,6 +83,7 @@ typedef enum {
     ULOC_TEX_OFFSET,
     ULOC_UPDATE_FRAME,
     ULOC_STEREO_IOD,
+    ULOC_STEREO_DIM,
     ULOC_COUNT
 } SGPU_SHADER_ULOC;
 
@@ -290,6 +291,9 @@ typedef struct
     float                       stereoParallaxP1;    // current P1 shift
     float                       stereoParallaxBnd;   // current plane boundary
     float                       stereoParallaxApplied;   // composite dedup key
+    float                       stereoPrioDimP0;
+    float                       stereoPrioDimP1;
+    float                       stereoPrioDimApplied;
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
     // false when the optional right-eye VRAM texture failed to allocate;
@@ -432,8 +436,9 @@ static inline void gpu3dsWaitForVBlank(gfxScreen_t screen) {
         gspWaitForVBlank1();
 }
 
-// 3D-tab editor preview highlight (issue #61); -1 = off
-void gpu3dsSetStereoPreviewHighlight(int layerId);
+// 3D-tab editor preview highlight (issue #61); layer -1 = off,
+// prio -1 = whole layer, 0/1 = spotlight that priority only
+void gpu3dsSetStereoPreviewHighlight(int layerId, int prio);
 
 // Push the stereo parallax uniform immediately (dedup'd). Must NOT rely on
 // gpu3dsApplyRenderState: its `if (!diff) return` early-out skips uniform
@@ -458,6 +463,19 @@ static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary)
 static inline void gpu3dsSetStereoParallax(float v)
 {
     gpu3dsSetStereoParallax3(v, v, 0.0f);
+}
+
+// per-priority brightness pair for the editor spotlight (1.0 = normal);
+// consumed by the tile shader as a primary-color multiplier per side
+static inline void gpu3dsSetStereoPrioDim(float dimP0, float dimP1)
+{
+    float key = dimP0 + dimP1 * 1024.0f;
+    if (GPU3DS.stereoPrioDimApplied == key)
+        return;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_DIM], dimP0, dimP1, 0.0f, 0.0f);
+    GPU3DS.stereoPrioDimApplied = key;
+    GPU3DS.stereoPrioDimP0 = dimP0;
+    GPU3DS.stereoPrioDimP1 = dimP1;
 }
 
 static inline void gpu3dsApplyRenderState(SGPURenderState *state)

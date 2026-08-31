@@ -376,10 +376,12 @@ static void gpu3dsSetGhostAlpha(float a)
 // 3D-tab editor preview (issue #61): while >= 0, every layer except
 // this one is dimmed hard so the edited layer reads instantly.
 static int s_previewHighlightLayer = -1;
+static int s_previewHighlightPrio = -1;   // -1 = whole layer
 
-void gpu3dsSetStereoPreviewHighlight(int layerId)
+void gpu3dsSetStereoPreviewHighlight(int layerId, int prio)
 {
     s_previewHighlightLayer = layerId;
+    s_previewHighlightPrio = prio;
     s_atmosLastColor = 1;               // poison the dedup so envs re-apply
 }
 
@@ -475,6 +477,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
     SLayer *layer = &list->layers[LAYER_WINDOW_LR];
 
     gpu3dsSetStereoParallax(0.0f);
+    // neutral spotlight for the window/depth prepass: a stale dim from
+    // the previous frame would alpha-discard the window masks
+    gpu3dsSetStereoPrioDim(1.0f, 1.0f);
     gpu3dsResetStereoAtmosphere();
 
     if (layer->verticesByTarget[0]) {
@@ -513,6 +518,19 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     sp1 = roundf(sp1);
                 }
                 gpu3dsSetStereoParallax3(sp0, sp1, GPU3DS.stereoPrioZBoundary[id]);
+
+                // spotlighting one PRIORITY hides its sibling in-shader
+                // (issue #61 polish): the TexEnv dim can't split a draw,
+                // and the tile TEV takes RGB straight from the texture,
+                // so the shader zeroes the sibling's vertex alpha and the
+                // NE_ZERO alpha test discards those tiles entirely
+                float dimP0 = 1.0f, dimP1 = 1.0f;
+                if (s_previewHighlightLayer == (int)id &&
+                    s_previewHighlightPrio >= 0 && id < LAYER_OBJ) {
+                    if (s_previewHighlightPrio == 0) dimP1 = 0.0f;
+                    else                             dimP0 = 0.0f;
+                }
+                gpu3dsSetStereoPrioDim(dimP0, dimP1);
             }
             gpu3dsSetStereoLayerAtmosphere(id);
 
@@ -569,6 +587,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
     }
 
     gpu3dsSetStereoParallax(0.0f);
+    gpu3dsSetStereoPrioDim(1.0f, 1.0f);
     gpu3dsResetStereoAtmosphere();   // the composites must not inherit it
 }
 
