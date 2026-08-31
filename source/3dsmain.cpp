@@ -989,8 +989,14 @@ static void menuRunUpdateWorker(std::vector<SMenuTab>& menuTabs,
     menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
         title, checkText, infoColor, withBar ? 0 : -1);
 
-    // 64KB stack: the mbedtls handshake alone wants a good chunk of it
-    Thread th = threadCreate(updWorkerThreadFn, NULL, 0x10000, 0x38, -2, false);
+    // 64KB stack: the mbedtls handshake alone wants a good chunk of it.
+    // Priority sits one notch below the ACTUAL main thread, queried at
+    // runtime - a hardcoded number risks starving the UI on hardware if
+    // main's priority is not the assumed default.
+    s32 mainPrio = 0x30;
+    svcGetThreadPriority(&mainPrio, CUR_THREAD_HANDLE);
+    Thread th = threadCreate(updWorkerThreadFn, NULL, 0x10000,
+                             (int)mainPrio + 1, -2, false);
     u64 startMs = osGetTime();
     while (th != NULL && !s_updWorker.finished)
     {
