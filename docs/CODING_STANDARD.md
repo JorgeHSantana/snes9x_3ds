@@ -214,3 +214,10 @@ Two consequences worth stating:
 * 4-space indent, no tabs (matches existing platform code).
 * One declaration per line.
 * Comments state constraints the code can't (`// guarded by snesAccessLock`), not what the next line does. English only.
+
+## 12. Documentation (mandatory)
+
+* Document as you go, in markdown, alongside the code — never "later".
+* **Architecture**: a change that adds or reshapes a subsystem (new module, new data flow, new uniform/format/protocol) updates the matching `docs/*.md` — or creates one — in the same commit series. Architecture docs describe the system as it **is**, not its history.
+* **Dev journal (diário de bordo)**: every working session appends an entry to `docs/journal/YYYY-MM.md` — date, what was attempted, what shipped, dead ends and *why* they failed, and the validation evidence (game/scene/hardware tested). The journal is append-only; it is where the history lives.
+* A bug whose root cause took real investigation gets its mechanism written down: a journal entry at minimum, and a note in the relevant `docs/*.md` when the constraint is permanent (e.g. "the tile TEV replaces RGB from the texture — vertex RGB never reaches the pixel").

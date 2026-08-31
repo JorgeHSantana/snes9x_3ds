@@ -58,6 +58,10 @@ The vertex shader decodes flips, the atlas slot → pixel coordinates in the 102
 
 The same program also draws **Mode 7 scanline spans**: a sentinel `y1 = -16384` from `gfxhw.cpp` routes the geometry shader to a 1-scanline-tall emission path (height 0.00395 — exactly 1/256 would make the scanline disappear).
 
+**Stereo priority tiers** (issue #60): the decoded depth plane (`d/32`) selects one of four parallax tiers via an overwrite cascade of three `ifc` blocks (picasso has no unconditional `jmp`). `stereoIOD` = (tier0 shift, tier1 shift, boundary 0/1); `stereoIOD2` = (tier2, tier3, boundary 1/2, boundary 2/3). BG layers park the upper boundaries at `STEREO_TIER_PARKED` (99) so only their two tile priorities exist; the OBJ layer uses all four (sprite planes are `(priority+1)*3` = 3/6/9/12, boundaries halfway between). `stereoDim` carries four per-tier alpha multipliers for the 3D editor's spotlight — alpha, not RGB, because of the TEV constraint below. Uniform discipline: `gpu3dsApplyRenderState`'s shader-rebind resync must write the **same values and dedup keys** as the setters (`gpu3dsSetStereoParallax3/Hi`, `gpu3dsSetStereoPrioDim4`) — a second writer with stale semantics kills the 3D (learned twice).
+
+**Permanent TEV constraint**: tile draws use `TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA` — RGB is REPLACE from TEXTURE0, so **vertex RGB never reaches the pixel** (for tiles the color attribute carries texcoords; for solid-color draws it carries the real color, which is why the TEV can't just modulate). Only the vertex **alpha** is modulated in, which is what the spotlight and the alpha classes ride on.
+
 ### `shader_mode7` (vertex + geometry, stride 3)
 
 Bakes the 1024×1024 `SNES_MODE7_FULL` playfield from the 128×128 Mode 7 character cache. One vertex per tile; the **dirty test runs on the GPU** — the vertex shader kills any vertex whose `Position.w` stamp is older than the `updateFrame` uniform, so all ~16 K vertices are submitted every bake but only changed tiles rasterize. The playfield is baked in 4× 512×512 sections (PICA can't target render viewports wider than 512); the render target's color buffer pointer is repointed per section.
