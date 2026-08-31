@@ -912,47 +912,114 @@ static bool s_bootAutoCheckPending = false;
 
 // Live download feedback: the transfer callback repaints the progress
 // dialog every couple of percent.
-struct UpdateProgressUi
+// The network runs on a worker thread (issue #64, Jorge's report: the
+// whole console froze during transfers); the main thread keeps drawing
+// the dialog, reads B, and composes progress from these shared fields.
+struct UpdateWorker
 {
-    SMenuTab* dialogTab;
-    bool* isDialog;
-    int* currentMenuTab;
-    std::vector<SMenuTab>* menuTabs;
-    int color;
-    int lastPct;
-    u64 startMs;
+    // job
+    bool                    applyMode;      // false = check
+    bool                    autoRule;       // check: never cross channels
+    int                     channel;
+    Update3dsRelease        release;        // apply input
+    // results
+    Update3dsCheck          check;
+    const char*             applyError;
+    // live state (worker writes, ui reads; cancel goes the other way)
+    volatile unsigned       done;
+    volatile unsigned       total;
+    volatile bool           cancel;
+    volatile bool           finished;
 };
+static UpdateWorker s_updWorker;
 
-static bool updNetKeepGoing()
+static bool updWorkerKeepGoing()
 {
-    hidScanInput();
-    return (hidKeysDown() & KEY_B) == 0;
+    return !s_updWorker.cancel;
 }
 
-static bool updateProgressCb(void* user, unsigned done, unsigned total)
+static bool updWorkerProgress(void*, unsigned done, unsigned total)
 {
-    UpdateProgressUi* ui = (UpdateProgressUi*)user;
-    if (!updNetKeepGoing())
-        return false;                   // B pressed - cancel the download
-    if (total == 0)
-        return true;                    // no size yet - keep downloading
-    int pct = (int)((unsigned long long)done * 100u / total);
-    if (pct - ui->lastPct >= 2 || (pct == 100 && ui->lastPct != 100))
+    s_updWorker.done = done;
+    s_updWorker.total = total;
+    return !s_updWorker.cancel;
+}
+
+static void updWorkerThreadFn(void*)
+{
+    update3dsNetSetCancelPoll(updWorkerKeepGoing);
+    if (s_updWorker.applyMode)
+        s_updWorker.applyError =
+            updater3dsApply(s_updWorker.release, updWorkerProgress, NULL);
+    else if (s_updWorker.autoRule)
+        updater3dsAutoCheck(s_updWorker.channel, s_updWorker.check);
+    else
+        updater3dsCheck(s_updWorker.channel, s_updWorker.check);
+    update3dsNetSetCancelPoll(NULL);
+    s_updWorker.finished = true;
+}
+
+// Spawns the worker and animates the dialog until it finishes. B sets
+// the cancel flag; the transfer aborts on its next poll.
+static void menuRunUpdateWorker(std::vector<SMenuTab>& menuTabs,
+                                int& currentMenuTab, const char* title,
+                                const char* checkText, bool withBar)
+{
+    SMenuTab dialogTab;
+    bool isDialog = false;
+    int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
+
+    s_updWorker.done = s_updWorker.total = 0;
+    s_updWorker.cancel = false;
+    s_updWorker.finished = false;
+    s_updWorker.applyError = NULL;
+
+    menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+        title, checkText, infoColor, withBar ? 0 : -1);
+
+    // 64KB stack: the mbedtls handshake alone wants a good chunk of it
+    Thread th = threadCreate(updWorkerThreadFn, NULL, 0x10000, 0x38, -2, false);
+    u64 startMs = osGetTime();
+    while (th != NULL && !s_updWorker.finished)
     {
-        ui->lastPct = pct;
-        u64 elapsedMs = osGetTime() - ui->startMs;
-        unsigned kbps = elapsedMs > 0
-            ? (unsigned)(((unsigned long long)done * 1000u) / elapsedMs / 1024u)
-            : 0;
-        char line[80];
-        snprintf(line, sizeof(line),
-                 "Downloading the new build... %d%% (%u KB/s)\nPress B to cancel.",
-                 pct, kbps);
-        menu3dsShowProgressDialog(*ui->dialogTab, *ui->isDialog,
-            *ui->currentMenuTab, *ui->menuTabs, "Updating", line,
-            ui->color, pct);
+        if (!aptMainLoop())
+            break;
+        hidScanInput();
+        if (hidKeysDown() & KEY_B)
+            s_updWorker.cancel = true;
+
+        char line[96];
+        int pct = -1;
+        if (withBar)
+        {
+            unsigned done = s_updWorker.done, total = s_updWorker.total;
+            pct = (total > 0)
+                ? (int)((unsigned long long)done * 100u / total) : 0;
+            u64 elapsedMs = osGetTime() - startMs;
+            unsigned kbps = (elapsedMs > 0)
+                ? (unsigned)(((unsigned long long)done * 1000u) / elapsedMs / 1024u)
+                : 0;
+            snprintf(line, sizeof(line),
+                     "Downloading the new build... %d%% (%u KB/s)\n%s",
+                     pct, kbps,
+                     s_updWorker.cancel ? "Cancelling..." : "Press B to cancel.");
+        }
+        else
+        {
+            snprintf(line, sizeof(line), "%s\n%s", checkText,
+                     s_updWorker.cancel ? "Cancelling..." : "Press B to cancel.");
+        }
+        menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab,
+            menuTabs, title, line, infoColor, pct);
     }
-    return true;
+    if (th != NULL)
+    {
+        while (!s_updWorker.finished)
+            svcSleepThread(10000000LL);      // apt quit: let it wind down
+        threadJoin(th, U64_MAX);
+        threadFree(th);
+    }
+    menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
 }
 
 // Offers 'chk' (a completed, update-available check), then downloads and
@@ -962,7 +1029,6 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
 {
     SMenuTab dialogTab;
     bool isDialog = false;
-    int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
 
     bool nightly = strcmp(chk.release.tag, "nightly-latest") == 0;
     char date[16];
@@ -1001,13 +1067,11 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
                        "Update Available", text, true, true, 3))
         return;
 
-    menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-        "Updating", "Downloading the new build... 0%", infoColor, 0);
-    UpdateProgressUi progressUi = { &dialogTab, &isDialog, &currentMenuTab,
-                                    &menuTabs, infoColor, 0, osGetTime() };
-    const char* err = updater3dsApply(chk.release, updateProgressCb,
-                                      &progressUi);
-    menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+    s_updWorker.applyMode = true;
+    s_updWorker.release = chk.release;
+    menuRunUpdateWorker(menuTabs, currentMenuTab, "Updating",
+                        "Downloading the new build...", true);
+    const char* err = s_updWorker.applyError;
 
     if (err != NULL)
     {
@@ -1042,21 +1106,16 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
 // update is actually there - a boot never nags.
 static void menuAutoCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMenuTab)
 {
-    SMenuTab dialogTab;
-    bool isDialog = false;
-    int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
-
-    menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-        "Updates", "Checking for updates...\nPress B to cancel.", infoColor, -1);
-    Update3dsCheck chk;
-    memset(&chk, 0, sizeof(chk));
-    if (update3dsNetInit())
-    {
-        update3dsNetSetCancelPoll(updNetKeepGoing);
-        updater3dsAutoCheck(settings3DS.UpdateChannel, chk);
-        update3dsNetSetCancelPoll(NULL);
-    }
-    menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+    if (!update3dsNetInit())
+        return;
+    s_updWorker.applyMode = false;
+    s_updWorker.autoRule = true;
+    s_updWorker.channel = settings3DS.UpdateChannel;
+    menuRunUpdateWorker(menuTabs, currentMenuTab, "Updates",
+                        "Checking for updates...", false);
+    if (s_updWorker.cancel)
+        return;
+    Update3dsCheck chk = s_updWorker.check;
 
     if (chk.ok && chk.updateAvailable)
         menuOfferUpdate(menuTabs, currentMenuTab, chk);
@@ -1082,21 +1141,23 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
         return;
     CheckAndUpdate(settings3DS.UpdateChannel, channel);
 
-    menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-        "Updates", "Checking for updates...\nPress B to cancel.", infoColor, -1);
     Update3dsCheck chk;
     if (update3dsNetInit())
     {
-        update3dsNetSetCancelPoll(updNetKeepGoing);
-        updater3dsCheck(settings3DS.UpdateChannel, chk);
-        update3dsNetSetCancelPoll(NULL);
+        s_updWorker.applyMode = false;
+        s_updWorker.autoRule = false;
+        s_updWorker.channel = settings3DS.UpdateChannel;
+        menuRunUpdateWorker(menuTabs, currentMenuTab, "Updates",
+                            "Checking for updates...", false);
+        chk = s_updWorker.check;
+        if (s_updWorker.cancel)
+            return;
     }
     else
     {
         memset(&chk, 0, sizeof(chk));
         snprintf(chk.error, sizeof(chk.error), "network unavailable");
     }
-    menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
 
     if (!chk.ok)
     {
