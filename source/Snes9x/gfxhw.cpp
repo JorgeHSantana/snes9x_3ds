@@ -829,7 +829,9 @@ inline void __attribute__((always_inline)) S9xDrawHiresBGFullTileHardwareInline 
 	bool variantPossible,
 	int prio, int depth0, int depth1,
 	int32 snesTile, int32 screenX, int32 screenY,
-	int32 startLine, int32 height, bool stretchedTy)
+	int32 startLine, int32 height, bool stretchedTy,
+	// horizontal slice of the 8px tile (issue #70's priority-gap fill)
+	int32 sliceX0 = 0, int32 sliceX1 = 8)
 {
     uint32 TileAddr = BG.TileAddress + ((snesTile & 0x3ff) << tileShift);
 
@@ -912,15 +914,15 @@ inline void __attribute__((always_inline)) S9xDrawHiresBGFullTileHardwareInline 
     }
 
 	bool fullWidth = GPU3DSExt.render2x.enabled;
-	int x0 = fullWidth ? screenX : (screenX >> 1);
+	int x0 = fullWidth ? (screenX + sliceX0) : ((screenX + sliceX0) >> 1);
 	int y0 = screenY + (prio == 0 ? depth0 : depth1);
 
-	int x1 = x0 + (fullWidth ? 8 : 4);
+	int x1 = fullWidth ? (screenX + sliceX1) : ((screenX + sliceX1) >> 1);
 	int y1 = y0 + height;
 
-	int tx0 = 0;
+	int tx0 = sliceX0;
 	int ty0 = startLine >> 3;
-	int tx1 = fullWidth ? 8 : 7;
+	int tx1 = (fullWidth || sliceX1 != 8) ? sliceX1 : 7;
 	int ty1 = stretchedTy ? (ty0 + 1) : (ty0 + height);
 
 	if (IPPU.Interlace && !stretchedTy)
@@ -1691,26 +1693,32 @@ inline void __attribute__((always_inline)) S9xDrawBackgroundHardwarePriority0Inl
 			// A background stores one tile per cell, so giving its two tile
 			// priorities different depths slides those cells apart and
 			// uncovers a strip with nothing behind it (issue #70). Extending
-			// the nearest priority-0 tile across each boundary fills that
-			// strip with the continuation of whatever it belonged to - on
-			// both sides, because the two eyes pull apart in opposite
-			// directions and share this geometry. Only when priority 0 sits
-			// further back: the extension draws at P0's depth plane, so any
-			// overshoot hides behind opaque P1 tiles. (Ported from rcmz's
-			// 'Fill background gaps'.)
+			// the nearest tile of the FARTHER priority across each boundary
+			// fills that strip with the continuation of whatever it belonged
+			// to - on both sides, because the two eyes pull apart in opposite
+			// directions and share this geometry. The extension draws at the
+			// farther priority's own plane, so it keeps that priority's shift
+			// and stacks under the nearer one; the width tracks the LIVE
+			// slider, so any overshoot is at most the ceil's 1px. (Ported
+			// from rcmz's 'Fill background gaps', extended to both
+			// arrangements.)
 			int fillWidth = 0;
-			if (settings3DS.StereoFillGaps &&
-				GPU3DS.stereoLayerDepth[bg] < GPU3DS.stereoLayerDepthP1[bg]) {
-				float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
-				fillWidth = (int)ceilf(slider *
-					(GPU3DS.stereoLayerDepthP1[bg] - GPU3DS.stereoLayerDepth[bg]));
-				if (fillWidth > 16) fillWidth = 16;
+			int fillPrio = 0;
+			{
+				float dP0 = GPU3DS.stereoLayerDepth[bg];
+				float dP1 = GPU3DS.stereoLayerDepthP1[bg];
+				if (settings3DS.StereoFillGaps && dP0 != dP1) {
+					fillPrio = dP0 < dP1 ? 0 : 1;
+					float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
+					fillWidth = (int)ceilf(slider * (dP0 < dP1 ? dP1 - dP0 : dP0 - dP1));
+					if (fillWidth > 16) fillWidth = 16;
+				}
 			}
 
 			int32 fillTile = 0;
 			bool haveFillTile = false;
-			int fillForward = 0;    // cells still to extend into after a low-priority run
-			int highRun = 0;        // consecutive high-priority cells seen so far
+			int fillForward = 0;    // cells still to extend into after a filler-priority run
+			int otherRun = 0;       // consecutive other-priority cells seen so far
 
 			// Middle, unclipped tiles
 			//Count = Width - Count;
@@ -1749,10 +1757,10 @@ inline void __attribute__((always_inline)) S9xDrawBackgroundHardwarePriority0Inl
 
 					if (fillWidth)
 					{
-						if (tpriority == 0)
+						if (tpriority == fillPrio)
 						{
-							// Extend back over the high-priority cells just passed.
-							for (int back = 1; back * 8 - 8 < fillWidth && back <= highRun; back++)
+							// Extend back over the other-priority cells just passed.
+							for (int back = 1; back * 8 - 8 < fillWidth && back <= otherRun; back++)
 							{
 								int32 width = fillWidth - (back - 1) * 8;
 								if (width > 8) width = 8;
@@ -1760,7 +1768,7 @@ inline void __attribute__((always_inline)) S9xDrawBackgroundHardwarePriority0Inl
 								S9xDrawBGFullTileHardwareInline(
 									tileSize, tileShift, paletteShift, paletteMask, startPalette, directColourMode,
 									variantPossible,
-									0, depth0, depth1,
+									fillPrio, depth0, depth1,
 									modifiedTile, sX - back * 8, sY, VirtAlign, Lines, stretchedTy,
 									8 - width, 8);
 							}
@@ -1768,27 +1776,27 @@ inline void __attribute__((always_inline)) S9xDrawBackgroundHardwarePriority0Inl
 							fillTile = modifiedTile;
 							haveFillTile = true;
 							fillForward = (fillWidth + 7) >> 3;
-							highRun = 0;
+							otherRun = 0;
 						}
 						else
 						{
-							// Extend the last priority-0 tile forward into this run.
+							// Extend the last filler-priority tile forward into this run.
 							if (fillForward > 0 && haveFillTile)
 							{
-								int32 width = fillWidth - highRun * 8;
+								int32 width = fillWidth - otherRun * 8;
 								if (width > 8) width = 8;
 
 								S9xDrawBGFullTileHardwareInline(
 									tileSize, tileShift, paletteShift, paletteMask, startPalette, directColourMode,
 									variantPossible,
-									0, depth0, depth1,
+									fillPrio, depth0, depth1,
 									fillTile, sX, sY, VirtAlign, Lines, stretchedTy,
 									0, width);
 
 								fillForward--;
 							}
 
-							highRun++;
+							otherRun++;
 						}
 					}
 				}
@@ -2432,6 +2440,28 @@ inline void __attribute__((always_inline)) S9xDrawHiresBackgroundHardwarePriorit
 
 			int tilesToDraw = sX == 0 ? 64 : 66;
 
+			// Priority-gap fill (issue #70), hires flavour: tiles span 4
+			// output pixels at native width, so the walk-space width is
+			// twice the on-screen gap there.
+			int fillWidth = 0;
+			int fillPrio = 0;
+			{
+				float dP0 = GPU3DS.stereoLayerDepth[bg];
+				float dP1 = GPU3DS.stereoLayerDepthP1[bg];
+				if (settings3DS.StereoFillGaps && dP0 != dP1) {
+					fillPrio = dP0 < dP1 ? 0 : 1;
+					float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
+					fillWidth = (int)ceilf(slider * (dP0 < dP1 ? dP1 - dP0 : dP0 - dP1));
+					if (!GPU3DSExt.render2x.enabled) fillWidth *= 2;
+					if (fillWidth > 16) fillWidth = 16;
+				}
+			}
+
+			int32 fillTile = 0;
+			bool haveFillTile = false;
+			int fillForward = 0;
+			int otherRun = 0;
+
 			for (int tno = 0; tno < tilesToDraw; tno++, sX += 8, Quot++)
 			{
 				Tile = READ_2BYTES(t);
@@ -2460,6 +2490,49 @@ inline void __attribute__((always_inline)) S9xDrawHiresBackgroundHardwarePriorit
 					variantPossible,
 					tpriority, depth0, depth1,
 					modifiedTile, sX, sY, VirtAlign, actualLines, stretchedTy);
+
+				if (fillWidth)
+				{
+					if (tpriority == fillPrio)
+					{
+						for (int back = 1; back * 8 - 8 < fillWidth && back <= otherRun; back++)
+						{
+							int32 width = fillWidth - (back - 1) * 8;
+							if (width > 8) width = 8;
+
+							S9xDrawHiresBGFullTileHardwareInline(
+								tileSize, tileShift, paletteShift, paletteMask, startPalette, directColourMode,
+								variantPossible,
+								fillPrio, depth0, depth1,
+								modifiedTile, sX - back * 8, sY, VirtAlign, actualLines, stretchedTy,
+								8 - width, 8);
+						}
+
+						fillTile = modifiedTile;
+						haveFillTile = true;
+						fillForward = (fillWidth + 7) >> 3;
+						otherRun = 0;
+					}
+					else
+					{
+						if (fillForward > 0 && haveFillTile)
+						{
+							int32 width = fillWidth - otherRun * 8;
+							if (width > 8) width = 8;
+
+							S9xDrawHiresBGFullTileHardwareInline(
+								tileSize, tileShift, paletteShift, paletteMask, startPalette, directColourMode,
+								variantPossible,
+								fillPrio, depth0, depth1,
+								fillTile, sX, sY, VirtAlign, actualLines, stretchedTy,
+								0, width);
+
+							fillForward--;
+						}
+
+						otherRun++;
+					}
+				}
 				
 				t += Quot & 1;
 				if (Quot == 63)

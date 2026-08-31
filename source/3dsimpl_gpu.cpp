@@ -346,6 +346,11 @@ static u32 s_atmosLastColor;
 // both the smear distance and its visibility
 static float s_atmosGhostAlpha;
 static float s_atmosGhostOffset;
+// which of the layer's depth tiers smear in the ghost passes: since the
+// priority split (issue #60) each tier sits at its own depth, so only
+// the tiers actually outside the focus zone blur - the in-zone ones are
+// alpha-hidden during the ghost passes and stay crisp
+static bool s_atmosGhostTierOn[4] = { true, true, true, true };
 
 static void gpu3dsResetStereoAtmosphere()
 {
@@ -354,6 +359,7 @@ static void gpu3dsResetStereoAtmosphere()
     s_atmosLastColor = 0xFFFFFFFF;
     s_atmosGhostAlpha = 0.0f;
     s_atmosGhostOffset = 0.0f;
+    for (int t = 0; t < 4; t++) s_atmosGhostTierOn[t] = true;
     GPU3DS.stereoGhostPass = false;
 }
 
@@ -441,9 +447,26 @@ static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id, bool forceOthers = false
     // (1..3px) and strengthens the ghosts together. Unlike fade/haze it
     // is a focus cue, not a distance cue: it counts the distance to the
     // nearest zone edge in BOTH directions (depth-of-field).
-    float excess = backExcess;
-    if (depth > GPU3DS.stereoFocusFront)
-        excess = depth - GPU3DS.stereoFocusFront;
+    // Per-TIER since the priority split (issue #60): each tier's own
+    // distance to the zone decides whether ITS tiles smear (a front
+    // P1 blurs while its in-zone P0 stays crisp); the pass strength
+    // follows the farthest tier.
+    float tierDepth[4];
+    tierDepth[0] = depth;
+    tierDepth[1] = GPU3DS.stereoLayerDepthP1[id];
+    tierDepth[2] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[0] : tierDepth[1];
+    tierDepth[3] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[1] : tierDepth[1];
+
+    float excess = 0.0f;
+    for (int t = 0; t < 4; t++) {
+        float ex = 0.0f;
+        if (tierDepth[t] < GPU3DS.stereoFocusBack)
+            ex = GPU3DS.stereoFocusBack - tierDepth[t];
+        else if (tierDepth[t] > GPU3DS.stereoFocusFront)
+            ex = tierDepth[t] - GPU3DS.stereoFocusFront;
+        s_atmosGhostTierOn[t] = ex > 0.001f;
+        if (ex > excess) excess = ex;
+    }
 
     float excessIn = GPU3DS.stereoMaxExcess > 0.0f ? excess / GPU3DS.stereoMaxExcess : 0.0f;
     float blur = (GPU3DS.stereoBlur / 8.0f) * excessIn * slider;
@@ -617,6 +640,13 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     if (gp == 1) {
                         GPU3DS.stereoGhostPass = true;
                         gpu3dsSetGhostAlpha(ghost);
+                        // only the tiers outside the focus zone smear;
+                        // the in-zone ones already drew crisp in pass 0
+                        gpu3dsSetStereoPrioDim4(
+                            s_atmosGhostTierOn[0] ? 1.0f : 0.0f,
+                            s_atmosGhostTierOn[1] ? 1.0f : 0.0f,
+                            s_atmosGhostTierOn[2] ? 1.0f : 0.0f,
+                            s_atmosGhostTierOn[3] ? 1.0f : 0.0f);
                         gpu3dsSetStereoParallax3(tierShift[0] + s_atmosGhostOffset,
                             tierShift[1] + s_atmosGhostOffset, tierBnd01);
                         gpu3dsSetStereoParallaxHi(tierShift[2] + s_atmosGhostOffset,
