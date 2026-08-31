@@ -62,6 +62,11 @@ void ui3dsDrawStringWithWrapping(gfxScreen_t targetScreen, int x0, int y0, int x
 int ui3dsDrawStringWithNoWrapping(gfxScreen_t targetScreen, int x0, int y0, int x1, int y1, int color, int horizontalAlignment, const char *buffer);
 int ui3dsGetStringWidth(const char *s, int startPos = 0, int endPos = 0xffff);
 
+// Line count (and optional wrap points, arrays sized [30]) that
+// ui3dsDrawStringWithWrapping would produce for this width - for sizing
+// containers to their text before drawing.
+int ui3dsScanWrappedLines(int maxWidth, const char *buffer, int *lineStart = nullptr, int *lineEnd = nullptr);
+
 int ui3dsDrawStringToTexture(u16 *textureBuffer, const char *text, int x, int y, int xMax, int yMax, u32 color);
 int ui3dsDrawStringToTextureBold(u16 *textureBuffer, const char *text, int x, int y, int xMax, int yMax, u32 color);
 

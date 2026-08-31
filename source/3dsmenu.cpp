@@ -1366,6 +1366,17 @@ int menu3dsShowDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, 
     dialogTextLines = textLines;
     dialogItemCount = (int)menuItems.size();
 
+    // content-size the header when the caller didn't: the fixed 76px
+    // header fits 3 text lines, and longer descriptions (picker help
+    // texts) were clipped at the 4th. Counted with the SAME wrap logic
+    // the draw uses, so width-wrapped lines are included too.
+    if (dialogTextLines < 0 && !dialogText.empty()) {
+        int lines = ui3dsScanWrappedLines(
+            settings3DS.SecondScreenWidth - 64, dialogText.c_str());
+        if (lines > 3)
+            dialogTextLines = lines;
+    }
+
     currentTab->SetTitle(title);
     currentTab->DialogText.assign(dialogText);
     currentTab->MenuItems = menuItems;
@@ -1432,7 +1443,17 @@ void menu3dsShowRomLoadingDialog(SMenuTab& dialogTab, bool& isDialog, int& curre
 
     int thumbHeight = showLoadingDialogThumb ? img3dsGetThumbHeight() : 0;
     int thumbWidth = showLoadingDialogThumb ? img3dsGetThumbWidth() : 0;
-    int dialogHeight = thumbHeight > 0 ? thumbHeight : 112;
+    // without a thumbnail, size the dialog to its content: title row +
+    // however many lines the game name wraps to + padding (the fixed
+    // 112px left a band of dead space under one-line names)
+    int dialogHeight = thumbHeight;
+    if (dialogHeight <= 0) {
+        int lines = ui3dsScanWrappedLines(
+            settings3DS.SecondScreenWidth - 64, text.c_str());
+        if (lines < 1) lines = 1;
+        if (lines > 3) lines = 3;              // the draw area caps at y70
+        dialogHeight = 30 + lines * FONT_HEIGHT + 14;
+    }
 
     int fadeSteps = 24;
     int loadingDialogSteps = ANIMATE_DIALOG_STEPS;

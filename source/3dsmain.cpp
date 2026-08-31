@@ -1559,12 +1559,12 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     if (gpu3dsIs3DAvailable()) {
         AddMenuHeader2(items, "Settings"_s);
         AddMenuPicker(items, "  Slider Response"_s,
-            "Discrete: shifts snap to whole pixels - layers always move\nas one solid block, but the slider steps through few levels.\nContinuous: smooth analog response; at partial slider a layer\ncan visibly split. At FULL slider both modes are identical."_s,
+            "Discrete: shifts snap to whole pixels - layers always move as one solid block, but the slider steps through few levels. Continuous: smooth analog response; at partial slider a layer can visibly split. At FULL slider both modes are identical."_s,
             makePickerOptions({"Discrete (solid layers)", "Continuous (smooth)"}),
             settings3DS.StereoShiftMode, DIALOG_TYPE_INFO, true,
             []( int val ) { CheckAndUpdate( settings3DS.StereoShiftMode, val ); });
         AddMenuPicker(items, "  Edge Cleanup"_s,
-            "The per-layer parallax corrupts a few columns at the screen\nedges. Trim narrows the game window (scale kept); Zoom crops\nthem away, absorbed by the stretch; Off shows the raw edges.\nApplies to the whole game - every layer, every profile."_s,
+            "The per-layer parallax corrupts a few columns at the screen edges. Trim narrows the game window (scale kept); Zoom crops them away, absorbed by the stretch; Off shows the raw edges. Applies to the whole game - every layer, every profile."_s,
             makePickerOptions({"Off", "Trim", "Zoom"}), settings3DS.StereoEdgeMode, DIALOG_TYPE_INFO, true,
             []( int val ) {
                 if (CheckAndUpdate( settings3DS.StereoEdgeMode, val )) {

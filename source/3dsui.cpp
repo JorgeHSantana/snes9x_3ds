@@ -596,11 +596,82 @@ int ui3dsDrawRGB565_StringToFramebuffer(gfxScreen_t targetScreen, int absoluteX,
 
 
 //---------------------------------------------------------------
+// Scans the wrap points of a string exactly the way
+// ui3dsDrawStringWithWrapping lays it out (space/dash/slash/\n
+// breaks, 30-line cap). Returns the line count; fills the
+// start/end index arrays (each sized [30]) when given.
+//---------------------------------------------------------------
+int ui3dsScanWrappedLines(int maxWidth, const char *buffer, int *lineStart, int *lineEnd)
+{
+    if (buffer == NULL)
+        return 0;
+
+    int strLineCount = 0;
+    int slen = strlen(buffer);
+
+    int curStartPos = 0;
+    int curEndPos = slen - 1;
+    int lineWidth = 0;
+    for (int i = 0; i < slen; )
+    {
+        if (i != curStartPos)
+        {
+            if (buffer[i] == ' ' && i > 0 && buffer[i-1] != ' ')
+                curEndPos = i - 1;
+            else if (buffer[i] == '-')  // use space or dash as line breaks
+                curEndPos = i;
+            else if (buffer[i] == '/')
+                curEndPos = i;
+            else if (buffer[i] == '\n')  // \n as line breaks.
+            {
+                curEndPos = i - 1;
+                lineWidth = 999999;     // force the line break.
+            }
+        }
+        lineWidth += fontWidth[(unsigned char)buffer[i]];
+        if (lineWidth > maxWidth)
+        {
+            // Break the line here
+            if (lineStart) lineStart[strLineCount] = curStartPos;
+            if (lineEnd)   lineEnd[strLineCount] = curEndPos;
+            strLineCount++;
+
+            if (strLineCount >= 30) break;
+
+            if (lineWidth != 999999)
+            {
+                i = curEndPos + 1;
+                while (buffer[i] == ' ')
+                    i++;
+            }
+            else
+            {
+                i = curEndPos + 2;
+            }
+            curStartPos = i;
+            curEndPos = slen - 1;
+            lineWidth = 0;
+        }
+        else
+            i++;
+    }
+
+    // The last line.
+    curEndPos = slen - 1;
+    if (curStartPos <= curEndPos && strLineCount < 30)
+    {
+        if (lineStart) lineStart[strLineCount] = curStartPos;
+        if (lineEnd)   lineEnd[strLineCount] = curEndPos;
+        strLineCount++;
+    }
+    return strLineCount;
+}
+
+//---------------------------------------------------------------
 // Draws a string with the forecolor, with wrapping
 //---------------------------------------------------------------
 void ui3dsDrawStringWithWrapping(gfxScreen_t targetScreen, int x0, int y0, int x1, int y1, int color, int horizontalAlignment, const char *buffer)
 {
-    int strLineCount = 0;
     int strLineStart[30];
     int strLineEnd[30];
 
@@ -608,69 +679,13 @@ void ui3dsDrawStringWithWrapping(gfxScreen_t targetScreen, int x0, int y0, int x
     x1 += translateX;
     y0 += translateY;
     y1 += translateY;
-    
+
     ui3dsPushViewport(x0, y0, x1, y1);
-   
+
     if (buffer != NULL)
     {
         int maxWidth = x1 - x0;
-        int slen = strlen(buffer);
-
-        int curStartPos = 0;
-        int curEndPos = slen - 1;
-        int lineWidth = 0;
-        for (int i = 0; i < slen; )
-        {
-            if (i != curStartPos)
-            {
-                if (buffer[i] == ' ' && i > 0 && buffer[i-1] != ' ')
-                    curEndPos = i - 1;
-                else if (buffer[i] == '-')  // use space or dash as line breaks
-                    curEndPos = i;
-                else if (buffer[i] == '/')
-                    curEndPos = i;
-                else if (buffer[i] == '\n')  // \n as line breaks.
-                {
-                    curEndPos = i - 1;
-                    lineWidth = 999999;     // force the line break.
-                }
-            }
-            lineWidth += fontWidth[(unsigned char)buffer[i]];
-            if (lineWidth > maxWidth)
-            {
-                // Break the line here
-                strLineStart[strLineCount] = curStartPos;
-                strLineEnd[strLineCount] = curEndPos;
-                strLineCount++;
-
-                if (strLineCount >= 30) break; 
-
-                if (lineWidth != 999999)
-                {
-                    i = curEndPos + 1;
-                    while (buffer[i] == ' ')
-                        i++;
-                }
-                else
-                {
-                    i = curEndPos + 2;
-                }
-                curStartPos = i;
-                curEndPos = slen - 1;
-                lineWidth = 0;
-            }
-            else
-                i++;
-        }
-
-        // Output the last line.
-        curEndPos = slen - 1;
-        if (curStartPos <= curEndPos)
-        {
-            strLineStart[strLineCount] = curStartPos;
-            strLineEnd[strLineCount] = curEndPos;
-            strLineCount++;
-        }
+        int strLineCount = ui3dsScanWrappedLines(maxWidth, buffer, strLineStart, strLineEnd);
 
         for (int i = 0; i < strLineCount; i++)
         {
