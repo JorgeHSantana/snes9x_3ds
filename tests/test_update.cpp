@@ -113,6 +113,24 @@ TEST_CASE("bad running sha fails safe and sha validation is strict")
     CHECK_FALSE(update3dsShaValid("0123abg"));    // non-hex
 }
 
+TEST_CASE("release date renders american from either channel")
+{
+    Update3dsRelease r;
+    char date[16];
+
+    REQUIRE(update3dsParseRelease(STABLE_JSON, strlen(STABLE_JSON), r));
+    update3dsReleaseDate(r, date, sizeof(date));
+    CHECK(strcmp(date, "08-30-2026") == 0);    // tag stable-20260830-...
+
+    REQUIRE(update3dsParseRelease(NIGHTLY_JSON, strlen(NIGHTLY_JSON), r));
+    update3dsReleaseDate(r, date, sizeof(date));
+    CHECK(strcmp(date, "08-31-2026") == 0);    // title "Nightly 2026-08-31"
+
+    memset(&r, 0, sizeof(r));
+    update3dsReleaseDate(r, date, sizeof(date));
+    CHECK(date[0] == 0);                       // no date anywhere -> empty
+}
+
 TEST_CASE("image verification rejects everything but a plausible build")
 {
     const size_t okSize = 2500000;   // our builds are ~2.5MB

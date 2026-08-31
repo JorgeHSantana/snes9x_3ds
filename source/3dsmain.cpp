@@ -923,10 +923,13 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     bool isDialog = false;
     int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
 
-    char text[192];
+    char date[16];
+    update3dsReleaseDate(chk.release, date, sizeof(date));
+    char text[96];
     snprintf(text, sizeof(text),
-             "%s\n%s > %s\nDownload and install now?",
-             chk.release.title, updater3dsRunningSha(), chk.release.sha);
+             "%s > %s%s%s%s\nDownload and install now?",
+             updater3dsRunningSha(), chk.release.sha,
+             date[0] != 0 ? " (" : "", date, date[0] != 0 ? ")" : "");
     if (!confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
                        "Update Available", text, true, true))
         return;

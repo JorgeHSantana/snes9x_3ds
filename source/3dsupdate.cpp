@@ -158,6 +158,42 @@ bool update3dsIsNewer(const char* runningSha, const Update3dsRelease& release)
     return strcmp(runningSha, release.sha) != 0;
 }
 
+static bool allDigits(const char* p, int n)
+{
+    for (int i = 0; i < n; i++)
+        if (p[i] < '0' || p[i] > '9')
+            return false;
+    return true;
+}
+
+void update3dsReleaseDate(const Update3dsRelease& release,
+                          char* out, size_t outSize)
+{
+    if (outSize == 0)
+        return;
+    out[0] = 0;
+
+    // stable tag: "stable-YYYYMMDD-<sha>"
+    const char* dash = strchr(release.tag, '-');
+    if (dash != NULL && allDigits(dash + 1, 8) && dash[9] == '-')
+    {
+        snprintf(out, outSize, "%.2s-%.2s-%.4s",
+                 dash + 5, dash + 7, dash + 1);
+        return;
+    }
+
+    // nightly title: "Nightly YYYY-MM-DD (<sha>)"
+    for (const char* p = release.title; *p != 0; p++)
+    {
+        if (allDigits(p, 4) && p[4] == '-' && allDigits(p + 5, 2) &&
+            p[7] == '-' && allDigits(p + 8, 2))
+        {
+            snprintf(out, outSize, "%.2s-%.2s-%.4s", p + 5, p + 8, p);
+            return;
+        }
+    }
+}
+
 bool update3dsVerifyImage(const unsigned char* head, size_t headLen,
                           size_t fileSize, bool isCia)
 {

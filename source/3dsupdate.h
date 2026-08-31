@@ -56,6 +56,11 @@ const char* update3dsAssetUrl(const Update3dsRelease& release, bool isCia);
 // True for exactly 7 lowercase-hex chars.
 bool update3dsShaValid(const char* sha);
 
+// Release date as "MM-DD-YYYY" (from the stable tag's YYYYMMDD or the
+// nightly title's YYYY-MM-DD); "" when neither carries one.
+void update3dsReleaseDate(const Update3dsRelease& release,
+                          char* out, size_t outSize);
+
 // Sanity-check a downloaded image before applying it: header magic
 // (3DSX: "3DSX"; CIA: header-size field 0x2020) and a floor on the file
 // size so a truncated download or an HTML error page never gets applied.
