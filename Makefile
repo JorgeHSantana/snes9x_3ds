@@ -283,7 +283,8 @@ buildsha:
 	@mkdir -p $(BUILD)/Snes9x
 	@sha="$(BUILD_GIT_SHA)"; \
 	 if [ -z "$$sha" ]; then sha=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo 0000000); fi; \
-	 printf '#define BUILD_GIT_SHA "%s"\n' "$$sha" > $(BUILD)/3dsbuildsha.h.tmp; \
+	 { printf '#define BUILD_GIT_SHA "%s"\n' "$$sha"; \
+	   printf '#define BUILD_UTC "%s"\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > $(BUILD)/3dsbuildsha.h.tmp; \
 	 if cmp -s $(BUILD)/3dsbuildsha.h.tmp $(BUILD)/3dsbuildsha.h 2>/dev/null; then \
 	   rm $(BUILD)/3dsbuildsha.h.tmp; \
 	 else mv $(BUILD)/3dsbuildsha.h.tmp $(BUILD)/3dsbuildsha.h; fi

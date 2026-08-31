@@ -73,9 +73,15 @@ void updater3dsAutoCheck(int rememberedChannel, Update3dsCheck& check)
         return;
     }
 
-    // Outdated on both: the last manual channel choice breaks the tie.
+    // Outdated on both: the last manual channel choice breaks the tie -
+    // but the startup path only offers a release published AFTER this
+    // build (Jorge's rule: no downgrade offers on boot; a cross-channel
+    // switch is a manual, deliberate act).
     check = (rememberedChannel == UPDATE3DS_CHANNEL_NIGHTLY) ? nightly
                                                              : stable;
+    check.updateAvailable = check.updateAvailable &&
+        update3dsIsNewerThanBuild(updater3dsRunningSha(), BUILD_UTC,
+                                  check.release);
 }
 
 // argv[0] from the homebrew loader ("sdmc:/3ds/.../snes9x_3ds.3dsx").

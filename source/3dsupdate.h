@@ -33,6 +33,7 @@ struct Update3dsRelease
     bool    valid;
     char    tag[UPDATE3DS_TAG_MAX];
     char    title[UPDATE3DS_TITLE_MAX];
+    char    publishedAt[24];                // ISO 8601 UTC, "" if absent
     char    sha[UPDATE3DS_SHA_LEN + 1];     // 7-hex short sha, "" if not found
     char    url3dsx[UPDATE3DS_URL_MAX];     // "" when the asset is missing
     char    urlCia[UPDATE3DS_URL_MAX];
@@ -49,6 +50,16 @@ bool update3dsParseRelease(const char* json, size_t len, Update3dsRelease& out);
 // An update applies when both shas are well-formed and differ. A release
 // with no sha never triggers an update (fail safe, never fail loud).
 bool update3dsIsNewer(const char* runningSha, const Update3dsRelease& release);
+
+// Startup policy (Jorge's spec): offer only releases published AFTER
+// this build was made - the shas must differ AND the release must be
+// published at least UPDATE3DS_PUBLISH_SLACK_MIN minutes past buildUtc
+// (CI publishes ~2.5min after the build stamps its time; measured
+// 2026-08-31, the slack covers it 4x). A missing or unparsable date on
+// either side falls back to the sha rule so nothing bricks.
+#define UPDATE3DS_PUBLISH_SLACK_MIN 10
+bool update3dsIsNewerThanBuild(const char* runningSha, const char* buildUtc,
+                               const Update3dsRelease& release);
 
 // Asset for the running format; NULL when the release lacks it.
 const char* update3dsAssetUrl(const Update3dsRelease& release, bool isCia);

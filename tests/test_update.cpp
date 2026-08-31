@@ -12,6 +12,7 @@ static const char* STABLE_JSON =
     "{"
     "\"url\":\"https://api.github.com/repos/JorgeHSantana/snes9x_3ds/releases/1\","
     "\"tag_name\":\"stable-20260830-d8df8d8\","
+    "\"published_at\":\"2026-08-30T21:00:00Z\","
     "\"name\":\"Stable 2026-08-30\","
     "\"prerelease\":false,"
     "\"assets\":["
@@ -27,6 +28,7 @@ static const char* STABLE_JSON =
 static const char* NIGHTLY_JSON =
     "{"
     "\"tag_name\":\"nightly-latest\","
+    "\"published_at\":\"2026-08-31T02:30:00Z\","
     "\"name\":\"Nightly 2026-08-31 (0f3c21a)\","
     "\"prerelease\":true,"
     "\"assets\":["
@@ -130,6 +132,44 @@ TEST_CASE("release date renders american from either channel")
     memset(&r, 0, sizeof(r));
     update3dsReleaseDate(r, date, sizeof(date));
     CHECK(date[0] == 0);                       // no date anywhere -> empty
+}
+
+TEST_CASE("startup rule only accepts releases published after the build")
+{
+    Update3dsRelease r;
+    REQUIRE(update3dsParseRelease(STABLE_JSON, strlen(STABLE_JSON), r));
+    CHECK(strcmp(r.publishedAt, "2026-08-30T21:00:00Z") == 0);
+
+    // build made AFTER that stable: sha differs but no downgrade offer
+    CHECK(update3dsIsNewer("aaaaaaa", r));
+    CHECK_FALSE(update3dsIsNewerThanBuild("aaaaaaa",
+                                          "2026-08-31T01:00:00Z", r));
+    // build made comfortably BEFORE it: genuine update
+    CHECK(update3dsIsNewerThanBuild("aaaaaaa", "2026-08-30T20:00:00Z", r));
+    // same sha never offers, dates aside
+    CHECK_FALSE(update3dsIsNewerThanBuild("d8df8d8",
+                                          "2026-08-01T00:00:00Z", r));
+    // publish lag inside the slack window (CI publishes ~2.5min after
+    // the build stamps time): no offer; past the slack: genuine update
+    CHECK_FALSE(update3dsIsNewerThanBuild("aaaaaaa",
+                                          "2026-08-30T20:55:00Z", r));
+    CHECK(update3dsIsNewerThanBuild("aaaaaaa", "2026-08-30T20:49:00Z", r));
+    // month boundary, exact math: 21 real minutes offers, 2 does not
+    Update3dsRelease feb = r;
+    snprintf(feb.publishedAt, sizeof(feb.publishedAt),
+             "2026-02-01T00:20:00Z");
+    CHECK(update3dsIsNewerThanBuild("aaaaaaa",
+                                    "2026-01-31T23:59:00Z", feb));
+    snprintf(feb.publishedAt, sizeof(feb.publishedAt),
+             "2026-02-01T00:01:00Z");
+    CHECK_FALSE(update3dsIsNewerThanBuild("aaaaaaa",
+                                          "2026-01-31T23:59:00Z", feb));
+
+    // missing either date: the sha rule decides (fail open, not broken)
+    CHECK(update3dsIsNewerThanBuild("aaaaaaa", "", r));
+    CHECK(update3dsIsNewerThanBuild("aaaaaaa", nullptr, r));
+    r.publishedAt[0] = 0;
+    CHECK(update3dsIsNewerThanBuild("aaaaaaa", "2026-08-31T01:00:00Z", r));
 }
 
 TEST_CASE("stable title carries the app version, nightly does not")

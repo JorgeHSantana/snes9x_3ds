@@ -100,6 +100,8 @@ bool update3dsParseRelease(const char* json, size_t len, Update3dsRelease& out)
 
     jsonFindString(json, end, "tag_name", out.tag, sizeof(out.tag));
     jsonFindString(json, end, "name", out.title, sizeof(out.title));
+    jsonFindString(json, end, "published_at", out.publishedAt,
+                   sizeof(out.publishedAt));
 
     // Walk every download url; each asset object lists "name" before
     // "browser_download_url", so remember the last seen asset name.
@@ -233,6 +235,38 @@ bool update3dsVerifyImage(const unsigned char* head, size_t headLen,
         return headerSize == 0x2020;
     }
     return memcmp(head, "3DSX", 4) == 0;
+}
+
+// "YYYY-MM-DDTHH:MM" -> minutes since the civil epoch, exact calendar
+// math (days-from-civil), so slack comparisons hold across month and
+// year boundaries. Returns -1 on malformed input.
+static long isoUtcToMinutes(const char* iso)
+{
+    if (iso == NULL || strlen(iso) < 16 || iso[4] != '-' || iso[7] != '-' ||
+        iso[10] != 'T' || iso[13] != ':')
+        return -1;
+    long y, mon, d, h, m;
+    if (sscanf(iso, "%4ld-%2ld-%2ldT%2ld:%2ld", &y, &mon, &d, &h, &m) != 5)
+        return -1;
+    long yy  = y - (mon <= 2 ? 1 : 0);
+    long era = yy / 400;
+    long yoe = yy - era * 400;
+    long doy = (153 * (mon + (mon > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    long days = era * 146097 + doe - 719468;
+    return days * 1440L + h * 60L + m;
+}
+
+bool update3dsIsNewerThanBuild(const char* runningSha, const char* buildUtc,
+                               const Update3dsRelease& release)
+{
+    if (!update3dsIsNewer(runningSha, release))
+        return false;
+    long rel = isoUtcToMinutes(release.publishedAt);
+    long build = isoUtcToMinutes(buildUtc);
+    if (rel < 0 || build < 0)
+        return true;                         // no dates - sha rule decides
+    return rel > build + UPDATE3DS_PUBLISH_SLACK_MIN;
 }
 
 const char* update3dsAssetUrl(const Update3dsRelease& release, bool isCia)
