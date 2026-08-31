@@ -921,6 +921,7 @@ struct UpdateProgressUi
     std::vector<SMenuTab>* menuTabs;
     int color;
     int lastPct;
+    u64 startMs;
 };
 
 static bool updateProgressCb(void* user, unsigned done, unsigned total)
@@ -932,8 +933,13 @@ static bool updateProgressCb(void* user, unsigned done, unsigned total)
     if (pct - ui->lastPct >= 2 || (pct == 100 && ui->lastPct != 100))
     {
         ui->lastPct = pct;
-        char line[64];
-        snprintf(line, sizeof(line), "Downloading the new build... %d%%", pct);
+        u64 elapsedMs = osGetTime() - ui->startMs;
+        unsigned kbps = elapsedMs > 0
+            ? (unsigned)(((unsigned long long)done * 1000u) / elapsedMs / 1024u)
+            : 0;
+        char line[80];
+        snprintf(line, sizeof(line),
+                 "Downloading the new build... %d%% (%u KB/s)", pct, kbps);
         menu3dsShowProgressDialog(*ui->dialogTab, *ui->isDialog,
             *ui->currentMenuTab, *ui->menuTabs, "Updating", line,
             ui->color, pct);
@@ -990,7 +996,7 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
         "Updating", "Downloading the new build... 0%", infoColor, 0);
     UpdateProgressUi progressUi = { &dialogTab, &isDialog, &currentMenuTab,
-                                    &menuTabs, infoColor, 0 };
+                                    &menuTabs, infoColor, 0, osGetTime() };
     const char* err = updater3dsApply(chk.release, updateProgressCb,
                                       &progressUi);
     menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
@@ -1037,8 +1043,8 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
         return;
     CheckAndUpdate(settings3DS.UpdateChannel, channel);
 
-    menu3dsShowRomLoadingDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-        "Updates", "Checking for updates...", infoColor);
+    menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+        "Updates", "Checking for updates...", infoColor, -1);
     Update3dsCheck chk;
     if (update3dsNetInit())
         updater3dsCheck(settings3DS.UpdateChannel, chk);

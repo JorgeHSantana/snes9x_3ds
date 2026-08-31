@@ -752,7 +752,8 @@ static void menu3dsDrawLoadingDialog(
     int dialogFrame,
     int dialogHeight,
     int thumbWidth,
-    int loadingDialogSteps)
+    int loadingDialogSteps,
+    int progressPercent = -1)
 {
     int openStep = loadingDialogSteps - dialogFrame;
     int yDialog = SCREEN_HEIGHT - (dialogHeight * openStep) / loadingDialogSteps;
@@ -791,6 +792,19 @@ static void menu3dsDrawLoadingDialog(
             horizontalPadding - offsetX, 30, 
             settings3DS.SecondScreenWidth - thumbWidth - horizontalPaddingRight, 70, 
             dialogTextColor, HALIGN_LEFT, dialogTab.DialogText.c_str());
+
+        if (progressPercent >= 0)
+        {
+            int pct = progressPercent > 100 ? 100 : progressPercent;
+            int barX0 = horizontalPadding - offsetX;
+            int barX1 = settings3DS.SecondScreenWidth - horizontalPadding;
+            int barY1 = dialogHeight - 16;
+            int barY0 = barY1 - 8;
+            int fill = barX0 + ((barX1 - barX0) * pct) / 100;
+            ui3dsDrawRect(barX0, barY0, barX1, barY1, 0x000000, 0.35f);
+            if (fill > barX0)
+                ui3dsDrawRect(barX0, barY0, fill, barY1, dialogTextColor, 0.9f);
+        }
     }
 
     ui3dsSetTranslate(0, 0);
@@ -1419,7 +1433,7 @@ void menu3dsShowRomLoadingDialog(SMenuTab& dialogTab, bool& isDialog, int& curre
 // enough to run from a transfer callback.
 void menu3dsShowProgressDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, const std::string& title, const std::string& text, int dialogColor, int percent)
 {
-    const int dialogHeight = 96;
+    const int dialogHeight = percent >= 0 ? 96 : 72;
 
     dialogBackColor = dialogColor;
     dialogItemCount = 0;
@@ -1438,20 +1452,7 @@ void menu3dsShowProgressDialog(SMenuTab& dialogTab, bool& isDialog, int& current
     for (int f = firstFrame; f <= loadingDialogSteps; f++)
     {
         if (!aptMainLoop()) break;
-        menu3dsDrawLoadingDialog(dialogTab, currentMenuTab, menuTabs, f, dialogHeight, 0, loadingDialogSteps);
-
-        if (percent >= 0 && f == loadingDialogSteps)
-        {
-            // bar inside the dialog, under the text
-            int barX0 = 32, barX1 = settings3DS.SecondScreenWidth - 32;
-            int barY0 = dialogHeight - 26, barY1 = dialogHeight - 16;
-            int fill = barX0 + ((barX1 - barX0) * (percent > 100 ? 100 : percent)) / 100;
-            ui3dsSetTranslate(0, SCREEN_HEIGHT - dialogHeight);
-            ui3dsDrawRect(barX0, barY0, barX1, barY1, 0x000000, 0.35f);
-            if (fill > barX0)
-                ui3dsDrawRect(barX0, barY0, fill, barY1, 0xffffff, 0.9f);
-            ui3dsSetTranslate(0, 0);
-        }
+        menu3dsDrawLoadingDialog(dialogTab, currentMenuTab, menuTabs, f, dialogHeight, 0, loadingDialogSteps, percent);
         menu3dsSwapBuffersAndWaitForVBlank();
     }
 }
