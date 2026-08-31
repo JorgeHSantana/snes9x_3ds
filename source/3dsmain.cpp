@@ -908,8 +908,7 @@ static int *stereoEditField(int which) {
 // Self-updater UI (issue #64). The check result from the boot-time auto
 // check parks here until showMenu can put a dialog on screen.
 //----------------------------------------------------------------------
-static Update3dsCheck s_pendingAutoUpdate;
-static bool s_hasPendingAutoUpdate = false;
+static bool s_bootAutoCheckPending = false;
 
 // Live download feedback: the transfer callback repaints the progress
 // dialog every couple of percent.
@@ -1036,6 +1035,31 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     {
         GPU3DS.emulatorState = EMUSTATE_END;
     }
+}
+
+// Startup auto check (issue #64): same dialog as the manual path, but
+// follows the running build's own channel and stays silent unless an
+// update is actually there - a boot never nags.
+static void menuAutoCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMenuTab)
+{
+    SMenuTab dialogTab;
+    bool isDialog = false;
+    int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
+
+    menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
+        "Updates", "Checking for updates...\nPress B to cancel.", infoColor, -1);
+    Update3dsCheck chk;
+    memset(&chk, 0, sizeof(chk));
+    if (update3dsNetInit())
+    {
+        update3dsNetSetCancelPoll(updNetKeepGoing);
+        updater3dsAutoCheck(settings3DS.UpdateChannel, chk);
+        update3dsNetSetCancelPoll(NULL);
+    }
+    menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+
+    if (chk.ok && chk.updateAvailable)
+        menuOfferUpdate(menuTabs, currentMenuTab, chk);
 }
 
 // "Check for Updates Now" - the interactive path.
@@ -2963,10 +2987,11 @@ void showMenu() {
     bool runNextGame = false;
     SMenuTab dialogTab;
 
-    // boot-time auto check found a new build: offer it before anything else
-    if (s_hasPendingAutoUpdate) {
-        s_hasPendingAutoUpdate = false;
-        menuOfferUpdate(menuTabs, currentMenuTab, s_pendingAutoUpdate);
+    // startup auto check runs on the first menu of the session, with the
+    // same dialogs the manual path uses
+    if (s_bootAutoCheckPending) {
+        s_bootAutoCheckPending = false;
+        menuAutoCheckForUpdates(menuTabs, currentMenuTab);
     }
 
     if (g_menuProbeActive) {
@@ -3430,19 +3455,10 @@ int main()
 
     GPU3DS.emulatorState = tryAutoBoot() ? EMUSTATE_EMULATE : EMUSTATE_PAUSEMENU;
 
-    // Boot-time auto update check (issue #64): only on a menu boot - an
-    // autobooted game should never wait on the network. The result parks
-    // in s_pendingAutoUpdate; showMenu offers it once dialogs exist.
-    if (GPU3DS.emulatorState == EMUSTATE_PAUSEMENU && settings3DS.UpdateAutoCheck)
-    {
-        menu3dsShowSplashMessage("Checking for updates");
-        if (update3dsNetInit())
-        {
-            updater3dsAutoCheck(settings3DS.UpdateChannel, s_pendingAutoUpdate);
-            s_hasPendingAutoUpdate = s_pendingAutoUpdate.ok &&
-                                     s_pendingAutoUpdate.updateAvailable;
-        }
-    }
+    // Startup auto update check (issue #64) happens on the session's
+    // first menu, where real dialogs exist - never on an autobooted game.
+    s_bootAutoCheckPending = (GPU3DS.emulatorState == EMUSTATE_PAUSEMENU &&
+                              settings3DS.UpdateAutoCheck);
 
     while (aptMainLoop() && GPU3DS.emulatorState != EMUSTATE_END) {
         switch (GPU3DS.emulatorState) {
