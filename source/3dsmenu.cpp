@@ -38,6 +38,7 @@ static u32 thisKeysHeld = 0;
 static int dialogBackColor = 0x000000;
 
 static int dialogTextLines = -1; // -1 = fixed-height dialog
+static int dialogItemCount = 0;  // real option rows of the open dialog
 
 // Issue #43: what the dialog dims behind itself defaults to the menu, but
 // a modal screen (rewind timeline) can substitute its own drawing so the
@@ -54,10 +55,14 @@ void menu3dsClearDialogBackdrop()
     dialogBackdropOverride = nullptr;
 }
 
-// Number of option rows a dialog shows at once (scroll window)
+// Number of option rows a dialog shows at once (scroll window). Sized
+// by the dialog's real item count so short dialogs (Yes/No, OK) don't
+// trail dead space below their last option; longer lists scroll in a
+// window as before.
 static int menu3dsGetDialogVisibleItems()
 {
-    return dialogTextLines > 0 ? 3 : 5;
+    int window = dialogTextLines > 0 ? 3 : 5;
+    return dialogItemCount < window ? dialogItemCount : window;
 }
 
 static void menu3dsGetDialogLayout(int& topHeight, int& bottomHeight)
@@ -72,7 +77,7 @@ static void menu3dsGetDialogLayout(int& topHeight, int& bottomHeight)
     else
     {
         topHeight = 76;
-        bottomHeight = 84;
+        bottomHeight = 19 + menu3dsGetDialogVisibleItems() * FONT_HEIGHT;
     }
 }
 
@@ -1320,6 +1325,7 @@ int menu3dsShowDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, 
 
     dialogBackColor = newDialogBackColor;
     dialogTextLines = textLines;
+    dialogItemCount = (int)menuItems.size();
 
     currentTab->SetTitle(title);
     currentTab->DialogText.assign(dialogText);
@@ -1370,6 +1376,7 @@ int menu3dsShowDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, 
 void menu3dsShowRomLoadingDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, const std::string& title, const std::string& text, int dialogColor, const char* romName)
 {
     dialogBackColor = dialogColor;
+    dialogItemCount = 0;                 // busy dialog: no option rows
 
     SMenuTab *currentTab = &dialogTab;
     currentTab->SetTitle(title);

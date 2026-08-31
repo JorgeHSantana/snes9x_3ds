@@ -300,8 +300,8 @@ std::vector<SMenuItem> makeOptionsForFileMenu(std::vector<FileMenuOption>& optio
     return items;
 }
 
-bool confirmDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, const std::string& title, const std::string& message, bool fade, bool hideAfter) {
-    int result = menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, message, Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn, makePickerOptions({ "Yes", "No" }), 1, fade);
+bool confirmDialog(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs, const std::string& title, const std::string& message, bool fade, bool hideAfter, int textLines = -1) {
+    int result = menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, message, Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn, makePickerOptions({ "Yes", "No" }), 1, fade, textLines);
 
     if (hideAfter) {
         menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs, fade);
@@ -954,7 +954,7 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
                      date[0] != 0 ? date : chk.release.tag);
     }
     if (!confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-                       "Update Available", text, true, true))
+                       "Update Available", text, true, true, 3))
         return;
 
     menu3dsShowRomLoadingDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
@@ -979,7 +979,7 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     if (confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Update Installed",
             "The new version runs on the next launch.\nExit the emulator now?",
-            true, true))
+            true, true, 3))
     {
         GPU3DS.emulatorState = EMUSTATE_END;
     }

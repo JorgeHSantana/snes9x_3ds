@@ -6,6 +6,7 @@
 #include "3dsupdatenet.h"
 #include "3dslog.h"
 #include "3dsbuildsha.h"
+#include <errno.h>
 
 #define API_BUF_SIZE     (64 * 1024)
 #define CIA_TEMP_PATH    "sdmc:/3ds/snes9x_3ds/update.cia"
@@ -89,7 +90,12 @@ static void own3dsxPath(char* out, size_t outSize)
     const char* argv0 = args + sizeof(u32);
     if (argc < 1 || argv0[0] == 0)
         return;
-    if (strncmp(argv0, "sdmc:/", 6) == 0 || argv0[0] == '/')
+    // strip the device prefix: newlib's rename() chokes on "sdmc:" paths
+    // (field-confirmed "could not stage" on hardware); the sd card is the
+    // default device, so plain absolute paths work everywhere
+    if (strncmp(argv0, "sdmc:", 5) == 0)
+        argv0 += 5;
+    if (argv0[0] == '/')
         snprintf(out, outSize, "%s", argv0);
 }
 
@@ -133,8 +139,11 @@ static const char* apply3dsx(const char* url,
     remove(old);
     if (rename(self, old) != 0)
     {
+        static char stageErr[64];
+        snprintf(stageErr, sizeof(stageErr),
+                 "could not stage the old version (errno %d)", errno);
         remove(temp);
-        return "could not stage the old version";
+        return stageErr;
     }
     if (rename(temp, self) != 0)
     {
