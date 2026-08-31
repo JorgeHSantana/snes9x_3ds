@@ -636,6 +636,25 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 float ghost = s_atmosGhostAlpha;
                 int passes = ghost > 0.0f ? 3 : 1;
 
+                // the ghost offset is fractional (1..3px growing with the
+                // blur level), and a fractional shift rasterizes with mixed
+                // per-section rounding - the #65 split, showing here as
+                // torn/doubled pixels at some blur levels. Discrete mode
+                // rounds the COMPOSED shift so each ghost still lands a
+                // whole pixel away from the base pass.
+                float ghostShift[4][2];
+                for (int t = 0; t < 4; t++) {
+                    ghostShift[t][0] = tierShift[t] + s_atmosGhostOffset;
+                    ghostShift[t][1] = tierShift[t] - s_atmosGhostOffset;
+                    if (settings3DS.StereoShiftMode == 0) {
+                        ghostShift[t][0] = roundf(ghostShift[t][0]);
+                        ghostShift[t][1] = roundf(ghostShift[t][1]);
+                        // never collapse onto the crisp base pass
+                        if (ghostShift[t][0] == tierShift[t]) ghostShift[t][0] += 1.0f;
+                        if (ghostShift[t][1] == tierShift[t]) ghostShift[t][1] -= 1.0f;
+                    }
+                }
+
                 for (int gp = 0; gp < passes; gp++) {
                     if (gp == 1) {
                         GPU3DS.stereoGhostPass = true;
@@ -647,15 +666,15 @@ void gpu3dsDrawLayers(SLayerList *list) {
                             s_atmosGhostTierOn[1] ? 1.0f : 0.0f,
                             s_atmosGhostTierOn[2] ? 1.0f : 0.0f,
                             s_atmosGhostTierOn[3] ? 1.0f : 0.0f);
-                        gpu3dsSetStereoParallax3(tierShift[0] + s_atmosGhostOffset,
-                            tierShift[1] + s_atmosGhostOffset, tierBnd01);
-                        gpu3dsSetStereoParallaxHi(tierShift[2] + s_atmosGhostOffset,
-                            tierShift[3] + s_atmosGhostOffset, tierBnd12, tierBnd23);
+                        gpu3dsSetStereoParallax3(ghostShift[0][0],
+                            ghostShift[1][0], tierBnd01);
+                        gpu3dsSetStereoParallaxHi(ghostShift[2][0],
+                            ghostShift[3][0], tierBnd12, tierBnd23);
                     } else if (gp == 2) {
-                        gpu3dsSetStereoParallax3(tierShift[0] - s_atmosGhostOffset,
-                            tierShift[1] - s_atmosGhostOffset, tierBnd01);
-                        gpu3dsSetStereoParallaxHi(tierShift[2] - s_atmosGhostOffset,
-                            tierShift[3] - s_atmosGhostOffset, tierBnd12, tierBnd23);
+                        gpu3dsSetStereoParallax3(ghostShift[0][1],
+                            ghostShift[1][1], tierBnd01);
+                        gpu3dsSetStereoParallaxHi(ghostShift[2][1],
+                            ghostShift[3][1], tierBnd12, tierBnd23);
                     }
 
                     if (list->useDrawArraysForTiledLayers) {

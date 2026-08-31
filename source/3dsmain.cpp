@@ -1479,6 +1479,8 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
 // ---- live 3D editor preview (issue #61) ----
 static int  s_stereoGaugeFirst = -1;    // item index of the first depth gauge
+static int  s_stereoFxFirst = -1;       // first item of the Focus/Effects zone
+static int  s_stereoFxLast = -1;        // one past its last item
 static bool s_stereoPreviewDirty = false;
 static bool s_stereoPreviewShown = false;
 static int  s_stereoPrevHighlight = -2;
@@ -1511,20 +1513,23 @@ static void stereo3dIdleTick()
         return;
     }
 
-    int rel = (s_stereoGaugeFirst >= 0)
-        ? menuTabs[curTab].SelectedItemIndex - s_stereoGaugeFirst : -1;
+    int sel = menuTabs[curTab].SelectedItemIndex;
+    int rel = (s_stereoGaugeFirst >= 0) ? sel - s_stereoGaugeFirst : -1;
     // 8 BG gauges (4 layers x 2 priorities) + 4 sprite priorities
     bool inGauges = rel >= 0 && rel < 12;
     int layer = !inGauges ? -1 : (rel < 8 ? rel / 2 : 4);
     int prio  = !inGauges ? -1 : (rel < 8 ? rel % 2 : rel - 8);
+    // Focus/Effects gauges: full-scene preview, effects applied live
+    bool inFx = !inGauges && s_stereoFxFirst >= 0 &&
+        sel >= s_stereoFxFirst && sel < s_stereoFxLast;
 
     bool peek = (hidKeysHeld() & KEY_Y) != 0;   // menu loop already scanned
     int wantHighlight = (inGauges && !peek) ? layer : -1;
     int wantPrio = (inGauges && !peek) ? prio : -1;
-    int wantKey = wantHighlight * 8 + wantPrio;
+    int wantKey = inFx ? -2 : wantHighlight * 8 + wantPrio;
     float slider = osGet3DSliderState();
 
-    if (!inGauges) {
+    if (!inGauges && !inFx) {
         if (s_stereoPreviewShown) {
             // left the gauges: paused look and its caption come back
             stereo3dRestorePausedLook();
@@ -1756,25 +1761,29 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Sprites split by their four priorities (0 = behind,"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  3 = in front). Most games keep one value for all."_s, ""_s);
 
+        // the Focus/Effects zone previews live too: full scene, effects
+        // applied as the gauges move (issue #61 follow-up, Jorge's ask)
+        s_stereoFxFirst = (int)items.size();
         AddMenuHeader2(items, "Focus"_s);
         AddMenuGauge(items, "  Back"_s, -8, 0, *stereoEditField(3),
-            []( int val ) { CheckAndUpdate( *stereoEditField(3), val ); }, true);
+            []( int val ) { if (CheckAndUpdate( *stereoEditField(3), val )) s_stereoPreviewDirty = true; }, true);
         AddMenuGauge(items, "  Front"_s, 0, 8, *stereoEditField(4),
-            []( int val ) { CheckAndUpdate( *stereoEditField(4), val ); }, true);
+            []( int val ) { if (CheckAndUpdate( *stereoEditField(4), val )) s_stereoPreviewDirty = true; }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Layers inside the Back..Front zone are untouched; effects"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  grow with the distance beyond it (gray depth values)."_s, ""_s);
 
         AddMenuHeader2(items, "Effects"_s);
         AddMenuGauge(items, "  Fade"_s, 0, 8, *stereoEditField(0),
-            []( int val ) { CheckAndUpdate( *stereoEditField(0), val ); }, true);
+            []( int val ) { if (CheckAndUpdate( *stereoEditField(0), val )) s_stereoPreviewDirty = true; }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Darkens layers behind the focus zone."_s, ""_s);
         AddMenuGauge(items, "  Haze"_s, 0, 8, *stereoEditField(1),
-            []( int val ) { CheckAndUpdate( *stereoEditField(1), val ); }, true);
+            []( int val ) { if (CheckAndUpdate( *stereoEditField(1), val )) s_stereoPreviewDirty = true; }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Fogs layers behind the focus zone."_s, ""_s);
         AddMenuGauge(items, "  Blur"_s, 0, 8, *stereoEditField(2),
-            []( int val ) { CheckAndUpdate( *stereoEditField(2), val ); }, true);
+            []( int val ) { if (CheckAndUpdate( *stereoEditField(2), val )) s_stereoPreviewDirty = true; }, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Smudges layers outside the zone, back and front."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Enabling it may cause small image artifacts."_s, ""_s);
+        s_stereoFxLast = (int)items.size();
 
         AddMenuDisabledOption(items, ""_s);
         AddMenuHeader2(items, "Tools"_s);
