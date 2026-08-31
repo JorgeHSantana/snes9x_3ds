@@ -521,6 +521,14 @@ static inline void gpu3dsSetStereoPrioDim(float dimP0, float dimP1)
     gpu3dsSetStereoPrioDim4(dimP0, dimP1, 1.0f, 1.0f);
 }
 
+// PROBE build (issue #69): forces the physical 3D slider fully open.
+// Azahar's emulated slider never reaches osGet3DSliderState, so stereo
+// paths can only be exercised there with this override.
+// Build with: make 3dsx EXTRA_DEFINES=-DPROBE_FORCE_SLIDER
+#ifdef PROBE_FORCE_SLIDER
+#define osGet3DSliderState() 1.0f
+#endif
+
 static inline void gpu3dsApplyRenderState(SGPURenderState *state)
 {
     u64 diff = GPU3DS.appliedRenderState.packed ^ state->packed;

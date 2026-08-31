@@ -485,6 +485,30 @@ void gpu3dsDrawLayers(SLayerList *list) {
     gpu3dsSetStereoPrioDim(1.0f, 1.0f);
     gpu3dsResetStereoAtmosphere();
 
+    // 3D: each eye's pass starts from a clean depth floor. The depth
+    // texture is shared between the eyes and never cleared - identical
+    // 2D redraws hide that, but per-eye parallax means one eye's shifted
+    // high-priority tiles leave their depth behind and occlude the other
+    // eye's lower layers along their edges (the MMX3 stage-1 pillar
+    // hole). Drawn as a full rect into the depth target - the same way
+    // the window prepass writes it - because a GX fill cannot join the
+    // middle of the frame's command list. Skipped entirely in 2D
+    // (IOD 0), so the Old 3DS pays nothing.
+    if (GPU3DS.stereoEyeIOD != 0.0f) {
+        GPU3DS.currentRenderState.target = TARGET_SNES_DEPTH;
+        GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_COLOR;
+        GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+        GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+
+        SVertexList *rects = &GPU3DS.vertices[VBO_SCENE_RECT];
+        int floorFrom = rects->from + rects->count;
+        gpu3dsAddRectangleVertexes(0, 0, 512, 256, 0x00000000);
+        gpu3dsDraw(rects, NULL, 2, floorFrom);
+        rects->count -= 2;   // paused previews replay this path with no
+                             // per-frame VBO flip - don't let it creep
+    }
+
     if (layer->verticesByTarget[0]) {
         GPU3DS.currentRenderState.target = TARGET_SNES_DEPTH;
 

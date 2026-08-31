@@ -102,4 +102,5 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
 | 66 | Update falha com jogo carregado | ABERTA | Proposta na issue: savestate temporário no SD → liberar ROM → update → reload no fim/erro |
 | 67 | 3dsmain.cpp virou monólito | ABERTA | Decompor em módulos, 1 por PR; começar pelo loader/saver .3d (destrava testes do parser) |
 | 68 | Core legado sem rede de proteção | ABERTA | Caracterização nos pontos tocados: funções puras testadas p/ macros de stereo, harness de hash determinístico p/ bisects |
-| 69 | Funil de validação = 1 humano + hardware | ABERTA | Harness de screenshot-diff no Azahar, savestates versionados, checklist de hardware, probe builds documentados |
+| 69 | Funil de validação = 1 humano + hardware | ABERTA | Harness de screenshot-diff no Azahar, savestates versionados, checklist de hardware; PROBE_FORCE_SLIDER via EXTRA_DEFINES já entregue |
+| 70 | Gap entre prioridades de um BG (buraco do pilar MMX3) | ABERTA | Causa: 1 tile por célula — separar prios descobre faixa sem conteúdo; rcmz fecha esticando o tile P0 vizinho ('Fill background gaps'); plano na issue |
