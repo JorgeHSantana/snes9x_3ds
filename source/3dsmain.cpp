@@ -616,15 +616,7 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
 
     AddMenuDisabledOption(items, ""_s);
 
-    AddMenuHeader1(items, "OTHERS"_s);
-
-    AddMenuCheckbox(items, "  Enable Logging (use when issues occur)"_s, settings3DS.LogFileEnabled,
-        []( int val ) { CheckAndUpdateToggle( settings3DS.LogFileEnabled, val ); });
-    std::string logfileInfo = "  Creates a session log in \"3ds/snes9x_3ds\". Restart required";
-    AddMenuDisabledOption(items, logfileInfo);
-    AddMenuDisabledOption(items, ""_s);
-
-    AddMenuHeader2(items, "Updates"_s);
+    AddMenuHeader1(items, "UPDATES"_s);
     {
         char buildLine[64];
         snprintf(buildLine, sizeof(buildLine), "  This build: %s (%s)",
@@ -640,6 +632,15 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     items.emplace_back([&menuTabs, &currentMenuTab](int val) {
         menuCheckForUpdates(menuTabs, currentMenuTab);
     }, MenuItemType::Action, "  Check for Updates Now"_s, ""_s);
+
+    AddMenuDisabledOption(items, ""_s);
+
+    AddMenuHeader1(items, "OTHERS"_s);
+
+    AddMenuCheckbox(items, "  Enable Logging (use when issues occur)"_s, settings3DS.LogFileEnabled,
+        []( int val ) { CheckAndUpdateToggle( settings3DS.LogFileEnabled, val ); });
+    std::string logfileInfo = "  Creates a session log in \"3ds/snes9x_3ds\". Restart required";
+    AddMenuDisabledOption(items, logfileInfo);
     AddMenuDisabledOption(items, ""_s);
 
     if (cfgFileAvailable[0] || cfgFileAvailable[1]) {
