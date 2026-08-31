@@ -305,7 +305,8 @@ typedef struct
     // until the editor exposes separate gauges
     float                       stereoLayerDepthP1[8];
     // z boundary between a BG's priority planes (d0/d1 from gfxhw's
-    // depth tables, in the shader's d/16 space); 0 = no split
+    // depth tables, in the shader's d/32 space - c_depth.x is 0.03125);
+    // 0 = no split
     float                       stereoPrioZBoundary[8];
     // atmospheric depth cues (0..8 each), anchored on the focus zone
     // [stereoFocusBack..stereoFocusFront]: layers inside are untouched.
