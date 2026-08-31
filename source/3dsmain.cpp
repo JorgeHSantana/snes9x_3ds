@@ -947,6 +947,17 @@ static bool updWorkerProgress(void*, unsigned done, unsigned total)
 
 static void updWorkerThreadFn(void*)
 {
+    u64 t0 = osGetTime();
+    if (!update3dsNetInit())
+    {
+        snprintf(s_updWorker.check.error, sizeof(s_updWorker.check.error),
+                 "network unavailable: %s", update3dsNetLastError());
+        s_updWorker.applyError = "network unavailable";
+        s_updWorker.finished = true;
+        return;
+    }
+    log3dsWrite("[upd] net ready in %ums", (unsigned)(osGetTime() - t0));
+
     update3dsNetSetCancelPoll(updWorkerKeepGoing);
     if (s_updWorker.applyMode)
         s_updWorker.applyError =
@@ -973,6 +984,7 @@ static void menuRunUpdateWorker(std::vector<SMenuTab>& menuTabs,
     s_updWorker.cancel = false;
     s_updWorker.finished = false;
     s_updWorker.applyError = NULL;
+    memset(&s_updWorker.check, 0, sizeof(s_updWorker.check));
 
     menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
         title, checkText, infoColor, withBar ? 0 : -1);
@@ -1106,8 +1118,6 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
 // update is actually there - a boot never nags.
 static void menuAutoCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMenuTab)
 {
-    if (!update3dsNetInit())
-        return;
     s_updWorker.applyMode = false;
     s_updWorker.autoRule = true;
     s_updWorker.channel = settings3DS.UpdateChannel;
@@ -1141,23 +1151,14 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
         return;
     CheckAndUpdate(settings3DS.UpdateChannel, channel);
 
-    Update3dsCheck chk;
-    if (update3dsNetInit())
-    {
-        s_updWorker.applyMode = false;
-        s_updWorker.autoRule = false;
-        s_updWorker.channel = settings3DS.UpdateChannel;
-        menuRunUpdateWorker(menuTabs, currentMenuTab, "Updates",
-                            "Checking for updates...", false);
-        chk = s_updWorker.check;
-        if (s_updWorker.cancel)
-            return;
-    }
-    else
-    {
-        memset(&chk, 0, sizeof(chk));
-        snprintf(chk.error, sizeof(chk.error), "network unavailable");
-    }
+    s_updWorker.applyMode = false;
+    s_updWorker.autoRule = false;
+    s_updWorker.channel = settings3DS.UpdateChannel;
+    menuRunUpdateWorker(menuTabs, currentMenuTab, "Updates",
+                        "Checking for updates...", false);
+    if (s_updWorker.cancel)
+        return;
+    Update3dsCheck chk = s_updWorker.check;
 
     if (!chk.ok)
     {
