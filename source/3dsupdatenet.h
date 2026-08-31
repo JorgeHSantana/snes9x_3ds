@@ -19,6 +19,10 @@ void update3dsNetExit();
 // dialogs - field reports then carry the real cause, not a guess.
 const char* update3dsNetLastError();
 
+// Optional poll consulted during transfers; returning false aborts the
+// transfer (maps to a "cancelled" error). NULL disables.
+void update3dsNetSetCancelPoll(bool (*keepGoing)(void));
+
 // GET https://api.github.com<path> into buf (NUL-terminated).
 // Returns payload length, or a negative value on any failure.
 int update3dsNetFetchApi(const char* path, char* buf, size_t bufSize);

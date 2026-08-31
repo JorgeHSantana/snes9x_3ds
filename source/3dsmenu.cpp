@@ -1453,10 +1453,12 @@ void menu3dsShowProgressDialog(SMenuTab& dialogTab, bool& isDialog, int& current
     currentTab->SelectedItemIndex = 0;
 
     int loadingDialogSteps = ANIMATE_DIALOG_STEPS;
-    int firstFrame = isDialog ? loadingDialogSteps : 0;
+    // frame counts DOWN to zero: steps = closed (offscreen), 0 = open.
+    // A repaint of an already-open dialog draws the open frame once.
+    int startFrame = isDialog ? 0 : loadingDialogSteps;
     isDialog = true;
 
-    for (int f = firstFrame; f <= loadingDialogSteps; f++)
+    for (int f = startFrame; f >= 0; f--)
     {
         if (!aptMainLoop()) break;
         menu3dsDrawLoadingDialog(dialogTab, currentMenuTab, menuTabs, f, dialogHeight, 0, loadingDialogSteps, percent);

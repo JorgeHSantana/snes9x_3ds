@@ -924,9 +924,17 @@ struct UpdateProgressUi
     u64 startMs;
 };
 
+static bool updNetKeepGoing()
+{
+    hidScanInput();
+    return (hidKeysDown() & KEY_B) == 0;
+}
+
 static bool updateProgressCb(void* user, unsigned done, unsigned total)
 {
     UpdateProgressUi* ui = (UpdateProgressUi*)user;
+    if (!updNetKeepGoing())
+        return false;                   // B pressed - cancel the download
     if (total == 0)
         return true;                    // no size yet - keep downloading
     int pct = (int)((unsigned long long)done * 100u / total);
@@ -939,7 +947,8 @@ static bool updateProgressCb(void* user, unsigned done, unsigned total)
             : 0;
         char line[80];
         snprintf(line, sizeof(line),
-                 "Downloading the new build... %d%% (%u KB/s)", pct, kbps);
+                 "Downloading the new build... %d%% (%u KB/s)\nPress B to cancel.",
+                 pct, kbps);
         menu3dsShowProgressDialog(*ui->dialogTab, *ui->isDialog,
             *ui->currentMenuTab, *ui->menuTabs, "Updating", line,
             ui->color, pct);
@@ -1003,6 +1012,8 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
 
     if (err != NULL)
     {
+        if (strcmp(err, "cancelled") == 0)
+            return;                     // user pressed B - just leave
         char msg[160];
         snprintf(msg, sizeof(msg),
                  "Update failed:\n%s\nNothing was changed.", err);
@@ -1013,6 +1024,10 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
         menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
         return;
     }
+
+    CheckAndUpdate(settings3DS.UpdateChannel,
+                   (int)(strcmp(chk.release.tag, "nightly-latest") == 0
+                       ? UPDATE3DS_CHANNEL_NIGHTLY : UPDATE3DS_CHANNEL_STABLE));
 
     if (confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Update Installed",
@@ -1044,10 +1059,14 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
     CheckAndUpdate(settings3DS.UpdateChannel, channel);
 
     menu3dsShowProgressDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
-        "Updates", "Checking for updates...", infoColor, -1);
+        "Updates", "Checking for updates...\nPress B to cancel.", infoColor, -1);
     Update3dsCheck chk;
     if (update3dsNetInit())
+    {
+        update3dsNetSetCancelPoll(updNetKeepGoing);
         updater3dsCheck(settings3DS.UpdateChannel, chk);
+        update3dsNetSetCancelPoll(NULL);
+    }
     else
     {
         memset(&chk, 0, sizeof(chk));
@@ -1057,6 +1076,8 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
 
     if (!chk.ok)
     {
+        if (strstr(chk.error, "cancel") != NULL)
+            return;                     // user pressed B - just leave
         char msg[160];
         snprintf(msg, sizeof(msg), "Could not check for updates:\n%s", chk.error);
         menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,

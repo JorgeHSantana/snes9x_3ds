@@ -26,6 +26,19 @@ const char* update3dsNetLastError()
     return netLastError;
 }
 
+static bool (*netCancelPoll)(void) = NULL;
+
+void update3dsNetSetCancelPoll(bool (*keepGoing)(void))
+{
+    netCancelPoll = keepGoing;
+}
+
+static int netCancelXfer(void*, curl_off_t, curl_off_t, curl_off_t,
+                         curl_off_t)
+{
+    return (netCancelPoll != NULL && !netCancelPoll()) ? 1 : 0;
+}
+
 static void netFail(const char* stage, CURLcode code)
 {
     snprintf(netLastError, sizeof(netLastError), "%s (%d %s)", stage,
@@ -120,6 +133,8 @@ int update3dsNetFetchApi(const char* path, char* buf, size_t bufSize)
 
     MemSink sink = { buf, bufSize, 0 };
     netSetup(c, url);
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, netCancelXfer);
+    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
     struct curl_slist* headers =
         curl_slist_append(NULL, "Accept: application/vnd.github+json");
     curl_easy_setopt(c, CURLOPT_HTTPHEADER, headers);
@@ -134,7 +149,9 @@ int update3dsNetFetchApi(const char* path, char* buf, size_t bufSize)
 
     if (code != CURLE_OK)
     {
-        if (code == CURLE_HTTP_RETURNED_ERROR)
+        if (code == CURLE_ABORTED_BY_CALLBACK)
+            snprintf(netLastError, sizeof(netLastError), "cancelled");
+        else if (code == CURLE_HTTP_RETURNED_ERROR)
             snprintf(netLastError, sizeof(netLastError), "http status %ld",
                      status);
         else
