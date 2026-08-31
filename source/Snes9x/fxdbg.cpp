@@ -67,7 +67,7 @@ void FxPipeString(char * pvString)
     }
     /* Check for 'move' instruction */
     else if( PIPE >= 0x10 && PIPE <= 0x1f && TF(B) )
-	sprintf(p, "move r%d,r%d", USEX8(PIPE & 0x0f), GSU.pvSreg - GSU.avReg);
+	sprintf(p, "move r%d,r%d", USEX8(PIPE & 0x0f), (int) GSU.pvSreg);
     /* Check for 'ibt', 'lms' or 'sms' */
     else if( PIPE >= 0xa0 && PIPE <= 0xaf )
     {
@@ -79,7 +79,7 @@ void FxPipeString(char * pvString)
     }
     /* Check for 'moves' */
     else if( PIPE >= 0xb0 && PIPE <= 0xbf && TF(B) )
-	sprintf(p, "moves r%d,r%d", GSU.pvDreg - GSU.avReg, USEX8(PIPE & 0x0f) );
+	sprintf(p, "moves r%d,r%d", (int) GSU.pvDreg, USEX8(PIPE & 0x0f) );
     /* Check for 'iwt', 'lm' or 'sm' */
     else if( PIPE >= 0xf0 )
     {
