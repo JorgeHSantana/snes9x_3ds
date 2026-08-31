@@ -1634,6 +1634,12 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Prio 0/1: a BG's two tile priorities can sit at"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  different depths (e.g. floor vs. detail planes)."_s, ""_s);
 
+        AddMenuPicker(items, "  Slider Response"_s,
+            "Discrete: shifts snap to whole pixels - layers always move\nas one solid block, but the slider steps through few levels.\nContinuous: smooth analog response; at partial slider a layer\ncan visibly split (fractional pixels)."_s,
+            makePickerOptions({"Discrete (solid layers)", "Continuous (smooth)"}),
+            settings3DS.StereoShiftMode, DIALOG_TYPE_INFO, true,
+            []( int val ) { CheckAndUpdate( settings3DS.StereoShiftMode, val ); });
+
         AddMenuHeader2(items, "Focus"_s);
         AddMenuGauge(items, "  Back"_s, -8, 0, *stereoEditField(3),
             []( int val ) { CheckAndUpdate( *stereoEditField(3), val ); }, true);
@@ -2225,6 +2231,10 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
         config3dsReadWriteEnum(stream, writeMode, "UpdateAutoCheck=%d\n", &settings3DS.UpdateAutoCheck, 0, 1);
     }
 
+    if (writeMode || detectedConfigVersion >= 2.3f) {
+        config3dsReadWriteInt32(stream, writeMode, "StereoShiftMode=%d\n", &settings3DS.StereoShiftMode, 0, 1);
+    }
+
     char formatBuf[64];
     snprintf(formatBuf, sizeof(formatBuf), "DefaultDir=%%%zu[^\n]\n", sizeof(settings3DS.defaultDir) - 1);
     config3dsReadWriteString(stream, writeMode, "DefaultDir=%s\n", formatBuf, settings3DS.defaultDir);
@@ -2314,6 +2324,7 @@ void settingsResetStereo3D()
         settings3DS.StereoDepth[i] = stereoDepthDefault[i];
         settings3DS.StereoDepthP1[i] = stereoDepthDefault[i];
     }
+    settings3DS.StereoShiftMode = 0;   // discrete: whole pixels
     settings3DS.StereoFade = 0;
     settings3DS.StereoHaze = 0;
     settings3DS.StereoBlur = 0;

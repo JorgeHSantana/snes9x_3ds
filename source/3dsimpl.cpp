@@ -870,12 +870,13 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	// Edge Cleanup: source columns to hide per side (Trim and Zoom)
 	float edgeCropSrc = 0.0f;
 	if (GPU3DS.stereoEdgeMode >= 1 && iod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f)
-		// same rounding as the layer shifts (issue #65): rounding is
-		// monotonic, so this covers every layer's applied displacement -
-		// crop and shifts can no longer disagree at partial slider.
-		// Continuous form kept for a possible return:
-		// edgeCropSrc = GPU3DS.stereoMaxAbs * (iod / gpu3dsGetIODBase()) * STEREO_PARALLAX_SCALE;
-		edgeCropSrc = roundf(GPU3DS.stereoMaxAbs * (iod / gpu3dsGetIODBase()) * STEREO_PARALLAX_SCALE);
+	{
+		// crop always mirrors the shift mode (issue #65): rounding is
+		// monotonic, so in discrete mode it covers every displacement
+		edgeCropSrc = GPU3DS.stereoMaxAbs * (iod / gpu3dsGetIODBase()) * STEREO_PARALLAX_SCALE;
+		if (settings3DS.StereoShiftMode == 0)
+			edgeCropSrc = roundf(edgeCropSrc);
+	}
 
 	// "Trim": physically narrow the game window by the corrupted columns.
 	// The window shrink is an integer, and the source crop is derived BACK

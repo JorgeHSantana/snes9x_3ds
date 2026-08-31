@@ -275,7 +275,9 @@ typedef struct {
                                                // All true by default.
 
     int                 StereoDepth[5];        // Stereoscopic 3D depth per layer
-    int                 StereoDepthP1[5];      // priority-1 depth per layer (issue #60) (BG1-4, Sprites),
+    int                 StereoDepthP1[5];      // priority-1 depth per layer (issue #60)
+    int                 StereoShiftMode;       // 0 = discrete (whole pixels, solid layers)
+                                               // 1 = continuous (smooth slider, may split layers) (BG1-4, Sprites),
                                                // -8..+8: + pops out of the screen, - sinks into it.
                                                // Saved to sd:/3ds/snes9x_3ds/stereo3d/<rom>.3d
                                                // (shareable), NOT to the regular config.

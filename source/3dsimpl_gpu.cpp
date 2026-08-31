@@ -467,19 +467,20 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // continuous 0..1, and a fractional shift rasterizes with
             // mixed per-section rounding - half the layer moves, half
             // stays. One rounded value keeps the layer a single block.
-            // Trade-off: the slider now steps through few discrete 3D
-            // levels. The continuous form below is kept for reference,
-            // but NEVER uncomment it as-is - raw fractional shifts bring
-            // the layer-splitting back. The working return path is
-            // quantizing in RENDER space: in the 512px mode half a SNES
-            // pixel is a whole render pixel, so rounding to 0.5 steps
-            // there doubles the slider levels with zero splitting (and
-            // the edge crop below must round the same way).
-            // gpu3dsSetStereoParallax(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE);
-            gpu3dsSetStereoParallax3(
-                roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE),
-                roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE),
-                GPU3DS.stereoPrioZBoundary[id]);
+            // Discrete mode (default) rounds every shift to a whole SNES
+            // pixel so a layer moves as one block (issue #65); Continuous
+            // keeps the analog slider feel and accepts that fractional
+            // shifts can split a layer at partial slider (user's choice,
+            // issue #60 UX).
+            {
+                float sp0 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
+                float sp1 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE;
+                if (settings3DS.StereoShiftMode == 0) {
+                    sp0 = roundf(sp0);
+                    sp1 = roundf(sp1);
+                }
+                gpu3dsSetStereoParallax3(sp0, sp1, GPU3DS.stereoPrioZBoundary[id]);
+            }
             gpu3dsSetStereoLayerAtmosphere(id);
 
             int from = layer->sectionsOffset + (sub ? 0 : layer->sectionsByTarget[TARGET_SNES_SUB]);
@@ -493,10 +494,12 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // hazy layers draw 2 extra ghost passes shifted +-1px with
                 // reduced alpha (a cheap box blur: soft "smoky" edges)
                 float ghost = s_atmosGhostAlpha;
-                // continuous form kept for a possible return (issue #65):
-                // float baseParallax = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
-                float baseParallax = roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE);
-                float baseParallaxP1 = roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE);
+                float baseParallax = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
+                float baseParallaxP1 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE;
+                if (settings3DS.StereoShiftMode == 0) {
+                    baseParallax = roundf(baseParallax);
+                    baseParallaxP1 = roundf(baseParallaxP1);
+                }
                 float prioBoundary = GPU3DS.stereoPrioZBoundary[id];
                 int passes = ghost > 0.0f ? 3 : 1;
 
