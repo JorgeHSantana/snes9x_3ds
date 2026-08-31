@@ -923,12 +923,10 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     bool isDialog = false;
     int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
 
-    char text[256];
+    char text[192];
     snprintf(text, sizeof(text),
-             "%s\n\nThis build: %s\nNew build:  %s\n\nDownload and install now?%s",
-             chk.release.title, updater3dsRunningSha(), chk.release.sha,
-             updater3dsIsCia() ? "" :
-             "\n(The .3dsx on the SD card will be replaced.)");
+             "%s\n%s > %s\nDownload and install now?",
+             chk.release.title, updater3dsRunningSha(), chk.release.sha);
     if (!confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
                        "Update Available", text, true, true))
         return;
@@ -941,10 +939,9 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
 
     if (err != NULL)
     {
-        char msg[192];
+        char msg[160];
         snprintf(msg, sizeof(msg),
-                 "The update could not be applied:\n%s\n\nNothing was changed - "
-                 "the emulator you are running is intact.", err);
+                 "Update failed:\n%s\nNothing was changed.", err);
         menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Update Failed", msg,
             Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn,
@@ -955,9 +952,7 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
 
     if (confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Update Installed",
-            updater3dsIsCia()
-                ? "The new version is installed and runs on the\nnext launch. Exit the emulator now?"
-                : "The .3dsx was replaced and runs on the next\nlaunch. Exit the emulator now?",
+            "The new version runs on the next launch.\nExit the emulator now?",
             true, true))
     {
         GPU3DS.emulatorState = EMUSTATE_END;

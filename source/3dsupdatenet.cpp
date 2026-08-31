@@ -9,6 +9,19 @@
 #define NET_CHUNK_SIZE      (64 * 1024)
 
 static bool netReady = false;
+static char netLastError[96] = "";
+
+const char* update3dsNetLastError()
+{
+    return netLastError;
+}
+
+static void netFail(const char* stage, Result rc)
+{
+    snprintf(netLastError, sizeof(netLastError), "%s (%08lx)", stage,
+             (unsigned long)rc);
+    log3dsWrite("[upd] %s", netLastError);
+}
 
 bool update3dsNetInit()
 {
@@ -39,7 +52,10 @@ static const char* netOpen(httpcContext* ctx, const char* url)
     {
         Result rc = httpcOpenContext(ctx, HTTPC_METHOD_GET, current, 1);
         if (R_FAILED(rc))
+        {
+            netFail("open", rc);
             return "connection open failed";
+        }
 
         // GitHub's cert chain is not in the console's store; standard
         // homebrew practice. Integrity is re-checked by the image verify.
@@ -52,15 +68,18 @@ static const char* netOpen(httpcContext* ctx, const char* url)
         rc = httpcBeginRequest(ctx);
         if (R_FAILED(rc))
         {
+            netFail("request", rc);
             httpcCloseContext(ctx);
-            return "request failed (no network?)";
+            return "request failed";
         }
 
         u32 status = 0;
-        if (R_FAILED(httpcGetResponseStatusCode(ctx, &status)))
+        rc = httpcGetResponseStatusCode(ctx, &status);
+        if (R_FAILED(rc))
         {
+            netFail("response", rc);
             httpcCloseContext(ctx);
-            return "no response (no network?)";
+            return "no response";
         }
 
         if (status == 301 || status == 302 || status == 303 ||
@@ -78,6 +97,8 @@ static const char* netOpen(httpcContext* ctx, const char* url)
         if (status != 200)
         {
             httpcCloseContext(ctx);
+            snprintf(netLastError, sizeof(netLastError), "http status %lu",
+                     (unsigned long)status);
             log3dsWrite("[upd] http status %lu for %.60s",
                         (unsigned long)status, current);
             return (status == 403 || status == 429) ? "rate limited, try later"
@@ -120,7 +141,7 @@ int update3dsNetFetchApi(const char* path, char* buf, size_t bufSize)
     httpcCloseContext(&ctx);
     if (R_FAILED(rc) && rc != (Result)HTTPC_RESULTCODE_DOWNLOADPENDING)
     {
-        log3dsWrite("[upd] api download failed: %08lx", (unsigned long)rc);
+        netFail("api read", rc);
         return -3;
     }
     buf[total] = 0;

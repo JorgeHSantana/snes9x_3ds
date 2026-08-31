@@ -15,6 +15,10 @@
 bool update3dsNetInit();
 void update3dsNetExit();
 
+// Detail of the last failure (stage + service result code), for error
+// dialogs - field reports then carry the real cause, not a guess.
+const char* update3dsNetLastError();
+
 // GET https://api.github.com<path> into buf (NUL-terminated).
 // Returns payload length, or a negative value on any failure.
 int update3dsNetFetchApi(const char* path, char* buf, size_t bufSize);

@@ -32,8 +32,10 @@ void updater3dsCheck(int channel, Update3dsCheck& check)
     int len = update3dsNetFetchApi(path, json, sizeof(json));
     if (len <= 0)
     {
+        const char* detail = update3dsNetLastError();
         snprintf(check.error, sizeof(check.error),
-                 "could not reach github (wifi?)");
+                 "github unreachable: %s",
+                 detail[0] != 0 ? detail : "unknown");
         return;
     }
     if (!update3dsParseRelease(json, (size_t)len, check.release))
