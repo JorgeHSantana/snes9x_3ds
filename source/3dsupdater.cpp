@@ -55,30 +55,13 @@ void updater3dsCheck(int channel, Update3dsCheck& check)
 
 void updater3dsAutoCheck(int rememberedChannel, Update3dsCheck& check)
 {
-    // On the latest stable? Then stable is our channel and we are done.
-    Update3dsCheck stable;
-    updater3dsCheck(UPDATE3DS_CHANNEL_STABLE, stable);
-    if (stable.ok && !stable.updateAvailable)
-    {
-        check = stable;
-        return;
-    }
-
-    // On the latest nightly? Same - a nightly build stays a nightly.
-    Update3dsCheck nightly;
-    updater3dsCheck(UPDATE3DS_CHANNEL_NIGHTLY, nightly);
-    if (nightly.ok && !nightly.updateAvailable)
-    {
-        check = nightly;
-        return;
-    }
-
-    // Outdated on both: the last manual channel choice breaks the tie -
-    // but the startup path only offers a release published AFTER this
-    // build (Jorge's rule: no downgrade offers on boot; a cross-channel
-    // switch is a manual, deliberate act).
-    check = (rememberedChannel == UPDATE3DS_CHANNEL_NIGHTLY) ? nightly
-                                                             : stable;
+    // Nightly is nightly, stable is stable: the startup check NEVER
+    // crosses channels (Jorge's rule). It consults only the channel this
+    // build belongs to - stamped into the settings by every install, or
+    // the last manual choice for hand-copied builds - and only offers a
+    // release published after the build itself (with slack for the CI's
+    // build-to-publish lag). Switching channels is always a manual act.
+    updater3dsCheck(rememberedChannel, check);
     check.updateAvailable = check.updateAvailable &&
         update3dsIsNewerThanBuild(updater3dsRunningSha(), BUILD_UTC,
                                   check.release);

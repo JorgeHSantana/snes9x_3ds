@@ -29,10 +29,9 @@ const char* updater3dsRunningSha();
 // build. Network must be up; failures land in check.error.
 void updater3dsCheck(int channel, Update3dsCheck& check);
 
-// Startup flavor: updates the channel the RUNNING build belongs to.
-// Whichever channel's latest sha matches the running build is "current"
-// (up to date, no offer); a build matching neither is outdated and
-// follows 'rememberedChannel' (the user's last manual choice).
+// Startup flavor: consults ONLY 'rememberedChannel' (stamped by every
+// install; the last manual choice for hand-copied builds) and offers
+// only releases published after this build. Never crosses channels.
 void updater3dsAutoCheck(int rememberedChannel, Update3dsCheck& check);
 
 // Downloads, verifies and applies 'release' for the running format.
