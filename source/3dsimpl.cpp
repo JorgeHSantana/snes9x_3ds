@@ -872,7 +872,9 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	if (GPU3DS.stereoEdgeMode >= 1 && iod != 0.0f && GPU3DS.stereoMaxAbs > 0.0f)
 		// same rounding as the layer shifts (issue #65): rounding is
 		// monotonic, so this covers every layer's applied displacement -
-		// crop and shifts can no longer disagree at partial slider
+		// crop and shifts can no longer disagree at partial slider.
+		// Continuous form kept for a possible return:
+		// edgeCropSrc = GPU3DS.stereoMaxAbs * (iod / gpu3dsGetIODBase()) * STEREO_PARALLAX_SCALE;
 		edgeCropSrc = roundf(GPU3DS.stereoMaxAbs * (iod / gpu3dsGetIODBase()) * STEREO_PARALLAX_SCALE);
 
 	// "Trim": physically narrow the game window by the corrupted columns.

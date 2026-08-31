@@ -467,6 +467,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // continuous 0..1, and a fractional shift rasterizes with
             // mixed per-section rounding - half the layer moves, half
             // stays. One rounded value keeps the layer a single block.
+            // Trade-off: the slider now steps through few discrete 3D
+            // levels. The continuous form below is kept for a possible
+            // return (e.g. half-pixel steps in the 512px render mode):
+            // gpu3dsSetStereoParallax(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE);
             gpu3dsSetStereoParallax(roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE));
             gpu3dsSetStereoLayerAtmosphere(id);
 
@@ -481,6 +485,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // hazy layers draw 2 extra ghost passes shifted +-1px with
                 // reduced alpha (a cheap box blur: soft "smoky" edges)
                 float ghost = s_atmosGhostAlpha;
+                // continuous form kept for a possible return (issue #65):
+                // float baseParallax = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
                 float baseParallax = roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE);
                 int passes = ghost > 0.0f ? 3 : 1;
 
