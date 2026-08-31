@@ -510,27 +510,48 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // keeps the analog slider feel and accepts that fractional
             // shifts can split a layer at partial slider (user's choice,
             // issue #60 UX).
+            // four depth tiers feed the shader cascade. BGs use tiers 0/1
+            // (their two tile priorities) with the upper boundaries parked;
+            // the OBJ layer maps its four sprite priorities onto all tiers
+            // (planes are (priority+1)*3 = 3/6/9/12, see S9xDrawOBJSHardware,
+            // so the boundaries sit halfway between them).
+            float tierShift[4];
+            float tierBnd01 = GPU3DS.stereoPrioZBoundary[id];
+            float tierBnd12 = STEREO_TIER_PARKED, tierBnd23 = STEREO_TIER_PARKED;
             {
-                float sp0 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
-                float sp1 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE;
-                if (settings3DS.StereoShiftMode == 0) {
-                    sp0 = roundf(sp0);
-                    sp1 = roundf(sp1);
+                tierShift[0] = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
+                tierShift[1] = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE;
+                tierShift[2] = tierShift[1];
+                tierShift[3] = tierShift[1];
+                if (id == LAYER_OBJ) {
+                    tierShift[2] = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthOBJHi[0] * STEREO_PARALLAX_SCALE;
+                    tierShift[3] = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthOBJHi[1] * STEREO_PARALLAX_SCALE;
+                    tierBnd01 = 4.5f / 32.0f;
+                    tierBnd12 = 7.5f / 32.0f;
+                    tierBnd23 = 10.5f / 32.0f;
                 }
-                gpu3dsSetStereoParallax3(sp0, sp1, GPU3DS.stereoPrioZBoundary[id]);
+                if (settings3DS.StereoShiftMode == 0)
+                    for (int t = 0; t < 4; t++) tierShift[t] = roundf(tierShift[t]);
+                gpu3dsSetStereoParallax3(tierShift[0], tierShift[1], tierBnd01);
+                gpu3dsSetStereoParallaxHi(tierShift[2], tierShift[3], tierBnd12, tierBnd23);
 
-                // spotlighting one PRIORITY hides its sibling in-shader
+                // spotlighting one PRIORITY hides its siblings in-shader
                 // (issue #61 polish): the TexEnv dim can't split a draw,
                 // and the tile TEV takes RGB straight from the texture,
-                // so the shader zeroes the sibling's vertex alpha and the
+                // so the shader zeroes the siblings' vertex alpha and the
                 // NE_ZERO alpha test discards those tiles entirely
-                float dimP0 = 1.0f, dimP1 = 1.0f;
+                float dim[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
                 if (s_previewHighlightLayer == (int)id &&
-                    s_previewHighlightPrio >= 0 && id < LAYER_OBJ) {
-                    if (s_previewHighlightPrio == 0) dimP1 = 0.0f;
-                    else                             dimP0 = 0.0f;
+                    s_previewHighlightPrio >= 0 && id <= LAYER_OBJ) {
+                    if (id == LAYER_OBJ) {
+                        for (int t = 0; t < 4; t++)
+                            dim[t] = (t == s_previewHighlightPrio) ? 1.0f : 0.0f;
+                    } else {
+                        if (s_previewHighlightPrio == 0) dim[1] = 0.0f;
+                        else                             dim[0] = 0.0f;
+                    }
                 }
-                gpu3dsSetStereoPrioDim(dimP0, dimP1);
+                gpu3dsSetStereoPrioDim4(dim[0], dim[1], dim[2], dim[3]);
             }
             gpu3dsSetStereoLayerAtmosphere(id);
 
@@ -545,24 +566,21 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // hazy layers draw 2 extra ghost passes shifted +-1px with
                 // reduced alpha (a cheap box blur: soft "smoky" edges)
                 float ghost = s_atmosGhostAlpha;
-                float baseParallax = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
-                float baseParallaxP1 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE;
-                if (settings3DS.StereoShiftMode == 0) {
-                    baseParallax = roundf(baseParallax);
-                    baseParallaxP1 = roundf(baseParallaxP1);
-                }
-                float prioBoundary = GPU3DS.stereoPrioZBoundary[id];
                 int passes = ghost > 0.0f ? 3 : 1;
 
                 for (int gp = 0; gp < passes; gp++) {
                     if (gp == 1) {
                         GPU3DS.stereoGhostPass = true;
                         gpu3dsSetGhostAlpha(ghost);
-                        gpu3dsSetStereoParallax3(baseParallax + s_atmosGhostOffset,
-                            baseParallaxP1 + s_atmosGhostOffset, prioBoundary);
+                        gpu3dsSetStereoParallax3(tierShift[0] + s_atmosGhostOffset,
+                            tierShift[1] + s_atmosGhostOffset, tierBnd01);
+                        gpu3dsSetStereoParallaxHi(tierShift[2] + s_atmosGhostOffset,
+                            tierShift[3] + s_atmosGhostOffset, tierBnd12, tierBnd23);
                     } else if (gp == 2) {
-                        gpu3dsSetStereoParallax3(baseParallax - s_atmosGhostOffset,
-                            baseParallaxP1 - s_atmosGhostOffset, prioBoundary);
+                        gpu3dsSetStereoParallax3(tierShift[0] - s_atmosGhostOffset,
+                            tierShift[1] - s_atmosGhostOffset, tierBnd01);
+                        gpu3dsSetStereoParallaxHi(tierShift[2] - s_atmosGhostOffset,
+                            tierShift[3] - s_atmosGhostOffset, tierBnd12, tierBnd23);
                     }
 
                     if (list->useDrawArraysForTiledLayers) {

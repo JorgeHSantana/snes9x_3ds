@@ -894,6 +894,12 @@ static int *stereoEditDepth(int layer) {
         return &settings3DS.StereoProfiles[s_stereoEditIdx].Depth[layer];
     return &settings3DS.StereoDepth[layer];
 }
+// sprite priorities 2/3 (issue #60): 0/1 ride Depth/DepthP1[4] like the BGs
+static int *stereoEditDepthOBJHi(int which) {
+    if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount)
+        return &settings3DS.StereoProfiles[s_stereoEditIdx].DepthOBJHi[which];
+    return &settings3DS.StereoDepthOBJHi[which];
+}
 static int *stereoEditField(int which) {
     if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount) {
         S9xSettings3DS::SStereoProfile *p = &settings3DS.StereoProfiles[s_stereoEditIdx];
@@ -1507,14 +1513,15 @@ static void stereo3dIdleTick()
 
     int rel = (s_stereoGaugeFirst >= 0)
         ? menuTabs[curTab].SelectedItemIndex - s_stereoGaugeFirst : -1;
-    bool inGauges = rel >= 0 && rel < 9;
+    // 8 BG gauges (4 layers x 2 priorities) + 4 sprite priorities
+    bool inGauges = rel >= 0 && rel < 12;
     int layer = !inGauges ? -1 : (rel < 8 ? rel / 2 : 4);
-    int prio  = !inGauges ? -1 : (rel < 8 ? rel % 2 : -1);
+    int prio  = !inGauges ? -1 : (rel < 8 ? rel % 2 : rel - 8);
 
     bool peek = (hidKeysHeld() & KEY_Y) != 0;   // menu loop already scanned
     int wantHighlight = (inGauges && !peek) ? layer : -1;
     int wantPrio = (inGauges && !peek) ? prio : -1;
-    int wantKey = wantHighlight * 4 + wantPrio;
+    int wantKey = wantHighlight * 8 + wantPrio;
     float slider = osGet3DSliderState();
 
     if (!inGauges) {
@@ -1593,6 +1600,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                         } else {
                             for (int i = 0; i < 5; i++) p->Depth[i] = settings3DS.StereoDepth[i];
                             for (int i = 0; i < 5; i++) p->DepthP1[i] = settings3DS.StereoDepthP1[i];
+                            for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = settings3DS.StereoDepthOBJHi[i];
                             p->Fade = settings3DS.StereoFade; p->Haze = settings3DS.StereoHaze;
                             p->Blur = settings3DS.StereoBlur;
                             p->FocusBack = settings3DS.StereoFocusBack;
@@ -1715,17 +1723,21 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             AddMenuGauge(items, stereoNamesP1[l], -8, 8, *stereoEditDepthP1(l),
                 [l]( int val ) { if (CheckAndUpdate( *stereoEditDepthP1(l), val )) s_stereoPreviewDirty = true; }, true, true);
         }
-        AddMenuGauge(items, "  Sprites"_s, -8, 8, *stereoEditDepth(4),
-            []( int val ) {
-                bool ch = CheckAndUpdate( *stereoEditDepth(4), val );
-                ch |= CheckAndUpdate( *stereoEditDepthP1(4), val );
-                if (ch) s_stereoPreviewDirty = true;
-            }, true, true);
+        AddMenuGauge(items, "  Sprites Prio 0"_s, -8, 8, *stereoEditDepth(4),
+            []( int val ) { if (CheckAndUpdate( *stereoEditDepth(4), val )) s_stereoPreviewDirty = true; }, true, true);
+        AddMenuGauge(items, "  Sprites Prio 1"_s, -8, 8, *stereoEditDepthP1(4),
+            []( int val ) { if (CheckAndUpdate( *stereoEditDepthP1(4), val )) s_stereoPreviewDirty = true; }, true, true);
+        AddMenuGauge(items, "  Sprites Prio 2"_s, -8, 8, *stereoEditDepthOBJHi(0),
+            []( int val ) { if (CheckAndUpdate( *stereoEditDepthOBJHi(0), val )) s_stereoPreviewDirty = true; }, true, true);
+        AddMenuGauge(items, "  Sprites Prio 3"_s, -8, 8, *stereoEditDepthOBJHi(1),
+            []( int val ) { if (CheckAndUpdate( *stereoEditDepthOBJHi(1), val )) s_stereoPreviewDirty = true; }, true, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Editing a gauge spotlights its layer on the game"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  screen, moving live. Hold Y to see the full scene."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  + pops out of the screen, - sinks into it."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Prio 0/1: a BG's two tile priorities can sit at"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  different depths (e.g. floor vs. detail planes)."_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Sprites split by their four priorities (0 = behind,"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  3 = in front). Most games keep one value for all."_s, ""_s);
 
         AddMenuHeader2(items, "Focus"_s);
         AddMenuGauge(items, "  Back"_s, -8, 0, *stereoEditField(3),
@@ -2406,6 +2418,8 @@ void settingsResetStereo3D()
         settings3DS.StereoDepth[i] = stereoDepthDefault[i];
         settings3DS.StereoDepthP1[i] = stereoDepthDefault[i];
     }
+    settings3DS.StereoDepthOBJHi[0] = stereoDepthDefault[4];
+    settings3DS.StereoDepthOBJHi[1] = stereoDepthDefault[4];
 
     settings3DS.StereoFade = 0;
     settings3DS.StereoHaze = 0;
@@ -2439,6 +2453,7 @@ void settingsLoadStereo3D()
     // profile opened by the last PROFILE= line (issue #23)
     int *tDepth = settings3DS.StereoDepth;
     int *tDepthP1 = settings3DS.StereoDepthP1;
+    int *tObjHi = settings3DS.StereoDepthOBJHi;
     int *tFade = &settings3DS.StereoFade;
     int *tHaze = &settings3DS.StereoHaze;
     int *tBlur = &settings3DS.StereoBlur;
@@ -2463,9 +2478,10 @@ void settingsLoadStereo3D()
                 snprintf(p->Name, sizeof(p->Name), "%s", name);
                 for (int i = 0; i < 5; i++) p->Depth[i] = stereoDepthDefault[i];
                 for (int i = 0; i < 5; i++) p->DepthP1[i] = stereoDepthDefault[i];
+                for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = stereoDepthDefault[4];
                 p->Fade = p->Haze = p->Blur = 0;
                 p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1;
-                tDepth = p->Depth; tDepthP1 = p->DepthP1;
+                tDepth = p->Depth; tDepthP1 = p->DepthP1; tObjHi = p->DepthOBJHi;
                 tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
                 tEdge = &p->EdgeMode;
@@ -2502,11 +2518,19 @@ void settingsLoadStereo3D()
                 v = v < -8 ? -8 : (v > 8 ? 8 : v);
                 tDepth[i] = v;
                 tDepthP1[i] = v;    // mirrored until a P1 key overrides
+                if (i == 4) {       // OBJ= seeds all four sprite priorities
+                    tObjHi[0] = v;
+                    tObjHi[1] = v;
+                }
             }
             snprintf(fmt, sizeof(fmt), "%sP1=%%d", stereoDepthKeys[i]);
             if (sscanf(line, fmt, &v) == 1)
                 tDepthP1[i] = v < -8 ? -8 : (v > 8 ? 8 : v);
         }
+        if (sscanf(line, "OBJP2=%d", &v) == 1)
+            tObjHi[0] = v < -8 ? -8 : (v > 8 ? 8 : v);
+        if (sscanf(line, "OBJP3=%d", &v) == 1)
+            tObjHi[1] = v < -8 ? -8 : (v > 8 ? 8 : v);
         if (sscanf(line, "FADE=%d", &v) == 1)
             *tFade = v < 0 ? 0 : (v > 8 ? 8 : v);
         if (sscanf(line, "HAZE=%d", &v) == 1)
@@ -2530,6 +2554,8 @@ static void settingsWriteStereo3DGlobals(FILE *f)
         fprintf(f, "%s=%d\n", stereoDepthKeys[i], settings3DS.StereoDepth[i]);
     for (int i = 0; i < 5; i++)
         fprintf(f, "%sP1=%d\n", stereoDepthKeys[i], settings3DS.StereoDepthP1[i]);
+    fprintf(f, "OBJP2=%d\nOBJP3=%d\n",
+        settings3DS.StereoDepthOBJHi[0], settings3DS.StereoDepthOBJHi[1]);
     fprintf(f, "# effects apply only outside the focus zone [FOCUSBACK..FOCUSFRONT],\n");
     fprintf(f, "# growing linearly with the distance to the zone edge (0..8 each):\n");
     fprintf(f, "# fade darkens / haze fogs behind it, blur smudges in both directions\n");
@@ -2577,6 +2603,7 @@ void settingsSaveStereo3D()
             fprintf(f, "%s=%d\n", stereoDepthKeys[i], p->Depth[i]);
         for (int i = 0; i < 5; i++)
             fprintf(f, "%sP1=%d\n", stereoDepthKeys[i], p->DepthP1[i]);
+        fprintf(f, "OBJP2=%d\nOBJP3=%d\n", p->DepthOBJHi[0], p->DepthOBJHi[1]);
         fprintf(f, "FADE=%d\nHAZE=%d\nBLUR=%d\n", p->Fade, p->Haze, p->Blur);
         fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\n",
             p->FocusBack, p->FocusFront, p->EdgeMode);

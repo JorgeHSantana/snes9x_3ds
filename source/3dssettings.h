@@ -276,6 +276,9 @@ typedef struct {
 
     int                 StereoDepth[5];        // Stereoscopic 3D depth per layer
     int                 StereoDepthP1[5];      // priority-1 depth per layer (issue #60)
+    int                 StereoDepthOBJHi[2];   // sprite priority 2/3 depths (issue #60;
+                                               // priorities 0/1 ride [4] of the two
+                                               // arrays above, like the BGs)
     int                 StereoShiftMode;       // 0 = discrete (whole pixels, solid layers)
                                                // 1 = continuous (smooth slider, may split layers) (BG1-4, Sprites),
                                                // -8..+8: + pops out of the screen, - sinks into it.
@@ -301,6 +304,7 @@ typedef struct {
         char Name[16];
         int  Depth[5];
         int  DepthP1[5];   // per-priority split (issue #60); mirrors Depth until edited
+        int  DepthOBJHi[2];// sprite priorities 2/3 (0/1 ride [4] above)
         int  Fade, Haze, Blur;
         int  FocusBack, FocusFront;
         int  EdgeMode;

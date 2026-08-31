@@ -3,12 +3,17 @@
 .fvec       textureScale         ; #4
 .fvec       textureOffset        ; #5
                                  ; x = texture offset (0.0 or 1.0 for mode5/6 hi-res flipping)
-.fvec       stereoIOD            ; #6 - Inter-ocular distance for horizontal parallax
-.fvec       stereoDim            ; #7 - (dimP0, dimP1) editor spotlight alpha multipliers
+.fvec       stereoIOD            ; #6 - (tier0 shift, tier1 shift, boundary 0/1)
+.fvec       stereoDim            ; #7 - (dim0..dim3) editor spotlight alpha multipliers
                                  ;      (the tile TEV replaces RGB from TEXTURE0 but
                                  ;      modulates alpha with the vertex color, so the
-                                 ;      spotlight hides the sibling priority via the
-                                 ;      alpha test instead of dimming its RGB)
+                                 ;      spotlight hides the sibling priorities via the
+                                 ;      alpha test instead of dimming their RGB)
+.fvec       stereoIOD2           ; #8 - (tier2 shift, tier3 shift, boundary 1/2,
+                                 ;      boundary 2/3). BG layers park both boundaries
+                                 ;      far above any plane so only tiers 0/1 exist;
+                                 ;      the OBJ layer uses all four (issue #60: sprite
+                                 ;      planes are (priority+1)*3 = 3/6/9/12)
 
 ; Constants
 .constf c_base          (0, 1, 2, 8)    ; (x, y, z, w)
@@ -99,22 +104,36 @@ depth_computation:
 
 draw:
     ; pass through, set final values for projection, textureScale and color in geo shader
-    ; Stereo parallax per priority (issue #60): stereoIOD = (P0 shift,
-    ; P1 shift, plane boundary). r0.z holds this tile's depth plane
-    ; (d/16, decoded above); below the boundary = priority 0. With both
-    ; shifts equal and boundary 0 this collapses to the flat behaviour,
-    ; an exact no-op in 2D.
-    mov     r1.xyz, stereoIOD.xyz
-    mov     r2.xy, stereoDim.xy
-    cmp     r0.z, ge, ge, r1.z          ; plane >= boundary -> keep P1
-    jmpc    cmp.x, parallax_apply
-    mov     r1.y, r1.x                  ; below boundary -> P0 takes its seat
-    mov     r2.y, r2.x                  ; ...and P0's spotlight dim with it
-parallax_apply:
-    add     r0.x, r1.y, r0.x
-    mul     r11.w, r2.y, r11.w          ; editor spotlight: sibling priority's
+    ; Stereo parallax per priority (issue #60): four depth tiers, picked
+    ; by comparing this tile's decoded depth plane (r0.z = d/32) against
+    ; the three ascending boundaries. Each passed boundary promotes the
+    ; selection one tier (overwrite cascade - picasso has no unconditional
+    ; jmp). With all shifts equal and boundaries 0/parked this collapses
+    ; to the flat behaviour, an exact no-op in 2D.
+    mov     r1.xyz, stereoIOD.xyz       ; s0, s1, b01
+    mov     r3, stereoIOD2              ; s2, s3, b12, b23
+    mov     r2, stereoDim               ; d0, d1, d2, d3
+    mov     r4.x, r1.x                  ; tier 0 shift
+    mov     r4.y, r2.x                  ; ...and its spotlight alpha
+    cmp     r0.z, ge, ge, r1.z          ; plane >= b01 -> tier 1
+    ifc     cmp.x
+        mov     r4.x, r1.y
+        mov     r4.y, r2.y
+    .end
+    cmp     r0.z, ge, ge, r3.z          ; plane >= b12 -> tier 2
+    ifc     cmp.x
+        mov     r4.x, r3.x
+        mov     r4.y, r2.z
+    .end
+    cmp     r0.z, ge, ge, r3.w          ; plane >= b23 -> tier 3
+    ifc     cmp.x
+        mov     r4.x, r3.y
+        mov     r4.y, r2.w
+    .end
+    add     r0.x, r4.x, r0.x
+    mul     r11.w, r4.y, r11.w          ; editor spotlight: other priorities'
                                         ; alpha goes to 0 (alpha test discards
-                                        ; it); 1.0 in gameplay = exact no-op
+                                        ; them); 1.0 in gameplay = exact no-op
     mov     outpos, r0
     mov     outtex, r10
     mov     outcol, r11

@@ -84,6 +84,7 @@ typedef enum {
     ULOC_UPDATE_FRAME,
     ULOC_STEREO_IOD,
     ULOC_STEREO_DIM,
+    ULOC_STEREO_IOD2,
     ULOC_COUNT
 } SGPU_SHADER_ULOC;
 
@@ -293,7 +294,17 @@ typedef struct
     float                       stereoParallaxApplied;   // composite dedup key
     float                       stereoPrioDimP0;
     float                       stereoPrioDimP1;
+    float                       stereoPrioDimP2;
+    float                       stereoPrioDimP3;
     float                       stereoPrioDimApplied;
+    // upper depth tiers (issue #60: OBJ per-priority): shifts for tiers
+    // 2/3 plus the 1/2 and 2/3 boundaries. BG layers park the boundaries
+    // at STEREO_TIER_PARKED so only tiers 0/1 ever match.
+    float                       stereoParallaxT2;
+    float                       stereoParallaxT3;
+    float                       stereoParallaxBnd12;
+    float                       stereoParallaxBnd23;
+    float                       stereoParallaxHiApplied;
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
     // false when the optional right-eye VRAM texture failed to allocate;
@@ -305,6 +316,9 @@ typedef struct
     // stereoEyeIOD * stereoLayerDepth[LAYER_ID] (px, set between draws).
     float                       stereoEyeIOD;
     float                       stereoLayerDepth[8];
+    // sprite priority 2/3 depths (issue #60: OBJ per-priority; priorities
+    // 0/1 live in stereoLayerDepth/P1[LAYER_OBJ] like the BGs)
+    float                       stereoLayerDepthOBJHi[2];
     // priority-1 depth per layer (issue #60); mirrors stereoLayerDepth
     // until the editor exposes separate gauges
     float                       stereoLayerDepthP1[8];
@@ -437,7 +451,7 @@ static inline void gpu3dsWaitForVBlank(gfxScreen_t screen) {
 }
 
 // 3D-tab editor preview highlight (issue #61); layer -1 = off,
-// prio -1 = whole layer, 0/1 = spotlight that priority only
+// prio -1 = whole layer; 0/1 (BGs) or 0..3 (sprites) = that priority only
 void gpu3dsSetStereoPreviewHighlight(int layerId, int prio);
 
 // Push the stereo parallax uniform immediately (dedup'd). Must NOT rely on
@@ -460,22 +474,51 @@ static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary)
     GPU3DS.stereoParallaxApplied = key;
 }
 
+// a boundary no decoded depth plane (max 16/32 = 0.5) can ever reach:
+// parks the upper tiers so a layer behaves two-tier (BGs, flat draws)
+#define STEREO_TIER_PARKED 99.0f
+
+// tiers 2/3 of the parallax cascade (OBJ priorities 2/3) plus their
+// boundaries. Same dedup/key discipline as gpu3dsSetStereoParallax3.
+static inline void gpu3dsSetStereoParallaxHi(float t2, float t3,
+    float bnd12, float bnd23)
+{
+    GPU3DS.stereoParallaxT2 = t2;
+    GPU3DS.stereoParallaxT3 = t3;
+    GPU3DS.stereoParallaxBnd12 = bnd12;
+    GPU3DS.stereoParallaxBnd23 = bnd23;
+    float key = t2 + t3 * 1024.0f + bnd12 * 1048576.0f + bnd23 * 8388608.0f;
+    if (GPU3DS.stereoParallaxHiApplied == key)
+        return;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD2], t2, t3, bnd12, bnd23);
+    GPU3DS.stereoParallaxHiApplied = key;
+}
+
 static inline void gpu3dsSetStereoParallax(float v)
 {
     gpu3dsSetStereoParallax3(v, v, 0.0f);
+    gpu3dsSetStereoParallaxHi(v, v, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
 }
 
-// per-priority brightness pair for the editor spotlight (1.0 = normal);
-// consumed by the tile shader as a primary-color multiplier per side
-static inline void gpu3dsSetStereoPrioDim(float dimP0, float dimP1)
+// per-priority spotlight alphas for the editor (1.0 = visible, 0.0 =
+// alpha-hidden); tier-selected by the tile shader like the parallax.
+// Values are only ever 0 or 1, so the small key multipliers can't collide.
+static inline void gpu3dsSetStereoPrioDim4(float d0, float d1, float d2, float d3)
 {
-    float key = dimP0 + dimP1 * 1024.0f;
+    float key = d0 + d1 * 2.0f + d2 * 4.0f + d3 * 8.0f;
     if (GPU3DS.stereoPrioDimApplied == key)
         return;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_DIM], dimP0, dimP1, 0.0f, 0.0f);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_DIM], d0, d1, d2, d3);
     GPU3DS.stereoPrioDimApplied = key;
-    GPU3DS.stereoPrioDimP0 = dimP0;
-    GPU3DS.stereoPrioDimP1 = dimP1;
+    GPU3DS.stereoPrioDimP0 = d0;
+    GPU3DS.stereoPrioDimP1 = d1;
+    GPU3DS.stereoPrioDimP2 = d2;
+    GPU3DS.stereoPrioDimP3 = d3;
+}
+
+static inline void gpu3dsSetStereoPrioDim(float dimP0, float dimP1)
+{
+    gpu3dsSetStereoPrioDim4(dimP0, dimP1, 1.0f, 1.0f);
 }
 
 static inline void gpu3dsApplyRenderState(SGPURenderState *state)

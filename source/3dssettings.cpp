@@ -261,12 +261,15 @@ void settings3dsUpdate(bool includeGameSettings)
 // computes every derived GPU3DS stereo field from a (possibly lerped)
 // set of float depths + effect/zone values
 static void settings3dsStereoApplyValues(const float depths[5],
-    const float depthsP1[5],
+    const float depthsP1[5], const float objHi[2],
     float fade, float haze, float blur, float focusB, float focusF, int edgeMode)
 {
     float focusBack = focusB;
     float focusFront = focusF;
     float maxExcess = 0.0f, maxBackExcess = 0.0f, maxPop = 0.0f, maxAbs = 0.0f;
+
+    GPU3DS.stereoLayerDepthOBJHi[0] = objHi[0];
+    GPU3DS.stereoLayerDepthOBJHi[1] = objHi[1];
 
     for (int i = 0; i < 8; i++) {
         float depth = (i < 5) ? depths[i] : 0.0f;
@@ -274,9 +277,11 @@ static void settings3dsStereoApplyValues(const float depths[5],
         GPU3DS.stereoLayerDepth[i] = depth;
         GPU3DS.stereoLayerDepthP1[i] = depthP1;
 
-        // aggregates consider both priorities (issue #60)
-        for (int pr = 0; pr < 2; pr++) {
-            float d = pr == 0 ? depth : depthP1;
+        // aggregates consider every priority (issue #60): two per BG,
+        // four for the sprites (priorities 2/3 exist only on layer 4)
+        int prios = (i == 4) ? 4 : 2;
+        for (int pr = 0; pr < prios; pr++) {
+            float d = pr == 0 ? depth : (pr == 1 ? depthP1 : objHi[pr - 2]);
             if (d > maxPop) maxPop = d;
             if (d > maxAbs) maxAbs = d;
             if (-d > maxAbs) maxAbs = -d;
@@ -310,6 +315,7 @@ static void settings3dsStereoDefaultProfile(S9xSettings3DS::SStereoProfile *p)
     snprintf(p->Name, sizeof(p->Name), "Default");
     for (int i = 0; i < 5; i++) p->Depth[i] = settings3DS.StereoDepth[i];
     for (int i = 0; i < 5; i++) p->DepthP1[i] = settings3DS.StereoDepthP1[i];
+    for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = settings3DS.StereoDepthOBJHi[i];
     p->Fade = settings3DS.StereoFade;
     p->Haze = settings3DS.StereoHaze;
     p->Blur = settings3DS.StereoBlur;
@@ -435,10 +441,11 @@ void settings3dsStereoApplyProfile(int idx)
         (idx >= 0 && idx < settings3DS.StereoProfilesCount)
             ? &settings3DS.StereoProfiles[idx] : &def;
 
-    float depths[5], depthsP1[5];
+    float depths[5], depthsP1[5], objHi[2];
     for (int i = 0; i < 5; i++) depths[i] = (float)p->Depth[i];
     for (int i = 0; i < 5; i++) depthsP1[i] = (float)p->DepthP1[i];
-    settings3dsStereoApplyValues(depths, depthsP1, (float)p->Fade, (float)p->Haze,
+    for (int i = 0; i < 2; i++) objHi[i] = (float)p->DepthOBJHi[i];
+    settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);
 }
@@ -451,10 +458,11 @@ void settings3dsStereoApplyDefault()
         (s_stereoActiveIdx >= 0 && s_stereoActiveIdx < settings3DS.StereoProfilesCount)
             ? &settings3DS.StereoProfiles[s_stereoActiveIdx] : &def;
 
-    float depths[5], depthsP1[5];
+    float depths[5], depthsP1[5], objHi[2];
     for (int i = 0; i < 5; i++) depths[i] = (float)p->Depth[i];
     for (int i = 0; i < 5; i++) depthsP1[i] = (float)p->DepthP1[i];
-    settings3dsStereoApplyValues(depths, depthsP1, (float)p->Fade, (float)p->Haze,
+    for (int i = 0; i < 2; i++) objHi[i] = (float)p->DepthOBJHi[i];
+    settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);   // edge is game-global (Jorge's UX)
 }
@@ -476,7 +484,8 @@ void settings3dsStereoFrameTick()
     static int s_stableFrames = 0;
     static int s_lerpLeft = 0;
     static float s_fromDepths[5];
-static float s_fromDepthsP1[5];
+    static float s_fromDepthsP1[5];
+    static float s_fromObjHi[2];
     static float s_fromFx[5];   // fade, haze, blur, focusBack, focusFront
 
     u8 *rr = Memory.FillRAM;
@@ -567,6 +576,7 @@ static float s_fromDepthsP1[5];
             if (++s_stableFrames >= HYSTERESIS_FRAMES) {
                 for (int i = 0; i < 5; i++) s_fromDepths[i] = GPU3DS.stereoLayerDepth[i];
                 for (int i = 0; i < 5; i++) s_fromDepthsP1[i] = GPU3DS.stereoLayerDepthP1[i];
+                for (int i = 0; i < 2; i++) s_fromObjHi[i] = GPU3DS.stereoLayerDepthOBJHi[i];
                 s_fromFx[0] = GPU3DS.stereoFade;
                 s_fromFx[1] = GPU3DS.stereoHaze;
                 s_fromFx[2] = GPU3DS.stereoBlur;
@@ -596,16 +606,18 @@ static float s_fromDepthsP1[5];
             (s_stereoActiveIdx >= 0) ? &settings3DS.StereoProfiles[s_stereoActiveIdx] : &def;
 
         float t = 1.0f - (float)s_lerpLeft / LERP_FRAMES;
-        float depths[5], depthsP1[5];
+        float depths[5], depthsP1[5], objHi[2];
         for (int i = 0; i < 5; i++)
             depths[i] = s_fromDepths[i] + ((float)p->Depth[i] - s_fromDepths[i]) * t;
         for (int i = 0; i < 5; i++)
             depthsP1[i] = s_fromDepthsP1[i] + ((float)p->DepthP1[i] - s_fromDepthsP1[i]) * t;
+        for (int i = 0; i < 2; i++)
+            objHi[i] = s_fromObjHi[i] + ((float)p->DepthOBJHi[i] - s_fromObjHi[i]) * t;
         float fx[5] = { (float)p->Fade, (float)p->Haze, (float)p->Blur,
                         (float)p->FocusBack, (float)p->FocusFront };
         for (int i = 0; i < 5; i++)
             fx[i] = s_fromFx[i] + (fx[i] - s_fromFx[i]) * t;
-        settings3dsStereoApplyValues(depths, depthsP1, fx[0], fx[1], fx[2], fx[3], fx[4],
+        settings3dsStereoApplyValues(depths, depthsP1, objHi, fx[0], fx[1], fx[2], fx[3], fx[4],
             settings3DS.StereoEdgeMode);
     }
 }
