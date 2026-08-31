@@ -196,6 +196,7 @@ void menu3dsMarkTabDirty(int tab);
 
 // called once per frame from the menu event loop while no dialog is open;
 // used to apply background directory-cache refreshes on the UI thread
+int menu3dsGetCurrentTabIndex();
 void menu3dsSetIdleCallback(void (*callback)(void));
 bool menu3dsHasDirtyTabs();
 

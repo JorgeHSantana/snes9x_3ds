@@ -336,6 +336,8 @@ void settings3dsUpdate(bool includeGameSettings);
 
 // per-scene 3D profiles (issue #23)
 void settings3dsStereoApplyDefault();
+void settings3dsStereoApplyProfile(int idx);      // -1 = flat Default
+void settings3dsStereoMarkReapply();              // issue #61 preview handoff
 void settings3dsStereoFrameTick();
 // arm the capture: observe the scene for ~5s after resuming, learn the
 // per-byte mask from the bits that flap, then bind the screen to the

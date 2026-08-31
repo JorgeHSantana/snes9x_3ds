@@ -432,6 +432,9 @@ static inline void gpu3dsWaitForVBlank(gfxScreen_t screen) {
         gspWaitForVBlank1();
 }
 
+// 3D-tab editor preview highlight (issue #61); -1 = off
+void gpu3dsSetStereoPreviewHighlight(int layerId);
+
 // Push the stereo parallax uniform immediately (dedup'd). Must NOT rely on
 // gpu3dsApplyRenderState: its `if (!diff) return` early-out skips uniform
 // handling between consecutive layer draws with identical packed state,

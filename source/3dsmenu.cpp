@@ -18,6 +18,12 @@
 static bool swapBuffer = true;
 
 static void (*menuIdleCallback)(void) = NULL;
+static int s_currentTabForIdle = -1;
+
+int menu3dsGetCurrentTabIndex()
+{
+    return s_currentTabForIdle;
+}
 
 void menu3dsSetIdleCallback(void (*callback)(void)) {
     menuIdleCallback = callback;
@@ -885,6 +891,7 @@ SMenuTab *menu3dsAnimateTab(SMenuTab& dialogTab, bool& isDialog, int& currentMen
 //
 int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs)
 {
+    s_currentTabForIdle = currentMenuTab;
     int framesDKeyHeld = 0;
     int returnResult = -1;
     char menuTextBuffer[512];

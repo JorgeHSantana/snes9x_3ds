@@ -373,8 +373,41 @@ static void gpu3dsSetGhostAlpha(float a)
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
 }
 
+// 3D-tab editor preview (issue #61): while >= 0, every layer except
+// this one is dimmed hard so the edited layer reads instantly.
+static int s_previewHighlightLayer = -1;
+
+void gpu3dsSetStereoPreviewHighlight(int layerId)
+{
+    s_previewHighlightLayer = layerId;
+    s_atmosLastColor = 1;               // poison the dedup so envs re-apply
+}
+
 static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id)
 {
+    if (s_previewHighlightLayer >= 0)
+    {
+        s_atmosGhostAlpha = 0.0f;
+        s_atmosGhostOffset = 0.0f;
+        u32 color = 0xFFFFFFFF;                     // highlighted: untouched
+        if ((int)id != s_previewHighlightLayer)
+            color = 0xB4000000;                     // others: 70% toward black
+        if (color == s_atmosLastColor)
+            return;
+        s_atmosLastColor = color;
+        C3D_TexEnv *env = C3D_GetTexEnv(2);
+        C3D_TexEnvInit(env);
+        if (color == 0xFFFFFFFF)
+            return;
+        C3D_TexEnvColor(env, color);
+        C3D_TexEnvSrc(env, C3D_RGB, GPU_CONSTANT, GPU_PREVIOUS, GPU_CONSTANT);
+        C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_ALPHA);
+        C3D_TexEnvFunc(env, C3D_RGB, GPU_INTERPOLATE);
+        C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS);
+        C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
+        return;
+    }
+
     // all cues anchor on the focus zone: layers inside it are untouched.
     // Relative model: the layer farthest outside gets the full gauge
     // strength, the ones in between scale linearly by their share.

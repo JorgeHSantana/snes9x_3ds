@@ -1072,6 +1072,34 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 }
 
 
+// Re-renders the paused frame from the retained vertex lists with the
+// CURRENT stereo values (issue #61's live editor) - the same replay the
+// right-eye pass does every frame - optionally spotlighting one layer.
+// Presents to the game screen; the menu keeps owning the bottom one.
+void impl3dsStereoPreviewFrame(int highlightLayer)
+{
+    if (!settings3DS.isRomLoaded)
+        return;
+    gpu3dsSetStereoPreviewHighlight(highlightLayer);
+    gpu3dsFrameBegin(0, true);
+    float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
+    GPU3DS.stereoRightPass = false;
+    GPU3DS.stereoEyeIOD = slider;
+    GPU3DS.appliedRenderState.target = TARGET_UNSET;
+    gpu3dsDrawSnesScreen();
+    if (slider != 0.0f) {
+        GPU3DS.stereoRightPass = true;
+        GPU3DS.stereoEyeIOD = -slider;
+        GPU3DS.appliedRenderState.target = TARGET_UNSET;
+        gpu3dsDrawSnesScreen();
+        GPU3DS.stereoRightPass = false;
+    }
+    impl3dsSceneRender(false, false);
+    gpu3dsFrameEnd();
+    gpu3dsSetStereoPreviewHighlight(-1);
+    GPU3DS.appliedRenderState.target = TARGET_UNSET;   // menu re-applies its own
+}
+
 //---------------------------------------------------------
 // This is called when the user chooses to save the state.
 // This function should save the state into a file whose

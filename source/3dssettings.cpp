@@ -417,6 +417,32 @@ const char *settings3dsStereoActiveName()
 
 
 
+// preview left the GPU carrying the EDITED profile's values: the next
+// in-game frame snaps back to the active one (issue #61)
+static bool s_reapplyAfterPreview = false;
+void settings3dsStereoMarkReapply()
+{
+    s_reapplyAfterPreview = true;
+}
+
+// applies a specific profile (or the flat Default at -1) - the live
+// editor previews the profile being EDITED, not the active one
+void settings3dsStereoApplyProfile(int idx)
+{
+    S9xSettings3DS::SStereoProfile def;
+    settings3dsStereoDefaultProfile(&def);
+    const S9xSettings3DS::SStereoProfile *p =
+        (idx >= 0 && idx < settings3DS.StereoProfilesCount)
+            ? &settings3DS.StereoProfiles[idx] : &def;
+
+    float depths[5], depthsP1[5];
+    for (int i = 0; i < 5; i++) depths[i] = (float)p->Depth[i];
+    for (int i = 0; i < 5; i++) depthsP1[i] = (float)p->DepthP1[i];
+    settings3dsStereoApplyValues(depths, depthsP1, (float)p->Fade, (float)p->Haze,
+        (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
+        settings3DS.StereoEdgeMode);
+}
+
 void settings3dsStereoApplyDefault()
 {
     S9xSettings3DS::SStereoProfile def;
@@ -438,6 +464,11 @@ void settings3dsStereoFrameTick()
 {
     const int HYSTERESIS_FRAMES = 30;
     const int LERP_FRAMES = 20;
+
+    if (s_reapplyAfterPreview) {
+        s_reapplyAfterPreview = false;
+        settings3dsStereoApplyDefault();
+    }
 
     static u64 s_lastSig = ~0ULL;
     static u64 s_lastSig2 = ~0ULL;

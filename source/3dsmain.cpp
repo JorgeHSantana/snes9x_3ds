@@ -1471,6 +1471,61 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuDisabledOption(items, ""_s);
 };
 
+// ---- live 3D editor preview (issue #61) ----
+static int  s_stereoGaugeFirst = -1;    // item index of the first depth gauge
+static bool s_stereoPreviewDirty = false;
+static bool s_stereoPreviewShown = false;
+static int  s_stereoPrevHighlight = -2;
+static float s_stereoPrevSlider = -1.0f;
+
+// runs once per menu frame (idle): with the 3D tab focused on a depth
+// gauge, the game screen re-renders live - edited layer spotlit, value
+// changes moving it in real time; holding Y peeks at the plain scene.
+static void stereo3dIdleTick()
+{
+    if (menuTabs.empty() || !settings3DS.isRomLoaded || !gpu3dsIs3DAvailable())
+        return;
+    int curTab = menu3dsGetCurrentTabIndex();
+    if (curTab < 0 || curTab >= (int)menuTabs.size())
+        return;
+    if (menuTabs[curTab].TabId != TAB_3D) {
+        if (s_stereoPreviewShown) {
+            // left the tab: hand the next in-game frame back to the
+            // active profile (instead of the edited preview values)
+            settings3dsStereoMarkReapply();
+            s_stereoPreviewShown = false;
+            s_stereoPrevHighlight = -2;
+        }
+        return;
+    }
+
+    int rel = (s_stereoGaugeFirst >= 0)
+        ? menuTabs[curTab].SelectedItemIndex - s_stereoGaugeFirst : -1;
+    bool inGauges = rel >= 0 && rel < 9;
+    int layer = !inGauges ? -1 : (rel < 8 ? rel / 2 : 4);
+
+    bool peek = (hidKeysHeld() & KEY_Y) != 0;   // menu loop already scanned
+    int wantHighlight = (inGauges && !peek) ? layer : -1;
+    float slider = osGet3DSliderState();
+
+    if (!inGauges && !s_stereoPreviewShown)
+        return;
+
+    bool redraw = s_stereoPreviewDirty
+        || wantHighlight != s_stereoPrevHighlight
+        || slider != s_stereoPrevSlider;
+    if (!redraw)
+        return;
+
+    settings3dsStereoApplyProfile(s_stereoEditIdx);
+    impl3dsStereoPreviewFrame(wantHighlight);
+    settings3dsStereoMarkReapply();
+    s_stereoPreviewShown = inGauges;
+    s_stereoPreviewDirty = false;
+    s_stereoPrevHighlight = wantHighlight;
+    s_stereoPrevSlider = slider;
+}
+
 void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
     items.clear();
 
@@ -1637,17 +1692,21 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
 
         static const char *stereoNamesP0[4] = { "  BG1 Prio 0", "  BG2 Prio 0", "  BG3 Prio 0", "  BG4 Prio 0" };
         static const char *stereoNamesP1[4] = { "  BG1 Prio 1", "  BG2 Prio 1", "  BG3 Prio 1", "  BG4 Prio 1" };
+        s_stereoGaugeFirst = (int)items.size();
         for (int l = 0; l < 4; l++) {
             AddMenuGauge(items, stereoNamesP0[l], -8, 8, *stereoEditDepth(l),
-                [l]( int val ) { CheckAndUpdate( *stereoEditDepth(l), val ); }, true, true);
+                [l]( int val ) { if (CheckAndUpdate( *stereoEditDepth(l), val )) s_stereoPreviewDirty = true; }, true, true);
             AddMenuGauge(items, stereoNamesP1[l], -8, 8, *stereoEditDepthP1(l),
-                [l]( int val ) { CheckAndUpdate( *stereoEditDepthP1(l), val ); }, true, true);
+                [l]( int val ) { if (CheckAndUpdate( *stereoEditDepthP1(l), val )) s_stereoPreviewDirty = true; }, true, true);
         }
         AddMenuGauge(items, "  Sprites"_s, -8, 8, *stereoEditDepth(4),
             []( int val ) {
-                CheckAndUpdate( *stereoEditDepth(4), val );
-                CheckAndUpdate( *stereoEditDepthP1(4), val );
+                bool ch = CheckAndUpdate( *stereoEditDepth(4), val );
+                ch |= CheckAndUpdate( *stereoEditDepthP1(4), val );
+                if (ch) s_stereoPreviewDirty = true;
             }, true, true);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Editing a gauge spotlights its layer on the game"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  screen, moving live. Hold Y to see the full scene."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  + pops out of the screen, - sinks into it."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Prio 0/1: a BG's two tile priorities can sit at"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  different depths (e.g. floor vs. detail planes)."_s, ""_s);
@@ -2799,8 +2858,13 @@ static void fileMenuIdleTick() {
     menu3dsSetScreenDirty(true, true);
 }
 
+static void menuIdleRouter() {
+    fileMenuIdleTick();
+    stereo3dIdleTick();
+}
+
 void setupMenu(int& currentMenuTab) {
-    menu3dsSetIdleCallback(fileMenuIdleTick);
+    menu3dsSetIdleCallback(menuIdleRouter);
     // the 3D tab only exists with a game loaded on 3D-capable hardware;
     // it sits between Cheats and Load Game so every existing positional
     // TAB_* comparison stays valid (TAB_3D == position 4)
