@@ -1478,6 +1478,16 @@ static bool s_stereoPreviewShown = false;
 static int  s_stereoPrevHighlight = -2;
 static float s_stereoPrevSlider = -1.0f;
 
+// leaving the editor: active profile's look re-rendered on the game
+// screen, "Press START to resume" caption included
+static void stereo3dRestorePausedLook()
+{
+    settings3dsStereoApplyDefault();
+    impl3dsStereoPreviewFrame(-1);
+    notif3dsTrigger(Notif::Paused, Notif::Type::Default,
+        settings3DS.GameScreen, 3600000.0, NULL);
+}
+
 // runs once per menu frame (idle): with the 3D tab focused on a depth
 // gauge, the game screen re-renders live - edited layer spotlit, value
 // changes moving it in real time; holding Y peeks at the plain scene.
@@ -1490,9 +1500,7 @@ static void stereo3dIdleTick()
         return;
     if (menuTabs[curTab].TabId != TAB_3D) {
         if (s_stereoPreviewShown) {
-            // left the tab: hand the next in-game frame back to the
-            // active profile (instead of the edited preview values)
-            settings3dsStereoMarkReapply();
+            stereo3dRestorePausedLook();
             s_stereoPreviewShown = false;
             s_stereoPrevHighlight = -2;
         }
@@ -1508,8 +1516,15 @@ static void stereo3dIdleTick()
     int wantHighlight = (inGauges && !peek) ? layer : -1;
     float slider = osGet3DSliderState();
 
-    if (!inGauges && !s_stereoPreviewShown)
+    if (!inGauges) {
+        if (s_stereoPreviewShown) {
+            // left the gauges: paused look and its caption come back
+            stereo3dRestorePausedLook();
+            s_stereoPreviewShown = false;
+            s_stereoPrevHighlight = -2;
+        }
         return;
+    }
 
     bool redraw = s_stereoPreviewDirty
         || wantHighlight != s_stereoPrevHighlight
@@ -1520,7 +1535,7 @@ static void stereo3dIdleTick()
     settings3dsStereoApplyProfile(s_stereoEditIdx);
     impl3dsStereoPreviewFrame(wantHighlight);
     settings3dsStereoMarkReapply();
-    s_stereoPreviewShown = inGauges;
+    s_stereoPreviewShown = true;
     s_stereoPreviewDirty = false;
     s_stereoPrevHighlight = wantHighlight;
     s_stereoPrevSlider = slider;
