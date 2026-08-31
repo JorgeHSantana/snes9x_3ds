@@ -323,6 +323,8 @@ static void apply3dsMode(int mode)
     }
 }
 
+static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMenuTab);
+
 void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
     items.clear();
 
@@ -620,6 +622,24 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         []( int val ) { CheckAndUpdateToggle( settings3DS.LogFileEnabled, val ); });
     std::string logfileInfo = "  Creates a session log in \"3ds/snes9x_3ds\". Restart required";
     AddMenuDisabledOption(items, logfileInfo);
+    AddMenuDisabledOption(items, ""_s);
+
+    AddMenuHeader2(items, "Updates"_s);
+    {
+        char buildLine[64];
+        snprintf(buildLine, sizeof(buildLine), "  This build: %s (%s)",
+                 updater3dsRunningSha(), updater3dsIsCia() ? "CIA" : "3DSX");
+        items.emplace_back(nullptr, MenuItemType::Textarea, std::string(buildLine), ""_s);
+    }
+    AddMenuPicker(items, "  Update Channel"_s,
+        "Stable: tested releases, recommended.\nNightly: the newest build of every change -\nfor testing, may be unstable."_s,
+        makePickerOptions({"Stable", "Nightly"}), settings3DS.UpdateChannel, DIALOG_TYPE_INFO, true,
+        []( int val ) { CheckAndUpdate( settings3DS.UpdateChannel, val ); });
+    AddMenuCheckbox(items, "  Check on Startup"_s, settings3DS.UpdateAutoCheck,
+        []( int val ) { CheckAndUpdateToggle( settings3DS.UpdateAutoCheck, val ); });
+    items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+        menuCheckForUpdates(menuTabs, currentMenuTab);
+    }, MenuItemType::Action, "  Check for Updates Now"_s, ""_s);
     AddMenuDisabledOption(items, ""_s);
 
     if (cfgFileAvailable[0] || cfgFileAvailable[1]) {
@@ -1586,23 +1606,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Deletes every profile and restores factory values."_s, ""_s);
     }
 
-    AddMenuDisabledOption(items, ""_s);
-    AddMenuHeader2(items, "Updates"_s);
-    {
-        char buildLine[64];
-        snprintf(buildLine, sizeof(buildLine), "  This build: %s (%s)",
-                 updater3dsRunningSha(), updater3dsIsCia() ? "CIA" : "3DSX");
-        items.emplace_back(nullptr, MenuItemType::Textarea, std::string(buildLine), ""_s);
-    }
-    AddMenuPicker(items, "  Update Channel"_s,
-        "Stable: tested releases, recommended.\nNightly: the newest build of every change -\nfor testing, may be unstable."_s,
-        makePickerOptions({"Stable", "Nightly"}), settings3DS.UpdateChannel, DIALOG_TYPE_INFO, true,
-        []( int val ) { CheckAndUpdate( settings3DS.UpdateChannel, val ); });
-    AddMenuCheckbox(items, "  Check on Startup"_s, settings3DS.UpdateAutoCheck,
-        []( int val ) { CheckAndUpdateToggle( settings3DS.UpdateAutoCheck, val ); });
-    items.emplace_back([&menuTabs, &currentMenuTab](int val) {
-        menuCheckForUpdates(menuTabs, currentMenuTab);
-    }, MenuItemType::Action, "  Check for Updates Now"_s, ""_s);
 
 
 
