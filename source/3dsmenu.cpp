@@ -795,15 +795,22 @@ static void menu3dsDrawLoadingDialog(
 
         if (progressPercent >= 0)
         {
+            // battery-icon anatomy (Jorge's spec): white outline, a gap
+            // in the dialog's own color, fill in the theme accent
             int pct = progressPercent > 100 ? 100 : progressPercent;
             int barX0 = horizontalPadding - offsetX;
             int barX1 = settings3DS.SecondScreenWidth - horizontalPadding;
-            int barY1 = dialogHeight - 16;
-            int barY0 = barY1 - 8;
-            int fill = barX0 + ((barX1 - barX0) * pct) / 100;
-            ui3dsDrawRect(barX0, barY0, barX1, barY1, 0x000000, 0.35f);
-            if (fill > barX0)
-                ui3dsDrawRect(barX0, barY0, fill, barY1, dialogTextColor, 0.9f);
+            int barY1 = dialogHeight - 14;
+            int barY0 = barY1 - 12;
+            ui3dsDrawRect(barX0, barY0, barX1, barY1, 0xffffff, 1.0f);
+            ui3dsDrawRect(barX0 + 1, barY0 + 1, barX1 - 1, barY1 - 1,
+                          dialogBackColorTop, 1.0f);
+            int fillX1 = barX0 + 2 +
+                         (((barX1 - 2) - (barX0 + 2)) * pct) / 100;
+            if (fillX1 > barX0 + 2)
+                ui3dsDrawRect(barX0 + 2, barY0 + 2, fillX1, barY1 - 2,
+                    Themes[static_cast<int>(settings3DS.Theme)].accentColor,
+                    1.0f);
         }
     }
 
