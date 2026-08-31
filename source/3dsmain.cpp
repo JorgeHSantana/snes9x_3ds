@@ -1462,12 +1462,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         AddMenuDisabledOption(items, ""_s);
     }
 
-    // Stereoscopic 3D lives in its own tab (issue #61); leave a signpost
-    if (gpu3dsIs3DAvailable() && settings3DS.isRomLoaded) {
-        AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Moved to the 3D tab (press R)."_s, ""_s);
-    }
-
     AddMenuDisabledOption(items, ""_s);
 };
 
