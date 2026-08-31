@@ -3350,7 +3350,7 @@ int main()
         menu3dsShowSplashMessage("Checking for updates");
         if (update3dsNetInit())
         {
-            updater3dsCheck(settings3DS.UpdateChannel, s_pendingAutoUpdate);
+            updater3dsAutoCheck(settings3DS.UpdateChannel, s_pendingAutoUpdate);
             s_hasPendingAutoUpdate = s_pendingAutoUpdate.ok &&
                                      s_pendingAutoUpdate.updateAvailable;
         }

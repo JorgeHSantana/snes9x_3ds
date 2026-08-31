@@ -52,6 +52,31 @@ void updater3dsCheck(int channel, Update3dsCheck& check)
                 check.updateAvailable ? "update" : "up to date");
 }
 
+void updater3dsAutoCheck(int rememberedChannel, Update3dsCheck& check)
+{
+    // On the latest stable? Then stable is our channel and we are done.
+    Update3dsCheck stable;
+    updater3dsCheck(UPDATE3DS_CHANNEL_STABLE, stable);
+    if (stable.ok && !stable.updateAvailable)
+    {
+        check = stable;
+        return;
+    }
+
+    // On the latest nightly? Same - a nightly build stays a nightly.
+    Update3dsCheck nightly;
+    updater3dsCheck(UPDATE3DS_CHANNEL_NIGHTLY, nightly);
+    if (nightly.ok && !nightly.updateAvailable)
+    {
+        check = nightly;
+        return;
+    }
+
+    // Outdated on both: the last manual channel choice breaks the tie.
+    check = (rememberedChannel == UPDATE3DS_CHANNEL_NIGHTLY) ? nightly
+                                                             : stable;
+}
+
 // argv[0] from the homebrew loader ("sdmc:/3ds/.../snes9x_3ds.3dsx").
 // Empty when the environment passed no argument list.
 static void own3dsxPath(char* out, size_t outSize)
