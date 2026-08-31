@@ -280,7 +280,7 @@ $(BUILD):
 # BUILD_GIT_SHA=xxxxxxx overrides for environments without a usable git.
 .PHONY: buildsha
 buildsha:
-	@mkdir -p $(BUILD)
+	@mkdir -p $(BUILD)/Snes9x
 	@sha="$(BUILD_GIT_SHA)"; \
 	 if [ -z "$$sha" ]; then sha=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo 0000000); fi; \
 	 printf '#define BUILD_GIT_SHA "%s"\n' "$$sha" > $(BUILD)/3dsbuildsha.h.tmp; \
