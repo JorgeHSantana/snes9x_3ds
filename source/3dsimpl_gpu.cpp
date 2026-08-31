@@ -476,7 +476,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // there doubles the slider levels with zero splitting (and
             // the edge crop below must round the same way).
             // gpu3dsSetStereoParallax(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE);
-            gpu3dsSetStereoParallax(roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE));
+            gpu3dsSetStereoParallax3(
+                roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE),
+                roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE),
+                GPU3DS.stereoPrioZBoundary[id]);
             gpu3dsSetStereoLayerAtmosphere(id);
 
             int from = layer->sectionsOffset + (sub ? 0 : layer->sectionsByTarget[TARGET_SNES_SUB]);
@@ -493,15 +496,19 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // continuous form kept for a possible return (issue #65):
                 // float baseParallax = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
                 float baseParallax = roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE);
+                float baseParallaxP1 = roundf(GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE);
+                float prioBoundary = GPU3DS.stereoPrioZBoundary[id];
                 int passes = ghost > 0.0f ? 3 : 1;
 
                 for (int gp = 0; gp < passes; gp++) {
                     if (gp == 1) {
                         GPU3DS.stereoGhostPass = true;
                         gpu3dsSetGhostAlpha(ghost);
-                        gpu3dsSetStereoParallax(baseParallax + s_atmosGhostOffset);
+                        gpu3dsSetStereoParallax3(baseParallax + s_atmosGhostOffset,
+                            baseParallaxP1 + s_atmosGhostOffset, prioBoundary);
                     } else if (gp == 2) {
-                        gpu3dsSetStereoParallax(baseParallax - s_atmosGhostOffset);
+                        gpu3dsSetStereoParallax3(baseParallax - s_atmosGhostOffset,
+                            baseParallaxP1 - s_atmosGhostOffset, prioBoundary);
                     }
 
                     if (list->useDrawArraysForTiledLayers) {

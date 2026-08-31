@@ -299,6 +299,12 @@ typedef struct
     // stereoEyeIOD * stereoLayerDepth[LAYER_ID] (px, set between draws).
     float                       stereoEyeIOD;
     float                       stereoLayerDepth[8];
+    // priority-1 depth per layer (issue #60); mirrors stereoLayerDepth
+    // until the editor exposes separate gauges
+    float                       stereoLayerDepthP1[8];
+    // z boundary between a BG's priority planes (d0/d1 from gfxhw's
+    // depth tables, in the shader's d/16 space); 0 = no split
+    float                       stereoPrioZBoundary[8];
     // atmospheric depth cues (0..8 each), anchored on the focus zone
     // [stereoFocusBack..stereoFocusFront]: layers inside are untouched.
     // Blur grows linearly with the distance to the NEAREST zone edge
@@ -428,13 +434,22 @@ static inline void gpu3dsWaitForVBlank(gfxScreen_t screen) {
 // handling between consecutive layer draws with identical packed state,
 // which left every BG after the first stuck on the first BG's parallax.
 // citro3d queues the value and flushes it on the next draw.
+// Per-priority parallax (issue #60): x = priority-0 shift, y =
+// priority-1 shift, z = the layer's plane boundary. The tile shader
+// picks x or y by comparing its decoded depth plane against z.
+static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary)
+{
+    GPU3DS.stereoParallax = p0;
+    float key = p0 + p1 * 1024.0f + boundary * 1048576.0f;
+    if (GPU3DS.stereoParallaxApplied == key)
+        return;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD], p0, p1, boundary, 0.0f);
+    GPU3DS.stereoParallaxApplied = key;
+}
+
 static inline void gpu3dsSetStereoParallax(float v)
 {
-    GPU3DS.stereoParallax = v;
-    if (GPU3DS.stereoParallaxApplied == v)
-        return;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD], v, 0.0f, 0.0f, 0.0f);
-    GPU3DS.stereoParallaxApplied = v;
+    gpu3dsSetStereoParallax3(v, v, 0.0f);
 }
 
 static inline void gpu3dsApplyRenderState(SGPURenderState *state)

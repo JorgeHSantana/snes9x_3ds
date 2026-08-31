@@ -3278,35 +3278,43 @@ void S9xRenderScreenHardware (bool8 sub)
 
 	#define DRAW_4COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-			S9xDrawBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 16.0f; \
+			S9xDrawBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_16COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-			S9xDrawBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 16.0f; \
+			S9xDrawBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_256COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-			S9xDrawBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 16.0f; \
+			S9xDrawBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_4COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-			S9xDrawOffsetBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 16.0f; \
+			S9xDrawOffsetBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_16COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-			S9xDrawOffsetBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 16.0f; \
+			S9xDrawOffsetBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_256COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-			S9xDrawOffsetBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 16.0f; \
+			S9xDrawOffsetBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_4COLOR_HIRES_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-			S9xDrawHiresBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 16.0f; \
+			S9xDrawHiresBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_16COLOR_HIRES_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-			S9xDrawHiresBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 16.0f; \
+			S9xDrawHiresBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	if (settings3DS.LayerEnabled[LAYER_BACKDROP])
 		S9xUpdateBackdropSections(!isMode5or6 && sub, sub, bgAlpha[LAYER_BACKDROP]);

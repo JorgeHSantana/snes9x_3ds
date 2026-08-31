@@ -269,6 +269,7 @@ static void settings3dsStereoApplyValues(const float depths[5],
     for (int i = 0; i < 8; i++) {
         float depth = (i < 5) ? depths[i] : 0.0f;
         GPU3DS.stereoLayerDepth[i] = depth;
+        GPU3DS.stereoLayerDepthP1[i] = depth;   // split arrives with #60's gauges
 
         if (depth > maxPop) maxPop = depth;
         if (depth > maxAbs) maxAbs = depth;

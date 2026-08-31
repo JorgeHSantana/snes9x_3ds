@@ -94,10 +94,17 @@ depth_computation:
 
 draw:
     ; pass through, set final values for projection, textureScale and color in geo shader
-    ; Stereo parallax: flat per-layer X shift, set between layer draws
-    ; (stereoIOD.x = eye sign * slider * layer depth; 0 with 3D off, so
-    ; this is an exact no-op in 2D).
-    add     r0.x, stereoIOD.x, r0.x
+    ; Stereo parallax per priority (issue #60): stereoIOD = (P0 shift,
+    ; P1 shift, plane boundary). r0.z holds this tile's depth plane
+    ; (d/16, decoded above); below the boundary = priority 0. With both
+    ; shifts equal and boundary 0 this collapses to the flat behaviour,
+    ; an exact no-op in 2D.
+    mov     r1.xyz, stereoIOD.xyz
+    cmp     r0.z, ge, ge, r1.z          ; plane >= boundary -> keep P1
+    jmpc    cmp.x, parallax_apply
+    mov     r1.y, r1.x                  ; below boundary -> P0 takes its seat
+parallax_apply:
+    add     r0.x, r1.y, r0.x
     mov     outpos, r0
     mov     outtex, r10
     mov     outcol, r11
