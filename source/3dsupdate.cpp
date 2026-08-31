@@ -194,6 +194,30 @@ void update3dsReleaseDate(const Update3dsRelease& release,
     }
 }
 
+void update3dsReleaseVersion(const Update3dsRelease& release,
+                             char* out, size_t outSize)
+{
+    if (outSize == 0)
+        return;
+    out[0] = 0;
+    // "v" followed by digits/dots, bounded by space or end
+    for (const char* p = release.title; *p != 0; p++)
+    {
+        if (*p != 'v' || p[1] < '0' || p[1] > '9')
+            continue;
+        size_t n = 0;
+        const char* q = p + 1;
+        while (*q != 0 && ((*q >= '0' && *q <= '9') || *q == '.'))
+        {
+            if (n + 1 < outSize)
+                out[n++] = *q;
+            q++;
+        }
+        out[n < outSize ? n : outSize - 1] = 0;
+        return;
+    }
+}
+
 bool update3dsVerifyImage(const unsigned char* head, size_t headLen,
                           size_t fileSize, bool isCia)
 {

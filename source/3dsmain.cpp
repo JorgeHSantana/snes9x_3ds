@@ -930,9 +930,29 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
                  updater3dsRunningSha(), chk.release.sha,
                  date[0] != 0 ? " (" : "", date, date[0] != 0 ? ")" : "");
     else
-        snprintf(text, sizeof(text),
-                 "Stable %.40s\nDownload and install now?",
-                 date[0] != 0 ? date : chk.release.title);
+    {
+        // stable speaks version language; the running side answers in
+        // kind (v2.0 > v2.1) unless it IS that version - then it is a
+        // nightly of it, and the sha does the talking (88s23f > v2.1)
+        char ver[16];
+        update3dsReleaseVersion(chk.release, ver, sizeof(ver));
+        const char* runningVer = settings3dsGetAppVersion("", "");
+        if (ver[0] != 0 && strcmp(runningVer, ver) != 0)
+            snprintf(text, sizeof(text),
+                     "v%s > v%s%s%s%s\nDownload and install now?",
+                     runningVer, ver,
+                     date[0] != 0 ? " (" : "", date, date[0] != 0 ? ")" : "");
+        else if (ver[0] != 0)
+            snprintf(text, sizeof(text),
+                     "%s > v%s%s%s%s\nDownload and install now?",
+                     updater3dsRunningSha(), ver,
+                     date[0] != 0 ? " (" : "", date, date[0] != 0 ? ")" : "");
+        else
+            snprintf(text, sizeof(text),
+                     "%s > Stable %.24s\nDownload and install now?",
+                     updater3dsRunningSha(),
+                     date[0] != 0 ? date : chk.release.tag);
+    }
     if (!confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
                        "Update Available", text, true, true))
         return;

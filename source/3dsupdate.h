@@ -61,6 +61,11 @@ bool update3dsShaValid(const char* sha);
 void update3dsReleaseDate(const Update3dsRelease& release,
                           char* out, size_t outSize);
 
+// App version a stable title carries ("Stable v2.1 (...)" -> "2.1");
+// "" when the title has none (nightlies, older stable releases).
+void update3dsReleaseVersion(const Update3dsRelease& release,
+                             char* out, size_t outSize);
+
 // Sanity-check a downloaded image before applying it: header magic
 // (3DSX: "3DSX"; CIA: header-size field 0x2020) and a floor on the file
 // size so a truncated download or an HTML error page never gets applied.

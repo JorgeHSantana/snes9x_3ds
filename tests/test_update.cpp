@@ -131,6 +131,29 @@ TEST_CASE("release date renders american from either channel")
     CHECK(date[0] == 0);                       // no date anywhere -> empty
 }
 
+TEST_CASE("stable title carries the app version, nightly does not")
+{
+    Update3dsRelease r;
+    char ver[16];
+
+    memset(&r, 0, sizeof(r));
+    snprintf(r.title, sizeof(r.title), "Stable v2.1 (2026-09-15)");
+    update3dsReleaseVersion(r, ver, sizeof(ver));
+    CHECK(strcmp(ver, "2.1") == 0);
+
+    snprintf(r.title, sizeof(r.title), "Stable v2.0.3 (2026-09-15)");
+    update3dsReleaseVersion(r, ver, sizeof(ver));
+    CHECK(strcmp(ver, "2.0.3") == 0);
+
+    REQUIRE(update3dsParseRelease(NIGHTLY_JSON, strlen(NIGHTLY_JSON), r));
+    update3dsReleaseVersion(r, ver, sizeof(ver));
+    CHECK(ver[0] == 0);                        // nightlies have no version
+
+    snprintf(r.title, sizeof(r.title), "Stable 2026-08-31");
+    update3dsReleaseVersion(r, ver, sizeof(ver));
+    CHECK(ver[0] == 0);                        // pre-version titles fall back
+}
+
 TEST_CASE("image verification rejects everything but a plausible build")
 {
     const size_t okSize = 2500000;   // our builds are ~2.5MB

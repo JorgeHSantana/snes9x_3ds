@@ -69,11 +69,17 @@ jobs:
         run: |
           SHORT=${GITHUB_SHA::7}
           TAG="stable-$(date -u +%Y%m%d)-$SHORT"
+          # the app version rides in the title so the in-emulator updater
+          # can offer stable in version language ("v2.1"), not sha jargon
+          MAJOR=$(sed -n 's/^APP_VERSION_MAJOR *= *//p' resources/AppInfo)
+          MINOR=$(sed -n 's/^APP_VERSION_MINOR *= *//p' resources/AppInfo)
+          MICRO=$(sed -n 's/^APP_VERSION_MICRO *= *//p' resources/AppInfo)
+          VER="$MAJOR.$MINOR"; [ "$MICRO" != "0" ] && VER="$VER.$MICRO"
           # release notes = the CHANGELOG's Unreleased section
           awk '/^## Unreleased/{f=1;next}/^## /{f=0}f' CHANGELOG.md > /tmp/notes.md
           gh release create "$TAG" \
             output/snes9x_3ds.cia output/snes9x_3ds.3dsx \
             --latest \
             --target "$GITHUB_SHA" \
-            --title "Stable $(date -u +%Y-%m-%d)" \
+            --title "Stable v$VER ($(date -u +%Y-%m-%d))" \
             --notes-file /tmp/notes.md
