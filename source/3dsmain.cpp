@@ -1627,6 +1627,16 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     menu3dsSetScreenDirty();
                 }
             });
+        AddMenuPicker(items, "  Blur Quality"_s,
+            "Full: two ghost copies smear both sides - the softest look. Light: one ghost per frame, alternating sides between frames and eyes - about a third cheaper, for games where Blur costs frames (heavy split-screen effects).",
+            makePickerOptions({"Full (two ghosts)", "Light (one, faster)"}),
+            settings3DS.StereoBlurQuality, DIALOG_TYPE_INFO, true,
+            []( int val ) {
+                if (CheckAndUpdate( settings3DS.StereoBlurQuality, val )) {
+                    settings3DS.isDirty = true;
+                    s_stereoPreviewDirty = true;
+                }
+            });
         AddMenuCheckbox(items, "  Fill Priority Gaps"_s, settings3DS.StereoFillGaps != 0,
             []( int val ) {
                 int v = val ? 1 : 0;
@@ -2406,6 +2416,10 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
 
     if (writeMode || detectedConfigVersion >= 2.4f) {
         config3dsReadWriteInt32(stream, writeMode, "StereoFillGaps=%d\n", &settings3DS.StereoFillGaps, 0, 1);
+    }
+
+    if (writeMode || detectedConfigVersion >= 2.5f) {
+        config3dsReadWriteInt32(stream, writeMode, "StereoBlurQuality=%d\n", &settings3DS.StereoBlurQuality, 0, 1);
     }
 
     char formatBuf[64];

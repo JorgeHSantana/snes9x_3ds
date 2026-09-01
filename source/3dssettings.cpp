@@ -18,6 +18,7 @@ S9xSettings3DS settings3DS;
 void settings3dsResetGlobalDefaults() {
     settings3DS.StereoShiftMode = 0;   // discrete: whole pixels (global preference)
     settings3DS.StereoFillGaps = 1;    // close priority-split gaps (issue #70)
+    settings3DS.StereoBlurQuality = 0; // full two-ghost blur by default
     settings3DS.RootDir = "sdmc:/3ds/snes9x_3ds";
     
     memset(settings3DS.defaultDir, 0, sizeof(settings3DS.defaultDir));

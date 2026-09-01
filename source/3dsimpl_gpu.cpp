@@ -635,14 +635,31 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     if (ghostShift[t][0] == tierShift[t]) ghostShift[t][0] += 1.0f;
                     if (ghostShift[t][1] == tierShift[t]) ghostShift[t][1] -= 1.0f;
                 }
+                // Light quality (issue #71): ONE ghost instead of two,
+                // ~33% off the blur's draw cost. The side alternates per
+                // frame AND runs opposite in the two eyes, so each frame
+                // still covers both directions binocularly and the LCD's
+                // persistence fuses the alternation - the same trick the
+                // SNES flicker-transparency games play. Alpha is boosted
+                // to keep the perceived smear weight close to Full.
+                bool light = settings3DS.StereoBlurQuality == 1;
+                int lightSide = ((IPPU.FrameCount ^ (GPU3DS.stereoRightPass ? 1u : 0u)) & 1u);
                 GPU3DS.stereoGhostPass = true;
-                gpu3dsSetGhostAlpha(ghost);
-                gpu3dsSetStereoParallax3(ghostShift[0][0], ghostShift[1][0], tierBnd01);
-                gpu3dsSetStereoParallaxHi(ghostShift[2][0], ghostShift[3][0], tierBnd12, tierBnd23);
-                drawPass();
-                gpu3dsSetStereoParallax3(ghostShift[0][1], ghostShift[1][1], tierBnd01);
-                gpu3dsSetStereoParallaxHi(ghostShift[2][1], ghostShift[3][1], tierBnd12, tierBnd23);
-                drawPass();
+                if (light) {
+                    float a = ghost * 1.4f;
+                    gpu3dsSetGhostAlpha(a > 0.55f ? 0.55f : a);
+                    gpu3dsSetStereoParallax3(ghostShift[0][lightSide], ghostShift[1][lightSide], tierBnd01);
+                    gpu3dsSetStereoParallaxHi(ghostShift[2][lightSide], ghostShift[3][lightSide], tierBnd12, tierBnd23);
+                    drawPass();
+                } else {
+                    gpu3dsSetGhostAlpha(ghost);
+                    gpu3dsSetStereoParallax3(ghostShift[0][0], ghostShift[1][0], tierBnd01);
+                    gpu3dsSetStereoParallaxHi(ghostShift[2][0], ghostShift[3][0], tierBnd12, tierBnd23);
+                    drawPass();
+                    gpu3dsSetStereoParallax3(ghostShift[0][1], ghostShift[1][1], tierBnd01);
+                    gpu3dsSetStereoParallaxHi(ghostShift[2][1], ghostShift[3][1], tierBnd12, tierBnd23);
+                    drawPass();
+                }
                 GPU3DS.stereoGhostPass = false;
                 gpu3dsSetGhostAlpha(0.0f);
                 // the base parallax comes back for whoever draws next
