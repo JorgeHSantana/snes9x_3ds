@@ -103,4 +103,5 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
 | 67 | 3dsmain.cpp virou monólito | ABERTA | Decompor em módulos, 1 por PR; começar pelo loader/saver .3d (destrava testes do parser) |
 | 68 | Core legado sem rede de proteção | ABERTA | Caracterização nos pontos tocados: funções puras testadas p/ macros de stereo, harness de hash determinístico p/ bisects |
 | 69 | Funil de validação = 1 humano + hardware | ABERTA | Harness de screenshot-diff no Azahar, savestates versionados, checklist de hardware; PROBE_FORCE_SLIDER via EXTRA_DEFINES já entregue |
-| 70 | Gap entre prioridades de um BG (buraco do pilar MMX3) | ABERTA | ENTREGUE: 'Fill Priority Gaps' (default ON) — extensão do tile P0 nas fronteiras, portada do rcmz; validada no state do pilar; falta A/B do Jorge no hardware p/ fechar |
+| 70 | Gap entre prioridades de um BG (buraco do pilar MMX3) | ABERTA | ENTREGUE: 'Fill Priority Gaps' (default ON) — extensão nas fronteiras (2 direções + hires); validada no state do pilar; falta A/B do Jorge no hardware p/ fechar |
+| 71 | DBZ Super Butoden 2 lento/instável pós-prios | ABERTA | Suspeito nº1: cascata de 4 tiers no vertex shader × tela dividida raster-pesada; plano de diagnóstico na issue; 'Priority Depth Off' por jogo como mitigação SE o shader for o culpado |
