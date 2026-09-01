@@ -16,7 +16,7 @@ Feedback and bug reports are welcome.
 * Compressed MSU-1 audio: `.flac` tracks play when the raw `.pcm` is absent (roughly half the SD space, still lossless)
 * MSU-1 pack folders show up as single game entries in the file browser; ROMs also load from `.zip`
 * Stereoscopic 3D with per-layer **and per-priority** depth: each BG's two tile priorities and each of the four sprite priorities get their own gauge, plus a focus zone with distance effects (fade, haze, depth-of-field blur), Edge Cleanup, and Enhanced Resolution rendering — all with zero extra draw calls (Old 3DS friendly)
-* Live 3D editor in a dedicated **3D Stereo** tab: focusing a gauge spotlights exactly its tiles on the top screen, values move the paused frame in real time, and holding Y previews the full scene
+* Live 3D editor in a dedicated **3D Stereo** tab: focusing a gauge spotlights exactly its tiles on the top screen, values move the paused frame in real time, and holding X previews the full scene
 * Scene Profiles (experimental): capture a screen and its own 3D configuration is applied automatically whenever that screen shows up
 * Self-updater: check and install new builds (Stable or Nightly channel) from inside the emulator, with optional check-on-boot
 * File browser with instant cached listings that self-refresh in the background when SD contents change
@@ -181,9 +181,9 @@ The gauges edit the actual paused frame, live on the top screen:
   what "BG2 Prio 1" actually is in this scene before deciding its depth.
 * **Moving the value moves the layer in real time** (open the 3D slider
   while editing and watch the depth change as you press left/right).
-* **Hold Y** to peek at the full scene with your current values, no
-  spotlight. The bottom bar shows the Y "View" button while the tab is
-  active.
+* **Hold X** to peek at the full scene with your current values, no
+  spotlight (Y keeps its usual page-up/down combo). The bottom bar shows
+  the X "View" button while the tab is active.
 * The **Enable / Disable Layers** toggles also apply live — useful to
   isolate a layer completely when the spotlight isn't enough.
 * Leaving the gauges brings the normal paused look back.
@@ -209,7 +209,7 @@ The reliable way to place each plane, using the spotlight:
 1. Walk down the depth gauges one by one. The spotlight shows exactly which
    tiles each gauge owns — decide what that content is (far background?
    playfield? HUD?) and set the depth accordingly.
-2. Hold **Y** now and then to judge the whole scene together.
+2. Hold **X** now and then to judge the whole scene together.
 3. A gauge whose spotlight shows nothing simply has no tiles on this screen
    — leave it alone (or check another scene before deciding).
 

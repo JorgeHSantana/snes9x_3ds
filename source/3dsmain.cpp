@@ -1523,7 +1523,8 @@ static void stereo3dIdleTick()
     bool inFx = !inGauges && s_stereoFxFirst >= 0 &&
         sel >= s_stereoFxFirst && sel < s_stereoFxLast;
 
-    bool peek = (hidKeysHeld() & KEY_Y) != 0;   // menu loop already scanned
+    bool peek = (hidKeysHeld() & KEY_X) != 0;   // menu loop already scanned
+                                                // (Y belongs to Y+Up/Down paging)
     int wantHighlight = (inGauges && !peek) ? layer : -1;
     int wantPrio = (inGauges && !peek) ? prio : -1;
     int wantKey = inFx ? -2 : wantHighlight * 8 + wantPrio;
@@ -1754,7 +1755,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         AddMenuGauge(items, "  Sprites Prio 3"_s, -8, 8, *stereoEditDepthOBJHi(1),
             []( int val ) { if (CheckAndUpdate( *stereoEditDepthOBJHi(1), val )) s_stereoPreviewDirty = true; }, true, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Editing a gauge spotlights its layer on the game"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  screen, moving live. Hold Y to see the full scene."_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  screen, moving live. Hold X to see the full scene."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  + pops out of the screen, - sinks into it."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Prio 0/1: a BG's two tile priorities can sit at"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  different depths (e.g. floor vs. detail planes)."_s, ""_s);

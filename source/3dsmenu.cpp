@@ -562,8 +562,10 @@ void menu3dsDrawMenu(std::vector<SMenuTab>& menuTabs, int& currentMenuTab, int m
     if (currentMenuTab >= 0 && currentMenuTab < (int)menuTabs.size()
         && menuTabs[currentMenuTab].TabId == TAB_3D) {
         // the live editor's peek (issue #61): hold Y to view the scene
-        static const MenuButton viewButton = {"View", "\x0cf", 0x0d8014};
+        // X peeks at the full scene; Y keeps its usual Y+Up/Down paging
+        static const MenuButton viewButton = {"View", "\x0ce", 0x0d5280};
         bottomMenuPosX = menu3dsDrawBottomBarButton(bottomMenuPosX, viewButton);
+        bottomMenuPosX = menu3dsDrawBottomBarButton(bottomMenuPosX, bottomMenuButtons[3]);
     }
 
     menu3dsDrawBatteryAndVersion();
