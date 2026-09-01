@@ -403,8 +403,19 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
 }
 
 
+#ifdef PROBE_DRAW_STATS
+// PROBE build (issue #71 numbers): per-frame draw-call and vertex counts,
+// split base vs ghost, logged every 60 frames. Host GPU time means
+// nothing for the 3DS, but submitted draws/vertices scale its cost.
+static u32 s_probeDraws, s_probeVerts, s_probeGhostDraws, s_probeGhostVerts, s_probeFrames;
+#endif
+
 void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
     t3dsStartTimer(TIMER_DRAW);
+#ifdef PROBE_DRAW_STATS
+    if (GPU3DS.stereoGhostPass) { s_probeGhostDraws++; s_probeGhostVerts += (u32)count; }
+    else                        { s_probeDraws++;      s_probeVerts += (u32)count; }
+#endif
     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
     gpu3dsSetAttributeBuffers(list);
 
@@ -446,6 +457,14 @@ void gpu3dsFrameEnd(u8 flags)
     t3dsStartTimer(TIMER_FLUSH);
     C3D_FrameEnd(flags);
     t3dsStopTimer(TIMER_FLUSH);
+#ifdef PROBE_DRAW_STATS
+    if (++s_probeFrames == 60) {
+        log3dsWrite("[drawstats] per-frame avg over 60: base %u draws / %u verts, ghost %u draws / %u verts, total %u draws / %u verts",
+            s_probeDraws / 60, s_probeVerts / 60, s_probeGhostDraws / 60, s_probeGhostVerts / 60,
+            (s_probeDraws + s_probeGhostDraws) / 60, (s_probeVerts + s_probeGhostVerts) / 60);
+        s_probeDraws = s_probeVerts = s_probeGhostDraws = s_probeGhostVerts = s_probeFrames = 0;
+    }
+#endif
 }
 
 bool gpu3dsSetTopMode()
