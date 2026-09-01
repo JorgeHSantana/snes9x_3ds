@@ -346,11 +346,6 @@ static u32 s_atmosLastColor;
 // both the smear distance and its visibility
 static float s_atmosGhostAlpha;
 static float s_atmosGhostOffset;
-// which of the layer's depth tiers smear in the ghost passes: since the
-// priority split (issue #60) each tier sits at its own depth, so only
-// the tiers actually outside the focus zone blur - the in-zone ones are
-// alpha-hidden during the ghost passes and stay crisp
-static bool s_atmosGhostTierOn[4] = { true, true, true, true };
 
 static void gpu3dsResetStereoAtmosphere()
 {
@@ -359,7 +354,6 @@ static void gpu3dsResetStereoAtmosphere()
     s_atmosLastColor = 0xFFFFFFFF;
     s_atmosGhostAlpha = 0.0f;
     s_atmosGhostOffset = 0.0f;
-    for (int t = 0; t < 4; t++) s_atmosGhostTierOn[t] = true;
     GPU3DS.stereoGhostPass = false;
 }
 
@@ -394,36 +388,16 @@ void gpu3dsSetStereoPreviewHighlight(int layerId, int prio)
 // forceOthers: treat this layer as "one of the others" (dimmed) even when
 // it is the highlighted one - the spotlight's base pass uses it so the
 // whole layer stays visible under the bright redraw of the edited priority
-static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id, bool forceOthers = false)
+// The effect math for ONE depth: fade/haze tint + blur ghost strength,
+// all anchored on the focus zone. Since the priority split (issue #60)
+// a layer's tiers can sit at different depths, so the caller may invoke
+// this once per depth GROUP (alpha-hiding the other groups) - that is
+// what makes fade, haze and blur per-priority.
+static void gpu3dsSetStereoAtmosphereForDepth(float depth)
 {
-    if (s_previewHighlightLayer >= 0)
-    {
-        s_atmosGhostAlpha = 0.0f;
-        s_atmosGhostOffset = 0.0f;
-        u32 color = 0xFFFFFFFF;                     // highlighted: untouched
-        if ((int)id != s_previewHighlightLayer || forceOthers)
-            color = 0xB4000000;                     // others: 70% toward black
-        if (color == s_atmosLastColor)
-            return;
-        s_atmosLastColor = color;
-        C3D_TexEnv *env = C3D_GetTexEnv(2);
-        C3D_TexEnvInit(env);
-        if (color == 0xFFFFFFFF)
-            return;
-        C3D_TexEnvColor(env, color);
-        C3D_TexEnvSrc(env, C3D_RGB, GPU_CONSTANT, GPU_PREVIOUS, GPU_CONSTANT);
-        C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_ALPHA);
-        C3D_TexEnvFunc(env, C3D_RGB, GPU_INTERPOLATE);
-        C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS);
-        C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
-        return;
-    }
-
-    // all cues anchor on the focus zone: layers inside it are untouched.
-    // Relative model: the layer farthest outside gets the full gauge
-    // strength, the ones in between scale linearly by their share.
+    // Relative model: the depth farthest outside the zone gets the full
+    // gauge strength, the ones in between scale linearly by their share.
     // Fade/haze count only the distance BEHIND the zone (distance cues).
-    float depth = GPU3DS.stereoLayerDepth[id];
     float backExcess = depth < GPU3DS.stereoFocusBack ? GPU3DS.stereoFocusBack - depth : 0.0f;
     float depthIn = GPU3DS.stereoMaxBackExcess > 0.0f ? backExcess / GPU3DS.stereoMaxBackExcess : 0.0f;
 
@@ -447,26 +421,11 @@ static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id, bool forceOthers = false
     // (1..3px) and strengthens the ghosts together. Unlike fade/haze it
     // is a focus cue, not a distance cue: it counts the distance to the
     // nearest zone edge in BOTH directions (depth-of-field).
-    // Per-TIER since the priority split (issue #60): each tier's own
-    // distance to the zone decides whether ITS tiles smear (a front
-    // P1 blurs while its in-zone P0 stays crisp); the pass strength
-    // follows the farthest tier.
-    float tierDepth[4];
-    tierDepth[0] = depth;
-    tierDepth[1] = GPU3DS.stereoLayerDepthP1[id];
-    tierDepth[2] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[0] : tierDepth[1];
-    tierDepth[3] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[1] : tierDepth[1];
-
     float excess = 0.0f;
-    for (int t = 0; t < 4; t++) {
-        float ex = 0.0f;
-        if (tierDepth[t] < GPU3DS.stereoFocusBack)
-            ex = GPU3DS.stereoFocusBack - tierDepth[t];
-        else if (tierDepth[t] > GPU3DS.stereoFocusFront)
-            ex = tierDepth[t] - GPU3DS.stereoFocusFront;
-        s_atmosGhostTierOn[t] = ex > 0.001f;
-        if (ex > excess) excess = ex;
-    }
+    if (depth < GPU3DS.stereoFocusBack)
+        excess = GPU3DS.stereoFocusBack - depth;
+    else if (depth > GPU3DS.stereoFocusFront)
+        excess = depth - GPU3DS.stereoFocusFront;
 
     float excessIn = GPU3DS.stereoMaxExcess > 0.0f ? excess / GPU3DS.stereoMaxExcess : 0.0f;
     float blur = (GPU3DS.stereoBlur / 8.0f) * excessIn * slider;
@@ -496,6 +455,34 @@ static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id, bool forceOthers = false
     C3D_TexEnvFunc(env, C3D_RGB, GPU_INTERPOLATE);
     C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS);
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
+}
+
+static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id, bool forceOthers = false)
+{
+    if (s_previewHighlightLayer >= 0)
+    {
+        s_atmosGhostAlpha = 0.0f;
+        s_atmosGhostOffset = 0.0f;
+        u32 color = 0xFFFFFFFF;                     // highlighted: untouched
+        if ((int)id != s_previewHighlightLayer || forceOthers)
+            color = 0xB4000000;                     // others: 70% toward black
+        if (color == s_atmosLastColor)
+            return;
+        s_atmosLastColor = color;
+        C3D_TexEnv *env = C3D_GetTexEnv(2);
+        C3D_TexEnvInit(env);
+        if (color == 0xFFFFFFFF)
+            return;
+        C3D_TexEnvColor(env, color);
+        C3D_TexEnvSrc(env, C3D_RGB, GPU_CONSTANT, GPU_PREVIOUS, GPU_CONSTANT);
+        C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_ALPHA);
+        C3D_TexEnvFunc(env, C3D_RGB, GPU_INTERPOLATE);
+        C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS);
+        C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
+        return;
+    }
+
+    gpu3dsSetStereoAtmosphereForDepth(GPU3DS.stereoLayerDepth[id]);
 }
 
 void gpu3dsDrawLayers(SLayerList *list) {
@@ -600,50 +587,18 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
             GPU3DS.currentRenderState.depthTest = id < LAYER_OBJ ? SGPU_STATE_ENABLED : SGPU_STATE_DISABLED;
 
-            // spotlighting one PRIORITY (issue #61 polish): the whole
-            // layer must stay visible, dimmed like the rest of the scene,
-            // with only the edited priority at full brightness. The TexEnv
-            // dim can't split a draw and the tile TEV ignores vertex RGB,
-            // so the layer draws twice: first whole and dimmed, then only
-            // the edited priority redrawn bright on top (the other tiers'
-            // vertex alpha goes to 0 and the NE_ZERO alpha test discards
-            // them; depth GEQUAL lets the equal-depth redraw win, and the
-            // OBJ layer draws with no depth test at all). Preview-only
-            // cost - gameplay never sets a highlight.
-            bool spotlight = s_previewHighlightLayer == (int)id &&
-                s_previewHighlightPrio >= 0 && id <= LAYER_OBJ;
-            int spotlightPasses = spotlight ? 2 : 1;
-
-            for (int sp = 0; sp < spotlightPasses; sp++) {
-            if (!spotlight) {
-                gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
-                gpu3dsSetStereoLayerAtmosphere(id);
-            } else if (sp == 0) {
-                // base pass: every priority, dimmed like the other layers
-                gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
-                gpu3dsSetStereoLayerAtmosphere(id, true);
-            } else {
-                // bright pass: only the edited priority survives
-                float dim[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-                dim[s_previewHighlightPrio & 3] = 1.0f;
-                gpu3dsSetStereoPrioDim4(dim[0], dim[1], dim[2], dim[3]);
-                gpu3dsSetStereoLayerAtmosphere(id);
-            }
-
+            // one pass over the layer's sections with whatever uniforms
+            // (dims, atmosphere, parallax) the caller just set. Tiled
+            // layers add the blur ghost passes; the composed ghost shift
+            // is rounded in BOTH slider modes (Jorge's call) - a smear
+            // distance gains nothing from a fraction, only the #65 tear.
+            auto drawLayerContent = [&]() {
             if (id < LAYER_BACKDROP) {
                 // hazy layers draw 2 extra ghost passes shifted +-1px with
                 // reduced alpha (a cheap box blur: soft "smoky" edges)
                 float ghost = s_atmosGhostAlpha;
                 int passes = ghost > 0.0f ? 3 : 1;
 
-                // the ghost offset is fractional (1..3px growing with the
-                // blur level), and a fractional shift rasterizes with mixed
-                // per-section rounding - the #65 split, showing here as
-                // torn/doubled pixels at some blur levels. The COMPOSED
-                // ghost shift is therefore rounded in BOTH slider modes
-                // (Jorge's call): Continuous exists for the analog feel of
-                // layer placement, but a smear distance gains nothing from
-                // a fraction - only the tear.
                 float ghostShift[4][2];
                 for (int t = 0; t < 4; t++) {
                     ghostShift[t][0] = roundf(tierShift[t] + s_atmosGhostOffset);
@@ -657,13 +612,6 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     if (gp == 1) {
                         GPU3DS.stereoGhostPass = true;
                         gpu3dsSetGhostAlpha(ghost);
-                        // only the tiers outside the focus zone smear;
-                        // the in-zone ones already drew crisp in pass 0
-                        gpu3dsSetStereoPrioDim4(
-                            s_atmosGhostTierOn[0] ? 1.0f : 0.0f,
-                            s_atmosGhostTierOn[1] ? 1.0f : 0.0f,
-                            s_atmosGhostTierOn[2] ? 1.0f : 0.0f,
-                            s_atmosGhostTierOn[3] ? 1.0f : 0.0f);
                         gpu3dsSetStereoParallax3(ghostShift[0][0],
                             ghostShift[1][0], tierBnd01);
                         gpu3dsSetStereoParallaxHi(ghostShift[2][0],
@@ -688,11 +636,93 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 if (passes > 1) {
                     GPU3DS.stereoGhostPass = false;
                     gpu3dsSetGhostAlpha(0.0f);
+                    // the base parallax comes back for whoever draws next
+                    gpu3dsSetStereoParallax3(tierShift[0], tierShift[1], tierBnd01);
+                    gpu3dsSetStereoParallaxHi(tierShift[2], tierShift[3], tierBnd12, tierBnd23);
                 }
             }
             else {
                 gpu3dsDrawVerticalSectionLayer(layer, from, to);
             }
+            };
+
+            // spotlighting one PRIORITY (issue #61 polish): the whole
+            // layer must stay visible, dimmed like the rest of the scene,
+            // with only the edited priority at full brightness. The TexEnv
+            // dim can't split a draw and the tile TEV ignores vertex RGB,
+            // so the layer draws twice: first whole and dimmed, then only
+            // the edited priority redrawn bright on top (the other tiers'
+            // vertex alpha goes to 0 and the NE_ZERO alpha test discards
+            // them; depth GEQUAL lets the equal-depth redraw win, and the
+            // OBJ layer draws with no depth test at all). Preview-only
+            // cost - gameplay never sets a highlight.
+            bool spotlight = s_previewHighlightLayer == (int)id &&
+                s_previewHighlightPrio >= 0 && id <= LAYER_OBJ;
+
+            // EFFECT GROUPS (Jorge's report: fade/haze/blur looked
+            // per-layer, not per-priority): tiers sharing a depth share
+            // one pass; when the depths split and any effect is active,
+            // each group draws with ITS OWN tint and ghost strength,
+            // alpha-hiding the other groups. The masks partition the
+            // tiles, so nothing draws twice and color math stays exact.
+            // Only tiled layers have tiers; extra passes appear only in
+            // 3D with effects on AND depths split - 2D pays nothing.
+            float tierDepth[4];
+            tierDepth[0] = GPU3DS.stereoLayerDepth[id];
+            tierDepth[1] = GPU3DS.stereoLayerDepthP1[id];
+            tierDepth[2] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[0] : tierDepth[1];
+            tierDepth[3] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[1] : tierDepth[1];
+            int nTiers = (id == LAYER_OBJ) ? 4 : ((int)id < LAYER_OBJ ? 2 : 0);
+
+            float grpDepth[4];
+            float grpDim[4][4];
+            int grpCount = 0;
+            bool effectsOn = GPU3DS.stereoFade > 0.0f || GPU3DS.stereoHaze > 0.0f ||
+                GPU3DS.stereoBlur > 0.0f;
+            if (!spotlight && s_previewHighlightLayer < 0 && effectsOn &&
+                GPU3DS.stereoEyeIOD != 0.0f && nTiers > 0) {
+                for (int t = 0; t < nTiers; t++) {
+                    int g;
+                    for (g = 0; g < grpCount; g++)
+                        if (grpDepth[g] == tierDepth[t]) break;
+                    if (g == grpCount) {
+                        grpDepth[grpCount] = tierDepth[t];
+                        for (int k = 0; k < 4; k++) grpDim[grpCount][k] = 0.0f;
+                        grpCount++;
+                    }
+                    grpDim[g][t] = 1.0f;
+                }
+            }
+
+            if (!spotlight && grpCount > 0) {
+                for (int g = 0; g < grpCount; g++) {
+                    gpu3dsSetStereoPrioDim4(grpDim[g][0], grpDim[g][1],
+                                            grpDim[g][2], grpDim[g][3]);
+                    gpu3dsSetStereoAtmosphereForDepth(grpDepth[g]);
+                    drawLayerContent();
+                }
+                continue;
+            }
+
+            int spotlightPasses = spotlight ? 2 : 1;
+
+            for (int sp = 0; sp < spotlightPasses; sp++) {
+            if (!spotlight) {
+                gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
+                gpu3dsSetStereoLayerAtmosphere(id);
+            } else if (sp == 0) {
+                // base pass: every priority, dimmed like the other layers
+                gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
+                gpu3dsSetStereoLayerAtmosphere(id, true);
+            } else {
+                // bright pass: only the edited priority survives
+                float dim[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+                dim[s_previewHighlightPrio & 3] = 1.0f;
+                gpu3dsSetStereoPrioDim4(dim[0], dim[1], dim[2], dim[3]);
+                gpu3dsSetStereoLayerAtmosphere(id);
+            }
+
+            drawLayerContent();
             }   // spotlight passes
         }
     }
