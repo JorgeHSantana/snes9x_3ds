@@ -1105,6 +1105,22 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
                        "Update Available", text, true, true, 3))
         return;
 
+    // A loaded game made updates fail in the field (issue #66). Jorge's
+    // flow: park the session in a savestate on SD, free the big buffers
+    // so the download has the machine to itself, and let the NEXT launch
+    // (the new build) resume the game right where it was.
+    char resumeState[PATH_MAX] = {0};
+    bool  resumeArmed = false;
+    if (settings3DS.isRomLoaded)
+    {
+        file3dsGetRelatedPath(Memory.ROMFilename, resumeState,
+                              sizeof(resumeState), ".update.frz", "savestates");
+        resumeArmed = resumeState[0] != 0 && impl3dsSaveState(resumeState);
+        if (!resumeArmed)
+            resumeState[0] = 0;
+        rewind3dsFinalize();   // ~24MB back; reallocates on the next enabled frame
+    }
+
     s_updWorker.applyMode = true;
     s_updWorker.release = chk.release;
     menuRunUpdateWorker(menuTabs, currentMenuTab, "Updating",
@@ -1113,6 +1129,8 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
 
     if (err != NULL)
     {
+        if (resumeArmed)
+            remove(resumeState);        // game untouched - nothing to resume
         if (strcmp(err, "cancelled") == 0)
             return;                     // user pressed B - just leave
         char msg[160];
@@ -1132,10 +1150,32 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
 
     if (confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Update Installed",
-            "The new version runs on the next launch.\nExit the emulator now?",
+            resumeArmed
+                ? "The new version runs on the next launch and\nyour game resumes where it is now.\nExit the emulator now?"
+                : "The new version runs on the next launch.\nExit the emulator now?",
             true, true, 3))
     {
+        if (resumeArmed)
+        {
+            // one-shot marker: the next boot loads this ROM + its
+            // .update.frz and the session continues seamlessly
+            char markerPath[PATH_MAX];
+            snprintf(markerPath, sizeof(markerPath), "%s/update-resume.txt",
+                     settings3DS.RootDir);
+            FILE* m = fopen(markerPath, "w");
+            if (m != NULL)
+            {
+                fprintf(m, "%s\n", Memory.ROMFilename);
+                fclose(m);
+            }
+        }
         GPU3DS.emulatorState = EMUSTATE_END;
+    }
+    else if (resumeArmed)
+    {
+        // staying in this session: the parked state would only grow stale
+        // and teleport a future launch back in time - drop it
+        remove(resumeState);
     }
 }
 
@@ -3677,6 +3717,38 @@ void emulatorLoop()
 static void msu1LogToFile(const char* message) { log3dsWrite("[msu1] %s", message); }
 
 
+// One-shot resume after a self-update (issue #66): the marker holds the
+// ROM's full path; its .update.frz savestate brings the session back to
+// the exact moment the update interrupted. Consumed (deleted) on sight,
+// so a failed load falls back to a normal menu boot instead of looping.
+static bool tryUpdateResume()
+{
+    char markerPath[PATH_MAX];
+    snprintf(markerPath, sizeof(markerPath), "%s/update-resume.txt",
+             settings3DS.RootDir);
+    FILE* f = fopen(markerPath, "r");
+    if (f == NULL) { return false; }
+    char path[PATH_MAX] = {};
+    bool ok = fgets(path, sizeof(path), f) != NULL;
+    fclose(f);
+    remove(markerPath);
+    if (!ok) { return false; }
+    path[strcspn(path, "\r\n")] = '\0';
+    char* slash = strrchr(path, '/');
+    if (slash == NULL || slash[1] == '\0') { return false; }
+    *slash = '\0';
+    file3dsSetCurrentDir(path);
+    snprintf(romFileName, sizeof(romFileName), "%s", slash + 1);
+    if (!emulatorLoadRom()) { return false; }
+    char statePath[PATH_MAX];
+    file3dsGetRelatedPath(Memory.ROMFilename, statePath, sizeof(statePath),
+                          ".update.frz", "savestates");
+    if (statePath[0] != 0 && impl3dsLoadState(statePath)) {
+        remove(statePath);
+    }
+    return true;
+}
+
 static bool tryAutoBoot()
 {
     FILE* f = fopen("sdmc:/autoboot.txt", "r");
@@ -3732,7 +3804,8 @@ int main()
     img3dsSetThumbMode();
     gfxSetDoubleBuffering(settings3DS.SecondScreen, true);
 
-    GPU3DS.emulatorState = tryAutoBoot() ? EMUSTATE_EMULATE : EMUSTATE_PAUSEMENU;
+    GPU3DS.emulatorState = (tryUpdateResume() || tryAutoBoot())
+        ? EMUSTATE_EMULATE : EMUSTATE_PAUSEMENU;
 
     // Startup auto update check (issue #64) happens on the session's
     // first menu, where real dialogs exist - never on an autobooted game.

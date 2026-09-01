@@ -118,8 +118,9 @@ first install. In the pause menu, **Emulator tab -> UPDATES**:
   goes through the system installer. Both take effect on the next launch.
   Downloads are verified before anything is touched — a failed or cancelled
   update (B cancels) never harms the running version.
-* For now, update **without a game loaded** (from the ROM list): updating
-  mid-game is unreliable and is being reworked (issue #66).
+* Updating **mid-game is fine**: the session is parked in a savestate on
+  the SD card, the update runs with the memory to itself, and the next
+  launch (the new build) resumes the game exactly where it was.
 
 ## Rewind: how to use
 
