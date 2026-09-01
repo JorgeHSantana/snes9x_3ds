@@ -1029,10 +1029,18 @@ static void menuRunUpdateWorker(std::vector<SMenuTab>& menuTabs,
             unsigned kbps = (elapsedMs > 0)
                 ? (unsigned)(((unsigned long long)done * 1000u) / elapsedMs / 1024u)
                 : 0;
-            snprintf(line, sizeof(line),
-                     "Downloading the new build... %d%% (%u KB/s)\n%s",
-                     pct, kbps,
-                     s_updWorker.cancel ? "Cancelling..." : "Press B to cancel.");
+            if (pct >= 100)
+                // done downloading (verify/stage now) - a transfer speed
+                // no longer means anything, hide it (Jorge's polish)
+                snprintf(line, sizeof(line),
+                         "Downloading the new build... %d%%\n%s",
+                         pct,
+                         s_updWorker.cancel ? "Cancelling..." : "Press B to cancel.");
+            else
+                snprintf(line, sizeof(line),
+                         "Downloading the new build... %d%% (%u KB/s)\n%s",
+                         pct, kbps,
+                         s_updWorker.cancel ? "Cancelling..." : "Press B to cancel.");
         }
         else
         {
