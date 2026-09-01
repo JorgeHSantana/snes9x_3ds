@@ -610,13 +610,23 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // layers add the blur ghost passes; the composed ghost shift
             // is rounded in BOTH slider modes (Jorge's call) - a smear
             // distance gains nothing from a fraction, only the #65 tear.
-            auto drawLayerContent = [&]() {
-            if (id < LAYER_BACKDROP) {
-                // hazy layers draw 2 extra ghost passes shifted +-1px with
-                // reduced alpha (a cheap box blur: soft "smoky" edges)
-                float ghost = s_atmosGhostAlpha;
-                int passes = ghost > 0.0f ? 3 : 1;
+            // one raw draw of the layer's sections with the CURRENT uniforms
+            auto drawPass = [&]() {
+                if (id >= LAYER_BACKDROP) {
+                    gpu3dsDrawVerticalSectionLayer(layer, from, to);
+                } else if (list->useDrawArraysForTiledLayers) {
+                    gpu3dsDrawTiledLayerSingleSection(layer, &list->sections[from]);
+                } else {
+                    u32 bufferOffset = layer->bufferOffset + (sub ? 0 : layer->verticesByTarget[TARGET_SNES_SUB]);
+                    u16 *indices = (u16 *)list->ibo + bufferOffset;
+                    gpu3dsDrawTiledLayer(layer, indices, from, to);
+                }
+            };
 
+            // the two blur ghost passes for whatever dims are set - the
+            // composed shift rounds in BOTH slider modes (a smear distance
+            // gains nothing from a fraction, only the #65 tear)
+            auto drawGhostPasses = [&](float ghost) {
                 float ghostShift[4][2];
                 for (int t = 0; t < 4; t++) {
                     ghostShift[t][0] = roundf(tierShift[t] + s_atmosGhostOffset);
@@ -625,43 +635,25 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     if (ghostShift[t][0] == tierShift[t]) ghostShift[t][0] += 1.0f;
                     if (ghostShift[t][1] == tierShift[t]) ghostShift[t][1] -= 1.0f;
                 }
+                GPU3DS.stereoGhostPass = true;
+                gpu3dsSetGhostAlpha(ghost);
+                gpu3dsSetStereoParallax3(ghostShift[0][0], ghostShift[1][0], tierBnd01);
+                gpu3dsSetStereoParallaxHi(ghostShift[2][0], ghostShift[3][0], tierBnd12, tierBnd23);
+                drawPass();
+                gpu3dsSetStereoParallax3(ghostShift[0][1], ghostShift[1][1], tierBnd01);
+                gpu3dsSetStereoParallaxHi(ghostShift[2][1], ghostShift[3][1], tierBnd12, tierBnd23);
+                drawPass();
+                GPU3DS.stereoGhostPass = false;
+                gpu3dsSetGhostAlpha(0.0f);
+                // the base parallax comes back for whoever draws next
+                gpu3dsSetStereoParallax3(tierShift[0], tierShift[1], tierBnd01);
+                gpu3dsSetStereoParallaxHi(tierShift[2], tierShift[3], tierBnd12, tierBnd23);
+            };
 
-                for (int gp = 0; gp < passes; gp++) {
-                    if (gp == 1) {
-                        GPU3DS.stereoGhostPass = true;
-                        gpu3dsSetGhostAlpha(ghost);
-                        gpu3dsSetStereoParallax3(ghostShift[0][0],
-                            ghostShift[1][0], tierBnd01);
-                        gpu3dsSetStereoParallaxHi(ghostShift[2][0],
-                            ghostShift[3][0], tierBnd12, tierBnd23);
-                    } else if (gp == 2) {
-                        gpu3dsSetStereoParallax3(ghostShift[0][1],
-                            ghostShift[1][1], tierBnd01);
-                        gpu3dsSetStereoParallaxHi(ghostShift[2][1],
-                            ghostShift[3][1], tierBnd12, tierBnd23);
-                    }
-
-                    if (list->useDrawArraysForTiledLayers) {
-                        gpu3dsDrawTiledLayerSingleSection(layer, &list->sections[from]);
-                    }
-                    else {
-                        u32 bufferOffset = layer->bufferOffset + (sub ? 0 : layer->verticesByTarget[TARGET_SNES_SUB]);
-                        u16 *indices = (u16 *)list->ibo + bufferOffset;
-                        gpu3dsDrawTiledLayer(layer, indices, from, to);
-                    }
-                }
-
-                if (passes > 1) {
-                    GPU3DS.stereoGhostPass = false;
-                    gpu3dsSetGhostAlpha(0.0f);
-                    // the base parallax comes back for whoever draws next
-                    gpu3dsSetStereoParallax3(tierShift[0], tierShift[1], tierBnd01);
-                    gpu3dsSetStereoParallaxHi(tierShift[2], tierShift[3], tierBnd12, tierBnd23);
-                }
-            }
-            else {
-                gpu3dsDrawVerticalSectionLayer(layer, from, to);
-            }
+            auto drawLayerContent = [&]() {
+            drawPass();
+            if (id < LAYER_BACKDROP && s_atmosGhostAlpha > 0.0f)
+                drawGhostPasses(s_atmosGhostAlpha);
             };
 
             // spotlighting one PRIORITY (issue #61 polish): the whole
@@ -724,13 +716,42 @@ void gpu3dsDrawLayers(SLayerList *list) {
             }
 
             if (!spotlight && grpCount > 0) {
+                // base passes first, one per DISTINCT TINT: groups that
+                // differ only in ghost strength share their crisp draw
+                // (issue #71: split-but-blur-only layers were paying an
+                // extra full base pass). Ghost passes then run per ghost
+                // parameter set, masked to their own tiers.
+                s_atmosGhostAlpha = 0.0f;
+                s_atmosGhostOffset = 0.0f;
                 for (int g = 0; g < grpCount; g++) {
+                    float d0 = grpDim[g][0], d1 = grpDim[g][1];
+                    float d2 = grpDim[g][2], d3 = grpDim[g][3];
+                    bool merged = false;
+                    for (int h = 0; h < g; h++) {
+                        if (grpColor[h] == grpColor[g]) { merged = true; break; }
+                    }
+                    if (merged)
+                        continue;   // its base already drew with an earlier group
+                    for (int h = g + 1; h < grpCount; h++) {
+                        if (grpColor[h] != grpColor[g])
+                            continue;
+                        d0 = d0 > grpDim[h][0] ? d0 : grpDim[h][0];
+                        d1 = d1 > grpDim[h][1] ? d1 : grpDim[h][1];
+                        d2 = d2 > grpDim[h][2] ? d2 : grpDim[h][2];
+                        d3 = d3 > grpDim[h][3] ? d3 : grpDim[h][3];
+                    }
+                    gpu3dsSetStereoPrioDim4(d0, d1, d2, d3);
+                    gpu3dsApplyAtmosphereColor(grpColor[g]);
+                    drawPass();
+                }
+                for (int g = 0; g < grpCount; g++) {
+                    if (grpGhostA[g] <= 0.0f)
+                        continue;
                     gpu3dsSetStereoPrioDim4(grpDim[g][0], grpDim[g][1],
                                             grpDim[g][2], grpDim[g][3]);
-                    s_atmosGhostAlpha = grpGhostA[g];
-                    s_atmosGhostOffset = grpGhostO[g];
                     gpu3dsApplyAtmosphereColor(grpColor[g]);
-                    drawLayerContent();
+                    s_atmosGhostOffset = grpGhostO[g];
+                    drawGhostPasses(grpGhostA[g]);
                 }
                 continue;
             }
