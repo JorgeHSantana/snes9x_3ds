@@ -1497,12 +1497,41 @@ void S9xDrawBackgroundMosaicHardware(
 //-------------------------------------------------------------------
 // Draw non-offset-per-tile backgrounds
 //-------------------------------------------------------------------
+
+//-------------------------------------------------------------------
+// Priority-gap fill width (issue #70): how far the FARTHER priority's
+// tiles extend across each P0/P1 boundary. Computed once per walker
+// call - a DBZ Super Butoden split screen walks dozens of raster rows
+// per layer per frame, and the per-row slider read added up (#71).
+// hires: tiles span 4 output pixels at native width, so the walk-space
+// width doubles there.
+//-------------------------------------------------------------------
+static inline void S9xComputePriorityFillWidth(int bg, bool hires,
+	int *outWidth, int *outPrio)
+{
+	*outWidth = 0;
+	*outPrio = 0;
+	float dP0 = GPU3DS.stereoLayerDepth[bg];
+	float dP1 = GPU3DS.stereoLayerDepthP1[bg];
+	if (!settings3DS.StereoFillGaps || dP0 == dP1)
+		return;
+	float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
+	int w = (int)ceilf(slider * (dP0 < dP1 ? dP1 - dP0 : dP0 - dP1));
+	if (hires && !GPU3DSExt.render2x.enabled) w *= 2;
+	if (w > 16) w = 16;
+	*outWidth = w;
+	*outPrio = dP0 < dP1 ? 0 : 1;
+}
+
 inline void __attribute__((always_inline)) S9xDrawBackgroundHardwarePriority0Inline (
     int tileSize, int tileShift, int bitShift, int paletteShift, int paletteMask, int startPalette, bool directColourMode,
     uint32 BGMode, uint32 bg, bool sub, int depth0, int depth1)
 {
     const bool variantPossible = S9xVariantPossibleForBg(directColourMode, paletteShift, paletteMask, startPalette);
     GFX.PixSize = 1;
+
+    int fillWidth, fillPrio;
+    S9xComputePriorityFillWidth(bg, false, &fillWidth, &fillPrio);
 
 	//printf ("BG%d Y=%d-%d W1:%d-%d W2:%d-%d\n", bg, GFX.StartY, GFX.EndY, PPU.Window1Left, PPU.Window1Right, PPU.Window2Left, PPU.Window2Right);
 
@@ -1689,31 +1718,6 @@ inline void __attribute__((always_inline)) S9xDrawBackgroundHardwarePriority0Inl
 
 
 			int tilesToDraw = sX == 0 ? 32 : 33;
-
-			// A background stores one tile per cell, so giving its two tile
-			// priorities different depths slides those cells apart and
-			// uncovers a strip with nothing behind it (issue #70). Extending
-			// the nearest tile of the FARTHER priority across each boundary
-			// fills that strip with the continuation of whatever it belonged
-			// to - on both sides, because the two eyes pull apart in opposite
-			// directions and share this geometry. The extension draws at the
-			// farther priority's own plane, so it keeps that priority's shift
-			// and stacks under the nearer one; the width tracks the LIVE
-			// slider, so any overshoot is at most the ceil's 1px. (Ported
-			// from rcmz's 'Fill background gaps', extended to both
-			// arrangements.)
-			int fillWidth = 0;
-			int fillPrio = 0;
-			{
-				float dP0 = GPU3DS.stereoLayerDepth[bg];
-				float dP1 = GPU3DS.stereoLayerDepthP1[bg];
-				if (settings3DS.StereoFillGaps && dP0 != dP1) {
-					fillPrio = dP0 < dP1 ? 0 : 1;
-					float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
-					fillWidth = (int)ceilf(slider * (dP0 < dP1 ? dP1 - dP0 : dP0 - dP1));
-					if (fillWidth > 16) fillWidth = 16;
-				}
-			}
 
 			int32 fillTile = 0;
 			bool haveFillTile = false;
@@ -2256,6 +2260,9 @@ inline void __attribute__((always_inline)) S9xDrawHiresBackgroundHardwarePriorit
     const bool variantPossible = S9xVariantPossibleForBg(directColourMode, paletteShift, paletteMask, startPalette);
     GFX.PixSize = 1;
 
+    int fillWidth, fillPrio;
+    S9xComputePriorityFillWidth(bg, true, &fillWidth, &fillPrio);
+
  	// Note: We draw subscreens first, then the main screen.
 	// So if the subscreen has already been drawn, and we are drawing the main screen,
 	// we simply just redraw the same vertices that we have saved.
@@ -2439,23 +2446,6 @@ inline void __attribute__((always_inline)) S9xDrawHiresBackgroundHardwarePriorit
 			}
 
 			int tilesToDraw = sX == 0 ? 64 : 66;
-
-			// Priority-gap fill (issue #70), hires flavour: tiles span 4
-			// output pixels at native width, so the walk-space width is
-			// twice the on-screen gap there.
-			int fillWidth = 0;
-			int fillPrio = 0;
-			{
-				float dP0 = GPU3DS.stereoLayerDepth[bg];
-				float dP1 = GPU3DS.stereoLayerDepthP1[bg];
-				if (settings3DS.StereoFillGaps && dP0 != dP1) {
-					fillPrio = dP0 < dP1 ? 0 : 1;
-					float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
-					fillWidth = (int)ceilf(slider * (dP0 < dP1 ? dP1 - dP0 : dP0 - dP1));
-					if (!GPU3DSExt.render2x.enabled) fillWidth *= 2;
-					if (fillWidth > 16) fillWidth = 16;
-				}
-			}
 
 			int32 fillTile = 0;
 			bool haveFillTile = false;

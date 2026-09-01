@@ -393,7 +393,12 @@ void gpu3dsSetStereoPreviewHighlight(int layerId, int prio)
 // a layer's tiers can sit at different depths, so the caller may invoke
 // this once per depth GROUP (alpha-hiding the other groups) - that is
 // what makes fade, haze and blur per-priority.
-static void gpu3dsSetStereoAtmosphereForDepth(float depth)
+// pure math: one depth's effect parameters (tint color, ghost strength),
+// no GPU state touched - the group builder uses it to MERGE tiers whose
+// effects come out identical (issue #71: split-but-in-zone tiers were
+// paying an extra pass for a no-op tint)
+static void gpu3dsComputeAtmosphereForDepth(float depth, u32 *outColor,
+    float *outGhostAlpha, float *outGhostOffset)
 {
     // Relative model: the depth farthest outside the zone gets the full
     // gauge strength, the ones in between scale linearly by their share.
@@ -430,16 +435,21 @@ static void gpu3dsSetStereoAtmosphereForDepth(float depth)
     float excessIn = GPU3DS.stereoMaxExcess > 0.0f ? excess / GPU3DS.stereoMaxExcess : 0.0f;
     float blur = (GPU3DS.stereoBlur / 8.0f) * excessIn * slider;
     if (blur > 0.02f) {
-        s_atmosGhostAlpha = 0.25f + 0.25f * blur;
+        *outGhostAlpha = 0.25f + 0.25f * blur;
         // under Enhanced Resolution the aura grows 1.875x (not the full 2x
         // of the parallax scale) to track the stronger depth there
-        s_atmosGhostOffset = (1.0f + 2.0f * blur)
+        *outGhostOffset = (1.0f + 2.0f * blur)
             * (GPU3DSExt.render2x.enabled ? 1.875f : 1.0f);
     } else {
-        s_atmosGhostAlpha = 0.0f;
-        s_atmosGhostOffset = 0.0f;
+        *outGhostAlpha = 0.0f;
+        *outGhostOffset = 0.0f;
     }
+    *outColor = color;
+}
 
+// applies a computed tint color to the atmosphere TexEnv stage (dedup'd)
+static void gpu3dsApplyAtmosphereColor(u32 color)
+{
     if (color == s_atmosLastColor)
         return;
     s_atmosLastColor = color;
@@ -455,6 +465,14 @@ static void gpu3dsSetStereoAtmosphereForDepth(float depth)
     C3D_TexEnvFunc(env, C3D_RGB, GPU_INTERPOLATE);
     C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS);
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
+}
+
+static void gpu3dsSetStereoAtmosphereForDepth(float depth)
+{
+    u32 color;
+    gpu3dsComputeAtmosphereForDepth(depth, &color,
+        &s_atmosGhostAlpha, &s_atmosGhostOffset);
+    gpu3dsApplyAtmosphereColor(color);
 }
 
 static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id, bool forceOthers = false)
@@ -674,19 +692,30 @@ void gpu3dsDrawLayers(SLayerList *list) {
             tierDepth[3] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[1] : tierDepth[1];
             int nTiers = (id == LAYER_OBJ) ? 4 : ((int)id < LAYER_OBJ ? 2 : 0);
 
-            float grpDepth[4];
+            u32 grpColor[4];
+            float grpGhostA[4], grpGhostO[4];
             float grpDim[4][4];
             int grpCount = 0;
             bool effectsOn = GPU3DS.stereoFade > 0.0f || GPU3DS.stereoHaze > 0.0f ||
                 GPU3DS.stereoBlur > 0.0f;
             if (!spotlight && s_previewHighlightLayer < 0 && effectsOn &&
                 GPU3DS.stereoEyeIOD != 0.0f && nTiers > 0) {
+                // merge by the effect's RESULT, not the raw depth: two
+                // depths inside the focus zone produce the same no-op
+                // tint and no ghosts - one pass covers both (issue #71:
+                // Butoden's split screen paid a doubled section-heavy
+                // pass for exactly that no-op)
                 for (int t = 0; t < nTiers; t++) {
+                    u32 col; float ga, go;
+                    gpu3dsComputeAtmosphereForDepth(tierDepth[t], &col, &ga, &go);
                     int g;
                     for (g = 0; g < grpCount; g++)
-                        if (grpDepth[g] == tierDepth[t]) break;
+                        if (grpColor[g] == col && grpGhostA[g] == ga &&
+                            grpGhostO[g] == go) break;
                     if (g == grpCount) {
-                        grpDepth[grpCount] = tierDepth[t];
+                        grpColor[grpCount] = col;
+                        grpGhostA[grpCount] = ga;
+                        grpGhostO[grpCount] = go;
                         for (int k = 0; k < 4; k++) grpDim[grpCount][k] = 0.0f;
                         grpCount++;
                     }
@@ -698,7 +727,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 for (int g = 0; g < grpCount; g++) {
                     gpu3dsSetStereoPrioDim4(grpDim[g][0], grpDim[g][1],
                                             grpDim[g][2], grpDim[g][3]);
-                    gpu3dsSetStereoAtmosphereForDepth(grpDepth[g]);
+                    s_atmosGhostAlpha = grpGhostA[g];
+                    s_atmosGhostOffset = grpGhostO[g];
+                    gpu3dsApplyAtmosphereColor(grpColor[g]);
                     drawLayerContent();
                 }
                 continue;
