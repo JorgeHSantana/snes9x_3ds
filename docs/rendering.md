@@ -98,9 +98,13 @@ and translucent. **Full** draws two ghosts per blurred tier (one per
 side); **Light** draws one, alternating side per frame and per eye - half
 the blur's draw and vertex cost (issue #71 numbers: +4 draws / +3,952
 verts vs +2 / +1,976 for one split layer). **Auto** (default) is Full
-until the frame loop's load-driven frameskip fires: `3dsblurauto.h` keeps
-a 60-frame window, switches to Light at 2+ skipped frames, and returns to
-Full after three clean windows (any skip re-arms the cooldown). The
+until the frame loop's load-driven frameskip fires: `3dsblurauto.h`
+switches to Light on the first skipped frame and returns to Full after a
+run of clean 60-frame windows (3 to start; any skip restarts the run). The
+run doubles, up to 60, each time Light comes back within 10 windows of a
+return to Full, and drops back to 3 once Full has held for 30 windows -
+adaptive hysteresis, so a game on the edge settles in Light instead of
+flapping. The
 verdict lives in `GPU3DSExt.blurAutoLight`, fed per emulated frame from
 `impl3dsRunOneFrame` BEFORE the MSU-1 FMV pacing rewrites the skip flag.
 

@@ -240,7 +240,8 @@ linearly with the distance beyond its edge:
   layers popping out in front of it. It is the most expensive effect
   (extra draw passes). **Blur Quality** in the tab's Settings defaults to
   **Auto**: full quality while the game holds its frame rate, a lighter
-  single-ghost blur (half the cost) as soon as frames start dropping.
+  single-ghost blur (half the cost) the moment a frame drops, and full
+  quality again once the game has stayed clean for a while.
 * **Unused rows**: layers and priorities the paused screen did not draw
   are dimmed (they keep their depth and stay editable); **Hide Unused
   Layers** in the tab's Settings removes them from the list instead.
