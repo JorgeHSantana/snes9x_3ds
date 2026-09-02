@@ -1200,9 +1200,9 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     if (confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Update Installed",
             resumeArmed
-                ? "The new version runs on the next launch and\nyour game resumes where it is now.\nExit now? (No = keep playing this version;\nthe game reloads where it was.)"
+                ? "Installed. It runs on the next launch and\nthis game resumes right where it is.\nExit now? (No: keep playing this version.)"
                 : "The new version runs on the next launch.\nExit the emulator now?",
-            true, true, 3))
+            true, true, -1))   // -1: sized to the wrapped text (the 3-line hint clipped the resume variant)
     {
         if (resumeArmed)
         {
