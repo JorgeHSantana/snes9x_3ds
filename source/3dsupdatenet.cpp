@@ -51,10 +51,18 @@ bool update3dsNetInit()
     if (netReady)
         return true;
 
-    socBuffer = (u32*)memalign(0x1000, SOC_BUFFER_SIZE);
+    {
+        struct mallinfo mi = mallinfo();
+        log3dsWrite("[upd] heap before net: %u KB in use, %u KB free (arena %u KB)",
+                    (unsigned)(mi.uordblks / 1024), (unsigned)(mi.fordblks / 1024),
+                    (unsigned)(mi.arena / 1024));
+    }
+    if (socBuffer == NULL)
+        socBuffer = (u32*)memalign(0x1000, SOC_BUFFER_SIZE);
     if (socBuffer == NULL)
     {
         snprintf(netLastError, sizeof(netLastError), "soc buffer alloc");
+        log3dsWrite("[upd] %s", netLastError);
         return false;
     }
     Result rc = socInit(socBuffer, SOC_BUFFER_SIZE);
@@ -78,9 +86,18 @@ void update3dsNetExit()
         return;
     curl_global_cleanup();
     socExit();
-    free(socBuffer);
-    socBuffer = NULL;
+    // the SOC buffer stays reserved for the session (see Reserve): freeing
+    // it hands the hole to the next game allocation and the following
+    // check has to hunt for 1MB aligned again
     netReady = false;
+}
+
+void update3dsNetReserve()
+{
+    if (socBuffer != NULL)
+        return;
+    socBuffer = (u32*)memalign(0x1000, SOC_BUFFER_SIZE);
+    log3dsWrite("[upd] soc buffer reserved at boot: %s", socBuffer ? "ok" : "FAILED");
 }
 
 // Common transfer setup. The console has no usable CA store, so peer

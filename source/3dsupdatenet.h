@@ -12,6 +12,11 @@
 // CDN redirect targets carry signed query strings well past 512 chars
 #define UPDATE3DSNET_URL_BUF 1024
 
+// Reserve the 1MB page-aligned SOC buffer while the heap is still whole
+// (call once at boot). A loaded game fragments the heap enough that the
+// same memalign fails at update time on hardware (issue #73). No-op if
+// already reserved; Init falls back to allocating on demand.
+void update3dsNetReserve();
 bool update3dsNetInit();
 void update3dsNetExit();
 

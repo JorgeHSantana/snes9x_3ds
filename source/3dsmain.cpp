@@ -986,6 +986,10 @@ static bool updWorkerKeepGoing()
     return !s_updWorker.cancel;
 }
 
+bool emulatorLoadRom();
+static void emulatorUnloadRom();
+static bool emulatorResumeParked(const char* romPath);
+
 static bool updWorkerProgress(void*, unsigned done, unsigned total)
 {
     s_updWorker.done = done;
@@ -1146,6 +1150,7 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     // so the download has the machine to itself, and let the NEXT launch
     // (the new build) resume the game right where it was.
     char resumeState[PATH_MAX] = {0};
+    char resumeRom[PATH_MAX] = {0};
     bool  resumeArmed = false;
     if (settings3DS.isRomLoaded)
     {
@@ -1154,7 +1159,15 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
         resumeArmed = resumeState[0] != 0 && impl3dsSaveState(resumeState);
         if (!resumeArmed)
             resumeState[0] = 0;
-        rewind3dsFinalize();   // ~24MB back; reallocates on the next enabled frame
+        snprintf(resumeRom, sizeof(resumeRom), "%s", Memory.ROMFilename);
+        // Jorge's flow (issue #73): the game leaves entirely - sound and
+        // MSU-1 threads, MSU buffers, rewind pools - so the download has
+        // the heap and the SD to itself. It comes back from the parked
+        // state right after, unless the user exits into the new build.
+        if (resumeArmed)
+            emulatorUnloadRom();
+        else
+            rewind3dsFinalize();   // could not park: at least free the pools
     }
 
     s_updWorker.applyMode = true;
@@ -1166,7 +1179,7 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     if (err != NULL)
     {
         if (resumeArmed)
-            remove(resumeState);        // game untouched - nothing to resume
+            emulatorResumeParked(resumeRom);   // nothing changed: back to the game
         if (strcmp(err, "cancelled") == 0)
             return;                     // user pressed B - just leave
         char msg[160];
@@ -1187,7 +1200,7 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     if (confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
             "Update Installed",
             resumeArmed
-                ? "The new version runs on the next launch and\nyour game resumes where it is now.\nExit the emulator now?"
+                ? "The new version runs on the next launch and\nyour game resumes where it is now.\nExit now? (No = keep playing this version;\nthe game reloads where it was.)"
                 : "The new version runs on the next launch.\nExit the emulator now?",
             true, true, 3))
     {
@@ -1201,7 +1214,7 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
             FILE* m = fopen(markerPath, "w");
             if (m != NULL)
             {
-                fprintf(m, "%s\n", Memory.ROMFilename);
+                fprintf(m, "%s\n", resumeRom);
                 fclose(m);
             }
         }
@@ -1209,9 +1222,10 @@ static void menuOfferUpdate(std::vector<SMenuTab>& menuTabs, int& currentMenuTab
     }
     else if (resumeArmed)
     {
-        // staying in this session: the parked state would only grow stale
-        // and teleport a future launch back in time - drop it
-        remove(resumeState);
+        // staying on this version: the game comes back right here (the
+        // parked state is consumed, so a future launch cannot teleport
+        // back in time)
+        emulatorResumeParked(resumeRom);
     }
 }
 
@@ -2933,6 +2947,53 @@ bool emulatorLoadRom()
     return true;
 }
 
+// Tear the loaded game down mid-session (the self-updater parks it and
+// resumes it afterwards, issue #73): the teardown emulatorLoadRom does
+// before the next ROM, without the load. Per-game settings and cheats
+// are saved first; the mixer stays drained until a ROM comes back.
+static void emulatorUnloadRom()
+{
+    if (!settings3DS.isRomLoaded)
+        return;
+    impl3dsSaveCheats();
+    settingsSave(true);
+    snd3dsDrainMixing();
+    Memory.ROMCRC32 = 0;
+    msu3dsOnEvent(Msu1Event::RomUnload);
+    rewind3dsReset();
+    rewind3dsFinalize();
+    settings3DS.isRomLoaded = false;
+    menu3dsMarkTabDirty(TAB_EMULATOR);
+    log3dsWrite("[upd] game unloaded for the update");
+}
+
+// Bring a parked game back: load the ROM at romPath, then its
+// <rom>.update.frz (consumed on success). Shared by the in-session
+// resume after an update and by the next-launch resume (update-resume.txt).
+static bool emulatorResumeParked(const char* romPath)
+{
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s", romPath);
+    char* slash = strrchr(path, '/');
+    if (slash == NULL || slash[1] == '\0') { return false; }
+    *slash = '\0';
+    file3dsSetCurrentDir(path);
+    snprintf(romFileName, sizeof(romFileName), "%s", slash + 1);
+    if (!emulatorLoadRom()) {
+        log3dsWrite("[upd] resume: could not reload %s", romPath);
+        return false;
+    }
+    char statePath[PATH_MAX];
+    file3dsGetRelatedPath(Memory.ROMFilename, statePath, sizeof(statePath),
+                          ".update.frz", "savestates");
+    if (statePath[0] != 0 && impl3dsLoadState(statePath)) {
+        remove(statePath);
+    }
+    menu3dsMarkTabDirty(TAB_EMULATOR);
+    menu3dsMarkTabDirty(TAB_3D);
+    return true;
+}
+
 //----------------------------------------------------------------------
 // Find the ID of the last selected item in the file list.
 //----------------------------------------------------------------------
@@ -3134,6 +3195,19 @@ void setupMenu(int& currentMenuTab) {
             menuTabs[i].SetTitle(tabs[i]);
             menuTabs[i].SubTitle.clear();
 
+            // remember the row under the cursor by identity: rows above it
+            // can appear or vanish on a rebuild (Hide Unused Layers), so
+            // the index alone would land on a neighbour (Jorge's report)
+            std::string prevText;
+            MenuItemType prevType = MenuItemType::Disabled;
+            {
+                int ps = menuTabs[i].SelectedItemIndex;
+                if (preserveSelection && ps >= 0 && ps < static_cast<int>(menuTabs[i].MenuItems.size())) {
+                    prevText = menuTabs[i].MenuItems[ps].Text;
+                    prevType = menuTabs[i].MenuItems[ps].Type;
+                }
+            }
+
             switch (ids[i]) {
                 case TAB_EMULATOR:
                     makeEmulatorMenu(menuTabs[i].MenuItems, menuTabs, currentMenuTab);
@@ -3150,6 +3224,20 @@ void setupMenu(int& currentMenuTab) {
                 case TAB_3D:
                     makeStereo3dMenu(menuTabs[i].MenuItems, menuTabs, currentMenuTab);
                     break;
+            }
+
+            if (!prevText.empty()) {
+                for (size_t j = 0; j < menuTabs[i].MenuItems.size(); j++) {
+                    if (menuTabs[i].MenuItems[j].Type == prevType && menuTabs[i].MenuItems[j].Text == prevText) {
+                        menuTabs[i].SelectedItemIndex = (int)j;
+                        int first = menuTabs[i].FirstItemIndex;
+                        if ((int)j < first || (int)j >= first + MENU_HEIGHT - 1) {
+                            first = (int)j - MENU_HEIGHT / 2;
+                            menuTabs[i].FirstItemIndex = first < 0 ? 0 : first;
+                        }
+                        break;
+                    }
+                }
             }
 
             int selected = menuTabs[i].SelectedItemIndex;
@@ -3842,19 +3930,7 @@ static bool tryUpdateResume()
     remove(markerPath);
     if (!ok) { return false; }
     path[strcspn(path, "\r\n")] = '\0';
-    char* slash = strrchr(path, '/');
-    if (slash == NULL || slash[1] == '\0') { return false; }
-    *slash = '\0';
-    file3dsSetCurrentDir(path);
-    snprintf(romFileName, sizeof(romFileName), "%s", slash + 1);
-    if (!emulatorLoadRom()) { return false; }
-    char statePath[PATH_MAX];
-    file3dsGetRelatedPath(Memory.ROMFilename, statePath, sizeof(statePath),
-                          ".update.frz", "savestates");
-    if (statePath[0] != 0 && impl3dsLoadState(statePath)) {
-        remove(statePath);
-    }
-    return true;
+    return emulatorResumeParked(path);
 }
 
 static bool tryAutoBoot()
@@ -3889,6 +3965,7 @@ int main()
     APT_CheckNew3DS(&settings3DS.isNew3DS);
     osSetSpeedupEnable(true);
     utils3dsInitialize();
+    update3dsNetReserve();   // 1MB aligned, while the heap is whole (issue #73)
 
     // ---- load/update settings first ----
     menu3dsSetHotkeysData(hotkeysData);
