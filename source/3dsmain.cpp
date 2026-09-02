@@ -3488,6 +3488,10 @@ void showMenu() {
         }
     }
 
+    // 3. a game is paused: the 3D tab's used/unused rows describe THIS
+    //    pause's frame (Jorge's report: Hide Unused never refreshed)
+    if (settings3DS.isRomLoaded && gpu3dsIs3DAvailable())
+        menu3dsMarkTabDirty(TAB_3D);
     // 1. first boot
     // 2. new game loaded
     if (menuTabs.empty() || Memory.ROMCRC32 != lastLoadedRomCRC || menu3dsHasDirtyTabs())

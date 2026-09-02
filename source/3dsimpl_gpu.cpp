@@ -626,9 +626,20 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // the two blur ghost passes for whatever dims are set - the
             // composed shift rounds in BOTH slider modes (a smear distance
             // gains nothing from a fraction, only the #65 tear)
-            auto drawGhostPasses = [&](float ghost) {
+            // tierMask (per-priority blur, Jorge's report): the ghost TexEnv
+            // takes its alpha from TEXTURE0 x constant to survive color-math
+            // scenes, so the vertex-alpha tier dims that mask the base
+            // passes do nothing here. Tiers outside the group are instead
+            // shifted clean off the screen - the parallax is per tier and
+            // the clipper drops them for free. NULL = every tier.
+            auto drawGhostPasses = [&](float ghost, const float *tierMask) {
+                const float offscreen = 4096.0f;
                 float ghostShift[4][2];
                 for (int t = 0; t < 4; t++) {
+                    if (tierMask != nullptr && tierMask[t] <= 0.0f) {
+                        ghostShift[t][0] = ghostShift[t][1] = offscreen;
+                        continue;
+                    }
                     ghostShift[t][0] = roundf(tierShift[t] + s_atmosGhostOffset);
                     ghostShift[t][1] = roundf(tierShift[t] - s_atmosGhostOffset);
                     // never collapse onto the crisp base pass
@@ -671,7 +682,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
             auto drawLayerContent = [&]() {
             drawPass();
             if (id < LAYER_BACKDROP && s_atmosGhostAlpha > 0.0f)
-                drawGhostPasses(s_atmosGhostAlpha);
+                drawGhostPasses(s_atmosGhostAlpha, nullptr);
             };
 
             // spotlighting one PRIORITY (issue #61 polish): the whole
@@ -769,7 +780,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                                             grpDim[g][2], grpDim[g][3]);
                     gpu3dsApplyAtmosphereColor(grpColor[g]);
                     s_atmosGhostOffset = grpGhostO[g];
-                    drawGhostPasses(grpGhostA[g]);
+                    drawGhostPasses(grpGhostA[g], grpDim[g]);
                 }
                 continue;
             }
