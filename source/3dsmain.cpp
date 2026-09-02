@@ -17,6 +17,7 @@
 
 #include "3dsutils.h"
 #include "3dssettings.h"
+#include "3dsstereokey.h"
 #include "3dslog.h"
 #include "3dstimer.h"
 #include "3dsexit.h"
@@ -883,6 +884,40 @@ static bool stereoCopyFile(const char *src, const char *dst)
     return fclose(out) == 0 && ok;
 }
 
+// <RootDir>/<dir>/<key>.3d - key = the ROM's header title (shareable
+// across filenames, see 3dsstereokey.h), falling back to the ROM filename
+// when the header has nothing to key on
+static void stereo3dGamePath(char *out, size_t n, const char *dir)
+{
+    char key[ROM_NAME_LEN + 1];
+    if (stereo3dKeyFromRomName(Memory.ROMName, key, sizeof(key)) > 0)
+        snprintf(out, n, "%s/%s/%s.3d", settings3DS.RootDir, dir, key);
+    else
+        file3dsGetRelatedPath(Memory.ROMFilename, out, n, ".3d", dir);
+}
+
+// the filename-keyed path older builds used; read for migration only
+static void stereo3dLegacyPath(char *out, size_t n, const char *dir)
+{
+    file3dsGetRelatedPath(Memory.ROMFilename, out, n, ".3d", dir);
+}
+
+// true when the game's file exists at the current key, copying a
+// filename-keyed file from older builds into place first if that is all
+// there is (the legacy file stays untouched)
+static bool stereo3dMigrateLegacy(const char *path, const char *dir)
+{
+    if (path[0] != '\0' && IsFileExists(path))
+        return true;
+    char legacy[PATH_MAX];
+    stereo3dLegacyPath(legacy, sizeof(legacy), dir);
+    if (legacy[0] == '\0' || strcmp(legacy, path) == 0 || !IsFileExists(legacy))
+        return false;
+    bool ok = stereoCopyFile(legacy, path);
+    log3dsWrite("[stereo3d] migrated %s -> %s (%s)", legacy, path, ok ? "ok" : "FAILED");
+    return ok;
+}
+
 static int *stereoEditDepthP1(int layer) {
     if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount)
         return &settings3DS.StereoProfiles[s_stereoEditIdx].DepthP1[layer];
@@ -1607,7 +1642,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     items.clear();
 
     AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game>.3d (shareable)."_s, ""_s);
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game title>.3d (shareable)."_s, ""_s);
     AddMenuDisabledOption(items, ""_s);
 
     if (gpu3dsIs3DAvailable()) {
@@ -1872,10 +1907,13 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
 
-            char curPath[PATH_MAX];
-            file3dsGetRelatedPath(Memory.ROMFilename, curPath, sizeof(curPath), ".3d", "stereo3d");
+            char curPath[PATH_MAX], legacyPath[PATH_MAX];
+            stereo3dGamePath(curPath, sizeof(curPath), "stereo3d");
+            stereo3dLegacyPath(legacyPath, sizeof(legacyPath), "stereo3d");
             const char *curBase = strrchr(curPath, '/');
             curBase = curBase ? curBase + 1 : curPath;
+            const char *legacyBase = strrchr(legacyPath, '/');
+            legacyBase = legacyBase ? legacyBase + 1 : legacyPath;
 
             char dirPath[PATH_MAX];
             snprintf(dirPath, sizeof(dirPath), "%s/stereo3d", settings3DS.RootDir);
@@ -1890,6 +1928,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     if (len < 4 || strcasecmp(e->d_name + len - 3, ".3d") != 0) continue;
                     if (strcasecmp(e->d_name, "default.3d") == 0) continue;
                     if (strcmp(e->d_name, curBase) == 0) continue;
+                    if (strcmp(e->d_name, legacyBase) == 0) continue;   // this game's pre-migration file
                     files.push_back(e->d_name);
                 }
                 closedir(d);
@@ -1948,9 +1987,9 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             char path[PATH_MAX], bak[PATH_MAX];
-            file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
+            stereo3dGamePath(path, sizeof(path), "stereo3d");
             // hidden sibling folder keeps the shareable stereo3d/ clean
-            file3dsGetRelatedPath(Memory.ROMFilename, bak, sizeof(bak), ".3d", ".stereo3d-bak");
+            stereo3dGamePath(bak, sizeof(bak), ".stereo3d-bak");
 
             settingsSaveStereo3D();
             bool ok = path[0] != '\0' && bak[0] != '\0' && stereoCopyFile(path, bak);
@@ -1963,8 +2002,9 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             char path[PATH_MAX], bak[PATH_MAX];
-            file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
-            file3dsGetRelatedPath(Memory.ROMFilename, bak, sizeof(bak), ".3d", ".stereo3d-bak");
+            stereo3dGamePath(path, sizeof(path), "stereo3d");
+            stereo3dGamePath(bak, sizeof(bak), ".stereo3d-bak");
+            stereo3dMigrateLegacy(bak, ".stereo3d-bak");   // snapshots from older builds
 
             if (bak[0] == '\0' || !IsFileExists(bak)) {
                 menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "Restore 3D Settings Backup",
@@ -2535,7 +2575,8 @@ void settingsLoadStereo3D()
     settings3DS.StereoWatchAddr = -1;
 
     char path[PATH_MAX];
-    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
+    stereo3dGamePath(path, sizeof(path), "stereo3d");
+    stereo3dMigrateLegacy(path, "stereo3d");
 
     FILE *f = path[0] != '\0' ? fopen(path, "r") : NULL;
     bool fallback = false;
@@ -2682,7 +2723,7 @@ void settingsSaveStereo3DDefault()
 void settingsSaveStereo3D()
 {
     char path[PATH_MAX];
-    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".3d", "stereo3d");
+    stereo3dGamePath(path, sizeof(path), "stereo3d");
     if (path[0] == '\0') return;
 
     FILE *f = fopen(path, "w");

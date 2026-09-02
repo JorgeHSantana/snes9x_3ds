@@ -147,8 +147,9 @@ All of this lives in the pause menu's dedicated **3D Stereo** tab (it appears
 between Settings and Controls when a game is loaded on a 3D-capable model —
 New 3DS / New 2DS XL with the 3D slider open; on other models the emulator
 falls back to plain 2D). Everything you configure is saved per game to
-`sd:/3ds/snes9x_3ds/stereo3d/<game>.3d` — a small text file you can share
-with other people.
+`sd:/3ds/snes9x_3ds/stereo3d/<game title>.3d` — named after the ROM's internal
+title, so it matches the same game whatever the file is called — a small
+text file you can share with other people.
 
 ### How depth works (-8 to +8)
 
