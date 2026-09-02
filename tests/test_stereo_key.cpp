@@ -1,4 +1,5 @@
 #include "doctest.h"
+#include <string>
 #include "../source/3dsstereokey.h"
 
 TEST_CASE("stereo key: plain title passes through") {
