@@ -241,6 +241,9 @@ linearly with the distance beyond its edge:
   (extra draw passes). **Blur Quality** in the tab's Settings defaults to
   **Auto**: full quality while the game holds its frame rate, a lighter
   single-ghost blur (half the cost) as soon as frames start dropping.
+* **Unused rows**: layers and priorities the paused screen did not draw
+  are dimmed (they keep their depth and stay editable); **Hide Unused
+  Layers** in the tab's Settings removes them from the list instead.
 
 So "how strong is the effect on this layer" = gauge value x how far the
 layer's depth sits from the focus zone. A layer at the zone's edge gets

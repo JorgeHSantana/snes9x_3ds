@@ -279,6 +279,8 @@ typedef struct {
     int                 StereoDepthOBJHi[2];   // sprite priority 2/3 depths (issue #60;
                                                // priorities 0/1 ride [4] of the two
                                                // arrays above, like the BGs)
+    int                 StereoHideUnused;      // 3D tab: 1 = hide the layer/priority rows the
+                                               // paused screen did not draw (default 0 = dim them)
     int                 StereoBlurQuality;     // 0 = auto (Full until the frame loop skips
                                                // frames, then Light, back after clean
                                                // windows - 3dsblurauto.h); 1 = full (two

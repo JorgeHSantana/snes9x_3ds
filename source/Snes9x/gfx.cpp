@@ -623,6 +623,7 @@ void S9xUpdatePalettes()
 
 void S9xStartScreenRefresh ()
 {
+    S9xLayerUseFrameStart();   // 3D editor's used-rows bookkeeping
 	
 	/*if (GFX.PreviousFrameBrightness != PPU.Brightness)
 	{
@@ -824,6 +825,7 @@ void S9xEndScreenRefresh ()
     if (IPPU.RenderThisFrame)
     {
 		FLUSH_REDRAW ();
+		S9xLayerUseFrameEnd();   // one complete rendered frame -> editor
 		
         if (
 #ifdef USE_GLIDE

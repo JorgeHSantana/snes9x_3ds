@@ -707,6 +707,18 @@ inline void __attribute__((always_inline)) S9xCommitMode7LayerSection(bool reuse
 	gpu3dsCommitLayerSection(VBO_SCENE_MODE7_LINE, (LAYER_ID)layer, &renderState, sub, reuseVertices);
 }
 
+// layer/priority usage of the frame being drawn (3dslayeruse.h). The BG
+// dispatch macros name the BG before walking it; the tile inlines mark
+// its priority; sprites and Mode 7 mark themselves.
+#include "3dslayeruse.h"
+static LayerUse s_layerUse;
+static int s_layerUseBg = 0;
+
+void S9xLayerUseFrameStart() { layerUseFrameStart(&s_layerUse); }
+void S9xLayerUseFrameEnd()   { layerUseFrameEnd(&s_layerUse); }
+bool S9xLayerUsedLastFrame(int layer, int prio) { return layerUseUsed(&s_layerUse, layer, prio); }
+bool S9xLayerUsedLastFrameAny(int layer)        { return layerUseLayerUsed(&s_layerUse, layer); }
+
 //-------------------------------------------------------------------
 // Draw a full tile 8xh tile using 3D hardware
 //-------------------------------------------------------------------
@@ -721,6 +733,7 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
 	// emitting the full tile exactly as before
 	int32 sliceX0 = 0, int32 sliceX1 = 8)
 {
+	layerUseMark(&s_layerUse, s_layerUseBg, prio);
     uint32 TileAddr = BG.TileAddress + ((snesTile & 0x3ff) << tileShift);
 
 	// Bug fix: overflow in Dragon Ball Budoten 3
@@ -833,6 +846,7 @@ inline void __attribute__((always_inline)) S9xDrawHiresBGFullTileHardwareInline 
 	// horizontal slice of the 8px tile (issue #70's priority-gap fill)
 	int32 sliceX0 = 0, int32 sliceX1 = 8)
 {
+	layerUseMark(&s_layerUse, s_layerUseBg, prio);
     uint32 TileAddr = BG.TileAddress + ((snesTile & 0x3ff) << tileShift);
 
 	// Bug fix: overflow in Dragon Ball Budoten 3 
@@ -2228,6 +2242,7 @@ void S9xDrawBackgroundMosaicHardware(
             int blockW = (X + outBlockW > 256) ? (256 - X) : outBlockW;
 
             int yDepth = (tpriority == 0 ? depth0 : depth1);
+            layerUseMark(&s_layerUse, bg, tpriority ? 1 : 0);   // mosaic quads bypass the tile inlines
             int x0 = X << hiShift;
             int y0 = Y + yDepth;
             int x1 = (X + blockW) << hiShift;
@@ -2843,6 +2858,7 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 				int StartLine = OBJList[S].StartLine;
 				
 				int priorityOffset = (PPU.OBJ[S].Priority + 1) * 3 * 256 + depth;
+				layerUseMark(&s_layerUse, 4, PPU.OBJ[S].Priority & 3);
 				bool isVFlipped = PPU.OBJ[S].VFlip;
 				bool isHFlipped = PPU.OBJ[S].HFlip;
 				int objWidth = GFX.OBJWidths[S];
@@ -3414,42 +3430,42 @@ void S9xRenderScreenHardware (bool8 sub)
 
 	#define DRAW_4COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
 			S9xDrawBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_16COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
 			S9xDrawBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_256COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
 			S9xDrawBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_4COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
 			S9xDrawOffsetBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_16COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
 			S9xDrawOffsetBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_256COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
 			S9xDrawOffsetBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_4COLOR_HIRES_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
 			S9xDrawHiresBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_16COLOR_HIRES_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
-		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; \
+		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
 			S9xDrawHiresBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	if (settings3DS.LayerEnabled[LAYER_BACKDROP])
@@ -3510,6 +3526,7 @@ void S9xRenderScreenHardware (bool8 sub)
 				if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 				{ \
 					int depth = bgAlpha[bg] + d*256; \
+					layerUseMark(&s_layerUse, bg, (d) >= 8 ? 1 : 0); \
 					if (tile0) \
 						S9xDrawBackgroundMode7HardwareRepeatTile0(bg, sub, depth); \
 					S9xDrawBackgroundMode7Hardware(bg, sub, depth, alphaTestActive); \

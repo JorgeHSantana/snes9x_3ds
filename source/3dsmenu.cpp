@@ -367,6 +367,8 @@ void menu3dsDrawItems(
         else if (currentTab->MenuItems[i].Type == MenuItemType::Checkbox)
         {
             color = normalItemTextColor;
+            if (currentTab->MenuItems[i].TextColor != -1)
+                color = currentTab->MenuItems[i].TextColor;   // e.g. a row the paused screen does not draw
             if (currentTab->SelectedItemIndex == i)
                 color = selectedItemTextColor;
                 
@@ -398,6 +400,8 @@ void menu3dsDrawItems(
         else if (currentTab->MenuItems[i].Type == MenuItemType::Gauge)
         {
             color = normalItemTextColor;
+            if (currentTab->MenuItems[i].TextColor != -1)
+                color = currentTab->MenuItems[i].TextColor;   // e.g. a row the paused screen does not draw
             if (currentTab->SelectedItemIndex == i)
                 color = selectedItemTextColor;
 

@@ -14,6 +14,7 @@
 #include "snes9x.h"
 #include "cheats.h"
 #include "memmap.h"
+#include "gfxhw.h"
 
 #include "3dsutils.h"
 #include "3dssettings.h"
@@ -1562,6 +1563,29 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
 // ---- live 3D editor preview (issue #61) ----
 static int  s_stereoGaugeFirst = -1;    // item index of the first depth gauge
+static int  s_stereoGaugeCount = 0;     // gauges actually listed (Hide Unused filters)
+static int  s_stereoGaugeLayer[12];     // per listed gauge: layer (0..3 BG, 4 sprites)
+static int  s_stereoGaugePrio[12];      // per listed gauge: priority
+
+// the edited profile's depth field for a gauge row
+static int *stereo3dGaugeValue(int layer, int prio)
+{
+    if (prio >= 2) return stereoEditDepthOBJHi(prio - 2);
+    return prio == 1 ? stereoEditDepthP1(layer) : stereoEditDepth(layer);
+}
+
+// a row the paused screen did not draw: dim (darker than disabled text)
+// or, with Hide Unused, absent. No ROM = every row counts as used.
+static bool stereo3dRowUsed(int layer, int prio)
+{
+    if (!settings3DS.isRomLoaded) return true;
+    return prio < 0 ? S9xLayerUsedLastFrameAny(layer) : S9xLayerUsedLastFrame(layer, prio);
+}
+static int stereo3dDimColor()
+{
+    uint32 c = Themes[static_cast<int>(settings3DS.Theme)].disabledItemTextColor;
+    return (int)((((c >> 16) & 0xFF) * 6 / 10) << 16 | (((c >> 8) & 0xFF) * 6 / 10) << 8 | ((c & 0xFF) * 6 / 10));
+}
 static int  s_stereoFxFirst = -1;       // first item of the Focus/Effects zone
 static int  s_stereoFxLast = -1;        // one past its last item
 static bool s_stereoPreviewDirty = false;
@@ -1598,10 +1622,11 @@ static void stereo3dIdleTick()
 
     int sel = menuTabs[curTab].SelectedItemIndex;
     int rel = (s_stereoGaugeFirst >= 0) ? sel - s_stereoGaugeFirst : -1;
-    // 8 BG gauges (4 layers x 2 priorities) + 4 sprite priorities
-    bool inGauges = rel >= 0 && rel < 12;
-    int layer = !inGauges ? -1 : (rel < 8 ? rel / 2 : 4);
-    int prio  = !inGauges ? -1 : (rel < 8 ? rel % 2 : rel - 8);
+    // the listed gauges (up to 4 BGs x 2 priorities + 4 sprite priorities;
+    // Hide Unused can drop some, the map says which is which)
+    bool inGauges = rel >= 0 && rel < s_stereoGaugeCount;
+    int layer = !inGauges ? -1 : s_stereoGaugeLayer[rel];
+    int prio  = !inGauges ? -1 : s_stereoGaugePrio[rel];
     // Focus/Effects gauges: full-scene preview, effects applied live
     bool inFx = !inGauges && s_stereoFxFirst >= 0 &&
         sel >= s_stereoFxFirst && sel < s_stereoFxLast;
@@ -1777,6 +1802,8 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
 
     static const char *layerNames[LAYER_BRIGHTNESS + 1] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites", "  Backdrop", "  Color Math", "  Brightness" };
     for (int layer = LAYER_BG0; layer <= LAYER_BRIGHTNESS; layer++) {
+        bool used = layer > LAYER_OBJ || stereo3dRowUsed(layer, -1);
+        if (!used && settings3DS.StereoHideUnused) continue;
         AddMenuCheckbox(items, layerNames[layer], settings3DS.LayerEnabled[layer],
             [layer]( int val ) {
                 if (CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val )
@@ -1786,6 +1813,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     stereo3dRestorePausedLook();
                 }
             });
+        if (!used) items.back().TextColor = stereo3dDimColor();
     }
     items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
 
@@ -1795,20 +1823,27 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         static const char *stereoNamesP0[4] = { "  BG1 Prio 0", "  BG2 Prio 0", "  BG3 Prio 0", "  BG4 Prio 0" };
         static const char *stereoNamesP1[4] = { "  BG1 Prio 1", "  BG2 Prio 1", "  BG3 Prio 1", "  BG4 Prio 1" };
         s_stereoGaugeFirst = (int)items.size();
-        for (int l = 0; l < 4; l++) {
-            AddMenuGauge(items, stereoNamesP0[l], -8, 8, *stereoEditDepth(l),
-                [l]( int val ) { if (CheckAndUpdate( *stereoEditDepth(l), val )) s_stereoPreviewDirty = true; }, true, true);
-            AddMenuGauge(items, stereoNamesP1[l], -8, 8, *stereoEditDepthP1(l),
-                [l]( int val ) { if (CheckAndUpdate( *stereoEditDepthP1(l), val )) s_stereoPreviewDirty = true; }, true, true);
+        s_stereoGaugeCount = 0;
+        struct GaugeRow { const char *name; int layer; int prio; };
+        static const GaugeRow rows[12] = {
+            { stereoNamesP0[0], 0, 0 }, { stereoNamesP1[0], 0, 1 },
+            { stereoNamesP0[1], 1, 0 }, { stereoNamesP1[1], 1, 1 },
+            { stereoNamesP0[2], 2, 0 }, { stereoNamesP1[2], 2, 1 },
+            { stereoNamesP0[3], 3, 0 }, { stereoNamesP1[3], 3, 1 },
+            { "  Sprites Prio 0", 4, 0 }, { "  Sprites Prio 1", 4, 1 },
+            { "  Sprites Prio 2", 4, 2 }, { "  Sprites Prio 3", 4, 3 },
+        };
+        for (int r = 0; r < 12; r++) {
+            int layer = rows[r].layer, prio = rows[r].prio;
+            bool used = stereo3dRowUsed(layer, prio);
+            if (!used && settings3DS.StereoHideUnused) continue;
+            AddMenuGauge(items, rows[r].name, -8, 8, *stereo3dGaugeValue(layer, prio),
+                [layer, prio]( int val ) { if (CheckAndUpdate( *stereo3dGaugeValue(layer, prio), val )) s_stereoPreviewDirty = true; }, true, true);
+            if (!used) items.back().TextColor = stereo3dDimColor();
+            s_stereoGaugeLayer[s_stereoGaugeCount] = layer;
+            s_stereoGaugePrio[s_stereoGaugeCount] = prio;
+            s_stereoGaugeCount++;
         }
-        AddMenuGauge(items, "  Sprites Prio 0"_s, -8, 8, *stereoEditDepth(4),
-            []( int val ) { if (CheckAndUpdate( *stereoEditDepth(4), val )) s_stereoPreviewDirty = true; }, true, true);
-        AddMenuGauge(items, "  Sprites Prio 1"_s, -8, 8, *stereoEditDepthP1(4),
-            []( int val ) { if (CheckAndUpdate( *stereoEditDepthP1(4), val )) s_stereoPreviewDirty = true; }, true, true);
-        AddMenuGauge(items, "  Sprites Prio 2"_s, -8, 8, *stereoEditDepthOBJHi(0),
-            []( int val ) { if (CheckAndUpdate( *stereoEditDepthOBJHi(0), val )) s_stereoPreviewDirty = true; }, true, true);
-        AddMenuGauge(items, "  Sprites Prio 3"_s, -8, 8, *stereoEditDepthOBJHi(1),
-            []( int val ) { if (CheckAndUpdate( *stereoEditDepthOBJHi(1), val )) s_stereoPreviewDirty = true; }, true, true);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Editing a gauge spotlights its layer on the game"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  screen, moving live. Hold X to see the full scene."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  + pops out of the screen, - sinks into it."_s, ""_s);
@@ -1878,6 +1913,17 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             });
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Splitting a BG's two priorities uncovers a strip that"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  belongs to neither; this paints it with the far one."_s, ""_s);
+        AddMenuCheckbox(items, "  Hide Unused Layers"_s, settings3DS.StereoHideUnused != 0,
+            []( int val ) {
+                int v = val ? 1 : 0;
+                if (CheckAndUpdate( settings3DS.StereoHideUnused, v )) {
+                    settings3DS.isDirty = true;
+                    menu3dsMarkTabDirty(TAB_3D);   // rebuild with the rows filtered
+                }
+            });
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Rows the paused screen did not draw are dimmed; this"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  hides them instead. Hidden layers keep their depth -"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  pause on a screen that uses them to edit."_s, ""_s);
         AddMenuDisabledOption(items, ""_s);
 
         AddMenuHeader2(items, "Tools"_s);
@@ -2464,6 +2510,9 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
         // 0 = Auto, 1 = Full, 2 = Light and adopts Auto for those files
         if (!writeMode && detectedConfigVersion < 2.6f)
             settings3DS.StereoBlurQuality = 0;
+    }
+    if (writeMode || detectedConfigVersion >= 2.7f) {
+        config3dsReadWriteInt32(stream, writeMode, "StereoHideUnused=%d\n", &settings3DS.StereoHideUnused, 0, 1);
     }
 
     char formatBuf[64];
