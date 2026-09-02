@@ -1611,44 +1611,6 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     AddMenuDisabledOption(items, ""_s);
 
     if (gpu3dsIs3DAvailable()) {
-        AddMenuHeader2(items, "Settings"_s);
-        AddMenuPicker(items, "  Slider Response"_s,
-            "Discrete: shifts snap to whole pixels - layers always move as one solid block, but the slider steps through few levels. Continuous: smooth analog response; at partial slider a layer can visibly split. At FULL slider both modes are identical."_s,
-            makePickerOptions({"Discrete (solid layers)", "Continuous (smooth)"}),
-            settings3DS.StereoShiftMode, DIALOG_TYPE_INFO, true,
-            []( int val ) { CheckAndUpdate( settings3DS.StereoShiftMode, val ); });
-        AddMenuPicker(items, "  Edge Cleanup"_s,
-            "The per-layer parallax corrupts a few columns at the screen edges. Trim narrows the game window (scale kept); Zoom crops them away, absorbed by the stretch; Off shows the raw edges. Applies to the whole game - every layer, every profile."_s,
-            makePickerOptions({"Off", "Trim", "Zoom"}), settings3DS.StereoEdgeMode, DIALOG_TYPE_INFO, true,
-            []( int val ) {
-                if (CheckAndUpdate( settings3DS.StereoEdgeMode, val )) {
-                    settings3DS.isDirty = true;
-                    settings3dsStereoApplyDefault();
-                    menu3dsSetScreenDirty();
-                }
-            });
-        AddMenuPicker(items, "  Blur Quality"_s,
-            "Auto: Full while the game holds its frame rate, Light as soon as frames start dropping, back to Full after a few clean seconds. Full: two ghost copies smear both sides - the softest look. Light: one ghost per frame, alternating sides between frames and eyes - half the blur's cost.",
-            makePickerOptions({"Auto (Full, Light under load)", "Full (two ghosts)", "Light (one, faster)"}),
-            settings3DS.StereoBlurQuality, DIALOG_TYPE_INFO, true,
-            []( int val ) {
-                if (CheckAndUpdate( settings3DS.StereoBlurQuality, val )) {
-                    settings3DS.isDirty = true;
-                    s_stereoPreviewDirty = true;
-                }
-            });
-        AddMenuCheckbox(items, "  Fill Priority Gaps"_s, settings3DS.StereoFillGaps != 0,
-            []( int val ) {
-                int v = val ? 1 : 0;
-                if (CheckAndUpdate( settings3DS.StereoFillGaps, v )) {
-                    settings3DS.isDirty = true;
-                    stereo3dRestorePausedLook();   // live, like the layer toggles
-                }
-            });
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Splitting a BG's two priorities uncovers a strip that"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  belongs to neither; this paints it with the far one."_s, ""_s);
-        AddMenuDisabledOption(items, ""_s);
-
         AddMenuHeader2(items, "Scene Profiles"_s);
 
         if (s_stereoEditIdx >= settings3DS.StereoProfilesCount)
@@ -1845,6 +1807,44 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         s_stereoFxLast = (int)items.size();
 
         AddMenuDisabledOption(items, ""_s);
+        AddMenuHeader2(items, "Settings"_s);
+        AddMenuPicker(items, "  Slider Response"_s,
+            "Discrete: shifts snap to whole pixels - layers always move as one solid block, but the slider steps through few levels. Continuous: smooth analog response; at partial slider a layer can visibly split. At FULL slider both modes are identical."_s,
+            makePickerOptions({"Discrete (solid layers)", "Continuous (smooth)"}),
+            settings3DS.StereoShiftMode, DIALOG_TYPE_INFO, true,
+            []( int val ) { CheckAndUpdate( settings3DS.StereoShiftMode, val ); });
+        AddMenuPicker(items, "  Edge Cleanup"_s,
+            "The per-layer parallax corrupts a few columns at the screen edges. Trim narrows the game window (scale kept); Zoom crops them away, absorbed by the stretch; Off shows the raw edges. Applies to the whole game - every layer, every profile."_s,
+            makePickerOptions({"Off", "Trim", "Zoom"}), settings3DS.StereoEdgeMode, DIALOG_TYPE_INFO, true,
+            []( int val ) {
+                if (CheckAndUpdate( settings3DS.StereoEdgeMode, val )) {
+                    settings3DS.isDirty = true;
+                    settings3dsStereoApplyDefault();
+                    menu3dsSetScreenDirty();
+                }
+            });
+        AddMenuPicker(items, "  Blur Quality"_s,
+            "Auto: Full while the game holds its frame rate, Light as soon as frames start dropping, back to Full after a few clean seconds. Full: two ghost copies smear both sides - the softest look. Light: one ghost per frame, alternating sides between frames and eyes - half the blur's cost.",
+            makePickerOptions({"Auto (Full, Light under load)", "Full (two ghosts)", "Light (one, faster)"}),
+            settings3DS.StereoBlurQuality, DIALOG_TYPE_INFO, true,
+            []( int val ) {
+                if (CheckAndUpdate( settings3DS.StereoBlurQuality, val )) {
+                    settings3DS.isDirty = true;
+                    s_stereoPreviewDirty = true;
+                }
+            });
+        AddMenuCheckbox(items, "  Fill Priority Gaps"_s, settings3DS.StereoFillGaps != 0,
+            []( int val ) {
+                int v = val ? 1 : 0;
+                if (CheckAndUpdate( settings3DS.StereoFillGaps, v )) {
+                    settings3DS.isDirty = true;
+                    stereo3dRestorePausedLook();   // live, like the layer toggles
+                }
+            });
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Splitting a BG's two priorities uncovers a strip that"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  belongs to neither; this paints it with the far one."_s, ""_s);
+        AddMenuDisabledOption(items, ""_s);
+
         AddMenuHeader2(items, "Tools"_s);
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
