@@ -237,8 +237,9 @@ linearly with the distance beyond its edge:
 * **Haze** washes them out toward the horizon (atmospheric perspective).
 * **Blur** is a depth-of-field: it softens layers behind the zone **and**
   layers popping out in front of it. It is the most expensive effect
-  (extra draw passes); if a game drops frames with it, the **Blur
-  Quality: Light** option in the tab's Settings halves that cost.
+  (extra draw passes). **Blur Quality** in the tab's Settings defaults to
+  **Auto**: full quality while the game holds its frame rate, a lighter
+  single-ghost blur (half the cost) as soon as frames start dropping.
 
 So "how strong is the effect on this layer" = gauge value x how far the
 layer's depth sits from the focus zone. A layer at the zone's edge gets

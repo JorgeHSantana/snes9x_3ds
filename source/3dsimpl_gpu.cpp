@@ -642,7 +642,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // persistence fuses the alternation - the same trick the
                 // SNES flicker-transparency games play. Alpha is boosted
                 // to keep the perceived smear weight close to Full.
-                bool light = settings3DS.StereoBlurQuality == 1;
+                bool light = settings3DS.StereoBlurQuality == 2 ||
+                    (settings3DS.StereoBlurQuality == 0 && GPU3DSExt.blurAutoLight);
                 int lightSide = ((IPPU.FrameCount ^ (GPU3DS.stereoRightPass ? 1u : 0u)) & 1u);
                 GPU3DS.stereoGhostPass = true;
                 if (light) {

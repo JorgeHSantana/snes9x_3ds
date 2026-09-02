@@ -91,6 +91,19 @@ Other mechanics:
 * Hi-res modes 5/6 have dedicated draw paths (with a texture-offset downsample trick); brightness-0 vertical sections trim entire render segments (`S9xTrimBlackScanlines`).
 * Mode 7: one textured line-quad per scanline with per-line matrix math from `LineMatrixData[]`; EXTBG draws BG1 twice at two depths with an alpha-test priority split; a Citra workaround issues a dummy 16-byte texture copy to flush the baked surface.
 
+### Blur Quality (Full / Light / Auto)
+
+Depth-of-field blur is ghost passes: the same tiles drawn again, shifted
+and translucent. **Full** draws two ghosts per blurred tier (one per
+side); **Light** draws one, alternating side per frame and per eye - half
+the blur's draw and vertex cost (issue #71 numbers: +4 draws / +3,952
+verts vs +2 / +1,976 for one split layer). **Auto** (default) is Full
+until the frame loop's load-driven frameskip fires: `3dsblurauto.h` keeps
+a 60-frame window, switches to Light at 2+ skipped frames, and returns to
+Full after three clean windows (any skip re-arms the cooldown). The
+verdict lives in `GPU3DSExt.blurAutoLight`, fed per emulated frame from
+`impl3dsRunOneFrame` BEFORE the MSU-1 FMV pacing rewrites the skip flag.
+
 ## Final composition
 
 `impl3dsSceneRender()` (in `3dsimpl.cpp`, see [Platform Layer](platform-layer.md)) draws `SNES_MAIN` to the top screen with stretch/crop/overscan/filter settings, plus the background image, scanline texture, bezel overlay and notifications — twice with ±IOD offsets when stereoscopic 3D is active. The menu system draws the bottom screen in software (see [Menu and UI](menu-ui.md)).

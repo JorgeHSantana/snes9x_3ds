@@ -279,10 +279,12 @@ typedef struct {
     int                 StereoDepthOBJHi[2];   // sprite priority 2/3 depths (issue #60;
                                                // priorities 0/1 ride [4] of the two
                                                // arrays above, like the BGs)
-    int                 StereoBlurQuality;     // 0 = full (two ghost passes); 1 = light
-                                               // (one ghost, side alternating per frame
-                                               // and per eye - ~33% cheaper blur for
-                                               // section-heavy games, issue #71)
+    int                 StereoBlurQuality;     // 0 = auto (Full until the frame loop skips
+                                               // frames, then Light, back after clean
+                                               // windows - 3dsblurauto.h); 1 = full (two
+                                               // ghost passes); 2 = light (one ghost, side
+                                               // alternating per frame and per eye - half
+                                               // the blur's cost, issue #71)
     int                 StereoFillGaps;        // 1 = fill the strip a BG's two priorities
                                                // uncover when their depths split, by drawing
                                                // the priority-0 tiles a second time at the

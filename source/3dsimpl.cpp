@@ -32,6 +32,7 @@
 #include "3dsrewind.h"
 #include "3dsimpl_tilecache.h"
 #include "3dsimpl_gpu.h"
+#include "3dsblurauto.h"
 
 // Compiled shaders
 #include "shader_tiles_shbin.h"
@@ -947,8 +948,20 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 // Executes one frame.
 //---------------------------------------------------------
 
+static BlurAutoState s_blurAuto;   // zero-init == blurAutoReset
+
 void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimmed)
 {
+	// Blur Quality Auto (issue #71): the LOAD-driven frameskip decides -
+	// sampled here, before the MSU-1 FMV pacing below also flips
+	// skipDrawingFrame for reasons that are not load
+	{
+		bool wasLight = GPU3DSExt.blurAutoLight;
+		GPU3DSExt.blurAutoLight = blurAutoStep(&s_blurAuto, skipDrawingFrame);
+		if (GPU3DSExt.blurAutoLight != wasLight)
+			log3dsWrite("[blur] auto -> %s", GPU3DSExt.blurAutoLight ? "light" : "full");
+	}
+
 	// per-scene 3D profiles (issue #23): match the PPU scene signature and
 	// swap the stereo config with hysteresis + lerp
 	settings3dsStereoFrameTick();

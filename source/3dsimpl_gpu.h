@@ -194,6 +194,9 @@ typedef struct
     bool            mode7SectionsModified[4];
     bool            mode7TilesModified;
 
+    bool            blurAutoLight;  // Blur Quality Auto verdict (issue #71): true while
+                                    // the frame loop reports load - fed per emulated
+                                    // frame from 3dsblurauto.h, read by the ghost passes
     SRender2xState  render2x;       // 512px internal SNES render path:
                                     // true hires for Mode 5, finer Mode 7 sampling, doubled geometry elsewhere
     int             renderWidth;    // 512 when render2x.enabled, else 256
