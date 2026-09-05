@@ -29,7 +29,7 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   (#60 A+B); the 3D Stereo tab + live editor: spotlight, real-time gauges,
   Y peek, pause-caption restore (#61); sprites split into four priorities
   (#60).
-* **Stable v2.1 (2026-09-05)** — the 3D block promoted after Jorge's
+* **Stable v2.1 (2026-09-05, 254369f)** — the 3D block promoted after Jorge's
   hardware pass ("ficou muito bom"): per-priority depth (#60), live editor
   (#61), Slider Response (#65), Fill Priority Gaps (#70), per-priority
   effects + Blur Quality Auto/Full/Light with adaptive hysteresis (#71),

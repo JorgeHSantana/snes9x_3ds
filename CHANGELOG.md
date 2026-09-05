@@ -3,6 +3,10 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
+_Nothing yet._
+
+## Stable v2.1 (2026-09-05, 254369f)
+
 ### Features
 * **Per-priority stereo depth** (issue #60): each background's two tile
   priorities and each of the four sprite priorities get their own depth
