@@ -377,6 +377,10 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         }, MenuItemType::Action, "  Take Screenshot"_s, ""_s);
 
         AddMenuHeader2(items, "Save and Load"_s);
+        AddMenuCheckbox(items, "  Auto Save / Auto Load"_s, settings3DS.AutoSaveLoad,
+            []( int val ) { CheckAndUpdateToggle( settings3DS.AutoSaveLoad, val ); });
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  Saves the game when the menu opens, on HOME, lid close"_s, ""_s);
+        items.emplace_back(nullptr, MenuItemType::Textarea, "  and exit; loads that save when the game starts."_s, ""_s);
         AddMenuCheckbox(items, "  Create screenshot when saving"_s, settings3DS.SaveStateScreenshots,
             []( int val ) {
                 bool wasEnabled = settings3DS.SaveStateScreenshots;
@@ -1538,7 +1542,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     AddMenuCheckbox(items, "  Automatically save state on exit, load state on start"_s, settings3DS.AutoSavestate,
         []( int val ) { CheckAndUpdateToggle( settings3DS.AutoSavestate, val ); });
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  (creates an *.auto.frz file inside \"savestates\" directory)"_s, ""_s);
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  (this game only; the global switch is in the Emulator tab)"_s, ""_s);
 
     AddMenuPicker(items, "  SRAM Auto-Save Delay"_s, "Periodically writes SRAM to the SD card.\nEach write can briefly freeze the game.\nDisabled still saves on exit/sleep."_s, makeOptionsForAutoSaveSRAMDelay(), settings3DS.SRAMSaveInterval, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.SRAMSaveInterval, val ); });
@@ -2528,6 +2532,9 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     if (writeMode || detectedConfigVersion >= 2.7f) {
         config3dsReadWriteInt32(stream, writeMode, "StereoHideUnused=%d\n", &settings3DS.StereoHideUnused, 0, 1);
     }
+    if (writeMode || detectedConfigVersion >= 2.8f) {
+        config3dsReadWriteEnum(stream, writeMode, "AutoSaveLoad=%d\n", &settings3DS.AutoSaveLoad, 0, 1);
+    }
 
     char formatBuf[64];
     snprintf(formatBuf, sizeof(formatBuf), "DefaultDir=%%%zu[^\n]\n", sizeof(settings3DS.defaultDir) - 1);
@@ -2937,8 +2944,8 @@ bool emulatorLoadRom()
         impl3dsDeleteStateScreenshots();
     }
 
-    if (settings3DS.AutoSavestate)
-        impl3dsLoadStateAuto();
+    if (impl3dsAutoSaveActive())
+        impl3dsLoadStateAuto();   // issue #72: the game starts where it was left
 
     float targetFps = (float)TICKS_PER_SEC / settings3DS.TicksPerFrame;
         notif3dsFpsUpdate(targetFps, settings3DS.GameScreen);
@@ -3487,6 +3494,12 @@ void showMenu() {
             menu3dsMarkTabDirty(TAB_3D);
         }
     }
+
+    // Auto Save (issue #72): opening the menu is one of the save points -
+    // the game is paused and the mixer idle, so the write costs nothing
+    // visible. HOME already saved in the APT hook; this one is cheap.
+    if (settings3DS.isRomLoaded && impl3dsAutoSaveActive())
+        impl3dsSaveStateAutoFor("menu");
 
     // 3. a game is paused: the 3D tab's used/unused rows describe THIS
     //    pause's frame (Jorge's report: Hide Unused never refreshed)

@@ -7,6 +7,7 @@
 #include "3dsmenu.h"
 #include "3dsexit.h"
 #include "3dsmsu.h"
+#include "3dsimpl.h"
 
 aptHookCookie hookCookie;
 
@@ -27,6 +28,11 @@ void handleAptHook(APT_HookType hook, void* param)
                 if (settings3DS.ForceSRAMWriteOnPause || CPU.SRAMModified || CPU.AutoSaveTimer) {
                     S9xAutoSaveSRAM();
                 }
+                // Auto Save (issue #72): HOME and the lid are the last
+                // chance before a power-off. The hook runs on the main
+                // thread at a frame boundary (libctru calls it from
+                // aptMainLoop), so the snapshot is consistent.
+                impl3dsSaveStateAutoFor(hook == APTHOOK_ONSUSPEND ? "home" : "sleep");
 
                 // HOME parks in the pause menu; closing the lid resumes
                 // play seamlessly on wake instead (issue #45) - waking

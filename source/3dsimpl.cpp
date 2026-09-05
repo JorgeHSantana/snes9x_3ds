@@ -956,6 +956,8 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 	// sampled here, before the MSU-1 FMV pacing below also flips
 	// skipDrawingFrame for reasons that are not load
 	{
+		if (firstFrame)
+			blurAutoReset(&s_blurAuto);   // warm-up: a load's first frames skip for non-load reasons
 		bool wasLight = GPU3DSExt.blurAutoLight;
 		GPU3DSExt.blurAutoLight = blurAutoStep(&s_blurAuto, skipDrawingFrame);
 		if (GPU3DSExt.blurAutoLight != wasLight)
@@ -1153,9 +1155,14 @@ bool impl3dsSaveStateSlot(int slotNumber)
     return false;
 }
 
-bool impl3dsSaveStateAuto()
+bool impl3dsAutoSaveActive()
 {
-    if (!settings3DS.isRomLoaded || !settings3DS.AutoSavestate) 
+    return settings3DS.AutoSaveLoad || settings3DS.AutoSavestate;
+}
+
+bool impl3dsSaveStateAutoFor(const char *reason)
+{
+    if (!settings3DS.isRomLoaded || !impl3dsAutoSaveActive())
         return true;
 
     char path[PATH_MAX];
@@ -1166,8 +1173,15 @@ bool impl3dsSaveStateAuto()
         impl3dsLogBrokenAudioSignatureContext("save-auto", path);
         return true;
     }
-	
-    return impl3dsSaveState(path);
+
+    bool ok = impl3dsSaveState(path);
+    log3dsWrite("[autosave] %s: %s", reason, ok ? "saved" : "FAILED");
+    return ok;
+}
+
+bool impl3dsSaveStateAuto()
+{
+    return impl3dsSaveStateAutoFor("exit");
 }
 
 bool impl3dsSaveState(const char* filename)

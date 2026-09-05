@@ -29,8 +29,13 @@ struct BlurAutoState
     int  clean;        // consecutive clean windows while Light
     int  required;     // clean windows Full needs right now (adapts)
     int  fullWindows;  // windows since the last return to Full (saturates)
+    int  warmup;       // frames still ignored after a (re)start: the first
+                       // frames after a ROM or state load skip for reasons
+                       // that are not load (caches filling, threads starting)
     bool light;        // current verdict
 };
+
+#define BLUR_AUTO_WARMUP_FRAMES 60
 
 static inline void blurAutoReset(BlurAutoState *s)
 {
@@ -39,6 +44,7 @@ static inline void blurAutoReset(BlurAutoState *s)
     s->clean = 0;
     s->required = BLUR_AUTO_CLEAN_BASE;
     s->fullWindows = BLUR_AUTO_STABLE_WINDOWS;   // a fresh start is not a relapse
+    s->warmup = BLUR_AUTO_WARMUP_FRAMES;
     s->light = false;
 }
 
@@ -47,6 +53,10 @@ static inline bool blurAutoStep(BlurAutoState *s, bool skippedFrame)
 {
     if (s == nullptr)
         return false;
+    if (s->warmup > 0) {
+        s->warmup--;
+        skippedFrame = false;
+    }
 
     if (!s->light && skippedFrame) {
         // Full just missed a frame: Light now. How soon after the last

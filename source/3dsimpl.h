@@ -122,6 +122,10 @@ bool impl3dsSaveStateSlot(int slotNumber);
 // Returns true if the state has been saved successfully.
 //---------------------------------------------------------
 bool impl3dsSaveStateAuto();
+// Auto Save / Auto Load (issue #72): the global switch OR the per-game one
+bool impl3dsAutoSaveActive();
+// same as impl3dsSaveStateAuto, tagging the trigger in the log
+bool impl3dsSaveStateAutoFor(const char *reason);
 
 
 //---------------------------------------------------------

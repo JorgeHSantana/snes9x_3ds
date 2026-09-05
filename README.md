@@ -122,6 +122,15 @@ first install. In the pause menu, **Emulator tab -> UPDATES**:
   the SD card, the update runs with the memory to itself, and the next
   launch (the new build) resumes the game exactly where it was.
 
+## Auto Save / Auto Load
+
+**Emulator tab -> Save and Load -> Auto Save / Auto Load** (off by default).
+With it on, the game is saved to `savestates/<rom>.auto.frz` whenever the
+menu opens, when you press HOME or close the lid, and on exit; the next
+time that game starts it loads that save. Nothing is written during
+gameplay, so the SD card sees one small file per pause. The older
+per-game "Automatically save state on exit" option still works on its own.
+
 ## Rewind: how to use
 
 Bind the Rewind hotkey in the **Controls** tab (the Emulator menu also has an

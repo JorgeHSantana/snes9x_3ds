@@ -160,6 +160,11 @@ typedef struct {
     int UpdateChannel;      // 0 = stable releases, 1 = nightly builds
     bool UpdateAutoCheck;   // check for a new build when the emulator starts
 
+    // --- AUTO SAVE / AUTO LOAD (issue #72) ---
+    bool AutoSaveLoad;      // global: save a state when the menu opens, on HOME,
+                            // lid close and exit; load it when the game starts.
+                            // The per-game AutoSavestate below still works alone.
+
     // --- FILE MENU ---
     char defaultDir[PATH_MAX];
     char lastSelectedDir[PATH_MAX];

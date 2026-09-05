@@ -18,31 +18,41 @@ static int windowsToFull(BlurAutoState *s)
     return -1;
 }
 
+// every helper below starts past the warm-up so the rules are tested bare
+static void fresh(BlurAutoState *s) { blurAutoReset(s); s->warmup = 0; }
+
+TEST_CASE("blur auto: skips during the warm-up after a start are ignored") {
+    BlurAutoState s; blurAutoReset(&s);
+    for (int i = 0; i < BLUR_AUTO_WARMUP_FRAMES; i++)
+        CHECK(blurAutoStep(&s, true) == false);
+    CHECK(blurAutoStep(&s, true) == true);   // first frame past the warm-up counts
+}
+
 TEST_CASE("blur auto: null state is Full") {
     CHECK(blurAutoStep(nullptr, true) == false);
 }
 
 TEST_CASE("blur auto: clean frames stay Full") {
-    BlurAutoState s; blurAutoReset(&s);
+    BlurAutoState s; fresh(&s);
     for (int w = 0; w < 50; w++)
         CHECK(runWindow(&s, 0) == false);
 }
 
 TEST_CASE("blur auto: one skipped frame flips to Light immediately") {
-    BlurAutoState s; blurAutoReset(&s);
+    BlurAutoState s; fresh(&s);
     for (int i = 0; i < 17; i++) CHECK(blurAutoStep(&s, false) == false);
     CHECK(blurAutoStep(&s, true) == true);
     CHECK(blurAutoStep(&s, false) == true);
 }
 
 TEST_CASE("blur auto: Full returns after the base run of clean windows") {
-    BlurAutoState s; blurAutoReset(&s);
+    BlurAutoState s; fresh(&s);
     blurAutoStep(&s, true);
     CHECK(windowsToFull(&s) == BLUR_AUTO_CLEAN_BASE);
 }
 
 TEST_CASE("blur auto: a skip while Light restarts the clean run") {
-    BlurAutoState s; blurAutoReset(&s);
+    BlurAutoState s; fresh(&s);
     blurAutoStep(&s, true);
     CHECK(runWindow(&s, 0) == true);
     CHECK(runWindow(&s, 0) == true);
@@ -51,7 +61,7 @@ TEST_CASE("blur auto: a skip while Light restarts the clean run") {
 }
 
 TEST_CASE("blur auto: a quick relapse doubles the proof Full needs, up to the cap") {
-    BlurAutoState s; blurAutoReset(&s);
+    BlurAutoState s; fresh(&s);
     blurAutoStep(&s, true);
     CHECK(windowsToFull(&s) == 3);
     runWindow(&s, 0);                     // 1 window in Full, then a skip: relapse
@@ -66,7 +76,7 @@ TEST_CASE("blur auto: a quick relapse doubles the proof Full needs, up to the ca
 }
 
 TEST_CASE("blur auto: a long stable Full resets the proof to base") {
-    BlurAutoState s; blurAutoReset(&s);
+    BlurAutoState s; fresh(&s);
     blurAutoStep(&s, true); windowsToFull(&s);
     blurAutoStep(&s, true); CHECK(windowsToFull(&s) == 6);      // escalated
     for (int w = 0; w < BLUR_AUTO_STABLE_WINDOWS; w++) CHECK(runWindow(&s, 0) == false);
@@ -75,7 +85,7 @@ TEST_CASE("blur auto: a long stable Full resets the proof to base") {
 }
 
 TEST_CASE("blur auto: a relapse between the relapse and stable marks keeps the current proof") {
-    BlurAutoState s; blurAutoReset(&s);
+    BlurAutoState s; fresh(&s);
     blurAutoStep(&s, true); windowsToFull(&s);
     blurAutoStep(&s, true); CHECK(windowsToFull(&s) == 6);
     for (int w = 0; w < BLUR_AUTO_RELAPSE_WINDOWS + 5; w++) runWindow(&s, 0);
@@ -84,7 +94,7 @@ TEST_CASE("blur auto: a relapse between the relapse and stable marks keeps the c
 }
 
 TEST_CASE("blur auto: reset clears everything") {
-    BlurAutoState s; blurAutoReset(&s);
+    BlurAutoState s; fresh(&s);
     blurAutoStep(&s, true); windowsToFull(&s); blurAutoStep(&s, true);
     blurAutoReset(&s);
     CHECK(s.light == false); CHECK(s.required == BLUR_AUTO_CLEAN_BASE);
