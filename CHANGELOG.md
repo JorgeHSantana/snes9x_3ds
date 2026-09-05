@@ -4,6 +4,56 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
+* **Per-priority stereo depth** (issue #60): each background's two tile
+  priorities and each of the four sprite priorities get their own depth
+  gauge, resolved in the vertex shader (no extra draw calls). Fade, haze
+  and blur follow the priority, not the layer.
+* **Live 3D editor** in the 3D Stereo tab (issue #61): focusing a gauge
+  spotlights exactly its tiles on the game screen (the rest of the scene
+  stays visible, dimmed), values move the paused frame in real time,
+  holding X previews the full scene, Focus/Effects gauges preview live,
+  and Enable/Disable Layers applies instantly.
+* **Fill Priority Gaps** (issue #70, rcmz's idea): splitting a
+  background's priorities uncovers a strip that belongs to neither; the
+  farther priority is extended to paint it. On by default.
+* **Slider Response** (issue #65): Discrete (whole-pixel shifts, layers
+  move as one block - default) or Continuous (analog feel).
+* **Blur Quality** (issue #71): Auto (default) draws the full two-ghost
+  blur while the game holds its frame rate, switches to a one-ghost Light
+  blur the moment a frame drops, and returns after a run of clean seconds
+  that grows if it has to switch again soon. Full and Light can be forced.
+  Light halves the blur's draw cost.
+* **Unused rows dimmed / Hide Unused Layers**: layers and priorities the
+  paused screen did not draw are dimmed in the 3D tab (still editable);
+  the optional Hide Unused Layers removes them. Re-evaluated on every pause.
+* **Shareable .3d files**: per-game 3D settings are now named after the
+  ROM's internal title (`stereo3d/<title>.3d`), so a file matches the same
+  game whatever it is called - regions and revisions share it. Existing
+  filename-based files migrate automatically on first load.
+* **Updating mid-game** (issues #66, #73): the session is parked in a
+  savestate, the game is unloaded so the download has the machine to
+  itself, and it reloads right where it was - in the same session, or on
+  the next launch of the new build if you exit.
+* 3D tab: Settings block sits above Tools; peek moved from Y to X (Y is
+  the paging combo); download speed hidden at 100%.
+
+### Fixes
+* Blur ghosts were smearing every priority of a split layer; they are
+  now masked to their own priority.
+* Blur artifacts at some levels: ghost shifts round to whole pixels in
+  both slider modes.
+* Fade/haze/blur were keyed to priority 0 of a layer; effect groups now
+  apply per priority (and merge by result, so Butoden-style split screens
+  do not pay for no-op passes).
+* Dialogs are sized to their wrapped text (Slider Response explanation,
+  ROM loading, Update Installed).
+* Update check could fail with an allocation error while a game was
+  loaded: the network buffer is reserved at boot.
+* Rebuilt menu tabs keep the cursor on the same row by identity.
+
+## Stable v2.0 (2026-08-31, 21481ff)
+
+### Features
 * **Self-updater** (issue #64): the emulator updates itself from the menu.
   Settings tab > Updates: pick the channel (Stable or Nightly), check on
   demand, or enable "Check on Startup" to be offered new builds on boot.

@@ -28,7 +28,13 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   shifts + Slider Response option (#65); per-priority BG depth, shader-side
   (#60 A+B); the 3D Stereo tab + live editor: spotlight, real-time gauges,
   Y peek, pause-caption restore (#61); sprites split into four priorities
-  (#60). Pending Jorge's hardware validation to close #60/#61/#65.
+  (#60).
+* **Stable v2.1 (2026-09-05)** — the 3D block promoted after Jorge's
+  hardware pass ("ficou muito bom"): per-priority depth (#60), live editor
+  (#61), Slider Response (#65), Fill Priority Gaps (#70), per-priority
+  effects + Blur Quality Auto/Full/Light with adaptive hysteresis (#71),
+  dimmed/hidden unused rows, .3d keyed by ROM title with migration,
+  update mid-game with in-session reload (#66, #73), dialog sizing.
 
 ## Issue ledger
 
@@ -93,17 +99,17 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
 | 57 | DBZ Hyper Dimension lento (SA-1) | ABERTA | Speedhacks aplicam ("SKIPPED bytes differ" era alarme falso); falta idle-loop — probe caça-loops planejado |
 | 58 | Edge Cleanup por cena com "Global" | ABERTA | Parcialmente absorvida: edge virou game-global; revisar se o por-cena ainda é desejado |
 | 59 | Stuttering progressivo no Old | ABERTA | NÃO é memory leak; 3 causas: log com fflush por linha (+storms de [sig]), capturas de 20ms, autosave de 225-259ms. Fixes propostos |
-| 60 | Profundidade por PRIORIDADE (rcmz) | ABERTA | ENTREGUE nas nightlies: cascata de 4 tiers no shader, BGs P0/P1 + sprites Prio 0-3, zero draws extras; aguarda validação em hardware p/ fechar |
-| 61 | Editor 3D ao vivo (rcmz, harmônico) | ABERTA | ENTREGUE: aba 3D Stereo, spotlight por prioridade, gauges em tempo real, Y peek, caption restaurada; aguarda validação p/ fechar |
+| 60 | Profundidade por PRIORIDADE (rcmz) | FECHADA | ENTREGUE nas nightlies: cascata de 4 tiers no shader, BGs P0/P1 + sprites Prio 0-3, zero draws extras; aguarda validação em hardware p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
+| 61 | Editor 3D ao vivo (rcmz, harmônico) | FECHADA | ENTREGUE: aba 3D Stereo, spotlight por prioridade, gauges em tempo real, Y peek, caption restaurada; aguarda validação p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
 | 62 | Perspectiva real no Mode 7 | ABERTA | Planejada (depth por scanline via matriz; disclaimer Old; integrar crop/stretch) |
 | 63 | SuperFX +10-20% | ABERTA | Round 1 merged (série Wyatt-James, polígonos do Star Fox ok); "melhorou mas ainda lento" → round 2 via caça-loops |
 | 64 | Updater integrado | FECHADA | Entregue e validado em hardware (primeira OTA do fork): curl+mbedtls, worker thread, canais isolados, janela de 10min no auto-check |
-| 65 | Deslocamento fracionário racha camadas | ABERTA | Causa-raiz: slider contínuo × arredondamento por seção; fix: roundf por camada + edge crop coerente + opção Discrete/Continuous; aguarda validação p/ fechar |
-| 66 | Update falha com jogo carregado | ABERTA | Proposta na issue: savestate temporário no SD → liberar ROM → update → reload no fim/erro |
+| 65 | Deslocamento fracionário racha camadas | FECHADA | Causa-raiz: slider contínuo × arredondamento por seção; fix: roundf por camada + edge crop coerente + opção Discrete/Continuous; aguarda validação p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
+| 66 | Update falha com jogo carregado | FECHADA | Proposta na issue: savestate temporário no SD → liberar ROM → update → reload no fim/erro; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
 | 67 | 3dsmain.cpp virou monólito | ABERTA | Decompor em módulos, 1 por PR; começar pelo loader/saver .3d (destrava testes do parser) |
 | 68 | Core legado sem rede de proteção | ABERTA | Caracterização nos pontos tocados: funções puras testadas p/ macros de stereo, harness de hash determinístico p/ bisects |
 | 69 | Funil de validação = 1 humano + hardware | ABERTA | Harness de screenshot-diff no Azahar, savestates versionados, checklist de hardware; PROBE_FORCE_SLIDER via EXTRA_DEFINES já entregue |
-| 70 | Gap entre prioridades de um BG (buraco do pilar MMX3) | ABERTA | ENTREGUE: 'Fill Priority Gaps' (default ON) — extensão nas fronteiras (2 direções + hires); validada no state do pilar; falta A/B do Jorge no hardware p/ fechar |
-| 71 | DBZ Super Butoden 2/3 lento com blur/névoa (New e 3DS Mode) | ABERTA | 3 rodadas: fusão de grupos por resultado, fill por-chamada, bases compartilhadas por tint (4→3 passes) + opção Blur Quality Light (1 ghost alternado); 'Old' = 3DS Mode; névoa = flicker do jogo; aguarda reteste do Jorge |
+| 70 | Gap entre prioridades de um BG (buraco do pilar MMX3) | FECHADA | ENTREGUE: 'Fill Priority Gaps' (default ON) — extensão nas fronteiras (2 direções + hires); validada no state do pilar; falta A/B do Jorge no hardware p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
+| 71 | DBZ Super Butoden 2/3 lento com blur/névoa (New e 3DS Mode) | FECHADA | 3 rodadas: fusão de grupos por resultado, fill por-chamada, bases compartilhadas por tint (4→3 passes) + opção Blur Quality Light (1 ghost alternado); 'Old' = 3DS Mode; névoa = flicker do jogo; aguarda reteste do Jorge; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
 | 72 | Auto Save / Auto Load com a linha do tempo, sem castigar o SD | ABERTA | ideia pós-v2.1: retomar com pergunta, fita do rewind persistida na saída (opt-in), gravação só em eventos calmos e atômica |
-| 73 | Update com jogo aberto falha (malloc); fluxo: fechar, atualizar, recarregar na sessão | ENTREGUE | buffer SOC reservado no boot; jogo descarregado durante o download e recarregado do .update.frz na mesma sessão; log do heap; aguarda reteste |
+| 73 | Update com jogo aberto falha (malloc); fluxo: fechar, atualizar, recarregar na sessão | FECHADA | buffer SOC reservado no boot; jogo descarregado durante o download e recarregado do .update.frz na mesma sessão; log do heap; aguarda reteste; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
