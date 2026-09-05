@@ -1,0 +1,22 @@
+{
+  "title": "MMX3 stage-1 pillar, BG1 split (P0 in focus, P1 +4), blur 6 Full - per-priority blur proof",
+  "rom": "sdmc:/snes/vanilla/Mega Man X3.smc",
+  "state": "states/mmx3-pillar.frz",
+  "stereo3d": [
+    { "file": "MEGAMAN X3",
+      "content": "BG1=0\nBG1P1=4\nBG2=0\nBG3=0\nBG4=0\nOBJ=0\nFADE=0\nHAZE=0\nBLUR=6\nFOCUSBACK=-1\nFOCUSFRONT=1\nEDGEMODE=1" }
+  ],
+  "settings": { "StereoBlurQuality": "1" },
+  "wait": 32,
+  "regions": {
+    "city_bg_P0":   [110, 60, 240, 150],
+    "pillar_P1":    [250, 20, 322, 170],
+    "floor_P1":     [80, 180, 320, 225]
+  },
+  "ab_expect": {
+    "city_bg_P0": [0, 0.5],
+    "pillar_P1":  [2, 100],
+    "floor_P1":   [0.5, 100]
+  },
+  "log_expect": ["ROM loaded: MEGAMAN X3"]
+}

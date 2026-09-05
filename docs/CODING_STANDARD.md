@@ -222,3 +222,23 @@ Two consequences worth stating:
 * **Dev journal (diário de bordo)**: every working session appends an entry to `docs/journal/YYYY-MM.md` — date, what was attempted, what shipped, dead ends and *why* they failed, and the validation evidence (game/scene/hardware tested). The journal is append-only; it is where the history lives.
 * A bug whose root cause took real investigation gets its mechanism written down: a journal entry at minimum, and a note in the relevant `docs/*.md` when the constraint is permanent (e.g. "the tile TEV replaces RGB from the texture — vertex RGB never reaches the pixel").
 * **History**: `docs/journal/HISTORY.md` keeps the release timeline (what shipped, with issue refs — full text stays in CHANGELOG.md) and the issue ledger — every issue with its resolution or current plan. Update it whenever an issue opens or closes; journal entries cite issue numbers.
+
+## 13. Validation (mandatory for rendering and 3D changes)
+
+* **Pixel proof before "looks right"**: a change that Azahar can see
+  (layers, priorities, effects, editor preview, dialogs) ships with a
+  scene in `tools/azahar-validate/scenes/` and its diff result in the
+  journal entry - a golden comparison or an A/B between two scenes, per
+  region, in percent of changed pixels. Zero key presses: scenes load
+  through the updater's resume marker.
+* **Hardware is the last mile, not the first**: what only the console
+  validates is the short list in `docs/testing/hardware-checklist.md`
+  (real stereo, Old 3DS performance, Wi-Fi/updater, HOME/lid/power
+  paths). Ask for those ten minutes with the log enabled; do not ask for
+  exploration.
+* **Probe builds are explicit**: `-DPROBE_FORCE_SLIDER` and
+  `-DPROBE_DRAW_STATS` via `EXTRA_DEFINES`, always after `make clean`,
+  and never in `output/` when a nightly is cut from the local tree.
+* **CI is the publisher**: a nightly or stable exists only when the
+  GitHub run is green - after every push, check the run and the release,
+  not the push.
