@@ -191,6 +191,7 @@ void menu3dsSetLastSelectedTabIndex(int index);
 void menu3dsSelectRandomGameIndex(SMenuTab& currentTab, int min, int max, int lastSelected);
 
 void menu3dsSetScreenDirty(bool gameScreen = true, bool secondScreen = false);
+void menu3dsGameScreenPresented();
 
 void menu3dsMarkTabDirty(int tab);
 

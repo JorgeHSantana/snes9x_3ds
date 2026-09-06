@@ -1625,6 +1625,17 @@ static void stereo3dRestorePausedLook()
 {
     settings3dsStereoApplyDefault();
     impl3dsStereoPreviewFrame(-1, -1, true);
+    menu3dsGameScreenPresented();
+}
+
+// menu (re)opened: forget what the last visit drew, so a gauge the cursor
+// still sits on gets its spotlight again instead of the plain pause
+static void stereo3dPreviewForget()
+{
+    s_stereoPreviewShown = false;
+    s_stereoPrevHighlight = -2;
+    s_stereoPrevSlider = -1.0f;
+    s_stereoPreviewDirty = false;
 }
 
 // runs once per menu frame (idle): with the 3D tab focused on a depth
@@ -1683,6 +1694,7 @@ static void stereo3dIdleTick()
     settings3dsStereoApplyProfile(s_stereoEditIdx);
     impl3dsStereoPreviewFrame(wantHighlight, wantPrio, false);
     settings3dsStereoMarkReapply();
+    menu3dsGameScreenPresented();   // the slider redraw would paint the pause over it
     s_stereoPreviewShown = true;
     s_stereoPreviewDirty = false;
     s_stereoPrevHighlight = wantKey;
@@ -1943,15 +1955,21 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             "Discrete: shifts snap to whole pixels - layers always move as one solid block, but the slider steps through few levels. Continuous: smooth analog response; at partial slider a layer can visibly split. At FULL slider both modes are identical."_s,
             makePickerOptions({"Discrete (solid layers)", "Continuous (smooth)"}),
             settings3DS.StereoShiftMode, DIALOG_TYPE_INFO, true,
-            []( int val ) { CheckAndUpdate( settings3DS.StereoShiftMode, val ); });
+            []( int val ) {
+                if (CheckAndUpdate( settings3DS.StereoShiftMode, val )) {
+                    stereo3dRestorePausedLook();   // live: the shift rounding shows at partial slider
+                    s_stereoPreviewDirty = true;
+                }
+            });
         AddMenuPicker(items, "  Edge Cleanup"_s,
             "The per-layer parallax corrupts a few columns at the screen edges. Trim narrows the game window (scale kept); Zoom crops them away, absorbed by the stretch; Off shows the raw edges. Applies to the whole game - every layer, every profile."_s,
             makePickerOptions({"Off", "Trim", "Zoom"}), settings3DS.StereoEdgeMode, DIALOG_TYPE_INFO, true,
             []( int val ) {
                 if (CheckAndUpdate( settings3DS.StereoEdgeMode, val )) {
-                    settings3DS.isDirty = true;
-                    settings3dsStereoApplyDefault();
-                    menu3dsSetScreenDirty();
+                    // live, both buffers - the menu's one-pass redraw left the
+                    // other buffer on the old crop (Trim -> Zoom broke the top screen)
+                    stereo3dRestorePausedLook();
+                    s_stereoPreviewDirty = true;
                 }
             });
         AddMenuPicker(items, "  Blur Quality"_s,
@@ -1960,7 +1978,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             settings3DS.StereoBlurQuality, DIALOG_TYPE_INFO, true,
             []( int val ) {
                 if (CheckAndUpdate( settings3DS.StereoBlurQuality, val )) {
-                    settings3DS.isDirty = true;
+                    stereo3dRestorePausedLook();   // live outside the gauges too
                     s_stereoPreviewDirty = true;
                 }
             });
@@ -3585,6 +3603,7 @@ void showMenu() {
             menu3dsMarkTabDirty(TAB_3D);
         }
     }
+    stereo3dPreviewForget();
 
     // Auto Save (issue #72): opening the menu is one of the save points -
     // the game is paused and the mixer idle, so the write costs nothing

@@ -1148,6 +1148,10 @@ void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
     gpu3dsSetStereoPreviewHighlight(-1, -1);
     if (pausedLook)
         notif3dsHide();
+    // both buffers now hold this frame: the menu's own redraw is one pass,
+    // so tell it to run two, or the next setting change (Edge Cleanup
+    // Trim -> Zoom) lands on one buffer and the screen alternates
+    GPU3DS.gameScreenBufferDesync = true;
     GPU3DS.appliedRenderState.target = TARGET_UNSET;   // menu re-applies its own
 }
 

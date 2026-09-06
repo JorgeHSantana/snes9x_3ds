@@ -19,6 +19,15 @@ Notable changes to this project will be documented in this file.
   widens with distance, instead of one tint and one smear for the whole
   plane (`M7FX` in the .3d).
 
+### Fixes
+* 3D Stereo tab live preview (Jorge's report): changing Edge Cleanup
+  (Trim -> Zoom), Blur Quality or Slider Response while paused now redraws
+  both screen buffers, so the top screen no longer alternates between the
+  old and the new crop; moving the slider on a depth gauge keeps the
+  spotlight (the pause redraw used to paint over it); reopening the menu
+  with the cursor on a gauge shows its spotlight again.
+
+
 ## Stable v2.2 (2026-09-06, a26c295)
 
 ### Features

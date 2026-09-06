@@ -29,6 +29,7 @@ void menu3dsSetIdleCallback(void (*callback)(void)) {
     menuIdleCallback = callback;
 }
 static bool gameScreenDirty = true;
+static float s_prevIOD = -1;   // slider value the game screen was last drawn for
 static bool secondScreenDirty = true;
 static bool isScrolling = false;
 
@@ -907,7 +908,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
     int framesDKeyHeld = 0;
     int returnResult = -1;
     char menuTextBuffer[512];
-    float prevIOD = -1;
+    s_prevIOD = -1;
     bool wasScrolling = false;
     bool firstFrame = !isDialog;
 
@@ -1225,9 +1226,9 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
 
         float iod = gpu3dsGetIOD();
 
-        if (!isDialog && iod != prevIOD) {
+        if (!isDialog && iod != s_prevIOD) {
             gameScreenDirty = true;
-            prevIOD = iod;
+            s_prevIOD = iod;
         }
 
         // input -> splash -> menu -> vblank
@@ -1344,6 +1345,14 @@ void menu3dsSelectRandomGameIndex(SMenuTab& currentTab, int min, int max, int la
 void menu3dsSetScreenDirty(bool gameScreen, bool secondScreen) {
     if (gameScreen)    gameScreenDirty = true;
     if (secondScreen)  secondScreenDirty = true;
+}
+
+// a caller (the 3D editor's live preview) just drew the game screen
+// itself, both buffers: drop the pending redraw so this frame's paused
+// look does not paint over it (slider moved on a gauge -> spotlight lost)
+void menu3dsGameScreenPresented() {
+    gameScreenDirty = false;
+    s_prevIOD = gpu3dsGetIOD();
 }
 
 void menu3dsMarkTabDirty(int tab) {
