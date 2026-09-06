@@ -1,0 +1,33 @@
+{
+  "title": "MMX3 Zero Project dam, BG2 -3 blurred, Blur Quality Light - the blurred sky must not wobble between frames",
+  "rom": "sdmc:/snes/Mega Man X3 Zero Project (MSU1)/Mega Man X3 Zero Project (MSU1).sfc",
+  "state": "states/mmx3zp-dam.frz",
+  "stereo3d": [
+    {
+      "file": "MEGAMAN X3 ZERO PROJ.",
+      "content": "BG1=0\nBG2=-3\nBG3=1\nBG4=0\nOBJ=0\nFADE=0\nHAZE=0\nBLUR=6\nFOCUSBACK=-1\nFOCUSFRONT=1\nEDGEMODE=2\nWATCH=F1"
+    }
+  ],
+  "settings": {
+    "StereoBlurQuality": "2"
+  },
+  "wait": 36,
+  "frames": 6,
+  "regions": {
+    "sky_forest_BG2": [
+      80,
+      0,
+      320,
+      118
+    ]
+  },
+  "temporal_expect": {
+    "sky_forest_BG2": [
+      0,
+      0.5
+    ]
+  },
+  "log_expect": [
+    "ROM loaded: MEGAMAN X3 ZERO"
+  ]
+}

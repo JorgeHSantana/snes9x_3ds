@@ -220,6 +220,24 @@ def run_scene(sd, sc, dsx, out_png):
     try:
         launch(dsx, sc["wait"])
         capture_top(out_png)
+        # temporal stability: extra frames 0.3s apart, diffed pairwise -
+        # a static region that changes between consecutive frames is a
+        # flicker/wobble (the Light blur once alternated its ghost side)
+        frames = int(sc.get("frames", 1))
+        sc["_temporal"] = None
+        if frames > 1:
+            paths = [out_png]
+            for i in range(1, frames):
+                time.sleep(0.3)
+                pi = out_png.replace(".png", f".f{i}.png")
+                capture_top(pi)
+                paths.append(pi)
+            worst = {}
+            for a, b in zip(paths, paths[1:]):
+                st = diff_images(a, b, sc["regions"])
+                for k, v in st.items():
+                    worst[k] = max(worst.get(k, 0.0), v)
+            sc["_temporal"] = worst
         text = session_log(sd)
     finally:
         kill_azahar()
@@ -286,11 +304,15 @@ def main():
                 shutil.copyfile(png, golden)
                 log(f"golden written: {golden}")
                 return 0
+            ok = True
+            if sc.get("_temporal") is not None:
+                ok &= report(f"{sc['_name']} temporal (max consecutive-frame diff)", sc["_temporal"],
+                             sc.get("temporal_expect", {}))
             if not os.path.exists(golden):
                 log(f"no golden at {golden}; capture kept at {png}")
-                return 0
+                return 0 if ok else 1
             stats = diff_images(png, golden, sc["regions"], os.path.join(args.out, sc["_name"] + ".diff.pgm"))
-            ok = report(f"{sc['_name']} vs golden", stats, sc.get("expect", {}))
+            ok &= report(f"{sc['_name']} vs golden", stats, sc.get("expect", {}))
             return 0 if ok else 1
         if args.mode == "ab":
             a, b = load_scene(args.scenes[0]), load_scene(args.scenes[1])

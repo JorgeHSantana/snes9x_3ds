@@ -95,8 +95,9 @@ Other mechanics:
 
 Depth-of-field blur is ghost passes: the same tiles drawn again, shifted
 and translucent. **Full** draws two ghosts per blurred tier (one per
-side); **Light** draws one, alternating side per frame and per eye - half
-the blur's draw and vertex cost (issue #71 numbers: +4 draws / +3,952
+side); **Light** draws one per eye, on opposite sides in the two eyes and steady in
+time (a per-frame alternation was tried first and read as the layer
+wobbling) - half the blur's draw and vertex cost (issue #71 numbers: +4 draws / +3,952
 verts vs +2 / +1,976 for one split layer). **Auto** (default) is Full
 until the frame loop's load-driven frameskip fires: `3dsblurauto.h`
 switches to Light on the first skipped frame and returns to Full after a

@@ -56,7 +56,9 @@ directions** - a probe build shipped by accident is a real risk.
   "expect":    { "city_bg_P0": [0, 0.5] },
   "ab_expect": { "city_bg_P0": [0, 0.5], "pillar_P1": [2, 100] },
   "log_expect": ["ROM loaded: MEGAMAN X3"],
-  "log_forbid": ["[blur] auto -> light"]
+  "log_forbid": ["[blur] auto -> light"],
+  "frames": 6,
+  "temporal_expect": { "sky_forest_BG2": [0, 0.5] }
 }
 ```
 
@@ -65,6 +67,9 @@ directions** - a probe build shipped by accident is a real risk.
   header title since v2.1.
 * `regions` are top-screen pixel boxes; bands are percentages of changed
   pixels (sum of channel deltas > 40).
+* `frames` > 1 captures that many frames 0.3 s apart and reports the worst
+  consecutive-frame diff per region (`temporal_expect`): a static region
+  that changes between frames is flicker or wobble.
 
 ## Caveats that cost hours before
 

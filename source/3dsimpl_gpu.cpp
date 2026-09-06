@@ -647,15 +647,18 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     if (ghostShift[t][1] == tierShift[t]) ghostShift[t][1] -= 1.0f;
                 }
                 // Light quality (issue #71): ONE ghost instead of two,
-                // ~33% off the blur's draw cost. The side alternates per
-                // frame AND runs opposite in the two eyes, so each frame
-                // still covers both directions binocularly and the LCD's
-                // persistence fuses the alternation - the same trick the
-                // SNES flicker-transparency games play. Alpha is boosted
-                // to keep the perceived smear weight close to Full.
+                // half the blur's draw cost. The ghost sits on opposite
+                // sides in the two eyes - steady in time - so the smear
+                // fuses BINOCULARLY. It used to alternate sides per frame
+                // as well, betting on LCD persistence; on a detailed
+                // background that read as the whole layer wobbling left
+                // and right (Jorge's Zero Project dam savestate: 6.5% of
+                // the sky changed between consecutive frames, 0% in
+                // Full). Alpha is boosted to keep the perceived smear
+                // weight close to Full.
                 bool light = settings3DS.StereoBlurQuality == 2 ||
                     (settings3DS.StereoBlurQuality == 0 && GPU3DSExt.blurAutoLight);
-                int lightSide = ((IPPU.FrameCount ^ (GPU3DS.stereoRightPass ? 1u : 0u)) & 1u);
+                int lightSide = GPU3DS.stereoRightPass ? 1 : 0;
                 GPU3DS.stereoGhostPass = true;
                 if (light) {
                     float a = ghost * 1.4f;

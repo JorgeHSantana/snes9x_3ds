@@ -3,7 +3,18 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
-_Nothing yet._
+### Features
+* **Auto Save / Auto Load** (issue #72): Emulator tab > Save and Load.
+  Saves when the menu opens, on HOME, lid close and exit; loads that save
+  when the game starts. Off by default; the per-game option still works.
+
+### Fixes
+* Blur Quality Light (and Auto under load) made blurred backgrounds
+  wobble left and right: the single ghost alternated sides every frame.
+  It now stays on one side per eye (opposite in the two eyes), steady in
+  time.
+* Blur Quality Auto no longer flips to Light during the first second
+  after a ROM or state load.
 
 ## Stable v2.1 (2026-09-05, 254369f)
 

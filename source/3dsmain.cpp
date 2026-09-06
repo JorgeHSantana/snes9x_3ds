@@ -1912,7 +1912,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 }
             });
         AddMenuPicker(items, "  Blur Quality"_s,
-            "Auto: Full while the game holds its frame rate, Light the moment a frame drops, back to Full after a run of clean seconds - a longer run each time it has to switch again soon. Full: two ghost copies smear both sides - the softest look. Light: one ghost per frame, alternating sides between frames and eyes - half the blur's cost.",
+            "Auto: Full while the game holds its frame rate, Light the moment a frame drops, back to Full after a run of clean seconds - a longer run each time it has to switch again soon. Full: two ghost copies smear both sides - the softest look. Light: one ghost per eye, on opposite sides in the two eyes - half the blur's cost.",
             makePickerOptions({"Auto (Full, Light under load)", "Full (two ghosts)", "Light (one, faster)"}),
             settings3DS.StereoBlurQuality, DIALOG_TYPE_INFO, true,
             []( int val ) {
