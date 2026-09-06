@@ -2993,8 +2993,16 @@ static bool emulatorResumeParked(const char* romPath)
     char statePath[PATH_MAX];
     file3dsGetRelatedPath(Memory.ROMFilename, statePath, sizeof(statePath),
                           ".update.frz", "savestates");
-    if (statePath[0] != 0 && impl3dsLoadState(statePath)) {
-        remove(statePath);
+    if (statePath[0] != 0) {
+        // inside a mixer drain window, like the per-game auto load in
+        // emulatorLoadRom: the MSU-1 SavestateLoaded event clears the
+        // audio queue and must never race the mixer's fill (Jorge's
+        // report: MSU-1 silent after the post-update resume)
+        snd3dsDrainMixing();
+        bool loaded = impl3dsLoadState(statePath);
+        snd3dsResumeMixing();
+        if (loaded)
+            remove(statePath);
     }
     menu3dsMarkTabDirty(TAB_EMULATOR);
     menu3dsMarkTabDirty(TAB_3D);

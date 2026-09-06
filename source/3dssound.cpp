@@ -455,13 +455,23 @@ void snd3dsFinalize()
 
     // Producer teardown only after the mixer is gone: the mixer's fill
     // path reads the ring through the msu1 prefetch hook until it exits.
+    bool raGone = true;
     if (msuRaThread)
     {
-        threadJoin(msuRaThread, 1000 * 1000000);
-        threadFree(msuRaThread);
-        msuRaThread = NULL;
+        // a producer still inside a tick (FLAC seek, SD read) after the
+        // timeout must keep its ring and decoder: tearing them down under
+        // it is a use-after-free on the read-ahead thread (field crash
+        // at the post-update exit, issue #73 follow-up). Leak instead.
+        Result rc = threadJoin(msuRaThread, 1000 * 1000000);
+        raGone = R_SUCCEEDED(rc);
+        if (raGone) {
+            threadFree(msuRaThread);
+            msuRaThread = NULL;
+        } else {
+            log3dsWrite("[snd] read-ahead thread did not exit in 1s - leaving its memory alone");
+        }
     }
-    if (msuRaStorage != NULL)
+    if (msuRaStorage != NULL && raGone)
     {
         msu3dsAudioReadaheadStop();
         free(msuRaStorage);

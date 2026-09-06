@@ -15,6 +15,12 @@ Notable changes to this project will be documented in this file.
   time.
 * Blur Quality Auto no longer flips to Light during the first second
   after a ROM or state load.
+* MSU-1 music was silent after the post-update resume: the parked state
+  is now loaded inside a mixer drain window, like every other state load.
+* Exit-path hardening after a field crash at the post-update exit: the
+  session log is thread-safe (the MSU-1 read-ahead thread logs too), and
+  a read-ahead thread that does not exit in time keeps its memory instead
+  of being torn down under itself.
 
 ## Stable v2.1 (2026-09-05, 254369f)
 

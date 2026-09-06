@@ -7,6 +7,15 @@
 
 #include "3dssettings.h"
 #include "3dslog.h"
+#include <3ds.h>
+
+// The MSU-1 read-ahead thread logs through msu1_diag while the main
+// thread logs too (and closes the file at exit): newlib FILE state is not
+// thread-safe, and a check-then-fprintf on a file being closed reads a
+// NULL FILE. One lock around every use.
+static LightLock s_logLock;
+static bool s_logLockInit = false;
+static inline void logLockEnsure(void) { if (!s_logLockInit) { LightLock_Init(&s_logLock); s_logLockInit = true; } }
 
 static const bool FORCE_DEBUG_LOGS = false;
 
@@ -43,6 +52,9 @@ void log3dsInitialize() {
 
 void log3dsWrite(const char *fmt, ...) {
     if (!logFile || (!settings3DS.LogFileEnabled && !FORCE_DEBUG_LOGS)) return;
+    logLockEnsure();
+    LightLock_Lock(&s_logLock);
+    if (!logFile) { LightLock_Unlock(&s_logLock); return; }   // closed while we waited
 
     u64 currentElapsedMs = osGetTime() - osTime;
 
@@ -59,13 +71,17 @@ void log3dsWrite(const char *fmt, ...) {
     fprintf(logFile, "\n");
     fflush(logFile);
     va_end(args);
+    LightLock_Unlock(&s_logLock);
 }
 
 void log3dsClose(void) {
+    logLockEnsure();
+    LightLock_Lock(&s_logLock);
     if (logFile) {
         fclose(logFile);
         logFile = NULL;
     }
+    LightLock_Unlock(&s_logLock);
 }
 
 const char* log3dsGetCurrentDate() {
