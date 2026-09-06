@@ -3441,9 +3441,12 @@ void S9xDrawBackgroundMode7HardwareRepeatTile0(int bg, bool8 sub, int depth)
 		}
 	}
 
+	// the queued rows must land in THIS section: flush before the commit
+	// (flushing after it handed the sky/outside strip to the next draw -
+	// the "missing layer" in Super Mario Kart's split screen on hardware)
+	m7FlushLines();
 	if (verticesUpdated)
 		S9xCommitMode7LayerSection(false, bg, sub, SNES_MODE7_TILE_0, ALPHA_TEST_NE_ZERO);
-	m7FlushLines();
 }
 
 
