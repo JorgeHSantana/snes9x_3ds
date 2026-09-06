@@ -1168,9 +1168,12 @@ bool impl3dsSaveStateAutoFor(const char *reason)
     char path[PATH_MAX];
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".auto.frz", "savestates");
 
-    // Do not override previous .auto.frz here
+    // Do not override previous .auto.frz here - a state whose APU looks
+    // dead would come back mute. (Azahar without DSP firmware trips this
+    // on every save: the harness cannot prove auto save, hardware can.)
     if (impl3dsHasBrokenAudioStateSignature()) {
         impl3dsLogBrokenAudioSignatureContext("save-auto", path);
+        log3dsWrite("[autosave] %s: skipped (broken-audio signature, previous file kept)", reason);
         return true;
     }
 
