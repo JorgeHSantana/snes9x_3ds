@@ -377,23 +377,6 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         }, MenuItemType::Action, "  Take Screenshot"_s, ""_s);
 
         AddMenuHeader2(items, "Save and Load"_s);
-        AddMenuCheckbox(items, "  Auto Save / Auto Load"_s, settings3DS.AutoSaveLoad,
-            []( int val ) { CheckAndUpdateToggle( settings3DS.AutoSaveLoad, val ); });
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Saves the game when the menu opens, on HOME, lid close"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  and exit; loads that save when the game starts."_s, ""_s);
-        AddMenuCheckbox(items, "  Create screenshot when saving"_s, settings3DS.SaveStateScreenshots,
-            []( int val ) {
-                bool wasEnabled = settings3DS.SaveStateScreenshots;
-                if (CheckAndUpdateToggle( settings3DS.SaveStateScreenshots, val )) {
-                    if (settings3DS.SaveStateScreenshots) {
-                        impl3dsEnsureStateScreenshotDir();
-                    } else if (wasEnabled) {
-                        impl3dsDeleteStateScreenshots();
-                    }
-                }
-            });
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  (disabling removes existing savestate screenshots)"_s, ""_s);
-        AddMenuDisabledOption(items, ""_s);
 
         char slotInfo[32];
 
@@ -574,6 +557,27 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     apply3dsMode(val);
             });
     }
+
+    AddMenuDisabledOption(items, ""_s);
+    // global save preferences live outside the CURRENT GAME block (Jorge's
+    // report): Auto Load must be switchable BEFORE a game is opened
+    AddMenuHeader1(items, "SAVESTATES"_s);
+    AddMenuCheckbox(items, "  Auto Save / Auto Load"_s, settings3DS.AutoSaveLoad,
+        []( int val ) { CheckAndUpdateToggle( settings3DS.AutoSaveLoad, val ); });
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  Saves the game when the menu opens, on HOME, lid close"_s, ""_s);
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  and exit; loads that save when the game starts."_s, ""_s);
+    AddMenuCheckbox(items, "  Create screenshot when saving"_s, settings3DS.SaveStateScreenshots,
+        []( int val ) {
+            bool wasEnabled = settings3DS.SaveStateScreenshots;
+            if (CheckAndUpdateToggle( settings3DS.SaveStateScreenshots, val )) {
+                if (settings3DS.SaveStateScreenshots) {
+                    impl3dsEnsureStateScreenshotDir();
+                } else if (wasEnabled) {
+                    impl3dsDeleteStateScreenshots();
+                }
+            }
+        });
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  (disabling removes existing savestate screenshots)"_s, ""_s);
 
     AddMenuDisabledOption(items, ""_s);
     AddMenuHeader1(items, "REWIND"_s);

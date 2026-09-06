@@ -4,7 +4,8 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
-* **Auto Save / Auto Load** (issue #72): Emulator tab > Save and Load.
+* **Auto Save / Auto Load** (issue #72): Emulator tab > SAVESTATES (global,
+  available before a game is loaded).
   Saves when the menu opens, on HOME, lid close and exit; loads that save
   when the game starts. Off by default; the per-game option still works.
 

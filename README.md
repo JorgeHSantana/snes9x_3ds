@@ -124,7 +124,8 @@ first install. In the pause menu, **Emulator tab -> UPDATES**:
 
 ## Auto Save / Auto Load
 
-**Emulator tab -> Save and Load -> Auto Save / Auto Load** (off by default).
+**Emulator tab -> SAVESTATES -> Auto Save / Auto Load** (off by default; it
+is a global setting, available before any game is loaded).
 With it on, the game is saved to `savestates/<rom>.auto.frz` whenever the
 menu opens, when you press HOME or close the lid, and on exit; the next
 time that game starts it loads that save. Nothing is written during
