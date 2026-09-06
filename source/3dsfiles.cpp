@@ -166,15 +166,6 @@ void file3dsSetCurrentDir(const char* targetDir) {
     }
 }
 
-void file3dsBgScanShutdown()
-{
-    bgScanAbort = true;
-    for (int i = 0; i < 600 && bgScanRunning; i++)   // up to 3s; a sweep step is one readdir
-        svcSleepThread(5 * 1000 * 1000LL);
-    if (bgScanRunning)
-        log3dsWrite("[file3ds] background scan still running at shutdown (waited 3s)");
-}
-
 void file3dsFinalize() 
 {
     file3dsBgScanShutdown();
@@ -642,6 +633,15 @@ static void file3dsBgStartValidation() {
     if (!t) {
         bgScanRunning = false;
     }
+}
+
+void file3dsBgScanShutdown()
+{
+    bgScanAbort = true;
+    for (int i = 0; i < 600 && bgScanRunning; i++)   // up to 3s; a sweep step is one readdir
+        svcSleepThread(5 * 1000 * 1000LL);
+    if (bgScanRunning)
+        log3dsWrite("[file3ds] background scan still running at shutdown (waited 3s)");
 }
 
 bool file3dsBgRefreshTake(std::vector<DirectoryEntry>& files) {
