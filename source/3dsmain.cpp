@@ -1910,9 +1910,11 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 {
                     bool extUsed = !settings3DS.isRomLoaded || S9xLayerUsedLastFrame(1, 1);
                     if (extUsed || !settings3DS.StereoHideUnused) {
-                        AddMenuGauge(items, "  Above the plane (EXTBG)"_s, -8, 8, *stereoEditDepthP1(1),
+                        AddMenuGauge(items, "  EXTBG offset (BG2 Prio 1)"_s, -8, 8, *stereoEditDepthP1(1),
                             []( int val ) { if (CheckAndUpdate( *stereoEditDepthP1(1), val )) s_stereoPreviewDirty = true; }, true, true);
                         if (!extUsed) items.back().TextColor = stereo3dDimColor();
+                        items.emplace_back(nullptr, MenuItemType::Textarea, "  The plane follows BG1 Prio 0; the priority pixels (EXTBG)"_s, ""_s);
+                        items.emplace_back(nullptr, MenuItemType::Textarea, "  sit at the plane plus (this minus BG2 Prio 0)."_s, ""_s);
                     }
                 }
                 AddMenuCheckbox(items, "  Effects by Distance"_s, *stereoEditField(7) != 0,
