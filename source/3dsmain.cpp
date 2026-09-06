@@ -4009,7 +4009,7 @@ static bool tryAutoBoot()
     if (!ok) { return false; }
     path[strcspn(path, "\r\n")] = '\0';
     if (!emulatorPointBrowserAt(path)) { return false; }
-    log3dsWrite("[autoboot] %s%s", file3dsGetCurrentDir(), romFileName);
+    log3dsWrite("[autoboot] dir=%s file=%s", file3dsGetCurrentDir(), romFileName);
     return emulatorLoadRom();
 }
 
