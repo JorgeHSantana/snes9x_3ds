@@ -1910,7 +1910,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 {
                     bool extUsed = !settings3DS.isRomLoaded || S9xLayerUsedLastFrame(1, 1);
                     if (extUsed || !settings3DS.StereoHideUnused) {
-                        AddMenuGauge(items, "  Above the plane (EXTBG)"_s, -8, 8, *stereoEditDepthP1(1),
+                        AddMenuGauge(items, "  Priority pixels (BG2 Prio 1)"_s, -8, 8, *stereoEditDepthP1(1),
                             []( int val ) { if (CheckAndUpdate( *stereoEditDepthP1(1), val )) s_stereoPreviewDirty = true; }, true, true);
                         if (!extUsed) items.back().TextColor = stereo3dDimColor();
                     }
