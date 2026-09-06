@@ -1887,7 +1887,14 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             // Mode 7 perspective (issue #62): lives in the live-preview
             // zone (full scene); dims/hides like any row the paused
             // screen did not draw
-            bool m7Used = !settings3DS.isRomLoaded || S9xMode7DrawnLastFrame();
+            // "used" = a Mode 7 plane drew in the last rendered frame OR the
+            // PPU sits in mode 7 right now (Jorge's report: the block vanished
+            // under Hide Unused on hardware while racing - the draw flag
+            // missed, the register cannot)
+            bool m7Used = !settings3DS.isRomLoaded || S9xMode7DrawnLastFrame() || PPU.BGMode == 7;
+            log3dsWrite("[m7] menu: drawnLastFrame=%d bgMode=%d bg1used=%d hideUnused=%d",
+                        S9xMode7DrawnLastFrame() ? 1 : 0, (int)PPU.BGMode,
+                        S9xLayerUsedLastFrame(0, 0) ? 1 : 0, settings3DS.StereoHideUnused);
             if (m7Used || !settings3DS.StereoHideUnused) {
                 AddMenuHeader2(items, "Mode 7"_s);
                 AddMenuGauge(items, "  Perspective"_s, 0, 8, *stereoEditField(6),
