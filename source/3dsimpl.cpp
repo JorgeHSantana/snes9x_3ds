@@ -271,7 +271,7 @@ bool impl3dsInitialize()
 	SVertexListInfo listInfos[] = {
 		{ VBO_SCENE_RECT, vbo_scene_rect_size, sizeof(SRectVertex), 2, { {GPU_SHORT, 2}, {GPU_UNSIGNED_BYTE, 4} } },
 		{ VBO_SCENE_TILE, vbo_scene_tile_size, sizeof(STileVertex), 2, { {GPU_SHORT, 3}, {GPU_SHORT, 2} } },
-		{ VBO_SCENE_MODE7_LINE, vbo_scene_mode7_line_size, sizeof(SMode7LineVertex), 2, { {GPU_SHORT, 2}, {GPU_FLOAT, 2} } },
+		{ VBO_SCENE_MODE7_LINE, vbo_scene_mode7_line_size, sizeof(SMode7LineVertex), 2, { {GPU_SHORT, 4}, {GPU_FLOAT, 2} } },
 		{ VBO_MODE7_TILE, vbo_mode7_tile_size, sizeof(SMode7TileVertex), 1, { {GPU_SHORT, 4} } },
 		{ VBO_SCREEN, vbo_screen_size, sizeof(SQuadVertex), 4, { {GPU_FLOAT, 4}, {GPU_FLOAT, 2}, {GPU_UNSIGNED_BYTE, 4}, {GPU_UNSIGNED_BYTE, 4} } },
 	};
@@ -930,6 +930,24 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 		gpu3dsClearScreen(settings3DS.GameScreen, stereoActive);
 	}
 
+#ifdef PROBE_SBS
+	// harness probe: both eyes side by side on the LEFT framebuffer (left
+	// half = left eye, right half = right eye) so one Azahar capture
+	// carries the per-row disparity. gpu3dsSetRenderTargetToScreen keeps
+	// the left target for both passes under this define.
+	GameScreenViewport vpL = gameScreenViewport, vpR = gameScreenViewport;
+	int midx = (gameScreenViewport.sx0 + gameScreenViewport.sx1) / 2;
+	vpL.sx1 = midx;
+	vpR.sx0 = midx;
+	GPU3DS.activeSide = GFX_LEFT;
+	impl3dsSceneRenderEye(firstFrame, paused, list, stereoActive ? vpL : gameScreenViewport, drawBackground, balancedFilterEnabled, -iod);
+	if (stereoActive) {
+		GPU3DS.activeSide = GFX_RIGHT;
+		GPU3DS.appliedRenderState.target = TARGET_UNSET;
+		impl3dsSceneRenderEye(firstFrame, paused, list, vpR, false, balancedFilterEnabled, iod, SNES_MAIN_RIGHT);
+		GPU3DS.activeSide = GFX_LEFT;
+	}
+#else
 	GPU3DS.activeSide = GFX_LEFT;
 	impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, -iod);
 
@@ -942,6 +960,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 
 		GPU3DS.activeSide = GFX_LEFT;
 	}
+#endif
 }
 
 //---------------------------------------------------------

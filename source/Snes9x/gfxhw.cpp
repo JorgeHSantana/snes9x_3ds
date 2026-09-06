@@ -714,8 +714,67 @@ inline void __attribute__((always_inline)) S9xCommitMode7LayerSection(bool reuse
 static LayerUse s_layerUse;
 static int s_layerUseBg = 0;
 
-void S9xLayerUseFrameStart() { layerUseFrameStart(&s_layerUse); }
-void S9xLayerUseFrameEnd()   { layerUseFrameEnd(&s_layerUse); }
+// ---- Mode 7 perspective (issue #62, 3dsmode7persp.h) -----------------
+// Scanlines are queued instead of emitted so the frame's nearest span is
+// known before any w is encoded; the flush emits them in order. Two
+// callers (the plain plane and the repeat-tile0 pass) each flush their own
+// run. s_m7Drawn* latch "a Mode 7 plane drew this frame" for the editor.
+#include "3dsmode7persp.h"
+struct M7QueuedLine { s16 x0, y, x1; float tx0, ty0, tx1, ty1; };
+static M7QueuedLine s_m7Queue[512];
+static int  s_m7QueueCount = 0;
+static bool s_m7DrawnAcc = false, s_m7DrawnLast = false;
+
+static inline void m7QueueLine(s16 x0, s16 y, s16 x1, float tx0, float ty0, float tx1, float ty1)
+{
+    if (s_m7QueueCount >= (int)(sizeof(s_m7Queue) / sizeof(s_m7Queue[0]))) return;
+    M7QueuedLine &q = s_m7Queue[s_m7QueueCount++];
+    q.x0 = x0; q.y = y; q.x1 = x1; q.tx0 = tx0; q.ty0 = ty0; q.tx1 = tx1; q.ty1 = ty1;
+}
+
+static void m7FlushLines(void)
+{
+    if (s_m7QueueCount == 0) return;
+    float spanRef = 0.0f;
+    for (int i = 0; i < s_m7QueueCount; i++) {
+        const M7QueuedLine &q = s_m7Queue[i];
+        float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
+        float span = sqrtf(dx * dx + dy * dy);
+        if (span > 0.0f && (spanRef == 0.0f || span < spanRef)) spanRef = span;
+    }
+    for (int i = 0; i < s_m7QueueCount; i++) {
+        const M7QueuedLine &q = s_m7Queue[i];
+        float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
+        s16 w = mode7PerspEncode(sqrtf(dx * dx + dy * dy), spanRef);
+        // -16384 on the right vertex: the geometry shader's Mode 7 marker
+        gpu3dsAddMode7LineVertexes(q.x0, q.y, q.x1, -16384, w, q.tx0, q.ty0, q.tx1, q.ty1);
+    }
+#ifdef PROBE_DRAW_STATS
+    // probe: the encoder's ramp for this run of rows (a race: 256 at the
+    // bottom row falling towards the horizon; a top-down map: flat 256)
+    static u32 s_m7ProbeFrames = 0;
+    if ((++s_m7ProbeFrames % 120) == 0) {
+        int wmin = 1000, wmax = -1, wfirst = -1, wlast = -1;
+        for (int i = 0; i < s_m7QueueCount; i++) {
+            const M7QueuedLine &q = s_m7Queue[i];
+            float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
+            int w = mode7PerspEncode(sqrtf(dx * dx + dy * dy), spanRef);
+            if (i == 0) wfirst = w;
+            wlast = w;
+            if (w < wmin) wmin = w;
+            if (w > wmax) wmax = w;
+        }
+        log3dsWrite("[m7persp] rows=%d spanRef=%.3f w top=%d bottom=%d min=%d max=%d",
+                    s_m7QueueCount, spanRef, wfirst, wlast, wmin, wmax);
+    }
+#endif
+    s_m7DrawnAcc = true;
+    s_m7QueueCount = 0;
+}
+
+void S9xLayerUseFrameStart() { layerUseFrameStart(&s_layerUse); s_m7DrawnAcc = false; }
+void S9xLayerUseFrameEnd()   { layerUseFrameEnd(&s_layerUse); s_m7DrawnLast = s_m7DrawnAcc; }
+bool S9xMode7DrawnLastFrame() { return s_m7DrawnLast; }
 bool S9xLayerUsedLastFrame(int layer, int prio) { return layerUseUsed(&s_layerUse, layer, prio); }
 bool S9xLayerUsedLastFrameAny(int layer)        { return layerUseLayerUsed(&s_layerUse, layer); }
 
@@ -3310,9 +3369,10 @@ void S9xDrawBackgroundMode7Hardware(int bg, bool8 sub, int depth, int alphaTestA
 		float ty1 = (float)(CC1 + DD) * INV_M7_SCALE;
 
 		// using -16384 for the geometry shader to detect mode 7
-		gpu3dsAddMode7LineVertexes(Left << hiShift, Y+depth, Right << hiShift, -16384, tx0, ty0, tx1, ty1);
+		m7QueueLine(Left << hiShift, Y+depth, Right << hiShift, tx0, ty0, tx1, ty1);
 	}
 
+	m7FlushLines();
 	layerVerticesCount[bg] = GPU3DS.vertices[VBO_SCENE_MODE7_LINE].count;
 
 	if (layerVerticesCount[bg] > 0)
@@ -3375,7 +3435,7 @@ void S9xDrawBackgroundMode7HardwareRepeatTile0(int bg, bool8 sub, int depth)
 		if (!withinTexture)
 		{
 			// using -16384 for the geometry shader to detect mode 7
-			gpu3dsAddMode7LineVertexes(Left << hiShift, Y+depth, Right << hiShift, -16384, tx0, ty0, tx1, ty1);
+			m7QueueLine(Left << hiShift, Y+depth, Right << hiShift, tx0, ty0, tx1, ty1);
 
 			verticesUpdated = true;
 		}
@@ -3383,6 +3443,7 @@ void S9xDrawBackgroundMode7HardwareRepeatTile0(int bg, bool8 sub, int depth)
 
 	if (verticesUpdated)
 		S9xCommitMode7LayerSection(false, bg, sub, SNES_MODE7_TILE_0, ALPHA_TEST_NE_ZERO);
+	m7FlushLines();
 }
 
 

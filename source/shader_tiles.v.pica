@@ -9,6 +9,8 @@
                                  ;      modulates alpha with the vertex color, so the
                                  ;      spotlight hides the sibling priorities via the
                                  ;      alpha test instead of dimming their RGB)
+.fvec       mode7Persp           ; #9 - x = Mode 7 perspective strength (0..1) while
+                                 ;      the Mode 7 layer draws, 0 for every other draw
 .fvec       stereoIOD2           ; #8 - (tier2 shift, tier3 shift, boundary 1/2,
                                  ;      boundary 2/3). BG layers park both boundaries
                                  ;      far above any plane so only tiers 0/1 exist;
@@ -20,6 +22,7 @@
 .constf c_tex           (32768, 16384, 0.0078125, 128)
 .constf c_alpha         (24576, 8192, 255, 0)
 .constf c_depth         (0.03125, -256, 0.00390625, 0)
+.constf c_m7            (-1, 0.00390625, 1, 0)   ; Mode 7 perspective helpers: -1, 1/256, 1
 
 ; Outputs
 .out        outpos      position
@@ -130,6 +133,13 @@ draw:
         mov     r4.x, r3.y
         mov     r4.y, r2.w
     .end
+    ; Mode 7 perspective (issue #62): a scanline vertex carries
+    ; w = 256 * (nearest span / its span); tiles carry the loader's w.
+    ; With mode7Persp.x = 0 outside Mode 7 draws this is 1 + 0 = exact no-op.
+    mov     r5, c_m7                            ; (-1, 1/256, 1, 0): mad's src3 must be a temp
+    mad     r5.x, r0.w, r5.y, r5.x              ; w/256 - 1  (0 at the nearest row)
+    mad     r5.x, r5.x, mode7Persp.x, r5.z      ; 1 + k * (w/256 - 1)
+    mul     r4.x, r4.x, r5.x
     add     r0.x, r4.x, r0.x
     mul     r11.w, r4.y, r11.w          ; editor spotlight: other priorities'
                                         ; alpha goes to 0 (alpha test discards

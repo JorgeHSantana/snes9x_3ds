@@ -394,6 +394,9 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
             GPU3DS.stereoPrioDimP1 * 2.0f +
             GPU3DS.stereoPrioDimP2 * 4.0f +
             GPU3DS.stereoPrioDimP3 * 8.0f;
+        // Mode 7 perspective strength: re-send whatever the last draw set
+        C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP],
+            GPU3DS.mode7PerspApplied, 0.0f, 0.0f, 0.0f);
     }
 
     if (shaderUpdated && state->shader == SPROGRAM_MODE7) {
@@ -526,6 +529,8 @@ bool gpu3dsInitialize()
     // spotlight dims are multiplicative: their neutral value is 1, not 0
     // (0 is a real value - it alpha-hides a priority in the 3D editor)
     GPU3DS.stereoPrioDimP0 = 1.0f;
+    GPU3DS.stereoMode7Persp = 0.0f;
+    GPU3DS.mode7PerspApplied = 0.0f;
     GPU3DS.stereoPrioDimP1 = 1.0f;
     GPU3DS.stereoPrioDimP2 = 1.0f;
     GPU3DS.stereoPrioDimP3 = 1.0f;
@@ -901,6 +906,7 @@ bool gpu3dsInitializeShaderUniformLocations()
     GPU3DS.shaderULocs[ULOC_STEREO_IOD] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoIOD");
     GPU3DS.shaderULocs[ULOC_STEREO_DIM] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoDim");
     GPU3DS.shaderULocs[ULOC_STEREO_IOD2] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoIOD2");
+    GPU3DS.shaderULocs[ULOC_MODE7_PERSP] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "mode7Persp");
 
 	bool uLocsInvalid = false;
 
@@ -1050,7 +1056,11 @@ void gpu3dsSetRenderTargetToFrameBuffer(SGPU_TARGET_ID targetId)
     SCREEN_TARGET screenTarget;
 
     if (screen == GFX_TOP)
+#ifdef PROBE_SBS
+        screenTarget = SCREEN_TARGET_LEFT;   // both eyes composite side by side on one framebuffer
+#else
         screenTarget = GPU3DS.activeSide == GFX_RIGHT ? SCREEN_TARGET_RIGHT : SCREEN_TARGET_LEFT;
+#endif
     else
         screenTarget = SCREEN_TARGET_BOTTOM;
 

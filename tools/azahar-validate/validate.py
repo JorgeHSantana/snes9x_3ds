@@ -141,10 +141,28 @@ def kill_azahar():
     time.sleep(1.0)
 
 
-def launch(dsx, wait_s):
+def launch(dsx, wait_s, wait_log=None, sd=None, settle_s=6.0):
+    # a stale session log from the previous run would satisfy wait_log at
+    # once (the emulator recreates it a second or two after launch)
+    if sd is not None:
+        for f in os.listdir(sd.app):
+            if f.startswith("debug_") and f.endswith("_session.log"):
+                try: os.remove(os.path.join(sd.app, f))
+                except OSError: pass
     sh(["open", "-a", "Azahar", dsx])
-    log(f"waiting {wait_s}s for boot + scene load")
-    time.sleep(wait_s)
+    if wait_log and sd is not None:
+        # gate on the session log instead of a fixed delay: e.g. "2105=07"
+        # (the scene matcher's PPU mode-7 signature) marks a Mode 7 screen
+        log(f"waiting up to {wait_s}s for {wait_log!r} in the session log")
+        t = 0.0
+        while t < wait_s:
+            time.sleep(2.0); t += 2.0
+            if wait_log in session_log(sd):
+                break
+        time.sleep(settle_s)
+    else:
+        log(f"waiting {wait_s}s for boot + scene load")
+        time.sleep(wait_s)
     osa('tell application "System Events" to tell process "azahar" to set frontmost to true')
     x, y, w, h = WINDOW
     osa(f'tell application "System Events" to tell process "azahar"\n'
@@ -218,7 +236,7 @@ def run_scene(sd, sc, dsx, out_png):
     kill_azahar()
     arm_scene(sd, sc)
     try:
-        launch(dsx, sc["wait"])
+        launch(dsx, sc["wait"], sc.get("wait_log"), sd, float(sc.get("settle", 6.0)))
         capture_top(out_png)
         # temporal stability: extra frames 0.3s apart, diffed pairwise -
         # a static region that changes between consecutive frames is a
@@ -254,6 +272,38 @@ def run_scene(sd, sc, dsx, out_png):
         if pat in text:
             raise SystemExit(f"session log contains forbidden text: {pat!r}")
     return out_png
+
+
+def sbs_disparity(png, band=20, max_shift=16):
+    """PROBE_SBS builds composite both eyes side by side on the top screen.
+    Per band of rows, the horizontal shift that best aligns the right half
+    to the left half is the stereo disparity there (in half-res pixels).
+    A flat layer gives one value everywhere; Mode 7 perspective grows it
+    from the horizon down."""
+    w, h, px = png_to_pixels(png)
+    half = w // 2
+    g = [[sum(px[y][x]) // 3 for x in range(w)] for y in range(h)]
+    out = []
+    for y0 in range(0, h, band):
+        y1 = min(h, y0 + band)
+        best = None
+        for sft in range(-max_shift, max_shift + 1):
+            err = n = 0
+            for y in range(y0, y1):
+                L = g[y][:half]; R = g[y][half:]
+                for x in range(20, half - 20):
+                    xr = x + sft
+                    if 0 <= xr < half:
+                        err += abs(L[x] - R[xr]); n += 1
+            e = err / max(n, 1)
+            if best is None or e < best[0]:
+                best = (e, sft)
+        out.append((y0, y1 - 1, best[1], best[0]))
+    return out
+
+
+def h_rows(rows):
+    return rows[-1][1] + 1 if rows else 0
 
 
 def report(name, stats, regions_expect):
@@ -305,6 +355,19 @@ def main():
                 log(f"golden written: {golden}")
                 return 0
             ok = True
+            if sc.get("sbs"):
+                print(f"\n== {sc['_name']} side-by-side disparity (rows: shift px, residual)")
+                rows = sbs_disparity(png)
+                for y0, y1, sft, e in rows:
+                    print(f"  rows {y0:3d}-{y1:3d}: {sft:+3d}  ({e:5.1f})")
+                exp = sc.get("sbs_expect")
+                if exp:
+                    top = [r[2] for r in rows if r[0] < exp.get("top_rows", 60)]
+                    bot = [r[2] for r in rows if r[1] >= h_rows(rows) - exp.get("bottom_rows", 60)]
+                    grow = (sum(bot) / len(bot)) - (sum(top) / len(top)) if top and bot else 0
+                    good = exp.get("min_growth", 0) <= abs(grow)
+                    print(f"  bottom-top disparity growth: {grow:+.1f} px  {'OK' if good else 'FAIL'}")
+                    ok &= good
             if sc.get("_temporal") is not None:
                 ok &= report(f"{sc['_name']} temporal (max consecutive-frame diff)", sc["_temporal"],
                              sc.get("temporal_expect", {}))

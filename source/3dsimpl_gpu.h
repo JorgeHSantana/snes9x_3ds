@@ -68,8 +68,11 @@ typedef struct {
 	u32         Color;
 } SRectVertex;
 
+// One Mode 7 scanline: z is 0, w carries the row's perspective factor
+// (3dsmode7persp.h) that scales its stereo shift; the right-hand vertex's
+// y is -16384 so the shader knows the pair is a scanline.
 typedef struct {
-    SVector2i    Position;
+    SVector4i    Position;
 	STexCoord2f  TexCoord;
 } SMode7LineVertex;
 
@@ -347,14 +350,14 @@ inline void __attribute__((always_inline)) gpu3dsAddTileVertexes(
 }
 
 inline void __attribute__((always_inline)) gpu3dsAddMode7LineVertexes(
-    s16 x0, s16 y0, s16 x1, s16 y1,
+    s16 x0, s16 y0, s16 x1, s16 y1, s16 perspW,
     float tx0, float ty0, float tx1, float ty1)
 {
     SVertexList *list = &GPU3DS.vertices[VBO_SCENE_MODE7_LINE];
     SMode7LineVertex *vertices = (SMode7LineVertex *) list->data + list->from + list->count;
 
-    vertices[0].Position = (SVector2i){x0, y0};
-    vertices[1].Position = (SVector2i){x1, y1};
+    vertices[0].Position = (SVector4i){x0, y0, 0, perspW};
+    vertices[1].Position = (SVector4i){x1, y1, 0, perspW};
 
     vertices[0].TexCoord = {tx0, ty0};
     vertices[1].TexCoord = {tx1, ty1};

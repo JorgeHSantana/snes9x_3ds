@@ -85,6 +85,7 @@ typedef enum {
     ULOC_STEREO_IOD,
     ULOC_STEREO_DIM,
     ULOC_STEREO_IOD2,
+    ULOC_MODE7_PERSP,
     ULOC_COUNT
 } SGPU_SHADER_ULOC;
 
@@ -305,6 +306,10 @@ typedef struct
     float                       stereoParallaxBnd12;
     float                       stereoParallaxBnd23;
     float                       stereoParallaxHiApplied;
+    // Mode 7 perspective (issue #62): the profile's strength (0..1) and the
+    // value the shader currently holds - set per layer draw, 0 off Mode 7
+    float                       stereoMode7Persp;
+    float                       mode7PerspApplied;
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
     // false when the optional right-eye VRAM texture failed to allocate;
@@ -492,6 +497,14 @@ static inline void gpu3dsSetStereoParallaxHi(float t2, float t3,
         return;
     C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD2], t2, t3, bnd12, bnd23);
     GPU3DS.stereoParallaxHiApplied = key;
+}
+
+static inline void gpu3dsSetMode7Persp(float k)
+{
+    if (GPU3DS.mode7PerspApplied == k)
+        return;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP], k, 0.0f, 0.0f, 0.0f);
+    GPU3DS.mode7PerspApplied = k;
 }
 
 static inline void gpu3dsSetStereoParallax(float v)

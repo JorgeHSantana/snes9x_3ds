@@ -3,7 +3,12 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
-_Nothing yet._
+### Features
+* **Mode 7 perspective** (issue #62): in 3D, the ground plane of Mode 7
+  screens recedes scanline by scanline (each row shifts by its own
+  distance) instead of moving as a flat wall. Automatic on Mode 7 rows;
+  a top-down or rotating map stays flat by itself. 3D Stereo tab > Mode 7
+  > Perspective (0 flat .. 8 full, per game/profile, `M7PERSP` in the .3d).
 
 ## Stable v2.2 (2026-09-06, a26c295)
 

@@ -950,13 +950,15 @@ static int *stereoEditField(int which) {
         switch (which) {
             case 0: return &p->Fade;      case 1: return &p->Haze;
             case 2: return &p->Blur;      case 3: return &p->FocusBack;
-            case 4: return &p->FocusFront; default: return &p->EdgeMode;
+            case 4: return &p->FocusFront; case 6: return &p->Mode7Persp;
+            default: return &p->EdgeMode;
         }
     }
     switch (which) {
         case 0: return &settings3DS.StereoFade;      case 1: return &settings3DS.StereoHaze;
         case 2: return &settings3DS.StereoBlur;      case 3: return &settings3DS.StereoFocusBack;
-        case 4: return &settings3DS.StereoFocusFront; default: return &settings3DS.StereoEdgeMode;
+        case 4: return &settings3DS.StereoFocusFront; case 6: return &settings3DS.StereoMode7Persp;
+        default: return &settings3DS.StereoEdgeMode;
     }
 }
 
@@ -1724,6 +1726,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                             p->FocusBack = settings3DS.StereoFocusBack;
                             p->FocusFront = settings3DS.StereoFocusFront;
                             p->EdgeMode = settings3DS.StereoEdgeMode;
+                            p->Mode7Persp = settings3DS.StereoMode7Persp;
                         }
                         snprintf(p->Name, sizeof(p->Name), "Profile %d", (newCount + 1) & 0xFF);
                         settings3DS.StereoProfilesCount++;
@@ -1877,6 +1880,21 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         // the Focus/Effects zone previews live too: full scene, effects
         // applied as the gauges move (issue #61 follow-up, Jorge's ask)
         s_stereoFxFirst = (int)items.size();
+        {
+            // Mode 7 perspective (issue #62): lives in the live-preview
+            // zone (full scene); dims/hides like any row the paused
+            // screen did not draw
+            bool m7Used = !settings3DS.isRomLoaded || S9xMode7DrawnLastFrame();
+            if (m7Used || !settings3DS.StereoHideUnused) {
+                AddMenuHeader2(items, "Mode 7"_s);
+                AddMenuGauge(items, "  Perspective"_s, 0, 8, *stereoEditField(6),
+                    []( int val ) { if (CheckAndUpdate( *stereoEditField(6), val )) s_stereoPreviewDirty = true; }, true);
+                if (!m7Used) items.back().TextColor = stereo3dDimColor();
+                items.emplace_back(nullptr, MenuItemType::Textarea, "  The ground recedes: each Mode 7 scanline shifts by its"_s, ""_s);
+                items.emplace_back(nullptr, MenuItemType::Textarea, "  own distance (0 = flat plane). Only acts on Mode 7"_s, ""_s);
+                items.emplace_back(nullptr, MenuItemType::Textarea, "  screens; a top-down map stays flat by itself."_s, ""_s);
+            }
+        }
         AddMenuHeader2(items, "Focus"_s);
         AddMenuGauge(items, "  Back"_s, -8, 0, *stereoEditField(3),
             []( int val ) { if (CheckAndUpdate( *stereoEditField(3), val )) s_stereoPreviewDirty = true; }, true);
@@ -2638,6 +2656,7 @@ void settingsResetStereo3D()
     settings3DS.StereoFocusBack = -1;
     settings3DS.StereoFocusFront = 1;
     settings3DS.StereoEdgeMode = 1;   // Trim
+    settings3DS.StereoMode7Persp = 8;   // full perspective on Mode 7 planes
     settings3DS.StereoProfilesCount = 0;
     settings3DS.StereoBindsCount = 0;
     s_stereoEditIdx = -1;
@@ -2672,6 +2691,7 @@ void settingsLoadStereo3D()
     int *tFB = &settings3DS.StereoFocusBack;
     int *tFF = &settings3DS.StereoFocusFront;
     int *tEdge = &settings3DS.StereoEdgeMode;
+    int *tM7 = &settings3DS.StereoMode7Persp;
 
     char line[96], name[16];
     int v;
@@ -2692,11 +2712,11 @@ void settingsLoadStereo3D()
                 for (int i = 0; i < 5; i++) p->DepthP1[i] = stereoDepthDefault[i];
                 for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = stereoDepthDefault[4];
                 p->Fade = p->Haze = p->Blur = 0;
-                p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1;
+                p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1; p->Mode7Persp = 8;
                 tDepth = p->Depth; tDepthP1 = p->DepthP1; tObjHi = p->DepthOBJHi;
                 tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
-                tEdge = &p->EdgeMode;
+                tEdge = &p->EdgeMode; tM7 = &p->Mode7Persp;
             }
             continue;
         }
@@ -2755,6 +2775,8 @@ void settingsLoadStereo3D()
             *tFF = v < 0 ? 0 : (v > 8 ? 8 : v);
         if (sscanf(line, "EDGEMODE=%d", &v) == 1)
             *tEdge = v < 0 ? 0 : (v > 2 ? 2 : v);
+        if (sscanf(line, "M7PERSP=%d", &v) == 1)
+            *tM7 = v < 0 ? 0 : (v > 8 ? 8 : v);
     }
     fclose(f);
 }
@@ -2778,6 +2800,8 @@ static void settingsWriteStereo3DGlobals(FILE *f)
     fprintf(f, "FOCUSFRONT=%d\n", settings3DS.StereoFocusFront);
     fprintf(f, "# edge cleanup for parallax side columns: 0 off, 1 trim, 2 zoom\n");
     fprintf(f, "EDGEMODE=%d\n", settings3DS.StereoEdgeMode);
+    fprintf(f, "# Mode 7 perspective: each scanline shifts by its own distance (0 flat .. 8 full)\n");
+    fprintf(f, "M7PERSP=%d\n", settings3DS.StereoMode7Persp);
 }
 
 // Writes the current game's LOOK (depths/focus/effects/edge) as the global
@@ -2817,8 +2841,8 @@ void settingsSaveStereo3D()
             fprintf(f, "%sP1=%d\n", stereoDepthKeys[i], p->DepthP1[i]);
         fprintf(f, "OBJP2=%d\nOBJP3=%d\n", p->DepthOBJHi[0], p->DepthOBJHi[1]);
         fprintf(f, "FADE=%d\nHAZE=%d\nBLUR=%d\n", p->Fade, p->Haze, p->Blur);
-        fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\n",
-            p->FocusBack, p->FocusFront, p->EdgeMode);
+        fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\nM7PERSP=%d\n",
+            p->FocusBack, p->FocusFront, p->EdgeMode, p->Mode7Persp);
     }
     if (settings3DS.StereoWatchAddr >= 0)
         fprintf(f, "WATCH=%X\n", settings3DS.StereoWatchAddr);

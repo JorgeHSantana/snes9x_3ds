@@ -308,6 +308,7 @@ typedef struct {
                                                // linearly with distance to the zone edge (same .3d file)
     int                 StereoFocusBack;       // -8..0: back edge of the focus zone (default -1)
     int                 StereoFocusFront;      // 0..+8: front edge of the focus zone (default +1)
+    int                 StereoMode7Persp;      // Mode 7 perspective strength 0..8 (issue #62)
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
                                                // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)
@@ -326,6 +327,7 @@ typedef struct {
         int  Fade, Haze, Blur;
         int  FocusBack, FocusFront;
         int  EdgeMode;
+        int  Mode7Persp;   // 0 = flat plane .. 8 = full per-scanline perspective (issue #62)
     };
     struct SStereoBind {
         u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C

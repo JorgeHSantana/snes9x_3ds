@@ -34,6 +34,7 @@ Exit code 1 when a region falls outside its `expect` / `ab_expect` band.
 |---|---|---|
 | `-DPROBE_FORCE_SLIDER` | `osGet3DSliderState()` reads 1.0 (Azahar never delivers a slider value) | every 3D scene |
 | `-DPROBE_DRAW_STATS` | `[drawstats]` per-frame draw/vertex counts in the session log every 60 frames | perf numbers |
+| `-DPROBE_SBS` | both eyes composite side by side on the top screen (left half = left eye) so one capture carries the per-row disparity (`"sbs": true` scenes) | stereo geometry (Mode 7 perspective) |
 
 ```
 make clean && make 3dsx EXTRA_DEFINES='-DPROBE_FORCE_SLIDER'
@@ -67,6 +68,8 @@ directions** - a probe build shipped by accident is a real risk.
   header title since v2.1.
 * `regions` are top-screen pixel boxes; bands are percentages of changed
   pixels (sum of channel deltas > 40).
+* `wait_log` gates the capture on a session-log substring instead of a fixed delay (e.g. `"2105=07"`, the scene matcher's PPU mode-7 signature), then waits `settle` seconds.
+* `sbs: true` (with a `-DPROBE_SBS` build) prints the per-row-band disparity between the two eyes; `sbs_expect.min_growth` asserts how much it grows from the top rows to the bottom rows.
 * `frames` > 1 captures that many frames 0.3 s apart and reports the worst
   consecutive-frame diff per region (`temporal_expect`): a static region
   that changes between frames is flicker or wobble.

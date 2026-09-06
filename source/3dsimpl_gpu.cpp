@@ -508,6 +508,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
     SLayer *layer = &list->layers[LAYER_WINDOW_LR];
 
     gpu3dsSetStereoParallax(0.0f);
+    gpu3dsSetMode7Persp(0.0f);
     // neutral spotlight for the window/depth prepass: a stale dim from
     // the previous frame would alpha-discard the window masks
     gpu3dsSetStereoPrioDim(1.0f, 1.0f);
@@ -602,6 +603,12 @@ void gpu3dsDrawLayers(SLayerList *list) {
             int to = from + layer->sectionsByTarget[i];
 
             if (to <= from) continue;
+
+            // Mode 7 perspective (issue #62): the strength reaches the
+            // shader only for a Mode 7 scanline layer; every other layer
+            // draws with 0, which the shader treats as an exact no-op
+            gpu3dsSetMode7Persp(list->sections[from].vboId == VBO_SCENE_MODE7_LINE
+                ? GPU3DS.stereoMode7Persp : 0.0f);
 
             GPU3DS.currentRenderState.depthTest = id < LAYER_OBJ ? SGPU_STATE_ENABLED : SGPU_STATE_DISABLED;
 

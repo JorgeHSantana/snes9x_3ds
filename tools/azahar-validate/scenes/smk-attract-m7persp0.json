@@ -1,0 +1,18 @@
+{
+  "rom": "sdmc:/snes/vanilla/Super Mario Kart (USA).sfc",
+  "wait": 240,
+  "wait_log": "2105=07",
+  "settle": 8,
+  "sbs": true,
+  "regions": {},
+  "log_expect": [
+    "ROM loaded: SUPER MARIO KART"
+  ],
+  "title": "SMK attract race, BG1 -6, Mode 7 Perspective 0 - flat plane, uniform disparity",
+  "stereo3d": [
+    {
+      "file": "SUPER MARIO KART",
+      "content": "BG1=-6\\nBG2=0\\nBG3=0\\nBG4=0\\nOBJ=0\\nFADE=0\\nHAZE=0\\nBLUR=0\\nFOCUSBACK=-8\\nFOCUSFRONT=8\\nEDGEMODE=0\\nM7PERSP=0"
+    }
+  ]
+}

@@ -109,6 +109,22 @@ flapping. The
 verdict lives in `GPU3DSExt.blurAutoLight`, fed per emulated frame from
 `impl3dsRunOneFrame` BEFORE the MSU-1 FMV pacing rewrites the skip flag.
 
+### Mode 7 perspective (issue #62)
+
+A Mode 7 plane is drawn as one scanline pair per row through the tile
+shader, so it always received the layer's flat parallax. Each row already
+knows how many texels it walks across the screen (the A/B/C/D matrix);
+that span is the row's distance. `gfxhw` queues the frame's rows, takes
+the smallest span as the nearest row, and stores
+`w = 256 * spanNearest / span` (clamped 8..256) in the scanline vertex's
+w (`3dsmode7persp.h`). The tile vertex shader applies
+`shift *= 1 + k * (w/256 - 1)` with `mode7Persp.x = k` (the profile's
+`M7PERSP` 0..8 over 8) set only for the Mode 7 layer's draw and 0 for
+every other draw, so tiles and 2D are exact no-ops. The nearest row keeps
+the gauge's full shift, the horizon barely moves, and a top-down map
+(uniform span) stays flat by itself - nothing detects "which kind" of
+Mode 7 a game is drawing. Ghost passes inherit the factor.
+
 ## Final composition
 
 `impl3dsSceneRender()` (in `3dsimpl.cpp`, see [Platform Layer](platform-layer.md)) draws `SNES_MAIN` to the top screen with stretch/crop/overscan/filter settings, plus the background image, scanline texture, bezel overlay and notifications — twice with ±IOD offsets when stereoscopic 3D is active. The menu system draws the bottom screen in software (see [Menu and UI](menu-ui.md)).
