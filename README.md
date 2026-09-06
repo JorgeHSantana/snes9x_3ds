@@ -101,6 +101,11 @@ Please keep PRs focused and test on hardware where possible.
 AI-assisted code is fine, but contributors are responsible for understanding and validating the code they submit.
 Broad, risky, hard-to-review PRs may be closed or split into smaller changes. Prototype work may still be credited if it informs a later implementation.
 
+Testing: rendering and 3D changes ship with a pixel proof from the Azahar
+harness in `tools/azahar-validate/` (see its README); what only the console
+can verify is listed in `docs/testing/hardware-checklist.md`. Every release
+carries its `.elf`, so a Luma crash dump can be symbolized.
+
 AI note: I use AI assistants as part of my development workflow, including code review, debugging, planning, implementation and documentation. All changes are reviewed and adjusted by me before they are merged.
 
 ## Updating the emulator

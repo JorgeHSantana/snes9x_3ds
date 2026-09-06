@@ -8,6 +8,11 @@ Notable changes to this project will be documented in this file.
   available before a game is loaded).
   Saves when the menu opens, on HOME, lid close and exit; loads that save
   when the game starts. Off by default; the per-game option still works.
+* **Validation harness** (issue #69, for contributors): `tools/azahar-validate`
+  boots a declared scene in Azahar with zero key presses and diffs the top
+  screen per region against a golden or a second scene; a hardware
+  checklist lists what only the console can verify. Every release now
+  ships its `.elf` so field crash dumps can be symbolized.
 
 ### Fixes
 * Blur Quality Light (and Auto under load) made blurred backgrounds

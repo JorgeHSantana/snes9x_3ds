@@ -35,6 +35,13 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   effects + Blur Quality Auto/Full/Light with adaptive hysteresis (#71),
   dimmed/hidden unused rows, .3d keyed by ROM title with migration,
   update mid-game with in-session reload (#66, #73), dialog sizing.
+* **Stable v2.2 (2026-09-06)** — Auto Save / Auto Load (#72); Blur Light
+  steady per eye (blurred backgrounds no longer wobble); Blur Auto
+  warm-up; post-update exit crash fixed from the Luma dump (background
+  directory sweep vs. sdmc unmount) plus exit-path hardening; MSU-1
+  resumes with music; MSU-1 pack resume keeps the browser at the pack's
+  parent; SAVESTATES section global; Azahar validation harness (#69) and
+  `.elf` on every release.
 
 ## Issue ledger
 
@@ -108,9 +115,9 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
 | 66 | Update falha com jogo carregado | FECHADA | Proposta na issue: savestate temporário no SD → liberar ROM → update → reload no fim/erro; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
 | 67 | 3dsmain.cpp virou monólito | ABERTA | Decompor em módulos, 1 por PR; começar pelo loader/saver .3d (destrava testes do parser) |
 | 68 | Core legado sem rede de proteção | ABERTA | Caracterização nos pontos tocados: funções puras testadas p/ macros de stereo, harness de hash determinístico p/ bisects |
-| 69 | Funil de validação = 1 humano + hardware | ABERTA | Harness de screenshot-diff no Azahar, savestates versionados, checklist de hardware; PROBE_FORCE_SLIDER via EXTRA_DEFINES já entregue |
+| 69 | Funil de validação = 1 humano + hardware | FECHADA | Harness de screenshot-diff no Azahar, savestates versionados, checklist de hardware; PROBE_FORCE_SLIDER via EXTRA_DEFINES já entregue; harness + checklist + §13 entregues, Stable v2.2 (2026-09-06) |
 | 70 | Gap entre prioridades de um BG (buraco do pilar MMX3) | FECHADA | ENTREGUE: 'Fill Priority Gaps' (default ON) — extensão nas fronteiras (2 direções + hires); validada no state do pilar; falta A/B do Jorge no hardware p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
 | 71 | DBZ Super Butoden 2/3 lento com blur/névoa (New e 3DS Mode) | FECHADA | 3 rodadas: fusão de grupos por resultado, fill por-chamada, bases compartilhadas por tint (4→3 passes) + opção Blur Quality Light (1 ghost alternado); 'Old' = 3DS Mode; névoa = flicker do jogo; aguarda reteste do Jorge; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
-| 72 | Auto Save / Auto Load com a linha do tempo, sem castigar o SD | ABERTA | ideia pós-v2.1: retomar com pergunta, fita do rewind persistida na saída (opt-in), gravação só em eventos calmos e atômica |
+| 72 | Auto Save / Auto Load com a linha do tempo, sem castigar o SD | FECHADA | ideia pós-v2.1: retomar com pergunta, fita do rewind persistida na saída (opt-in), gravação só em eventos calmos e atômica; entregue (opção global, gatilhos menu/HOME/tampa/saída, load no boot); fita do rewind persistida fica para depois; Stable v2.2 (2026-09-06) |
 | 73 | Update com jogo aberto falha (malloc); fluxo: fechar, atualizar, recarregar na sessão | FECHADA | buffer SOC reservado no boot; jogo descarregado durante o download e recarregado do .update.frz na mesma sessão; log do heap; aguarda reteste; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
 | 74 | Blur como pós-processo por camada (investigação) | ABERTA | ideia do Jorge 2026-09-06; custo seções×1 + quads em vez de seções×3; bloqueios: VRAM (alvo reciclado por olho), profundidade/color math na composição, por prioridade |
