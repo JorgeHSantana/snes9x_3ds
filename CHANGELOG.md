@@ -12,8 +12,8 @@ Notable changes to this project will be documented in this file.
   out; per game/profile, `M7PERSP` in the .3d).
 * Mode 7 with EXTBG: the plane is BG1 and the priority pixels are BG2
   Prio 1 (Mario Kart puts the road there); which is which depends on the
-  game, so both stay as absolute gauges - the 3D tab lists the rows the
-  screen really draws, and the Mode 7 block repeats the BG2 Prio 1 gauge.
+  game, so both stay as absolute gauges in the Depth list, which shows the
+  rows the paused screen really draws.
 * **Mode 7 effects by distance**: with Effects by Distance on (default),
   fade and haze fog the plane row by row towards the horizon and blur
   widens with distance, instead of one tint and one smear for the whole
