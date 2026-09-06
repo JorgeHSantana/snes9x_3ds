@@ -166,8 +166,18 @@ void file3dsSetCurrentDir(const char* targetDir) {
     }
 }
 
+void file3dsBgScanShutdown()
+{
+    bgScanAbort = true;
+    for (int i = 0; i < 600 && bgScanRunning; i++)   // up to 3s; a sweep step is one readdir
+        svcSleepThread(5 * 1000 * 1000LL);
+    if (bgScanRunning)
+        log3dsWrite("[file3ds] background scan still running at shutdown (waited 3s)");
+}
+
 void file3dsFinalize() 
 {
+    file3dsBgScanShutdown();
     log3dsWrite("dealloc file buffer, clear romNameMappings");
     free(g_fileBuffer);
     romNameMappings.clear();
@@ -348,6 +358,12 @@ static u64 currentDirCacheCreatedAt = 0;
 static LightLock bgLock;
 static bool bgLockInitialized = false;
 static volatile bool bgScanRunning = false;
+// set once at shutdown: the sweep stops at its next readdir and no new
+// sweep starts. The thread is detached, so the exit path WAITS for
+// bgScanRunning to drop before main returns - libctru unmounts sdmc:
+// right after, and a readdir on a removed device reads a NULL devoptab
+// (field crash: data abort at NULL+0x44 = devoptab->dirnext_r).
+static volatile bool bgScanAbort = false;
 static bool bgResultReady = false;
 static std::vector<DirectoryEntry> bgResult;
 static int bgResultRomCount = 0;
@@ -384,7 +400,7 @@ static bool file3dsProbeMsuPack(const char* parentDir, const char* dirName, char
     bool hasMsuFiles = false;
     struct dirent* entry;
 
-    while ((entry = readdir(d)) != NULL) {
+    while (!bgScanAbort && (entry = readdir(d)) != NULL) {
         if (entry->d_name[0] == '.' || entry->d_type != DT_REG)
             continue;
 
@@ -612,7 +628,7 @@ static void file3dsBgScanThread(void*) {
 static void file3dsBgStartValidation() {
     file3dsBgLockInit();
 
-    if (bgScanRunning) return;
+    if (bgScanRunning || bgScanAbort) return;
     bgScanRunning = true;
 
     LightLock_Lock(&bgLock);

@@ -17,10 +17,14 @@ Notable changes to this project will be documented in this file.
   after a ROM or state load.
 * MSU-1 music was silent after the post-update resume: the parked state
   is now loaded inside a mixer drain window, like every other state load.
-* Exit-path hardening after a field crash at the post-update exit: the
-  session log is thread-safe (the MSU-1 read-ahead thread logs too), and
-  a read-ahead thread that does not exit in time keeps its memory instead
-  of being torn down under itself.
+* Crash at exit right after a mid-game update (data abort): the file
+  browser's background directory sweep, started when the unloaded game
+  brought the Load Game tab back, was still reading the SD card when the
+  process ended and the card was unmounted. The sweep now stops and is
+  waited for on exit. (Diagnosed from the Luma crash dump.)
+* Exit-path hardening found on the way: the session log is thread-safe
+  (the MSU-1 read-ahead thread logs too), and a read-ahead thread that
+  does not exit in time keeps its memory instead of being torn down.
 
 ## Stable v2.1 (2026-09-05, 254369f)
 

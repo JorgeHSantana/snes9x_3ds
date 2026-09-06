@@ -59,6 +59,9 @@ inline int file3dsClose(FILE* fp) {
 
 bool file3dsInitialize();
 void file3dsFinalize();
+// stop the background directory sweep and wait for it (called by
+// file3dsFinalize before the process returns and sdmc: is unmounted)
+void file3dsBgScanShutdown();
 
 void file3dsGoUpOrDownDirectory(const DirectoryEntry& entry);
 void file3dsGoToParentDirectory(void);
