@@ -596,27 +596,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // (planes are (priority+1)*3 = 3/6/9/12, see S9xDrawOBJSHardware,
             // so the boundaries sit halfway between them).
             float tierShift[4];
-            int lid = (int)id < 8 ? (int)id : 0;   // per-layer tables have 8 entries; later ids are neutral
-            float tierBnd01 = GPU3DS.stereoPrioZBoundary[lid];
+            float tierBnd01 = GPU3DS.stereoPrioZBoundary[id];
             float tierBnd12 = STEREO_TIER_PARKED, tierBnd23 = STEREO_TIER_PARKED;
-            // Mode 7 + EXTBG: BG2 is the SAME plane as BG1 drawn again with a
-            // per-pixel priority split (Mario Kart puts the bit on the road).
-            // One plane, one depth: both BG2 tiers follow BG1's gauge, and the
-            // EXTBG pixels take an offset = (BG2 Prio 1 - BG2 Prio 0), 0 by
-            // default. Before this the road and the grass answered to
-            // different gauges ("a BG está errada", Jorge).
-            float depth0 = GPU3DS.stereoLayerDepth[lid], depth1 = GPU3DS.stereoLayerDepthP1[lid];
-            bool m7ExtBg = (int)id == 1 && list->layersTotalByTarget[i] > 0 &&
-                layer->sectionsByTarget[i] > 0 &&
-                list->sections[layer->sectionsOffset + (sub ? 0 : layer->sectionsByTarget[TARGET_SNES_SUB])].vboId == VBO_SCENE_MODE7_LINE;
-            if (m7ExtBg) {
-                float plane = GPU3DS.stereoLayerDepth[0];
-                depth1 = plane + (GPU3DS.stereoLayerDepthP1[1] - GPU3DS.stereoLayerDepth[1]);
-                depth0 = plane;
-            }
             {
-                tierShift[0] = GPU3DS.stereoEyeIOD * depth0 * STEREO_PARALLAX_SCALE;
-                tierShift[1] = GPU3DS.stereoEyeIOD * depth1 * STEREO_PARALLAX_SCALE;
+                tierShift[0] = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
+                tierShift[1] = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE;
                 tierShift[2] = tierShift[1];
                 tierShift[3] = tierShift[1];
                 if (id == LAYER_OBJ) {
@@ -802,8 +786,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
             }
 
             float tierDepth[4];
-            tierDepth[0] = depth0;
-            tierDepth[1] = depth1;
+            tierDepth[0] = GPU3DS.stereoLayerDepth[id];
+            tierDepth[1] = GPU3DS.stereoLayerDepthP1[id];
             tierDepth[2] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[0] : tierDepth[1];
             tierDepth[3] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[1] : tierDepth[1];
             int nTiers = (id == LAYER_OBJ) ? 4 : ((int)id < LAYER_OBJ ? 2 : 0);
