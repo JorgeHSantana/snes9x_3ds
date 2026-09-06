@@ -10,6 +10,10 @@ Notable changes to this project will be documented in this file.
   a top-down or rotating map stays flat by itself. 3D Stereo tab > Mode 7
   > Perspective (0 flat, 4 full perspective, 5-8 push the near rows further
   out; per game/profile, `M7PERSP` in the .3d).
+* Mode 7 with EXTBG is one plane: BG2 follows the BG1 depth and the
+  priority pixels take a relative offset (3D tab > Mode 7 > EXTBG offset),
+  so the road and the grass of Mario Kart no longer answer to different
+  gauges.
 * **Mode 7 effects by distance**: with Effects by Distance on (default),
   fade and haze fog the plane row by row towards the horizon and blur
   widens with distance, instead of one tint and one smear for the whole
