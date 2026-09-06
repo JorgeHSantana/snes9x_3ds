@@ -35,7 +35,7 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/snes9x_3ds -w /snes9x_3ds \
             devkitpro/devkitarm bash -c "make clean && make release BUILD_GIT_SHA=${GITHUB_SHA::7}"
-          ls -la output/snes9x_3ds.cia output/snes9x_3ds.3dsx
+          ls -la output/snes9x_3ds.cia output/snes9x_3ds.3dsx output/snes9x_3ds.elf
 
       - name: Backfill release notes (idempotent)
         run: |
@@ -58,7 +58,7 @@ jobs:
             awk '/^## Unreleased/{f=1;next}/^## /{f=0}f' CHANGELOG.md
           } > /tmp/notes.md
           gh release create nightly-latest \
-            output/snes9x_3ds.cia output/snes9x_3ds.3dsx \
+            output/snes9x_3ds.cia output/snes9x_3ds.3dsx output/snes9x_3ds.elf \
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Nightly $(date -u +%Y-%m-%d) ($SHORT)" \
@@ -78,7 +78,7 @@ jobs:
           # release notes = the CHANGELOG's Unreleased section
           awk '/^## Unreleased/{f=1;next}/^## /{f=0}f' CHANGELOG.md > /tmp/notes.md
           gh release create "$TAG" \
-            output/snes9x_3ds.cia output/snes9x_3ds.3dsx \
+            output/snes9x_3ds.cia output/snes9x_3ds.3dsx output/snes9x_3ds.elf \
             --latest \
             --target "$GITHUB_SHA" \
             --title "Stable v$VER ($(date -u +%Y-%m-%d))" \
