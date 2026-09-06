@@ -3591,6 +3591,11 @@ void S9xRenderScreenHardware (bool8 sub)
 				{ \
 					int depth = bgAlpha[bg] + d*256; \
 					layerUseMark(&s_layerUse, bg, (d) >= 8 ? 1 : 0); \
+					/* the tile macros set the BG's priority boundary every frame; the */ \
+					/* Mode 7 draws never did, so the EXTBG's high pass (BG2, depth 8) */ \
+					/* landed in tier 0 and answered to the BG2 Prio 0 gauge (Jorge). */ \
+					/* BG2: boundary between its two passes (2 and 8); BG1: parked.  */ \
+					GPU3DS.stereoPrioZBoundary[bg] = (bg == 1) ? ((2 + 8) * 0.5f / 32.0f) : STEREO_TIER_PARKED; \
 					if (tile0) \
 						S9xDrawBackgroundMode7HardwareRepeatTile0(bg, sub, depth); \
 					S9xDrawBackgroundMode7Hardware(bg, sub, depth, alphaTestActive); \
