@@ -573,6 +573,12 @@ void file3dsShowCachingIndicator(std::vector<SMenuTab>& menuTabs) {
     menu3dsSwapBuffersAndWaitForVBlank();
 }
 
+bool file3dsIsMsuPackDir(const char* parentDir, const char* dirName)
+{
+    char rom[NAME_MAX + 1];
+    return file3dsProbeMsuPack(parentDir, dirName, rom, sizeof(rom));
+}
+
 static void file3dsBgScanThread(void*) {
     char dir[PATH_MAX];
     u32 gen;

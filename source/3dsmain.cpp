@@ -2978,18 +2978,46 @@ static void emulatorUnloadRom()
     log3dsWrite("[upd] game unloaded for the update");
 }
 
-// Bring a parked game back: load the ROM at romPath, then its
-// <rom>.update.frz (consumed on success). Shared by the in-session
-// resume after an update and by the next-launch resume (update-resume.txt).
-static bool emulatorResumeParked(const char* romPath)
+// Point the browser at a full ROM path the way a browser pick would:
+// current dir = the ROM's folder and romFileName = the file - unless that
+// folder is an MSU-1 pack, which the browser shows as ONE virtual entry
+// ("Pack/rom.sfc") from its parent and never enters. Without this the
+// resume after an update left the browser inside the pack (Jorge's
+// report). Returns false when the path has no directory part.
+static bool emulatorPointBrowserAt(const char* romPath)
 {
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s", romPath);
     char* slash = strrchr(path, '/');
     if (slash == NULL || slash[1] == '\0') { return false; }
     *slash = '\0';
+    const char* file = slash + 1;
+
+    char* parentSlash = strrchr(path, '/');
+    if (parentSlash != NULL && parentSlash[1] != '\0') {
+        char parent[PATH_MAX];
+        size_t n = (size_t)(parentSlash - path) + 1;      // keep the trailing '/'
+        if (n < sizeof(parent)) {
+            memcpy(parent, path, n); parent[n] = '\0';
+            if (file3dsIsMsuPackDir(parent, parentSlash + 1)) {
+                parent[n - 1] = '\0';                   // SetCurrentDir adds it back
+                file3dsSetCurrentDir(parent);
+                snprintf(romFileName, sizeof(romFileName), "%s/%s", parentSlash + 1, file);
+                return true;
+            }
+        }
+    }
     file3dsSetCurrentDir(path);
-    snprintf(romFileName, sizeof(romFileName), "%s", slash + 1);
+    snprintf(romFileName, sizeof(romFileName), "%s", file);
+    return true;
+}
+
+// Bring a parked game back: load the ROM at romPath, then its
+// <rom>.update.frz (consumed on success). Shared by the in-session
+// resume after an update and by the next-launch resume (update-resume.txt).
+static bool emulatorResumeParked(const char* romPath)
+{
+    if (!emulatorPointBrowserAt(romPath)) { return false; }
     if (!emulatorLoadRom()) {
         log3dsWrite("[upd] resume: could not reload %s", romPath);
         return false;
@@ -3980,12 +4008,8 @@ static bool tryAutoBoot()
     fclose(f);
     if (!ok) { return false; }
     path[strcspn(path, "\r\n")] = '\0';
-    char* slash = strrchr(path, '/');
-    if (slash == NULL || slash[1] == '\0') { return false; }
-    *slash = '\0';
-    file3dsSetCurrentDir(path);
-    snprintf(romFileName, sizeof(romFileName), "%s", slash + 1);
-    log3dsWrite("[autoboot] %s/%s", path, romFileName);
+    if (!emulatorPointBrowserAt(path)) { return false; }
+    log3dsWrite("[autoboot] %s%s", file3dsGetCurrentDir(), romFileName);
     return emulatorLoadRom();
 }
 

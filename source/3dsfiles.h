@@ -62,6 +62,9 @@ void file3dsFinalize();
 // stop the background directory sweep and wait for it (called by
 // file3dsFinalize before the process returns and sdmc: is unmounted)
 void file3dsBgScanShutdown();
+// true when parentDir/dirName is an MSU-1 pack folder (one ROM + audio/data
+// files) - the browser shows those as one virtual entry and never enters them
+bool file3dsIsMsuPackDir(const char* parentDir, const char* dirName);
 
 void file3dsGoUpOrDownDirectory(const DirectoryEntry& entry);
 void file3dsGoToParentDirectory(void);

@@ -18,6 +18,9 @@ Notable changes to this project will be documented in this file.
   after a ROM or state load.
 * MSU-1 music was silent after the post-update resume: the parked state
   is now loaded inside a mixer drain window, like every other state load.
+* Resuming an MSU-1 game after an update (or autoboot) left the file
+  browser inside the pack folder; it now points at the pack's parent with
+  the pack as the single entry, like a browser pick.
 * Crash at exit right after a mid-game update (data abort): the file
   browser's background directory sweep, started when the unloaded game
   brought the Load Game tab back, was still reading the SD card when the
