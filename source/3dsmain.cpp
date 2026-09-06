@@ -1902,6 +1902,17 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 if (!m7Used) items.back().TextColor = stereo3dDimColor();
                 items.emplace_back(nullptr, MenuItemType::Textarea, "  Each Mode 7 scanline shifts by its own distance. 0 = flat,"_s, ""_s);
                 items.emplace_back(nullptr, MenuItemType::Textarea, "  4 = full perspective, 5-8 push the near rows further out."_s, ""_s);
+                // the plane's second Mode 7 layer: EXTBG, which the PPU exposes
+                // as BG2 priority 1 (Jorge asked for it beside the plane here;
+                // it is the same value as the Depth list's BG2 Prio 1 row)
+                {
+                    bool extUsed = !settings3DS.isRomLoaded || S9xLayerUsedLastFrame(1, 1);
+                    if (extUsed || !settings3DS.StereoHideUnused) {
+                        AddMenuGauge(items, "  Above the plane (EXTBG)"_s, -8, 8, *stereoEditDepthP1(1),
+                            []( int val ) { if (CheckAndUpdate( *stereoEditDepthP1(1), val )) s_stereoPreviewDirty = true; }, true, true);
+                        if (!extUsed) items.back().TextColor = stereo3dDimColor();
+                    }
+                }
                 AddMenuCheckbox(items, "  Effects by Distance"_s, *stereoEditField(7) != 0,
                     []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(7), v )) s_stereoPreviewDirty = true; });
                 if (!m7Used) items.back().TextColor = stereo3dDimColor();
