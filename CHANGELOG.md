@@ -3,6 +3,10 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
+_Nothing yet._
+
+## Stable v2.2 (2026-09-06, a26c295)
+
 ### Features
 * **Auto Save / Auto Load** (issue #72): Emulator tab > SAVESTATES (global,
   available before a game is loaded).

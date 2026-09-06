@@ -35,7 +35,7 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   effects + Blur Quality Auto/Full/Light with adaptive hysteresis (#71),
   dimmed/hidden unused rows, .3d keyed by ROM title with migration,
   update mid-game with in-session reload (#66, #73), dialog sizing.
-* **Stable v2.2 (2026-09-06)** — Auto Save / Auto Load (#72); Blur Light
+* **Stable v2.2 (2026-09-06, a26c295)** — Auto Save / Auto Load (#72); Blur Light
   steady per eye (blurred backgrounds no longer wobble); Blur Auto
   warm-up; post-update exit crash fixed from the Luma dump (background
   directory sweep vs. sdmc unmount) plus exit-path hardening; MSU-1
