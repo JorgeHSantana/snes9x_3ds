@@ -1861,9 +1861,11 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             { "  Sprites Prio 0", 4, 0 }, { "  Sprites Prio 1", 4, 1 },
             { "  Sprites Prio 2", 4, 2 }, { "  Sprites Prio 3", 4, 3 },
         };
+        char rowLog[160]; rowLog[0] = '\0';
         for (int r = 0; r < 12; r++) {
             int layer = rows[r].layer, prio = rows[r].prio;
             bool used = stereo3dRowUsed(layer, prio);
+            if (used) { size_t n = strlen(rowLog); snprintf(rowLog + n, sizeof(rowLog) - n, "%s%s", n ? " " : "", rows[r].name + 2); }
             if (!used && settings3DS.StereoHideUnused) continue;
             AddMenuGauge(items, rows[r].name, -8, 8, *stereo3dGaugeValue(layer, prio),
                 [layer, prio]( int val ) { if (CheckAndUpdate( *stereo3dGaugeValue(layer, prio), val )) s_stereoPreviewDirty = true; }, true, true);
@@ -1872,6 +1874,9 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             s_stereoGaugePrio[s_stereoGaugeCount] = prio;
             s_stereoGaugeCount++;
         }
+        // what the paused frame drew, for field reports and the harness
+        log3dsWrite("[3dtab] used rows: %s | listed %d | mode7 block %s", rowLog, s_stereoGaugeCount,
+                    (!settings3DS.isRomLoaded || S9xMode7DrawnLastFrame() || PPU.BGMode == 7) ? "yes" : "no");
         items.emplace_back(nullptr, MenuItemType::Textarea, "  Editing a gauge spotlights its layer on the game"_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  screen, moving live. Hold X to see the full scene."_s, ""_s);
         items.emplace_back(nullptr, MenuItemType::Textarea, "  + pops out of the screen, - sinks into it."_s, ""_s);
