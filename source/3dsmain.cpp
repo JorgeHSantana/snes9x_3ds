@@ -1895,7 +1895,9 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             log3dsWrite("[m7] menu: drawnLastFrame=%d bgMode=%d bg1used=%d hideUnused=%d",
                         S9xMode7DrawnLastFrame() ? 1 : 0, (int)PPU.BGMode,
                         S9xLayerUsedLastFrame(0, 0) ? 1 : 0, settings3DS.StereoHideUnused);
-            if (m7Used || !settings3DS.StereoHideUnused) {
+            // the block exists only while the game actually uses Mode 7
+            // (Jorge's UX) - regardless of Hide Unused
+            if (m7Used) {
                 AddMenuHeader2(items, "Mode 7"_s);
                 AddMenuGauge(items, "  Perspective"_s, 0, 8, *stereoEditField(6),
                     []( int val ) { if (CheckAndUpdate( *stereoEditField(6), val )) s_stereoPreviewDirty = true; }, true);
