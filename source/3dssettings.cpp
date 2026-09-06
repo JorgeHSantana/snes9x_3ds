@@ -8,6 +8,7 @@
 #include "3dsui_notif.h"
 #include "3dsstereosig.h"
 #include "3dsgpu.h"
+#include "3dsmode7persp.h"
 #include "3dsmsu.h"
 #include "3dssound.h"
 #include "3dslcd.h"
@@ -305,6 +306,15 @@ static void settings3dsStereoApplyValues(const float depths[5],
     GPU3DS.stereoFocusFront = focusFront;
     GPU3DS.stereoMaxExcess = maxExcess;
     GPU3DS.stereoMaxBackExcess = maxBackExcess;
+    // Mode 7 perspective gain (gauge 5..8) pushes the plane's nearest rows
+    // past the BG1 gauge: the edge crop must size for that or the side
+    // columns show above 4 (Jorge's report). BG1 is the Mode 7 plane.
+    {
+        float m7k, m7gain;
+        mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
+        float bg1 = depths[0] < 0.0f ? -depths[0] : depths[0];
+        if (bg1 * m7gain > maxAbs) maxAbs = bg1 * m7gain;
+    }
     GPU3DS.stereoMaxPop = maxPop;
     GPU3DS.stereoMaxAbs = maxAbs;
     GPU3DS.stereoFade = fade;
@@ -451,11 +461,11 @@ void settings3dsStereoApplyProfile(int idx)
     for (int i = 0; i < 5; i++) depths[i] = (float)p->Depth[i];
     for (int i = 0; i < 5; i++) depthsP1[i] = (float)p->DepthP1[i];
     for (int i = 0; i < 2; i++) objHi[i] = (float)p->DepthOBJHi[i];
+    GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;   // read by ApplyValues (edge crop)
+    GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);
-    GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;
-    GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
 }
 
 void settings3dsStereoApplyDefault()
@@ -470,11 +480,11 @@ void settings3dsStereoApplyDefault()
     for (int i = 0; i < 5; i++) depths[i] = (float)p->Depth[i];
     for (int i = 0; i < 5; i++) depthsP1[i] = (float)p->DepthP1[i];
     for (int i = 0; i < 2; i++) objHi[i] = (float)p->DepthOBJHi[i];
+    GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;   // read by ApplyValues (edge crop)
+    GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);   // edge is game-global (Jorge's UX)
-    GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;
-    GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
 }
 
 // called once per emulated frame while in-game
