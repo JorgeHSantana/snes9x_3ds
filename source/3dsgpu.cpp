@@ -396,7 +396,8 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
             GPU3DS.stereoPrioDimP3 * 8.0f;
         // Mode 7 perspective strength: re-send whatever the last draw set
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP],
-            GPU3DS.mode7PerspApplied, 0.0f, 0.0f, 0.0f);
+            GPU3DS.mode7PerspSet[0], GPU3DS.mode7PerspSet[1],
+            -GPU3DS.mode7PerspSet[2], -GPU3DS.mode7PerspSet[3]);
     }
 
     if (shaderUpdated && state->shader == SPROGRAM_MODE7) {
@@ -530,7 +531,10 @@ bool gpu3dsInitialize()
     // (0 is a real value - it alpha-hides a priority in the 3D editor)
     GPU3DS.stereoPrioDimP0 = 1.0f;
     GPU3DS.stereoMode7Persp = 0.0f;
-    GPU3DS.mode7PerspApplied = 0.0f;
+    GPU3DS.stereoMode7Fx = 0.0f;
+    GPU3DS.mode7PerspApplied = -1.0f;
+    GPU3DS.mode7PerspSet[0] = GPU3DS.mode7PerspSet[2] = GPU3DS.mode7PerspSet[3] = 0.0f;
+    GPU3DS.mode7PerspSet[1] = 1.0f;
     GPU3DS.stereoPrioDimP1 = 1.0f;
     GPU3DS.stereoPrioDimP2 = 1.0f;
     GPU3DS.stereoPrioDimP3 = 1.0f;

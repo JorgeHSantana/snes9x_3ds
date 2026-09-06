@@ -8,7 +8,12 @@ Notable changes to this project will be documented in this file.
   screens recedes scanline by scanline (each row shifts by its own
   distance) instead of moving as a flat wall. Automatic on Mode 7 rows;
   a top-down or rotating map stays flat by itself. 3D Stereo tab > Mode 7
-  > Perspective (0 flat .. 8 full, per game/profile, `M7PERSP` in the .3d).
+  > Perspective (0 flat, 4 full perspective, 5-8 push the near rows further
+  out; per game/profile, `M7PERSP` in the .3d).
+* **Mode 7 effects by distance**: with Effects by Distance on (default),
+  fade and haze fog the plane row by row towards the horizon and blur
+  widens with distance, instead of one tint and one smear for the whole
+  plane (`M7FX` in the .3d).
 
 ## Stable v2.2 (2026-09-06, a26c295)
 

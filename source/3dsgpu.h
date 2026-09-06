@@ -308,8 +308,10 @@ typedef struct
     float                       stereoParallaxHiApplied;
     // Mode 7 perspective (issue #62): the profile's strength (0..1) and the
     // value the shader currently holds - set per layer draw, 0 off Mode 7
-    float                       stereoMode7Persp;
-    float                       mode7PerspApplied;
+    float                       stereoMode7Persp;   // the profile's gauge 0..8
+    float                       stereoMode7Fx;      // 1 = fade/haze/blur by distance on the plane
+    float                       mode7PerspApplied;  // composite key of mode7PerspSet
+    float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
     // false when the optional right-eye VRAM texture failed to allocate;
@@ -499,12 +501,17 @@ static inline void gpu3dsSetStereoParallaxHi(float t2, float t3,
     GPU3DS.stereoParallaxHiApplied = key;
 }
 
-static inline void gpu3dsSetMode7Persp(float k)
+// (k ramp, gain, fog amount, ghost offset) for the Mode 7 plane's draw;
+// the shader takes fog and ghost negated (d = w/256 - 1 is <= 0)
+static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float ghost)
 {
-    if (GPU3DS.mode7PerspApplied == k)
+    float key = k + gain * 8.0f + fog * 64.0f + ghost * 4096.0f;
+    if (GPU3DS.mode7PerspApplied == key)
         return;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP], k, 0.0f, 0.0f, 0.0f);
-    GPU3DS.mode7PerspApplied = k;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP], k, gain, -fog, -ghost);
+    GPU3DS.mode7PerspSet[0] = k; GPU3DS.mode7PerspSet[1] = gain;
+    GPU3DS.mode7PerspSet[2] = fog; GPU3DS.mode7PerspSet[3] = ghost;
+    GPU3DS.mode7PerspApplied = key;
 }
 
 static inline void gpu3dsSetStereoParallax(float v)

@@ -6,6 +6,7 @@
 #include "3dsgpu.h"
 #include "3dsimpl.h"
 #include "3dsimpl_gpu.h"
+#include "3dsmode7persp.h"
 #include "3dslog.h"
 
 SGPU3DSExtended GPU3DSExt;
@@ -467,6 +468,22 @@ static void gpu3dsApplyAtmosphereColor(u32 color)
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
 }
 
+// Mode 7 by distance: the SAME interpolate stage, but the amount comes
+// from the vertex color's blue (the tile vertex shader writes each Mode 7
+// row's fog there) instead of the constant's alpha
+static void gpu3dsApplyAtmosphereColorPerVertex(u32 color)
+{
+    s_atmosLastColor = 0;   // the constant variant must re-apply after us
+    C3D_TexEnv *env = C3D_GetTexEnv(2);
+    C3D_TexEnvInit(env);
+    C3D_TexEnvColor(env, color | 0xFF000000);
+    C3D_TexEnvSrc(env, C3D_RGB, GPU_CONSTANT, GPU_PREVIOUS, GPU_PRIMARY_COLOR);
+    C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_B);
+    C3D_TexEnvFunc(env, C3D_RGB, GPU_INTERPOLATE);
+    C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS);
+    C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
+}
+
 static void gpu3dsSetStereoAtmosphereForDepth(float depth)
 {
     u32 color;
@@ -508,7 +525,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
     SLayer *layer = &list->layers[LAYER_WINDOW_LR];
 
     gpu3dsSetStereoParallax(0.0f);
-    gpu3dsSetMode7Persp(0.0f);
+    gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
     // neutral spotlight for the window/depth prepass: a stale dim from
     // the previous frame would alpha-discard the window masks
     gpu3dsSetStereoPrioDim(1.0f, 1.0f);
@@ -607,8 +624,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // Mode 7 perspective (issue #62): the strength reaches the
             // shader only for a Mode 7 scanline layer; every other layer
             // draws with 0, which the shader treats as an exact no-op
-            gpu3dsSetMode7Persp(list->sections[from].vboId == VBO_SCENE_MODE7_LINE
-                ? GPU3DS.stereoMode7Persp : 0.0f);
+            bool isMode7Plane = list->sections[from].vboId == VBO_SCENE_MODE7_LINE;
+            float m7k = 0.0f, m7gain = 1.0f;
+            if (isMode7Plane)
+                mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
+            gpu3dsSetMode7Persp(m7k, m7gain, 0.0f, 0.0f);
 
             GPU3DS.currentRenderState.depthTest = id < LAYER_OBJ ? SGPU_STATE_ENABLED : SGPU_STATE_DISABLED;
 
@@ -716,6 +736,55 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // tiles, so nothing draws twice and color math stays exact.
             // Only tiled layers have tiers; extra passes appear only in
             // 3D with effects on AND depths split - 2D pays nothing.
+            // Mode 7 effects by distance (Jorge's ask): on the plane the
+            // per-layer model is wrong - one tint and one ghost width for
+            // rows that span from the player's wheels to the horizon. With
+            // the profile's Effects by Distance on, fog and blur grow with
+            // each row's distance instead: the vertex shader writes the
+            // row's fog into color.b (interpolated by the TexEnv variant)
+            // and widens the ghost offset by (1 - w/256). Nothing at the
+            // nearest row, the full gauge at the horizon.
+            if (isMode7Plane && GPU3DS.stereoMode7Fx > 0.0f && !spotlight &&
+                s_previewHighlightLayer < 0 && GPU3DS.stereoEyeIOD != 0.0f &&
+                (GPU3DS.stereoFade > 0.0f || GPU3DS.stereoHaze > 0.0f || GPU3DS.stereoBlur > 0.0f)) {
+                float slider = GPU3DS.stereoEyeIOD < 0.0f ? -GPU3DS.stereoEyeIOD : GPU3DS.stereoEyeIOD;
+                float fog = mode7FogAmount((int)GPU3DS.stereoFade, (int)GPU3DS.stereoHaze, slider);
+                float hz = GPU3DS.stereoHaze * 0.60f, fd = GPU3DS.stereoFade * 0.70f;
+                float share = (fd + hz) > 0.0f ? hz / (fd + hz) : 0.0f;
+                u32 fogColor = ((u32)(215.0f * share) << 16) | ((u32)(205.0f * share) << 8) | (u32)(200.0f * share);
+
+                gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
+                if (fog >= 0.01f) gpu3dsApplyAtmosphereColorPerVertex(fogColor);
+                else              gpu3dsApplyAtmosphereColor(0xFFFFFFFF);
+                gpu3dsSetMode7Persp(m7k, m7gain, fog, 0.0f);
+                drawPass();
+
+                float blur = (GPU3DS.stereoBlur / 8.0f) * slider;
+                if (blur > 0.02f) {
+                    float ghostA = 0.25f + 0.25f * blur;
+                    float off = (1.0f + 2.0f * blur) * (GPU3DSExt.render2x.enabled ? 1.875f : 1.0f) * 2.0f;
+                    bool light = settings3DS.StereoBlurQuality == 2 ||
+                        (settings3DS.StereoBlurQuality == 0 && GPU3DSExt.blurAutoLight);
+                    int lightSide = GPU3DS.stereoRightPass ? 1 : 0;
+                    GPU3DS.stereoGhostPass = true;
+                    gpu3dsSetGhostAlpha(light ? (ghostA * 1.4f > 0.55f ? 0.55f : ghostA * 1.4f) : ghostA);
+                    if (light) {
+                        gpu3dsSetMode7Persp(m7k, m7gain, fog, lightSide == 0 ? off : -off);
+                        drawPass();
+                    } else {
+                        gpu3dsSetMode7Persp(m7k, m7gain, fog, off);
+                        drawPass();
+                        gpu3dsSetMode7Persp(m7k, m7gain, fog, -off);
+                        drawPass();
+                    }
+                    GPU3DS.stereoGhostPass = false;
+                    gpu3dsSetGhostAlpha(0.0f);
+                }
+                gpu3dsSetMode7Persp(m7k, m7gain, 0.0f, 0.0f);
+                gpu3dsApplyAtmosphereColor(0xFFFFFFFF);
+                continue;
+            }
+
             float tierDepth[4];
             tierDepth[0] = GPU3DS.stereoLayerDepth[id];
             tierDepth[1] = GPU3DS.stereoLayerDepthP1[id];

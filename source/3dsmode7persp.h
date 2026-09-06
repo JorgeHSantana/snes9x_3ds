@@ -39,4 +39,26 @@ static inline float mode7PerspFactor(int16_t w, float k)
     return 1.0f + k * ((float)w / (float)MODE7_PERSP_W_ONE - 1.0f);
 }
 
+// Gauge 0..8 -> (ramp k, near-row gain): the first half builds the ramp
+// (4 = full perspective), the second half pushes the nearest rows past the
+// layer gauge (8 = 2x) - "more depth" without touching the horizon.
+static inline void mode7PerspGaugeSplit(int gauge, float *k, float *gain)
+{
+    if (gauge < 0) gauge = 0;
+    if (gauge > 8) gauge = 8;
+    *k = (gauge < 4 ? gauge : 4) / 4.0f;
+    *gain = 1.0f + (gauge > 4 ? gauge - 4 : 0) / 4.0f;
+}
+
+// Effects by distance on a Mode 7 plane: the fog a row receives is
+// amount * (1 - w/256) - nothing at the nearest row, the full amount at
+// the horizon. Same weights as the per-layer model (fade 0.70, haze 0.60,
+// cap 0.85), scaled by the slider.
+static inline float mode7FogAmount(int fade, int haze, float slider)
+{
+    float t = (fade / 8.0f) * 0.70f + (haze / 8.0f) * 0.60f;
+    t *= slider < 0.0f ? -slider : slider;
+    return t > 0.85f ? 0.85f : t;
+}
+
 #endif

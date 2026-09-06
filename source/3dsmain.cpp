@@ -951,6 +951,7 @@ static int *stereoEditField(int which) {
             case 0: return &p->Fade;      case 1: return &p->Haze;
             case 2: return &p->Blur;      case 3: return &p->FocusBack;
             case 4: return &p->FocusFront; case 6: return &p->Mode7Persp;
+            case 7: return &p->Mode7Fx;
             default: return &p->EdgeMode;
         }
     }
@@ -958,6 +959,7 @@ static int *stereoEditField(int which) {
         case 0: return &settings3DS.StereoFade;      case 1: return &settings3DS.StereoHaze;
         case 2: return &settings3DS.StereoBlur;      case 3: return &settings3DS.StereoFocusBack;
         case 4: return &settings3DS.StereoFocusFront; case 6: return &settings3DS.StereoMode7Persp;
+        case 7: return &settings3DS.StereoMode7Fx;
         default: return &settings3DS.StereoEdgeMode;
     }
 }
@@ -1727,6 +1729,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                             p->FocusFront = settings3DS.StereoFocusFront;
                             p->EdgeMode = settings3DS.StereoEdgeMode;
                             p->Mode7Persp = settings3DS.StereoMode7Persp;
+                            p->Mode7Fx = settings3DS.StereoMode7Fx;
                         }
                         snprintf(p->Name, sizeof(p->Name), "Profile %d", (newCount + 1) & 0xFF);
                         settings3DS.StereoProfilesCount++;
@@ -1890,9 +1893,13 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 AddMenuGauge(items, "  Perspective"_s, 0, 8, *stereoEditField(6),
                     []( int val ) { if (CheckAndUpdate( *stereoEditField(6), val )) s_stereoPreviewDirty = true; }, true);
                 if (!m7Used) items.back().TextColor = stereo3dDimColor();
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  The ground recedes: each Mode 7 scanline shifts by its"_s, ""_s);
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  own distance (0 = flat plane). Only acts on Mode 7"_s, ""_s);
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  screens; a top-down map stays flat by itself."_s, ""_s);
+                items.emplace_back(nullptr, MenuItemType::Textarea, "  Each Mode 7 scanline shifts by its own distance. 0 = flat,"_s, ""_s);
+                items.emplace_back(nullptr, MenuItemType::Textarea, "  4 = full perspective, 5-8 push the near rows further out."_s, ""_s);
+                AddMenuCheckbox(items, "  Effects by Distance"_s, *stereoEditField(7) != 0,
+                    []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(7), v )) s_stereoPreviewDirty = true; });
+                if (!m7Used) items.back().TextColor = stereo3dDimColor();
+                items.emplace_back(nullptr, MenuItemType::Textarea, "  Fade, haze and blur grow towards the horizon on the plane"_s, ""_s);
+                items.emplace_back(nullptr, MenuItemType::Textarea, "  instead of covering it evenly. A top-down map stays flat."_s, ""_s);
             }
         }
         AddMenuHeader2(items, "Focus"_s);
@@ -2657,6 +2664,7 @@ void settingsResetStereo3D()
     settings3DS.StereoFocusFront = 1;
     settings3DS.StereoEdgeMode = 1;   // Trim
     settings3DS.StereoMode7Persp = 8;   // full perspective on Mode 7 planes
+    settings3DS.StereoMode7Fx = 1;      // effects by distance on the plane
     settings3DS.StereoProfilesCount = 0;
     settings3DS.StereoBindsCount = 0;
     s_stereoEditIdx = -1;
@@ -2692,6 +2700,7 @@ void settingsLoadStereo3D()
     int *tFF = &settings3DS.StereoFocusFront;
     int *tEdge = &settings3DS.StereoEdgeMode;
     int *tM7 = &settings3DS.StereoMode7Persp;
+    int *tM7Fx = &settings3DS.StereoMode7Fx;
 
     char line[96], name[16];
     int v;
@@ -2712,11 +2721,11 @@ void settingsLoadStereo3D()
                 for (int i = 0; i < 5; i++) p->DepthP1[i] = stereoDepthDefault[i];
                 for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = stereoDepthDefault[4];
                 p->Fade = p->Haze = p->Blur = 0;
-                p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1; p->Mode7Persp = 8;
+                p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1; p->Mode7Persp = 8; p->Mode7Fx = 1;
                 tDepth = p->Depth; tDepthP1 = p->DepthP1; tObjHi = p->DepthOBJHi;
                 tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
-                tEdge = &p->EdgeMode; tM7 = &p->Mode7Persp;
+                tEdge = &p->EdgeMode; tM7 = &p->Mode7Persp; tM7Fx = &p->Mode7Fx;
             }
             continue;
         }
@@ -2777,6 +2786,8 @@ void settingsLoadStereo3D()
             *tEdge = v < 0 ? 0 : (v > 2 ? 2 : v);
         if (sscanf(line, "M7PERSP=%d", &v) == 1)
             *tM7 = v < 0 ? 0 : (v > 8 ? 8 : v);
+        if (sscanf(line, "M7FX=%d", &v) == 1)
+            *tM7Fx = v ? 1 : 0;
     }
     fclose(f);
 }
@@ -2802,6 +2813,8 @@ static void settingsWriteStereo3DGlobals(FILE *f)
     fprintf(f, "EDGEMODE=%d\n", settings3DS.StereoEdgeMode);
     fprintf(f, "# Mode 7 perspective: each scanline shifts by its own distance (0 flat .. 8 full)\n");
     fprintf(f, "M7PERSP=%d\n", settings3DS.StereoMode7Persp);
+    fprintf(f, "# Mode 7 effects by distance: fade/haze/blur grow towards the horizon (0/1)\n");
+    fprintf(f, "M7FX=%d\n", settings3DS.StereoMode7Fx);
 }
 
 // Writes the current game's LOOK (depths/focus/effects/edge) as the global
@@ -2841,8 +2854,8 @@ void settingsSaveStereo3D()
             fprintf(f, "%sP1=%d\n", stereoDepthKeys[i], p->DepthP1[i]);
         fprintf(f, "OBJP2=%d\nOBJP3=%d\n", p->DepthOBJHi[0], p->DepthOBJHi[1]);
         fprintf(f, "FADE=%d\nHAZE=%d\nBLUR=%d\n", p->Fade, p->Haze, p->Blur);
-        fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\nM7PERSP=%d\n",
-            p->FocusBack, p->FocusFront, p->EdgeMode, p->Mode7Persp);
+        fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\nM7PERSP=%d\nM7FX=%d\n",
+            p->FocusBack, p->FocusFront, p->EdgeMode, p->Mode7Persp, p->Mode7Fx);
     }
     if (settings3DS.StereoWatchAddr >= 0)
         fprintf(f, "WATCH=%X\n", settings3DS.StereoWatchAddr);

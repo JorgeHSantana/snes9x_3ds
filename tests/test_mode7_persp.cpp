@@ -35,3 +35,22 @@ TEST_CASE("mode7 persp: the shader factor is an exact no-op at strength 0 and at
     CHECK(mode7PerspFactor(128, 1.0f) == doctest::Approx(0.5f));
     CHECK(mode7PerspFactor(128, 0.5f) == doctest::Approx(0.75f));
 }
+
+TEST_CASE("mode7 persp: gauge split - ramp first, gain second") {
+    float k, g;
+    mode7PerspGaugeSplit(0, &k, &g); CHECK(k == 0.0f); CHECK(g == 1.0f);
+    mode7PerspGaugeSplit(2, &k, &g); CHECK(k == 0.5f); CHECK(g == 1.0f);
+    mode7PerspGaugeSplit(4, &k, &g); CHECK(k == 1.0f); CHECK(g == 1.0f);
+    mode7PerspGaugeSplit(6, &k, &g); CHECK(k == 1.0f); CHECK(g == 1.5f);
+    mode7PerspGaugeSplit(8, &k, &g); CHECK(k == 1.0f); CHECK(g == 2.0f);
+    mode7PerspGaugeSplit(99, &k, &g); CHECK(k == 1.0f); CHECK(g == 2.0f);
+}
+
+TEST_CASE("mode7 persp: fog amount follows the per-layer weights and caps") {
+    CHECK(mode7FogAmount(0, 0, 1.0f) == 0.0f);
+    CHECK(mode7FogAmount(8, 0, 1.0f) == doctest::Approx(0.70f));
+    CHECK(mode7FogAmount(0, 8, 1.0f) == doctest::Approx(0.60f));
+    CHECK(mode7FogAmount(8, 8, 1.0f) == doctest::Approx(0.85f));   // capped
+    CHECK(mode7FogAmount(8, 0, 0.5f) == doctest::Approx(0.35f));   // slider scales
+    CHECK(mode7FogAmount(8, 0, -1.0f) == doctest::Approx(0.70f));  // sign-free
+}

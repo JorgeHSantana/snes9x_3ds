@@ -327,6 +327,7 @@ static void settings3dsStereoDefaultProfile(S9xSettings3DS::SStereoProfile *p)
     p->FocusFront = settings3DS.StereoFocusFront;
     p->EdgeMode = settings3DS.StereoEdgeMode;
     p->Mode7Persp = settings3DS.StereoMode7Persp;
+    p->Mode7Fx = settings3DS.StereoMode7Fx;
 }
 
 static int s_stereoActiveIdx = -1;   // -1 = default profile
@@ -453,7 +454,8 @@ void settings3dsStereoApplyProfile(int idx)
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);
-    GPU3DS.stereoMode7Persp = (float)p->Mode7Persp / 8.0f;
+    GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;
+    GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
 }
 
 void settings3dsStereoApplyDefault()
@@ -471,7 +473,8 @@ void settings3dsStereoApplyDefault()
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);   // edge is game-global (Jorge's UX)
-    GPU3DS.stereoMode7Persp = (float)p->Mode7Persp / 8.0f;
+    GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;
+    GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
 }
 
 // called once per emulated frame while in-game
