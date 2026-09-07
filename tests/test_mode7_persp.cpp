@@ -60,4 +60,9 @@ TEST_CASE("mode7 persp: the right-hand vertex carries the marker plus the row's 
     CHECK(mode7RightVertexY(100 + 2 * 256) == MODE7_RIGHT_MARKER + 512); // depth 2
     CHECK(mode7RightVertexY(239 + 8 * 256) == MODE7_RIGHT_MARKER + 2048);
     CHECK(mode7RightVertexY(12 * 256 + 5) < -1);                        // still a marker after projection
+    // the BG's alpha bits ride above the depth on the left vertex: they must
+    // NOT reach the marker (16384 + marker = 0 -> the row drew as a tile)
+    CHECK(mode7RightVertexY(16384 + 2 * 256 + 100) == MODE7_RIGHT_MARKER + 512);
+    CHECK(mode7RightVertexY(24576 + 15 * 256 + 239) == MODE7_RIGHT_MARKER + 15 * 256);
+    CHECK(mode7RightVertexY(24576 + 15 * 256 + 239) < -1);
 }

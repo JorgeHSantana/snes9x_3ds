@@ -34,7 +34,8 @@ Notable changes to this project will be documented in this file.
 * Mode 7 scanlines move as one piece in 3D: the right-hand end of each
   row now carries the row's depth with the marker, so both ends pick the
   same stereo tier (before, a BG whose two priorities sat at different
-  depths could stretch the row instead of shifting it).
+  depths could stretch the row instead of shifting it). Nightly 102a86a
+  drew the plane as stripes on the console - fixed the same day.
 * Mode 7 perspective anchor stays as shipped (horizon on the screen plane,
   the layer gauge at the nearest row): one nightly (2026-09-07) sank the
   whole plane past the gauge instead, and the depth read vanished - the

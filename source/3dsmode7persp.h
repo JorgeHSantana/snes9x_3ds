@@ -28,10 +28,13 @@
 // and they take the same stereo tier: the line moves, never stretches.
 #define MODE7_RIGHT_MARKER (-16384)
 
+// The left-hand y is (alpha << 13) + depth * 256 + row: ONLY the depth
+// nibble travels - the alpha bits (8192/16384/24576) would push the
+// marker positive and the geometry shader would draw the row as a tile
+// (the striped plane on Jorge's console, nightly 102a86a).
 static inline int16_t mode7RightVertexY(int leftY)
 {
-    int depth = leftY - (leftY & 0xFF);     // strip the screen row
-    if (depth < 0) depth = 0;
+    int depth = leftY & 0xF00;
     return (int16_t)(MODE7_RIGHT_MARKER + depth);
 }
 
