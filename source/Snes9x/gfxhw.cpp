@@ -809,15 +809,61 @@ void     S9xGroundSigPos(int slot, int *x, int *y)
     *y = ok ? s_groundLast.sigY[slot] : 0;
 }
 
-// the sprite's vertex w: its bottom row's ground distance (from the
-// previous frame's plane rows) + this frame's signature slot
+// every sprite's vertex w for this frame, computed once before the
+// sprites are emitted: sprites that touch form one character and share
+// the lowest member's row (the feet) and one signature slot - the feet
+// sprite's, or a member marked "not on ground" (so the whole character
+// stays off the ground and the editor's spotlight lights all of it)
+static s16 s_spriteW[128];
+
+static void groundPrepareSprites(void)
+{
+    if (!groundRowsPresent(&s_groundPrev)) {
+        memset(s_spriteW, 0, sizeof(s_spriteW));
+        return;
+    }
+    GroundBox box[128];
+    bool vis[128];
+    for (int S = 0; S < 128; S++) {
+        int x = PPU.OBJ[S].HPos;
+        if (x == -256) x = 256;
+        int top = groundSpriteTop(PPU.OBJ[S].VPos);
+        int w = GFX.OBJWidths[S], h = GFX.OBJHeights[S];
+        box[S].x0 = (int16_t)x; box[S].x1 = (int16_t)(x + w - 1);
+        box[S].y0 = (int16_t)top; box[S].y1 = (int16_t)(top + h - 1);
+        vis[S] = x + w > 0 && x < 256 && top + h > 0 && top < 240 && w > 0 && h > 0;
+    }
+    uint8_t cluster[128];
+    groundClusterBoxes(box, vis, 128, 2, cluster);
+
+    // per cluster root: the feet (max bottom) and a marked member, if any
+    int feetS[128], excS[128];
+    for (int S = 0; S < 128; S++) { feetS[S] = -1; excS[S] = -1; }
+    for (int S = 0; S < 128; S++) {
+        if (!vis[S]) continue;
+        int r = cluster[S];
+        if (feetS[r] < 0 || box[S].y1 > box[feetS[r]].y1) feetS[r] = S;
+        if (excS[r] < 0 && groundIsException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount,
+                                             groundSigMake(PPU.OBJ[S].Name, PPU.OBJ[S].Palette)))
+            excS[r] = S;
+    }
+    s16 rootW[128];
+    for (int r = 0; r < 128; r++) {
+        rootW[r] = 0;
+        if (feetS[r] < 0) continue;
+        int lead = excS[r] >= 0 ? excS[r] : feetS[r];
+        int rowW = groundRowAt(&s_groundPrev, box[feetS[r]].y1);
+        int slot = groundSlotFor(&s_groundAcc, groundSigMake(PPU.OBJ[lead].Name, PPU.OBJ[lead].Palette),
+                                 box[lead].x0, box[lead].y0 < 0 ? 0 : box[lead].y0);
+        rootW[r] = groundVertexW(rowW, slot);
+    }
+    for (int S = 0; S < 128; S++)
+        s_spriteW[S] = vis[S] ? rootW[cluster[S]] : 0;
+}
+
 static inline s16 groundSpriteW(int S)
 {
-    int bottom = groundSpriteBottom(PPU.OBJ[S].VPos, GFX.OBJHeights[S]);
-    int rowW = groundRowAt(&s_groundPrev, bottom);
-    int slot = groundSlotFor(&s_groundAcc, groundSigMake(PPU.OBJ[S].Name, PPU.OBJ[S].Palette),
-                             PPU.OBJ[S].HPos, PPU.OBJ[S].VPos);
-    return groundVertexW(rowW, slot);
+    return s_spriteW[S];
 }
 bool S9xLayerUsedLastFrame(int layer, int prio) { return layerUseUsed(&s_layerUse, layer, prio); }
 bool S9xLayerUsedLastFrameAny(int layer)        { return layerUseLayerUsed(&s_layerUse, layer); }
@@ -2917,6 +2963,8 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 	BG.Depth = depth;
 
 	GFX.PixSize = 1;
+
+	groundPrepareSprites();   // sprites follow the ground (issue #76): once per frame
 	
 	// Wonder what is the best value for this to get the optimal performance? 
 	if (PPU.PriorityDrawFromSprite >= 0 && GFX.EndY - LayerRender.startY[LAYER_OBJ] >= 16)

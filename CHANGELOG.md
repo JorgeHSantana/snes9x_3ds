@@ -11,7 +11,10 @@ Notable changes to this project will be documented in this file.
   not on the ground (a flying enemy, a HUD item) keep the Sprites gauges;
   the Mode 7 block lists the sprites on the paused screen with a live
   spotlight, and unticking one marks it "not on ground" for this game.
-  3D Stereo tab > Mode 7; `.3d` keys `GSPR`, `GNEAR`, `GFAR`, `GROUNDX`.
+  Hardware sprites that touch (kart + driver + shadow) count as one
+  character and follow its feet, so a character never splits across
+  depths. 3D Stereo tab > Mode 7; `.3d` keys `GSPR`, `GNEAR`, `GFAR`,
+  `GROUNDX`.
 * **Mode 7 perspective** (issue #62): in 3D, the ground plane of Mode 7
   screens recedes scanline by scanline (each row shifts by its own
   distance) instead of moving as a flat wall. Automatic on Mode 7 rows;

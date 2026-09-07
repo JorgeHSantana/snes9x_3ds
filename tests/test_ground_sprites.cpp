@@ -98,3 +98,35 @@ TEST_CASE("ground: the sprite bottom row follows the SNES vertical wrap") {
     CHECK(groundSpriteBottom(230, 32) == 261);   // past the bottom: caller clamps via groundRowAt
     CHECK(groundSpriteBottom(250, 32) == 25);    // hanging off the top (VPos 250 = -6)
 }
+
+TEST_CASE("ground: touching sprites cluster, separate ones do not, invisible ones are ignored") {
+    GroundBox b[5] = {
+        { 100, 150, 131, 181 },   // kart body
+        { 104, 134, 127, 151 },   // driver, sitting on the body (touching)
+        { 100, 182, 131, 189 },   // shadow, 1 px below the body
+        { 200, 40, 215, 55 },     // an opponent far away
+        { 100, 150, 131, 181 },   // a duplicate box, but off screen
+    };
+    bool vis[5] = { true, true, true, true, false };
+    uint8_t c[5];
+    int n = groundClusterBoxes(b, vis, 5, 2, c);
+    CHECK(n == 2);
+    CHECK(c[0] == c[1]);
+    CHECK(c[0] == c[2]);
+    CHECK(c[3] != c[0]);
+    CHECK(c[4] == 4);          // invisible: its own root, not merged
+}
+
+TEST_CASE("ground: clusters chain through a middle sprite") {
+    GroundBox b[3] = { { 0, 0, 15, 15 }, { 40, 0, 55, 15 }, { 16, 0, 39, 15 } };
+    bool vis[3] = { true, true, true };
+    uint8_t c[3];
+    CHECK(groundClusterBoxes(b, vis, 3, 0, c) == 1);
+    CHECK(c[0] == c[1]);
+    CHECK(c[1] == c[2]);
+}
+
+TEST_CASE("ground: sprite top follows the vertical wrap") {
+    CHECK(groundSpriteTop(100) == 100);
+    CHECK(groundSpriteTop(250) == -6);
+}

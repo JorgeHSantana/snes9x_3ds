@@ -150,11 +150,54 @@ static inline int groundToggleException(uint32_t *list, int count, uint32_t sig)
 
 // the sprite's bottom row on screen: a SNES VPos wraps at 256 (a sprite
 // hanging off the top starts at VPos - 256)
+static inline int groundSpriteTop(int vpos)
+{
+    return vpos >= 240 ? vpos - 256 : vpos;
+}
+
 static inline int groundSpriteBottom(int vpos, int height)
 {
-    int top = vpos;
-    if (top >= 240) top -= 256;
-    return top + height - 1;
+    return groundSpriteTop(vpos) + height - 1;
+}
+
+// A character is several hardware sprites (kart + driver + shadow); each
+// has its own bottom row, so the driver's head would sit on a farther row
+// than the wheels and the character would split across depths (Jorge's
+// report). Sprites whose boxes touch (within `expand` px) are clustered;
+// the cluster's lowest bottom row - its feet - is the master every member
+// follows. Union-find over the visible boxes; `cluster[i]` receives the
+// root index of box i. Returns the number of clusters.
+struct GroundBox { int16_t x0, y0, x1, y1; };   // inclusive edges
+
+static inline int groundClusterFind(uint8_t *parent, int i)
+{
+    while (parent[i] != i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+    return i;
+}
+
+static inline int groundClusterBoxes(const GroundBox *b, const bool *visible, int n,
+                                     int expand, uint8_t *cluster)
+{
+    uint8_t parent[128];
+    if (n > 128) n = 128;
+    for (int i = 0; i < n; i++) parent[i] = (uint8_t)i;
+    for (int i = 0; i < n; i++) {
+        if (!visible[i]) continue;
+        for (int j = i + 1; j < n; j++) {
+            if (!visible[j]) continue;
+            // inclusive edges: a gap of `expand` pixels or less still touches
+            if (b[i].x1 + expand + 1 < b[j].x0 || b[j].x1 + expand + 1 < b[i].x0) continue;
+            if (b[i].y1 + expand + 1 < b[j].y0 || b[j].y1 + expand + 1 < b[i].y0) continue;
+            int ri = groundClusterFind(parent, i), rj = groundClusterFind(parent, j);
+            if (ri != rj) parent[rj < ri ? ri : rj] = (uint8_t)(rj < ri ? rj : ri);
+        }
+    }
+    int count = 0;
+    for (int i = 0; i < n; i++) {
+        cluster[i] = (uint8_t)groundClusterFind(parent, i);
+        if (cluster[i] == i && visible[i]) count++;
+    }
+    return count;
 }
 
 #endif

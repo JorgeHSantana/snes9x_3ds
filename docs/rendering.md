@@ -142,7 +142,12 @@ priority tier shift with `near + (far - near) * (1 - rowW/255)` for
 on-ground sprites. Profile: `GSPR` (switch), `GNEAR`, `GFAR` (depths);
 per game: `GROUNDX=` signatures marked "not on ground" in the editor
 (Lakitu, a HUD item), which the Mode 7 block lists for the paused screen
-with a live spotlight per sprite.
+with a live spotlight per sprite. A character is several hardware
+sprites with different bottom rows; `groundPrepareSprites` clusters the
+visible boxes that touch (union-find, 2 px tolerance) once per frame and
+every member takes the cluster's lowest row and one slot - the feet
+sprite's, or a marked member's, so a mark or a spotlight covers the whole
+character.
 
 ## Final composition
 
