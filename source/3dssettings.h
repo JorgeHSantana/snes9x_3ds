@@ -2,6 +2,7 @@
 #define _3DSSETTINGS_H_
 
 #include <stdio.h>
+#include "3dsgroundsprites.h"
 #include <array>
 #include <limits.h>
 #include <3ds.h>
@@ -310,6 +311,13 @@ typedef struct {
     int                 StereoFocusFront;      // 0..+8: front edge of the focus zone (default +1)
     int                 StereoMode7Persp;      // Mode 7 perspective strength 0..8 (issue #62)
     int                 StereoMode7Fx;         // Mode 7 effects by distance 0/1
+    int                 StereoSpritesGround;   // sprites follow the Mode 7 ground 0/1 (issue #76)
+    int                 StereoGroundNear;      // -8..8: depth of a sprite on the nearest plane row
+    int                 StereoGroundFar;       // -8..8: depth of a sprite at the horizon
+    // sprites marked "not on ground" (tile name + palette signatures,
+    // 3dsgroundsprites.h); per game, .3d GROUNDX= lines
+    uint32_t            StereoGroundX[32];
+    int                 StereoGroundXCount;
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
                                                // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)
@@ -330,6 +338,9 @@ typedef struct {
         int  EdgeMode;
         int  Mode7Persp;   // 0 = flat plane .. 8 = full per-scanline perspective (issue #62)
         int  Mode7Fx;      // 1 = fade/haze/blur grow with each row's distance on the plane
+        int  SpritesGround;// 1 = sprites on the plane follow their row's depth (issue #76)
+        int  GroundNear;   // -8..8 depth of the nearest row's sprites
+        int  GroundFar;    // -8..8 depth of the horizon's sprites
     };
     struct SStereoBind {
         u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C

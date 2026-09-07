@@ -4,6 +4,14 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
+* **Sprites follow the Mode 7 ground** (issue #76, Jorge's idea): with the
+  option on, a sprite standing on the plane takes the depth of the row its
+  feet touch, from Ground Near (bottom row) to Ground Far (horizon) - an
+  opponent down the track sits far, a box beside you sits near. Sprites
+  not on the ground (a flying enemy, a HUD item) keep the Sprites gauges;
+  the Mode 7 block lists the sprites on the paused screen with a live
+  spotlight, and unticking one marks it "not on ground" for this game.
+  3D Stereo tab > Mode 7; `.3d` keys `GSPR`, `GNEAR`, `GFAR`, `GROUNDX`.
 * **Mode 7 perspective** (issue #62): in 3D, the ground plane of Mode 7
   screens recedes scanline by scanline (each row shifts by its own
   distance) instead of moving as a flat wall. Automatic on Mode 7 rows;

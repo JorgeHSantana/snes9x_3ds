@@ -125,6 +125,25 @@ the gauge's full shift, the horizon barely moves, and a top-down map
 (uniform span) stays flat by itself - nothing detects "which kind" of
 Mode 7 a game is drawing. Ghost passes inherit the factor.
 
+### Sprites follow the Mode 7 ground (issue #76)
+
+A sprite standing on the plane takes the depth of the row its feet touch.
+`gfxhw` keeps two small tables (`3dsgroundsprites.h`): the plane rows'
+distance bytes, filled at the Mode 7 flush and read by the sprites of the
+NEXT frame (the plane may flush after them in draw order; one frame of
+latency is invisible), and the frame's sprite signature table (tile name +
+palette, up to 31 slots). Sprites draw from their own VBO
+(`VBO_SCENE_OBJ`, a 4-short position) so the extra short costs the BGs
+nothing; the vertex's `w = rowW + 256 * slot`, rowW 0 meaning "not on a
+plane row". The tile vertex shader, armed only for the sprite layer's draw
+(`ground.z = 256`, `-1` otherwise), reads `groundTab[slot]` (an indexed
+uniform: on-ground flag + editor spotlight alpha) and replaces the
+priority tier shift with `near + (far - near) * (1 - rowW/255)` for
+on-ground sprites. Profile: `GSPR` (switch), `GNEAR`, `GFAR` (depths);
+per game: `GROUNDX=` signatures marked "not on ground" in the editor
+(Lakitu, a HUD item), which the Mode 7 block lists for the paused screen
+with a live spotlight per sprite.
+
 ## Final composition
 
 `impl3dsSceneRender()` (in `3dsimpl.cpp`, see [Platform Layer](platform-layer.md)) draws `SNES_MAIN` to the top screen with stretch/crop/overscan/filter settings, plus the background image, scanline texture, bezel overlay and notifications — twice with ±IOD offsets when stereoscopic 3D is active. The menu system draws the bottom screen in software (see [Menu and UI](menu-ui.md)).

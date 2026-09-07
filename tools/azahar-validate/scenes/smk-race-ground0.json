@@ -1,0 +1,25 @@
+{
+  "rom": "sdmc:/snes/vanilla/Super Mario Kart (USA).sfc",
+  "state": "states/smk-race.frz",
+  "wait": 24,
+  "sbs": true,
+  "sbs_band": 10,
+  "regions": {},
+  "log_expect": [
+    "ROM loaded: SUPER MARIO KART"
+  ],
+  "title": "SMK race (Jorge's state), every layer flat, sprites NOT following the ground - the kart rows carry no disparity (PROBE_FORCE_SLIDER + PROBE_SBS build)",
+  "stereo3d": [
+    {
+      "file": "SUPER MARIO KART",
+      "content": "BG1=0\nBG2=0\nBG3=0\nBG4=0\nOBJ=0\nFADE=0\nHAZE=0\nBLUR=0\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nM7PERSP=0\nGSPR=0\nGNEAR=4\nGFAR=-8"
+    }
+  ],
+  "sbs_expect": {
+    "rows": [
+      60,
+      112
+    ],
+    "max_abs": 1
+  }
+}

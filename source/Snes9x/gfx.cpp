@@ -1237,6 +1237,7 @@ void S9xSetupOBJ ()
 			int Width = PPU.OBJ[S].Size ? LargeWidth : SmallWidth;
 			int Height = PPU.OBJ[S].Size ? LargeHeight : SmallHeight;
 			GFX.OBJWidths[S] = Width;
+			GFX.OBJHeights[S] = Height;
 
 			int HPos = PPU.OBJ[S].HPos;
 			HPos = (HPos == -256) ? 256 : HPos;
@@ -1319,6 +1320,7 @@ void S9xSetupOBJ ()
 			int Width = PPU.OBJ[S].Size ? LargeWidth : SmallWidth;
 			int Height = PPU.OBJ[S].Size ? LargeHeight : SmallHeight;
 			GFX.OBJWidths[S] = Width;
+			GFX.OBJHeights[S] = Height;
 
 			int HPos = PPU.OBJ[S].HPos;
 			HPos = (HPos == -256) ? 256 : HPos;

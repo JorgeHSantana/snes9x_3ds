@@ -262,6 +262,9 @@ bool impl3dsInitialize()
 	// bg0-bg1
 	int vbo_scene_mode7_line_size = (int)gpu3dsGetNextPowerOf2(sizeof(SMode7LineVertex) * MAX_VERTICES_MODE7_LINE * 2);
 
+	// sprites (issue #76: their own VBO so the 4th position short costs the BGs nothing)
+	int vbo_scene_obj_size = (int)gpu3dsGetNextPowerOf2(sizeof(SObjTileVertex) * MAX_VERTICES_OBJ * 2);
+
 	// mode 7 full texture + tile0 = MAX_VERTICES_MODE7_TILE
 	int vbo_mode7_tile_size = (int)gpu3dsGetNextPowerOf2(sizeof(SMode7TileVertex) * MAX_VERTICES_MODE7_TILE * 2);
 
@@ -271,6 +274,7 @@ bool impl3dsInitialize()
 	SVertexListInfo listInfos[] = {
 		{ VBO_SCENE_RECT, vbo_scene_rect_size, sizeof(SRectVertex), 2, { {GPU_SHORT, 2}, {GPU_UNSIGNED_BYTE, 4} } },
 		{ VBO_SCENE_TILE, vbo_scene_tile_size, sizeof(STileVertex), 2, { {GPU_SHORT, 3}, {GPU_SHORT, 2} } },
+		{ VBO_SCENE_OBJ, vbo_scene_obj_size, sizeof(SObjTileVertex), 2, { {GPU_SHORT, 4}, {GPU_SHORT, 2} } },
 		{ VBO_SCENE_MODE7_LINE, vbo_scene_mode7_line_size, sizeof(SMode7LineVertex), 2, { {GPU_SHORT, 4}, {GPU_FLOAT, 2} } },
 		{ VBO_MODE7_TILE, vbo_mode7_tile_size, sizeof(SMode7TileVertex), 1, { {GPU_SHORT, 4} } },
 		{ VBO_SCREEN, vbo_screen_size, sizeof(SQuadVertex), 4, { {GPU_FLOAT, 4}, {GPU_FLOAT, 2}, {GPU_UNSIGNED_BYTE, 4}, {GPU_UNSIGNED_BYTE, 4} } },

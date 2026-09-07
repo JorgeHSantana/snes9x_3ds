@@ -699,6 +699,14 @@ inline void __attribute__((always_inline)) S9xCommitLayerSection(bool reuseVerti
 	gpu3dsCommitLayerSection(VBO_SCENE_TILE, (LAYER_ID)layer, &renderState, sub, reuseVertices);
 }
 
+inline void __attribute__((always_inline)) S9xCommitObjLayerSection(bool reuseVertices, bool sub) {
+	renderState.textureBind = SNES_TILE_CACHE;
+	renderState.stencilTest = S9xComputeAndEnableStencilFunction(LAYER_OBJ, sub);
+	renderState.alphaTest = ALPHA_TEST_NE_ZERO;
+
+	gpu3dsCommitLayerSection(VBO_SCENE_OBJ, LAYER_OBJ, &renderState, sub, reuseVertices);
+}
+
 inline void __attribute__((always_inline)) S9xCommitMode7LayerSection(bool reuseVertices, int layer, bool sub, SGPU_TEXTURE_ID texture, SGPU_ALPHA_TEST alphaTest) {
 	renderState.textureBind = texture;
 	renderState.stencilTest = S9xComputeAndEnableStencilFunction(layer, sub);
@@ -720,6 +728,12 @@ static int s_layerUseBg = 0;
 // callers (the plain plane and the repeat-tile0 pass) each flush their own
 // run. s_m7Drawn* latch "a Mode 7 plane drew this frame" for the editor.
 #include "3dsmode7persp.h"
+#include "3dsgroundsprites.h"
+// sprites-on-ground frames (issue #76): the rows the plane drew (sprites
+// read the PREVIOUS frame's - the plane may flush after them in draw
+// order; one frame of latency is invisible) and this frame's signature
+// table, latched at frame end for the GPU draw and the editor
+static GroundFrame s_groundAcc, s_groundPrev, s_groundLast;
 struct M7QueuedLine { s16 x0, y, x1; float tx0, ty0, tx1, ty1; };
 static M7QueuedLine s_m7Queue[512];
 static int  s_m7QueueCount = 0;
@@ -746,6 +760,7 @@ static void m7FlushLines(void)
         const M7QueuedLine &q = s_m7Queue[i];
         float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
         s16 w = mode7PerspEncode(sqrtf(dx * dx + dy * dy), spanRef);
+        groundRowSet(&s_groundAcc, q.y & 0xFF, w);   // q.y = screen row + depth (a multiple of 256)
         // -16384 on the right vertex: the geometry shader's Mode 7 marker
         gpu3dsAddMode7LineVertexes(q.x0, q.y, q.x1, -16384, w, q.tx0, q.ty0, q.tx1, q.ty1);
     }
@@ -772,9 +787,38 @@ static void m7FlushLines(void)
     s_m7QueueCount = 0;
 }
 
-void S9xLayerUseFrameStart() { layerUseFrameStart(&s_layerUse); s_m7DrawnAcc = false; }
-void S9xLayerUseFrameEnd()   { layerUseFrameEnd(&s_layerUse); s_m7DrawnLast = s_m7DrawnAcc; }
+void S9xLayerUseFrameStart()
+{
+    layerUseFrameStart(&s_layerUse); s_m7DrawnAcc = false;
+    s_groundPrev = s_groundAcc;
+    groundFrameStart(&s_groundAcc);
+}
+void S9xLayerUseFrameEnd()
+{
+    layerUseFrameEnd(&s_layerUse); s_m7DrawnLast = s_m7DrawnAcc;
+    s_groundLast = s_groundAcc;
+}
 bool S9xMode7DrawnLastFrame() { return s_m7DrawnLast; }
+bool     S9xGroundRowsLastFrame() { return groundRowsPresent(&s_groundPrev); }
+int      S9xGroundSigCount()      { return s_groundLast.sigCount; }
+uint32_t S9xGroundSig(int slot)   { return (slot > 0 && slot < s_groundLast.sigCount) ? s_groundLast.sig[slot] : 0; }
+void     S9xGroundSigPos(int slot, int *x, int *y)
+{
+    bool ok = slot > 0 && slot < s_groundLast.sigCount;
+    *x = ok ? s_groundLast.sigX[slot] : 0;
+    *y = ok ? s_groundLast.sigY[slot] : 0;
+}
+
+// the sprite's vertex w: its bottom row's ground distance (from the
+// previous frame's plane rows) + this frame's signature slot
+static inline s16 groundSpriteW(int S)
+{
+    int bottom = groundSpriteBottom(PPU.OBJ[S].VPos, GFX.OBJHeights[S]);
+    int rowW = groundRowAt(&s_groundPrev, bottom);
+    int slot = groundSlotFor(&s_groundAcc, groundSigMake(PPU.OBJ[S].Name, PPU.OBJ[S].Palette),
+                             PPU.OBJ[S].HPos, PPU.OBJ[S].VPos);
+    return groundVertexW(rowW, slot);
+}
 bool S9xLayerUsedLastFrame(int layer, int prio) { return layerUseUsed(&s_layerUse, layer, prio); }
 bool S9xLayerUsedLastFrameAny(int layer)        { return layerUseLayerUsed(&s_layerUse, layer); }
 
@@ -2755,7 +2799,7 @@ void S9xDrawHiresBackgroundHardwarePriority0Inline_16Color
 inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
 	bool sub, int depth, 
 	uint32 snesTile,
-	int screenX, int screenY, uint32 textureYOffset, int height)
+	int screenX, int screenY, uint32 textureYOffset, int height, s16 groundW)
 {
     uint32 TileAddr = BG.TileAddress + ((snesTile & 0x1ff) << 5);
 
@@ -2820,10 +2864,10 @@ inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
 	int tx1 = tx0 + 8;
 	int ty1 = ty0 + height;
 
-	gpu3dsAddTileVertexes(
+	gpu3dsAddObjTileVertexes(
 		x0, y0, x1, y1,
 		tx0, ty0,
-		tx1, ty1, (snesTile & (V_FLIP | H_FLIP)) + texturePos);
+		tx1, ty1, (snesTile & (V_FLIP | H_FLIP)) + texturePos, groundW);
 }
 
 
@@ -2848,7 +2892,7 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 	//
 	if (layerVerticesCount[LAYER_OBJ] > 0)
 	{
-		S9xCommitLayerSection(true, LAYER_OBJ, sub);
+		S9xCommitObjLayerSection(true, sub);
 
 		return;
 	}
@@ -2918,6 +2962,7 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 				
 				int priorityOffset = (PPU.OBJ[S].Priority + 1) * 3 * 256 + depth;
 				layerUseMark(&s_layerUse, 4, PPU.OBJ[S].Priority & 3);
+				s16 groundW = groundSpriteW(S);
 				bool isVFlipped = PPU.OBJ[S].VFlip;
 				bool isHFlipped = PPU.OBJ[S].HFlip;
 				int objWidth = GFX.OBJWidths[S];
@@ -2955,7 +3000,7 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 						//
 						for (; X<=256 && X<PPU.OBJ[S].HPos+objWidth; X += 8)
 						{
-							S9xDrawOBJTileHardware2 (sub, priorityOffset, BaseTile|TileX, X, Y, TileLine, TileHeight);
+							S9xDrawOBJTileHardware2 (sub, priorityOffset, BaseTile|TileX, X, Y, TileLine, TileHeight, groundW);
 							TileX=(TileX+TileInc) & 0x0f;
 
 						}
@@ -3006,12 +3051,13 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 		
 				int X = (ppuObj.HPos == -256) ? 256 : ppuObj.HPos;
 				int endX = X + GFX.OBJWidths[S];
+				s16 groundW = groundSpriteW(S);
 		
 				while (X <= 256 && X < endX)
 				{
 					S9xDrawOBJTileHardware2(sub, 
 						priorityDepthOffset + ppuObj.Priority * 768, 
-						BaseTile | TileX, X, Y, TileLine, 1);
+						BaseTile | TileX, X, Y, TileLine, 1, groundW);
 		
 					TileX = (TileX + TileInc) & 0x0f;
 					X += 8;
@@ -3020,10 +3066,10 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 		}
 	}
 
-	layerVerticesCount[LAYER_OBJ] = GPU3DS.vertices[VBO_SCENE_TILE].count;
+	layerVerticesCount[LAYER_OBJ] = GPU3DS.vertices[VBO_SCENE_OBJ].count;
 
 	if (layerVerticesCount[LAYER_OBJ] > 0)
-		S9xCommitLayerSection(false, LAYER_OBJ, sub);
+		S9xCommitObjLayerSection(false, sub);
 }
 
 

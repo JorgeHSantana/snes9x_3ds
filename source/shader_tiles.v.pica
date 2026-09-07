@@ -13,6 +13,12 @@
                                  ;      x = ramp strength k (0..1), y = near-row gain (1..2),
                                  ;      z = -fog amount (rows fog by distance into color.b),
                                  ;      w = -ghost offset (blur grows with distance)
+.fvec       ground               ; #10 - sprites follow the Mode 7 ground (issue #76), armed
+                                 ;      only for the sprite layer's draw: x = near shift,
+                                 ;      y = far - near, z = 256 when armed / -1 disarmed
+                                 ;      (the branch test), w = 1 armed / 0 (spotlight gate)
+.fvec       groundTab[32]        ; #11-42 - per signature slot: x = 1 on the ground / 0 keeps
+                                 ;      the sprite gauges, y = editor spotlight alpha
 .fvec       stereoIOD2           ; #8 - (tier2 shift, tier3 shift, boundary 1/2,
                                  ;      boundary 2/3). BG layers park both boundaries
                                  ;      far above any plane so only tiers 0/1 exist;
@@ -25,6 +31,7 @@
 .constf c_alpha         (24576, 8192, 255, 0)
 .constf c_depth         (0.03125, -256, 0.00390625, 0)
 .constf c_m7            (-1, 0.00390625, 1, 0)   ; Mode 7 perspective helpers: -1, 1/256, 1
+.constf c_ground        (256, 0.00390625, -0.003921569, 1)   ; slot unit, 1/256, -1/255, 1
 
 ; Outputs
 .out        outpos      position
@@ -146,6 +153,36 @@ draw:
     mad     r4.x, r6.x, mode7Persp.w, r4.x      ; + d * (-ghost) = ghost * (1 - w/256): blur by distance
     mad     r11.z, r6.x, mode7Persp.z, r11.z    ; color.b += d * (-fog) = fog * (1 - w/256): fog by
                                                 ; distance (a line's b is 0; every other draw has z = 0)
+    ; Sprites follow the Mode 7 ground (issue #76): a sprite vertex carries
+    ; w = rowW + 256 * slot (3dsgroundsprites.h). slot -> groundTab[slot]
+    ; (ground flag, spotlight); rowW 1..255 = its bottom row's distance,
+    ; 0 = not on the plane. Armed (ground.z = 256) only for the sprite draw:
+    ; every other draw has ground.z = -1, so the branch never takes and the
+    ; spotlight gate (ground.w = 0) leaves alpha untouched - exact no-op.
+    mov     r5, c_ground
+    mov     r7, ground
+    mul     r6.y, r0.w, r5.y                    ; w / 256
+    flr     r6.y, r6.y                          ; slot
+    mad     r6.z, r6.y, -r5.x, r0.w             ; rowW = w - slot * 256
+    mova    a0.x, r6.y
+    mov     r8, groundTab[a0.x]                 ; x = on ground, y = spotlight alpha
+    ; spotlight: alpha *= 1 + armed * (tab.y - 1)  (1 when disarmed)
+    add     r8.y, r8.y, -r5.w
+    mad     r8.y, r8.y, r7.w, r5.w
+    mul     r4.y, r4.y, r8.y
+    ; branch: 0 < rowW < ground.z
+    mov     r9.x, r5.x                          ; scratch: (0, ground.z) vs (rowW, rowW)
+    mov     r9.x, c_base.x
+    mov     r9.y, r7.z
+    cmp     r9.xy, lt, gt, r6.zz
+    ifc     cmp.x && cmp.y
+        ; t = 1 - rowW/255 ; shiftG = near + (far - near) * t
+        mad     r6.w, r6.z, r5.z, r5.w
+        mad     r9.z, r6.w, r7.y, r7.x
+        ; blend by the slot's ground flag: r4.x += flag * (shiftG - r4.x)
+        add     r9.z, r9.z, -r4.x
+        mad     r4.x, r8.x, r9.z, r4.x
+    .end
     add     r0.x, r4.x, r0.x
     mul     r11.w, r4.y, r11.w          ; editor spotlight: other priorities'
                                         ; alpha goes to 0 (alpha test discards

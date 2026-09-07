@@ -41,6 +41,7 @@ struct SGFX{
     uint32 Mode7Mask;
     uint32 Mode7PriorityMask;
     uint8  OBJWidths[128];
+    uint8  OBJHeights[128];   // sprites-on-ground: the sprite's bottom row (issue #76)
     uint8  OBJVisibleTiles[128];
     struct {
         uint8 RTOFlags;

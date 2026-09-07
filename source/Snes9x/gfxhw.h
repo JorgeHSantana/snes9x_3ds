@@ -16,5 +16,11 @@ bool S9xLayerUsedLastFrame(int layer, int prio);
 bool S9xLayerUsedLastFrameAny(int layer);
 // a Mode 7 plane drew in the last rendered frame (editor: the Mode 7 gauge dims otherwise)
 bool S9xMode7DrawnLastFrame();
+// sprites follow the Mode 7 ground (issue #76): the last drawn frame's
+// plane rows and sprite signature table (3dsgroundsprites.h)
+bool     S9xGroundRowsLastFrame();
+int      S9xGroundSigCount();
+uint32_t S9xGroundSig(int slot);
+void     S9xGroundSigPos(int slot, int *x, int *y);
 
 #endif

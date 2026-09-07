@@ -11,6 +11,7 @@
 // backdrop * 2, window_lr, brightness, color math
 #define MAX_VERTICES_RECT           (241 * 2 + 241 + 241 + 241)
 #define MAX_VERTICES_MODE7_LINE     8192
+#define MAX_VERTICES_OBJ            16384   // 128 sprites x up to 64 tiles x 2
 #define MAX_VERTICES_MODE7_TILE     16388
 
 #define MAX_VERTICES_QUAD           256
@@ -62,6 +63,12 @@ typedef struct {
     SVector3i    Position;
 	STexCoord2i  TexCoord;
 } STileVertex;
+
+// a sprite tile: w = ground row + 256 * signature slot (3dsgroundsprites.h)
+typedef struct {
+    SVector4i    Position;
+	STexCoord2i  TexCoord;
+} SObjTileVertex;
 
 typedef struct {
     SVector2i   Position;
@@ -342,6 +349,23 @@ inline void __attribute__((always_inline)) gpu3dsAddTileVertexes(
 
     vertices[0].Position = (SVector3i){x0, y0, z};
     vertices[1].Position = (SVector3i){x1, y1, z};
+
+    vertices[0].TexCoord = (STexCoord2i){tx0, ty0};
+    vertices[1].TexCoord = (STexCoord2i){tx1, ty1};
+
+    list->count += 2;
+}
+
+inline void __attribute__((always_inline)) gpu3dsAddObjTileVertexes(
+    s16 x0, s16 y0, s16 x1, s16 y1,
+    s16 tx0, s16 ty0, s16 tx1, s16 ty1,
+    s16 z, s16 groundW)
+{
+    SVertexList *list = &GPU3DS.vertices[VBO_SCENE_OBJ];
+    SObjTileVertex *vertices = &((SObjTileVertex *) list->data)[list->from + list->count];
+
+    vertices[0].Position = (SVector4i){x0, y0, z, groundW};
+    vertices[1].Position = (SVector4i){x1, y1, z, groundW};
 
     vertices[0].TexCoord = (STexCoord2i){tx0, ty0};
     vertices[1].TexCoord = (STexCoord2i){tx1, ty1};
