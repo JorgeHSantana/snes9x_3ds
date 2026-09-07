@@ -16,10 +16,12 @@
   ],
   "sbs_expect": {
     "rows": [
-      20,
-      50
+      30,
+      60
     ],
-    "max_abs": 3
+    "top_rows": 12,
+    "bottom_rows": 12,
+    "min_growth": 3
   },
-  "sbs_band": 10
+  "sbs_band": 6
 }

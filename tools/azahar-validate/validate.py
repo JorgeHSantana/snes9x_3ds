@@ -141,6 +141,36 @@ def kill_azahar():
     time.sleep(1.0)
 
 
+# --dump: Azahar records its own output (`-d video`), so the capture does
+# not touch the Mac's screen - it works with the display locked, which
+# blocked whole sessions of measurements. The process must exit cleanly
+# for the container to be finalized (a -9 leaves it unreadable); the
+# files it rewrites on exit are restored by the harness anyway.
+DUMP = {"on": False, "video": None, "proc": None}
+FBDUMP = {"sd": None}   # --fbdump: the emulator's own top-screen PNG (PROBE_FBDUMP build)
+AZAHAR_BIN = "/Applications/Azahar.app/Contents/MacOS/azahar"
+
+
+def dump_finish(out_png):
+    proc = DUMP["proc"]
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    video = DUMP["video"]
+    if not video or not os.path.exists(video):
+        raise SystemExit("no video dump was written - is video dumping enabled in Azahar?")
+    # the last frame of the dump; the top screen is the top 400x240 of the
+    # default layout (top over bottom, 400x480)
+    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", "-0.3", "-i", video,
+                        "-frames:v", "1", "-vf", "crop=400:240:0:0", out_png],
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if r.returncode != 0 or not os.path.exists(out_png):
+        raise SystemExit(f"ffmpeg could not read the dump: {r.stdout}")
+
+
 def launch(dsx, wait_s, wait_log=None, sd=None, settle_s=6.0):
     # a stale session log from the previous run would satisfy wait_log at
     # once (the emulator recreates it a second or two after launch)
@@ -149,7 +179,13 @@ def launch(dsx, wait_s, wait_log=None, sd=None, settle_s=6.0):
             if f.startswith("debug_") and f.endswith("_session.log"):
                 try: os.remove(os.path.join(sd.app, f))
                 except OSError: pass
-    sh(["open", "-a", "Azahar", dsx])
+    if DUMP["on"]:
+        if os.path.exists(DUMP["video"]):
+            os.remove(DUMP["video"])
+        DUMP["proc"] = subprocess.Popen([AZAHAR_BIN, "-w", "-d", DUMP["video"], dsx],
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        sh(["open", "-a", "Azahar", dsx])
     if wait_log and sd is not None:
         # gate on the session log instead of a fixed delay: e.g. "2105=07"
         # (the scene matcher's PPU mode-7 signature) marks a Mode 7 screen
@@ -163,6 +199,8 @@ def launch(dsx, wait_s, wait_log=None, sd=None, settle_s=6.0):
     else:
         log(f"waiting {wait_s}s for boot + scene load")
         time.sleep(wait_s)
+    if DUMP["on"]:
+        return
     osa('tell application "System Events" to tell process "azahar" to set frontmost to true')
     x, y, w, h = WINDOW
     osa(f'tell application "System Events" to tell process "azahar"\n'
@@ -171,6 +209,21 @@ def launch(dsx, wait_s, wait_log=None, sd=None, settle_s=6.0):
 
 
 def capture_top(out_png):
+    if DUMP["on"]:
+        dump_finish(out_png)
+        return
+    if FBDUMP["sd"] is not None:
+        # a -DPROBE_FBDUMP build writes the presented top screen to the SD
+        # 10 s (frame 600) after the ROM loaded: wait for it and take it
+        src = FBDUMP["sd"].path("probe_top_600.png")
+        t = 0.0
+        while not os.path.exists(src) and t < 60.0:
+            time.sleep(1.0); t += 1.0
+        if not os.path.exists(src):
+            raise SystemExit("no probe_top_600.png on the SD - is this a -DPROBE_FBDUMP build?")
+        time.sleep(1.0)   # let the PNG finish writing
+        shutil.copyfile(src, out_png)
+        return
     x, y, w, h = WINDOW
     tx, ty, tw, th = TOP_SCREEN
     r = subprocess.run(["screencapture", "-x", "-R", f"{x + tx},{y + ty},{tw},{th}", out_png],
@@ -262,7 +315,8 @@ def run_scene(sd, sc, dsx, out_png):
         sd.restore()
         # the resume marker is consumed on boot; the parked state is not
         # restored by design (it was ours) - remove any leftover
-        for p in (sd.path("update-resume.txt"), sd.path(f"savestates/{rom_base(sc['rom'])}.update.frz")):
+        for p in (sd.path("update-resume.txt"), sd.path(f"savestates/{rom_base(sc['rom'])}.update.frz"),
+                  sd.path("probe_top_600.png"), sd.path("probe_top_1200.png")):
             if os.path.exists(p):
                 os.remove(p)
     for pat in sc.get("log_expect", []):
@@ -293,6 +347,7 @@ def sbs_disparity(png, band=20, max_shift=16, viewport=None):
     for y0 in range(0, h, band):
         y1 = min(h, y0 + band)
         best = None
+        worst = 0.0
         for sft in range(-max_shift, max_shift + 1):
             err = n = 0
             for y in range(y0, y1):
@@ -304,7 +359,12 @@ def sbs_disparity(png, band=20, max_shift=16, viewport=None):
             e = err / max(n, 1)
             if best is None or e < best[0]:
                 best = (e, sft)
-        out.append((y0, y1 - 1, best[1], best[0]))
+            if e > worst:
+                worst = e
+        # spread = how much the wrong shifts cost over the best one: a
+        # featureless band has ~0 (any shift fits), a lone sprite on a flat
+        # plane has a small but clear spread even though its residual is 0
+        out.append((y0, y1 - 1, best[1], best[0], worst - best[0]))
     return out
 
 
@@ -336,7 +396,14 @@ def main():
     ap.add_argument("--golden", help="run: compare against this PNG")
     ap.add_argument("--update-golden", action="store_true", help="run: write the capture as the golden")
     ap.add_argument("--out", default=os.path.join(HERE, "out"))
+    ap.add_argument("--dump", action="store_true",
+                    help="capture from Azahar's own video dump instead of the screen (works with the display locked)")
+    ap.add_argument("--fbdump", action="store_true",
+                    help="capture the PNG a -DPROBE_FBDUMP build writes to the SD (works with the display locked)")
     args = ap.parse_args()
+    if args.dump:
+        DUMP["on"] = True
+        DUMP["video"] = os.path.join(args.out, "dump.mp4")
 
     if args.mode == "list":
         for f in sorted(os.listdir(os.path.join(HERE, "scenes"))):
@@ -347,6 +414,8 @@ def main():
 
     os.makedirs(args.out, exist_ok=True)
     sd = Sdmc(args.sdmc)
+    if args.fbdump:
+        FBDUMP["sd"] = sd
     if not os.path.isdir(sd.app):
         raise SystemExit(f"no emulator dir at {sd.app}")
     caff = subprocess.Popen(["caffeinate", "-d"])
@@ -364,14 +433,14 @@ def main():
             if sc.get("sbs"):
                 print(f"\n== {sc['_name']} side-by-side disparity (rows: shift px, residual)")
                 rows = sbs_disparity(png, band=sc.get("sbs_band", 20), viewport=sc.get("sbs_viewport"))
-                for y0, y1, sft, e in rows:
-                    print(f"  rows {y0:3d}-{y1:3d}: {sft:+3d}  ({e:5.1f})")
+                for y0, y1, sft, e, spread in rows:
+                    print(f"  rows {y0:3d}-{y1:3d}: {sft:+3d}  (res {e:5.1f}, spread {spread:5.1f})")
                 exp = sc.get("sbs_expect")
                 if exp:
-                    # featureless bands (residual ~0: any shift fits) carry no
+                    # featureless bands (spread ~0: any shift fits) carry no
                     # information - the yellow Mode 7 plane Azahar renders
                     ry0, ry1 = exp.get("rows", [0, h_rows(rows)])
-                    feat = [r for r in rows if r[3] >= 1.0 and r[0] >= ry0 and r[1] <= ry1]
+                    feat = [r for r in rows if r[4] >= 1.0 and r[0] >= ry0 and r[1] <= ry1]
                     if "min_abs" in exp or "max_abs" in exp:
                         peak = max((abs(r[2]) for r in feat), default=0)
                         good = exp.get("min_abs", 0) <= peak <= exp.get("max_abs", 1e9)

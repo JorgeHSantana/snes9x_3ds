@@ -1094,6 +1094,27 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		}
 	gpu3dsFrameEnd();
 
+#ifdef PROBE_FBDUMP
+	// harness probe (tools/azahar-validate --fbdump): the presented top
+	// screen saved to the SD at fixed frames after the ROM loaded, so a
+	// capture never touches the Mac's screen (the display lock blocked
+	// whole sessions of measurements). Same dance as a screenshot.
+	{
+		static int s_probeFrames = 0;
+		if (firstFrame) s_probeFrames = 0;
+		s_probeFrames++;
+		if (!skipDrawingFrame && (s_probeFrames == 600 || s_probeFrames == 1200)) {
+			gspWaitForEvent(GSPGPU_EVENT_PPF, GPU3DS.isReal3DS);
+			gfxScreenSwapBuffers(GFX_TOP, false);
+			impl3dsInvalidateScreen(GFX_TOP, false, gfxIsWide());
+			char probePath[PATH_MAX];
+			snprintf(probePath, sizeof(probePath), "sdmc:/3ds/snes9x_3ds/probe_top_%d.png", s_probeFrames);
+			bool ok = img3dsSaveScreenRegion(probePath, 400, 240, 0, 0, GFX_TOP, false);
+			log3dsWrite("[probe] top screen dump %s: %s", probePath, ok ? "v" : "x");
+		}
+	}
+#endif
+
 	if (screenshot.dirty && !skipDrawingFrame) {
 		char path[PATH_MAX];
 
