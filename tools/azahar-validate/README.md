@@ -69,7 +69,7 @@ directions** - a probe build shipped by accident is a real risk.
 * `regions` are top-screen pixel boxes; bands are percentages of changed
   pixels (sum of channel deltas > 40).
 * `wait_log` gates the capture on a session-log substring instead of a fixed delay (e.g. `"2105=07"`, the scene matcher's PPU mode-7 signature), then waits `settle` seconds.
-* `sbs: true` (with a `-DPROBE_SBS` build) prints the per-row-band disparity between the two eyes; `sbs_expect.min_growth` asserts how much it changes between the top rows and the bottom rows (`horizon_deeper: true` asserts the top rows carry that much MORE shift than the bottom ones - the Mode 7 anchor since the horizon recedes past the gauge).
+* `sbs: true` (with a `-DPROBE_SBS` build) prints the per-row-band disparity between the two eyes; `sbs_expect.min_growth` asserts how much it changes between the top rows and the bottom rows (`horizon_deeper: true` asserts the top rows carry that much MORE shift than the bottom ones - the Mode 7 anchor since the horizon recedes past the gauge); `min_abs`/`max_abs` bound the peak |disparity| over the featured bands inside `rows: [y0, y1]`; `sbs_band` sets the band height. Featureless bands (residual ~0) are ignored. The halves are compared inside the game viewport (256 px centred by default, `sbs_viewport: [x0, x1]` otherwise), not across the screen.
 * `frames` > 1 captures that many frames 0.3 s apart and reports the worst
   consecutive-frame diff per region (`temporal_expect`): a static region
   that changes between frames is flicker or wobble.

@@ -274,14 +274,20 @@ def run_scene(sd, sc, dsx, out_png):
     return out_png
 
 
-def sbs_disparity(png, band=20, max_shift=16):
-    """PROBE_SBS builds composite both eyes side by side on the top screen.
-    Per band of rows, the horizontal shift that best aligns the right half
-    to the left half is the stereo disparity there (in half-res pixels).
-    A flat layer gives one value everywhere; Mode 7 perspective grows it
-    from the horizon down."""
+def sbs_disparity(png, band=20, max_shift=16, viewport=None):
+    """PROBE_SBS builds composite both eyes side by side INSIDE the game
+    viewport (each eye's full image squeezed into one half of it), not the
+    whole top screen: with the 4:3 unstretched default the viewport is
+    256 px wide, centred, so the halves are 128 px apart - comparing the
+    screen halves (200 px apart) matched nothing and saturated at the
+    search limit (the "unreliable disparity" of earlier sessions). Per band
+    of rows, the horizontal shift that best aligns the right half to the
+    left half is the stereo disparity there (in half-res pixels). A flat
+    layer gives one value everywhere; the Mode 7 anchor puts more at the
+    horizon. Bands whose residual is ~0 are featureless (any shift fits)."""
     w, h, px = png_to_pixels(png)
-    half = w // 2
+    x0, x1 = viewport if viewport else ((w - 256) // 2, (w + 256) // 2)
+    half = (x0 + x1) // 2
     g = [[sum(px[y][x]) // 3 for x in range(w)] for y in range(h)]
     out = []
     for y0 in range(0, h, band):
@@ -290,10 +296,10 @@ def sbs_disparity(png, band=20, max_shift=16):
         for sft in range(-max_shift, max_shift + 1):
             err = n = 0
             for y in range(y0, y1):
-                L = g[y][:half]; R = g[y][half:]
-                for x in range(20, half - 20):
+                L = g[y][x0:half]; R = g[y][half:x1]
+                for x in range(20, len(L) - 20):
                     xr = x + sft
-                    if 0 <= xr < half:
+                    if 0 <= xr < len(R):
                         err += abs(L[x] - R[xr]); n += 1
             e = err / max(n, 1)
             if best is None or e < best[0]:
@@ -357,26 +363,36 @@ def main():
             ok = True
             if sc.get("sbs"):
                 print(f"\n== {sc['_name']} side-by-side disparity (rows: shift px, residual)")
-                rows = sbs_disparity(png)
+                rows = sbs_disparity(png, band=sc.get("sbs_band", 20), viewport=sc.get("sbs_viewport"))
                 for y0, y1, sft, e in rows:
                     print(f"  rows {y0:3d}-{y1:3d}: {sft:+3d}  ({e:5.1f})")
                 exp = sc.get("sbs_expect")
                 if exp:
-                    top = [r[2] for r in rows if r[0] < exp.get("top_rows", 60)]
-                    bot = [r[2] for r in rows if r[1] >= h_rows(rows) - exp.get("bottom_rows", 60)]
-                    mt = sum(top) / len(top) if top else 0
-                    mb = sum(bot) / len(bot) if bot else 0
-                    if exp.get("horizon_deeper"):
-                        # the plane's anchor is the nearest row: the horizon
-                        # carries MORE shift than the bottom rows, by min_growth
-                        grow = abs(mt) - abs(mb)
-                        good = exp.get("min_growth", 0) <= grow
-                        print(f"  horizon-bottom |disparity| excess: {grow:+.1f} px  {'OK' if good else 'FAIL'}")
-                    else:
-                        grow = mb - mt
-                        good = exp.get("min_growth", 0) <= abs(grow)
-                        print(f"  bottom-top disparity growth: {grow:+.1f} px  {'OK' if good else 'FAIL'}")
-                    ok &= good
+                    # featureless bands (residual ~0: any shift fits) carry no
+                    # information - the yellow Mode 7 plane Azahar renders
+                    ry0, ry1 = exp.get("rows", [0, h_rows(rows)])
+                    feat = [r for r in rows if r[3] >= 1.0 and r[0] >= ry0 and r[1] <= ry1]
+                    if "min_abs" in exp or "max_abs" in exp:
+                        peak = max((abs(r[2]) for r in feat), default=0)
+                        good = exp.get("min_abs", 0) <= peak <= exp.get("max_abs", 1e9)
+                        print(f"  peak |disparity| over featured bands in rows {ry0}-{ry1}: {peak} px  {'OK' if good else 'FAIL'}")
+                        ok &= good
+                    top = [r[2] for r in feat if r[0] < ry0 + exp.get("top_rows", 60)]
+                    bot = [r[2] for r in feat if r[1] >= ry1 - exp.get("bottom_rows", 60)]
+                    if "min_growth" in exp:
+                        mt = sum(top) / len(top) if top else 0
+                        mb = sum(bot) / len(bot) if bot else 0
+                        if exp.get("horizon_deeper"):
+                            # the plane's anchor is the nearest row: the horizon
+                            # carries MORE shift than the bottom rows, by min_growth
+                            grow = abs(mt) - abs(mb)
+                            good = exp["min_growth"] <= grow
+                            print(f"  horizon-bottom |disparity| excess: {grow:+.1f} px  {'OK' if good else 'FAIL'}")
+                        else:
+                            grow = mb - mt
+                            good = exp["min_growth"] <= abs(grow)
+                            print(f"  bottom-top disparity growth: {grow:+.1f} px  {'OK' if good else 'FAIL'}")
+                        ok &= good
             if sc.get("_temporal") is not None:
                 ok &= report(f"{sc['_name']} temporal (max consecutive-frame diff)", sc["_temporal"],
                              sc.get("temporal_expect", {}))

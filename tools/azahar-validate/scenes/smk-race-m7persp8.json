@@ -1,0 +1,25 @@
+{
+  "rom": "sdmc:/snes/vanilla/Super Mario Kart (USA).sfc",
+  "state": "states/smk-race.frz",
+  "wait": 24,
+  "sbs": true,
+  "regions": {},
+  "log_expect": [
+    "ROM loaded: SUPER MARIO KART"
+  ],
+  "title": "SMK race (Jorge's state), BG1 -6, Perspective 8 - the far rows (the only textured plane rows in this state) must carry at least 10 half-px of disparity vs 6 flat (PROBE_FORCE_SLIDER + PROBE_SBS build)",
+  "stereo3d": [
+    {
+      "file": "SUPER MARIO KART",
+      "content": "BG1=-6\nBG2=0\nBG3=0\nBG4=0\nOBJ=0\nFADE=0\nHAZE=0\nBLUR=0\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nM7PERSP=8"
+    }
+  ],
+  "sbs_expect": {
+    "rows": [
+      20,
+      50
+    ],
+    "min_abs": 10
+  },
+  "sbs_band": 10
+}
