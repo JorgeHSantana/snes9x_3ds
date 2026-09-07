@@ -14,12 +14,9 @@
 //
 // The factor rides in the scanline vertex's w as 256 * (spanRef / span),
 // clamped to [MODE7_PERSP_W_MIN, MODE7_PERSP_W_ONE]. The tile vertex
-// shader applies shift += H * (1 - w/256) with H the eye's shift for the
-// horizon's EXTRA depth (the layer gauge is the nearest row; the horizon
-// sinks `recede` units past it, whatever the gauge's sign - the old
-// multiplicative ramp flipped the plane with a negative gauge). H is set
-// only for the Mode 7 layer draw and 0 for every other draw, so tiles and
-// 2D are exact no-ops.
+// shader applies shift *= 1 + k * (w/256 - 1) with k the profile's
+// strength (0..1) for the Mode 7 layer draw and 0 for every other draw,
+// so tiles and 2D are exact no-ops.
 
 #define MODE7_PERSP_W_ONE 256
 #define MODE7_PERSP_W_MIN 8
@@ -36,20 +33,21 @@ static inline int16_t mode7PerspEncode(float span, float spanRef)
     return (int16_t)w;
 }
 
-// the shader's formula, mirrored for tests: a row's shift from the
-// nearest row's (the layer gauge) and the horizon's extra shift
-static inline float mode7PerspRowShift(int16_t w, float nearShift, float horizonShift)
+// the shader's formula, mirrored for tests
+static inline float mode7PerspFactor(int16_t w, float k)
 {
-    return nearShift + horizonShift * (1.0f - (float)w / (float)MODE7_PERSP_W_ONE);
+    return 1.0f + k * ((float)w / (float)MODE7_PERSP_W_ONE - 1.0f);
 }
 
-// Gauge 0..8 -> depth units the horizon sinks past the layer gauge
-// (0 flat; 4 = a race track's natural recession; 8 = twice that).
-static inline float mode7PerspRecede(int gauge)
+// Gauge 0..8 -> (ramp k, near-row gain): the first half builds the ramp
+// (4 = full perspective), the second half pushes the nearest rows past the
+// layer gauge (8 = 2x) - "more depth" without touching the horizon.
+static inline void mode7PerspGaugeSplit(int gauge, float *k, float *gain)
 {
     if (gauge < 0) gauge = 0;
     if (gauge > 8) gauge = 8;
-    return (float)gauge;
+    *k = (gauge < 4 ? gauge : 4) / 4.0f;
+    *gain = 1.0f + (gauge > 4 ? gauge - 4 : 0) / 4.0f;
 }
 
 // Effects by distance on a Mode 7 plane: the fog a row receives is

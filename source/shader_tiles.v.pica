@@ -10,8 +10,7 @@
                                  ;      spotlight hides the sibling priorities via the
                                  ;      alpha test instead of dimming their RGB)
 .fvec       mode7Persp           ; #9 - Mode 7 plane, set only while it draws (all 0 otherwise):
-                                 ;      x = -horizon shift (the eye's shift for the recession, rows
-                                 ;      take it by distance), y unused,
+                                 ;      x = ramp strength k (0..1), y = near-row gain (1..2),
                                  ;      z = -fog amount (rows fog by distance into color.b),
                                  ;      w = -ghost offset (blur grows with distance)
 .fvec       stereoIOD2           ; #8 - (tier2 shift, tier3 shift, boundary 1/2,
@@ -138,11 +137,12 @@ draw:
     .end
     ; Mode 7 perspective (issue #62): a scanline vertex carries
     ; w = 256 * (nearest span / its span); tiles carry the loader's w.
-    ; With mode7Persp = 0 outside Mode 7 draws every term is + 0 = exact no-op.
+    ; With mode7Persp.x = 0 outside Mode 7 draws this is 1 + 0 = exact no-op.
     mov     r5, c_m7                            ; (-1, 1/256, 1, 0): mad's src3 must be a temp
     mad     r6.x, r0.w, r5.y, r5.x              ; d = w/256 - 1  (0 at the nearest row, -1 at the horizon)
-    mad     r4.x, r6.x, mode7Persp.x, r4.x      ; + d * (-H) = H * (1 - w/256): the layer gauge is the
-                                                ; nearest row, the horizon sinks H past it (any gauge sign)
+    mad     r5.x, r6.x, mode7Persp.x, r5.z      ; 1 + k * d
+    mul     r5.x, mode7Persp.y, r5.x            ; * near-row gain (a uniform must be src1 in mul)
+    mul     r4.x, r4.x, r5.x
     mad     r4.x, r6.x, mode7Persp.w, r4.x      ; + d * (-ghost) = ghost * (1 - w/256): blur by distance
     mad     r11.z, r6.x, mode7Persp.z, r11.z    ; color.b += d * (-fog) = fog * (1 - w/256): fog by
                                                 ; distance (a line's b is 0; every other draw has z = 0)

@@ -306,13 +306,14 @@ static void settings3dsStereoApplyValues(const float depths[5],
     GPU3DS.stereoFocusFront = focusFront;
     GPU3DS.stereoMaxExcess = maxExcess;
     GPU3DS.stereoMaxBackExcess = maxBackExcess;
-    // Mode 7 perspective sinks the horizon `recede` units past the BG1
-    // gauge (BG1 is the plane): the edge crop must size for the horizon
-    // row or the side columns show (Jorge's report at gauge > 4).
+    // Mode 7 perspective gain (gauge 5..8) pushes the plane's nearest rows
+    // past the BG1 gauge: the edge crop must size for that or the side
+    // columns show above 4 (Jorge's report). BG1 is the Mode 7 plane.
     {
-        float horizon = depths[0] - mode7PerspRecede((int)GPU3DS.stereoMode7Persp);
-        if (horizon < 0.0f) horizon = -horizon;
-        if (horizon > maxAbs) maxAbs = horizon;
+        float m7k, m7gain;
+        mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
+        float bg1 = depths[0] < 0.0f ? -depths[0] : depths[0];
+        if (bg1 * m7gain > maxAbs) maxAbs = bg1 * m7gain;
     }
     GPU3DS.stereoMaxPop = maxPop;
     GPU3DS.stereoMaxAbs = maxAbs;

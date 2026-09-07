@@ -20,11 +20,10 @@ Notable changes to this project will be documented in this file.
   plane (`M7FX` in the .3d).
 
 ### Fixes
-* Mode 7 perspective anchor: the layer gauge is now the nearest row and
-  the horizon sinks the Perspective gauge's depth past it, whatever the
-  gauge's sign. Before, the ramp multiplied the gauge, so a negative BG1
-  (into the screen) tilted the plane the wrong way - near rows deeper than
-  the horizon (Jorge: "the other fork feels slightly different"). Same cost.
+* Mode 7 perspective anchor stays as shipped (horizon on the screen plane,
+  the layer gauge at the nearest row): one nightly (2026-09-07) sank the
+  whole plane past the gauge instead, and the depth read vanished - the
+  far rows left the comfortable fusion range (Jorge's report).
 * 3D Stereo tab live preview (Jorge's report): changing Edge Cleanup
   (Trim -> Zoom), Blur Quality or Slider Response while paused now redraws
   both screen buffers, so the top screen no longer alternates between the

@@ -28,34 +28,22 @@ TEST_CASE("mode7 persp: clamps and guards") {
     CHECK(mode7PerspEncode(1.0f, 0.0f) == MODE7_PERSP_W_ONE);         // no reference yet
 }
 
-TEST_CASE("mode7 persp: row shift is an exact no-op with no recession and at the nearest row") {
-    CHECK(mode7PerspRowShift(8, -4.0f, 0.0f) == -4.0f);
-    CHECK(mode7PerspRowShift(1, 0.0f, 0.0f) == 0.0f);          // a tile's loader-filled w
-    CHECK(mode7PerspRowShift(MODE7_PERSP_W_ONE, -4.0f, -4.0f) == -4.0f);
+TEST_CASE("mode7 persp: the shader factor is an exact no-op at strength 0 and at the nearest row") {
+    CHECK(mode7PerspFactor(8, 0.0f) == 1.0f);
+    CHECK(mode7PerspFactor(1, 0.0f) == 1.0f);        // a tile's loader-filled w
+    CHECK(mode7PerspFactor(MODE7_PERSP_W_ONE, 1.0f) == 1.0f);
+    CHECK(mode7PerspFactor(128, 1.0f) == doctest::Approx(0.5f));
+    CHECK(mode7PerspFactor(128, 0.5f) == doctest::Approx(0.75f));
 }
 
-TEST_CASE("mode7 persp: the horizon sinks past the gauge whatever its sign") {
-    // negative gauge (into the screen): the horizon is deeper still
-    CHECK(mode7PerspRowShift(128, -4.0f, -4.0f) == doctest::Approx(-6.0f));
-    CHECK(mode7PerspRowShift(MODE7_PERSP_W_MIN, -4.0f, -4.0f) == doctest::Approx(-7.875f));
-    // positive gauge (pop out): the near rows pop, the horizon still recedes
-    CHECK(mode7PerspRowShift(128, 4.0f, -4.0f) == doctest::Approx(2.0f));
-    CHECK(mode7PerspRowShift(MODE7_PERSP_W_MIN, 4.0f, -4.0f) < 4.0f);
-    // rows never move against the recession
-    float prev = mode7PerspRowShift(MODE7_PERSP_W_ONE, 2.0f, -3.0f);
-    for (int w = MODE7_PERSP_W_ONE - 8; w >= MODE7_PERSP_W_MIN; w -= 8) {
-        float cur = mode7PerspRowShift((int16_t)w, 2.0f, -3.0f);
-        CHECK(cur <= prev);
-        prev = cur;
-    }
-}
-
-TEST_CASE("mode7 persp: gauge is the recession in depth units, clamped 0..8") {
-    CHECK(mode7PerspRecede(0) == 0.0f);
-    CHECK(mode7PerspRecede(4) == 4.0f);
-    CHECK(mode7PerspRecede(8) == 8.0f);
-    CHECK(mode7PerspRecede(99) == 8.0f);
-    CHECK(mode7PerspRecede(-3) == 0.0f);
+TEST_CASE("mode7 persp: gauge split - ramp first, gain second") {
+    float k, g;
+    mode7PerspGaugeSplit(0, &k, &g); CHECK(k == 0.0f); CHECK(g == 1.0f);
+    mode7PerspGaugeSplit(2, &k, &g); CHECK(k == 0.5f); CHECK(g == 1.0f);
+    mode7PerspGaugeSplit(4, &k, &g); CHECK(k == 1.0f); CHECK(g == 1.0f);
+    mode7PerspGaugeSplit(6, &k, &g); CHECK(k == 1.0f); CHECK(g == 1.5f);
+    mode7PerspGaugeSplit(8, &k, &g); CHECK(k == 1.0f); CHECK(g == 2.0f);
+    mode7PerspGaugeSplit(99, &k, &g); CHECK(k == 1.0f); CHECK(g == 2.0f);
 }
 
 TEST_CASE("mode7 persp: fog amount follows the per-layer weights and caps") {
