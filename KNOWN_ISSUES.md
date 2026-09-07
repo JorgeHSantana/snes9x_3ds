@@ -27,6 +27,11 @@ They are only listed below when there is another issue or a relevant New 3DS not
 
 Games with heavy in-frame palette changes can also struggle, typically racing games with scrolling road effects and/or gradient skies.
 
+Super Mario Kart is heavier than F-Zero by construction (DSP-1 on the CPU,
+two Mode 7 planes per frame for the split screen); stereoscopic 3D adds
+one cheap composite per frame on top, and its Blur Auto starts in Light.
+If it drops frames on an Old 3DS in 2D already, 3D cannot make it faster.
+
 ## In-frame palette changes
 
 Set `In-Frame Palette Changes` to `Enabled` for the most accurate visuals.

@@ -26,6 +26,20 @@
 // depth (a multiple of 256 the left-hand vertex carries above its screen
 // row), so the tile vertex shader decodes the same plane for both ends
 // and they take the same stereo tier: the line moves, never stretches.
+// EXTBG (Mario Kart): BG2 shows the plane's 7-bit colour with bit 7 as a
+// per-pixel priority, drawn as two full-screen passes (the low pixels
+// under BG1's depth, the high ones above the sprites). The low pass is
+// BG1's own pixels exactly (index < 128, same tilemap, same matrix), so
+// whenever BG1 draws on the same screen segment with the same window
+// mask it is fully covered: one full-screen fill of the 1024^2 texture
+// less per frame - a third of the plane cost on an Old 3DS (Jorge:
+// F-Zero fine, Mario Kart slow).
+static inline bool mode7ExtbgLowPassRedundant(bool bg1Enabled, bool bg1Segment,
+                                              bool bg2Enabled, uint32_t stencilBg1, uint32_t stencilBg2)
+{
+    return bg1Enabled && bg1Segment && bg2Enabled && stencilBg1 == stencilBg2;
+}
+
 #define MODE7_RIGHT_MARKER (-16384)
 
 // The left-hand y is (alpha << 13) + depth * 256 + row: ONLY the depth

@@ -147,7 +147,7 @@ def kill_azahar():
 # for the container to be finalized (a -9 leaves it unreadable); the
 # files it rewrites on exit are restored by the harness anyway.
 DUMP = {"on": False, "video": None, "proc": None}
-FBDUMP = {"sd": None}   # --fbdump: the emulator's own top-screen PNG (PROBE_FBDUMP build)
+FBDUMP = {"sd": None, "frame": 600}   # --fbdump: the emulator's own top-screen PNG (PROBE_FBDUMP build)
 AZAHAR_BIN = "/Applications/Azahar.app/Contents/MacOS/azahar"
 
 
@@ -215,12 +215,15 @@ def capture_top(out_png):
     if FBDUMP["sd"] is not None:
         # a -DPROBE_FBDUMP build writes the presented top screen to the SD
         # 10 s (frame 600) after the ROM loaded: wait for it and take it
-        src = FBDUMP["sd"].path("probe_top_600.png")
+        # (600, 1200 or 3600 - `fbdump_frame` in the scene picks; 3600 = 60 s,
+        # for a scene that only forms late, like SMK's attract race)
+        frame = int(FBDUMP["frame"])
+        src = FBDUMP["sd"].path(f"probe_top_{frame}.png")
         t = 0.0
-        while not os.path.exists(src) and t < 60.0:
+        while not os.path.exists(src) and t < 150.0:
             time.sleep(1.0); t += 1.0
         if not os.path.exists(src):
-            raise SystemExit("no probe_top_600.png on the SD - is this a -DPROBE_FBDUMP build?")
+            raise SystemExit(f"no probe_top_{frame}.png on the SD - is this a -DPROBE_FBDUMP build?")
         time.sleep(1.0)   # let the PNG finish writing
         shutil.copyfile(src, out_png)
         return
@@ -288,6 +291,7 @@ def diff_images(a_png, b_png, regions, out_mask=None):
 def run_scene(sd, sc, dsx, out_png):
     kill_azahar()
     arm_scene(sd, sc)
+    FBDUMP["frame"] = int(sc.get("fbdump_frame", 600))
     try:
         launch(dsx, sc["wait"], sc.get("wait_log"), sd, float(sc.get("settle", 6.0)))
         capture_top(out_png)
@@ -316,7 +320,7 @@ def run_scene(sd, sc, dsx, out_png):
         # the resume marker is consumed on boot; the parked state is not
         # restored by design (it was ours) - remove any leftover
         for p in (sd.path("update-resume.txt"), sd.path(f"savestates/{rom_base(sc['rom'])}.update.frz"),
-                  sd.path("probe_top_600.png"), sd.path("probe_top_1200.png")):
+                  sd.path("probe_top_600.png"), sd.path("probe_top_1200.png"), sd.path("probe_top_3600.png")):
             if os.path.exists(p):
                 os.remove(p)
     for pat in sc.get("log_expect", []):

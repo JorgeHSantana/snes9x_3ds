@@ -8,6 +8,12 @@
 // frame loop feeds one bool per emulated frame, the renderer reads the
 // verdict.
 //
+// A start is Light: the two eyes fuse one ghost each into the same smear
+// Full's two ghosts give, so nothing is lost while the run of clean
+// windows proves the game holds its rate - and an Old 3DS that never
+// does never pays for Full (Jorge, Mario Kart). The first promotion is
+// not a "return", so a skip right after it is not a relapse.
+//
 // Entering Light is immediate: one skipped frame flips it. Returning to
 // Full needs `required` consecutive clean windows of
 // BLUR_AUTO_WINDOW_FRAMES frames; any skip while Light restarts the run.
@@ -33,6 +39,7 @@ struct BlurAutoState
                        // frames after a ROM or state load skip for reasons
                        // that are not load (caches filling, threads starting)
     bool light;        // current verdict
+    bool promoted;     // Full reached at least once since the reset
 };
 
 #define BLUR_AUTO_WARMUP_FRAMES 60
@@ -45,7 +52,8 @@ static inline void blurAutoReset(BlurAutoState *s)
     s->required = BLUR_AUTO_CLEAN_BASE;
     s->fullWindows = BLUR_AUTO_STABLE_WINDOWS;   // a fresh start is not a relapse
     s->warmup = BLUR_AUTO_WARMUP_FRAMES;
-    s->light = false;
+    s->light = true;
+    s->promoted = false;
 }
 
 // One emulated frame. Returns the verdict after this frame.
@@ -85,7 +93,10 @@ static inline bool blurAutoStep(BlurAutoState *s, bool skippedFrame)
             s->clean = 0;                         // not clean: the run restarts
         else if (++s->clean >= s->required) {
             s->light = false;
-            s->fullWindows = 0;
+            // the first Full after a start is not a return: a skip soon
+            // after it must not double the proof like a relapse would
+            s->fullWindows = s->promoted ? 0 : BLUR_AUTO_STABLE_WINDOWS;
+            s->promoted = true;
         }
     } else if (s->fullWindows < BLUR_AUTO_STABLE_WINDOWS) {
         s->fullWindows++;

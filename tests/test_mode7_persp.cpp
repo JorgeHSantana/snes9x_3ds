@@ -66,3 +66,11 @@ TEST_CASE("mode7 persp: the right-hand vertex carries the marker plus the row's 
     CHECK(mode7RightVertexY(24576 + 15 * 256 + 239) == MODE7_RIGHT_MARKER + 15 * 256);
     CHECK(mode7RightVertexY(24576 + 15 * 256 + 239) < -1);
 }
+
+TEST_CASE("mode7 extbg: the BG2 low pass is redundant only under BG1 on the same segment and window") {
+    CHECK(mode7ExtbgLowPassRedundant(true, true, true, 5, 5));
+    CHECK_FALSE(mode7ExtbgLowPassRedundant(false, true, true, 5, 5));   // BG1 off: BG2 low shows
+    CHECK_FALSE(mode7ExtbgLowPassRedundant(true, false, true, 5, 5));   // BG1 not in this segment
+    CHECK_FALSE(mode7ExtbgLowPassRedundant(true, true, false, 5, 5));   // nothing to skip
+    CHECK_FALSE(mode7ExtbgLowPassRedundant(true, true, true, 5, 6));    // different window masks
+}

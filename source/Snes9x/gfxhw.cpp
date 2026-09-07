@@ -3697,7 +3697,22 @@ void S9xRenderScreenHardware (bool8 sub)
 
 			bool isTile0 = PPU.Mode7Repeat == 3;
             if (IPPU.Mode7EXTBGFlag) {
-                DRAW_M7BG(1, 2, 0, isTile0);
+                // BG2's low pass is BG1's pixels under BG1: skipped when
+                // BG1 covers it (3dsmode7persp.h) - one plane fill less
+                bool lowRedundant = mode7ExtbgLowPassRedundant(
+                    bgEnabled[0], LayerRender.shouldRenderThisSegment[0], bgEnabled[1],
+                    S9xComputeAndEnableStencilFunction(0, sub), S9xComputeAndEnableStencilFunction(1, sub));
+                static bool s_extbgLogged = false;
+                if (!s_extbgLogged) {
+                    s_extbgLogged = true;
+                    log3dsWrite("[m7] extbg: BG2 low pass %s (bg1=%d seg1=%d bg2=%d st1=%u st2=%u sub=%d)",
+                        lowRedundant ? "skipped (covered by BG1)" : "drawn",
+                        bgEnabled[0] ? 1 : 0, LayerRender.shouldRenderThisSegment[0] ? 1 : 0, bgEnabled[1] ? 1 : 0,
+                        (unsigned)S9xComputeAndEnableStencilFunction(0, sub), (unsigned)S9xComputeAndEnableStencilFunction(1, sub), sub ? 1 : 0);
+                }
+                if (!lowRedundant) {
+                    DRAW_M7BG(1, 2, 0, isTile0);
+                }
                 DRAW_M7BG(1, 8, 1, isTile0);
             }
 

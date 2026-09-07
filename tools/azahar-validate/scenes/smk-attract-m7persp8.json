@@ -19,5 +19,6 @@
     "top_rows": 60,
     "bottom_rows": 60,
     "min_growth": 2
-  }
+  },
+  "fbdump_frame": 3600
 }

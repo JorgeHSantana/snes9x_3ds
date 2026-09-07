@@ -4,6 +4,18 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
+* **Blur Quality Auto starts in Light** and turns Full after the run of
+  clean seconds proves the game holds its rate (the two eyes fuse one
+  ghost each into the same smear Full gives); an Old 3DS that never
+  holds it never pays for Full. A skip right after that first Full is
+  not treated as a relapse.
+* **EXTBG in two passes instead of three** (Mode 7 games with per-pixel
+  priority: Tiny Toon Adventures, Contra III, Super Castlevania IV):
+  BG2's low-priority pass is BG1's own pixels under BG1, so it is skipped
+  whenever BG1 draws on the same screen segment with the same window
+  mask - one full-screen fill of the Mode 7 texture less per frame.
+  `[m7] extbg: BG2 low pass ...` in the log tells whether it applied.
+  Super Mario Kart does not use EXTBG (measured), so it gains nothing here.
 * **Sprites follow the Mode 7 ground** (issue #76, Jorge's idea): with the
   option on, a sprite standing on the plane takes the depth of the row its
   feet touch, from Ground Near (bottom row) to Ground Far (horizon) - an

@@ -1103,7 +1103,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		static int s_probeFrames = 0;
 		if (firstFrame) s_probeFrames = 0;
 		s_probeFrames++;
-		if (!skipDrawingFrame && (s_probeFrames == 600 || s_probeFrames == 1200)) {
+		if (!skipDrawingFrame && (s_probeFrames == 600 || s_probeFrames == 1200 || s_probeFrames == 3600)) {
 			gspWaitForEvent(GSPGPU_EVENT_PPF, GPU3DS.isReal3DS);
 			gfxScreenSwapBuffers(GFX_TOP, false);
 			impl3dsInvalidateScreen(GFX_TOP, false, gfxIsWide());
