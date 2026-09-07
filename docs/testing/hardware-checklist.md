@@ -28,6 +28,12 @@ build; everything else goes through `tools/azahar-validate/`.
    new ones appear (`[stereo3d] migrated` in the log).
 7. **Sleep/wake**: close the lid mid-game, wake - audio back, no dark
    screen.
+8. **Mode 7 plane**: Super Mario Kart race with the slider up - the track
+   draws whole (a striped plane = the scanline marker broke, nightly
+   102a86a), BG1 Prio 0 and Prio 1 at different depths keep the row in one
+   piece at the sides (right-vertex depth), and with Sprites Follow the
+   Ground on (Near +2, Far -6) the kart, driver and shadow move as one
+   block while far opponents sit deeper.
 
 ## Always
 

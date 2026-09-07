@@ -206,6 +206,20 @@ For general Satellaview background - including compatibility categories and avai
 | BS Zelda no Densetsu - Kodai no Sekiban - Dai-1 to Dai-4 | 🇯🇵 | 🔴&nbsp;Broken | O3DS & N3DS: Stuck early on. Unplayable. |
 | Sutte Hakkun (Event Version, Winter Event Version, BS Version 2) | 🇯🇵 | 🔴&nbsp;Broken | Boots, but the game always believes a save exists: a file can be selected and the map loads, but no level can be chosen. Returning to the file-select menu leaves the cursor misplaced, and deleting the save files (and the .srm) repeats the same loop. |
 
+## 3D: sprites on the Mode 7 ground (first version)
+
+With "Sprites Follow the Ground" on (3D Stereo tab > Mode 7):
+
+* A sprite's identity for the editor's list and the "not on ground" marks
+  is the row of the sprite sheet plus the palette. An animation that
+  changes sheet row shows up as two entries; mark both.
+* Up to 31 characters per frame get an entry; beyond that a character
+  still follows the ground by position but cannot be marked.
+* Sprites on the ground draw sharp: the depth-of-field blur ghosts are
+  not offset for them.
+* Ghost/HUD sprites drawn inside the plane's rows take the ground depth
+  until unticked (the mark is saved in the game's `.3d`).
+
 ## Super Road Blaster (MSU-1): brief flicker during FMV gameplay
 
 **Symptom:** occasional single-frame flicker in the video during gameplay,

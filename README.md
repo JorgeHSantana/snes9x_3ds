@@ -16,7 +16,8 @@ Feedback and bug reports are welcome.
 * Compressed MSU-1 audio: `.flac` tracks play when the raw `.pcm` is absent (roughly half the SD space, still lossless)
 * MSU-1 pack folders show up as single game entries in the file browser; ROMs also load from `.zip`
 * Stereoscopic 3D with per-layer **and per-priority** depth: each BG's two tile priorities and each of the four sprite priorities get their own gauge, plus a focus zone with distance effects (fade, haze, depth-of-field blur), Edge Cleanup, and Enhanced Resolution rendering — all with zero extra draw calls (Old 3DS friendly)
-* **Mode 7 perspective**: the ground plane of Mode 7 games (Mario Kart, F-Zero, Pilotwings) recedes in 3D scanline by scanline instead of standing up like a wall - automatic on Mode 7 screens, a top-down map stays flat; a gauge in the 3D tab sets the strength
+* **Mode 7 perspective**: the ground plane of Mode 7 games (Mario Kart, F-Zero, Pilotwings) recedes in 3D scanline by scanline instead of standing up like a wall - automatic on Mode 7 screens, a top-down map stays flat; a gauge in the 3D tab sets the strength, and with Effects by Distance the fade, haze and blur grow towards the horizon
+* **Sprites follow the Mode 7 ground**: a kart or an item standing on the plane takes the depth of the row under its feet, between Ground Near and Ground Far; hardware sprites that touch count as one character, and anything not on the ground (a flying enemy, a HUD item) can be unticked in the editor's sprite list, saved per game
 * Live 3D editor in a dedicated **3D Stereo** tab: focusing a gauge spotlights exactly its tiles on the top screen, values move the paused frame in real time, and holding X previews the full scene
 * Scene Profiles (experimental): capture a screen and its own 3D configuration is applied automatically whenever that screen shows up
 * Self-updater: check and install new builds (Stable or Nightly channel) from inside the emulator, with optional check-on-boot

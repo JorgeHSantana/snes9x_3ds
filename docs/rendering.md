@@ -123,7 +123,12 @@ w (`3dsmode7persp.h`). The tile vertex shader applies
 every other draw, so tiles and 2D are exact no-ops. The nearest row keeps
 the gauge's full shift, the horizon barely moves, and a top-down map
 (uniform span) stays flat by itself - nothing detects "which kind" of
-Mode 7 a game is drawing. Ghost passes inherit the factor.
+Mode 7 a game is drawing. Ghost passes inherit the factor. The scanline's
+right-hand vertex is the geometry shader's marker (any projected y < -1)
+and carries the row's depth nibble on top (`mode7RightVertexY`: `-16384 +
+(y & 0xF00)`, never the BG's alpha bits above it - those flip the marker
+positive and every row draws as a tile), so both ends decode the same
+plane and take the same stereo tier: the row moves, it never stretches.
 
 ### Sprites follow the Mode 7 ground (issue #76)
 

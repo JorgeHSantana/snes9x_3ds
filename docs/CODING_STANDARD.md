@@ -236,9 +236,16 @@ Two consequences worth stating:
   (real stereo, Old 3DS performance, Wi-Fi/updater, HOME/lid/power
   paths). Ask for those ten minutes with the log enabled; do not ask for
   exploration.
-* **Probe builds are explicit**: `-DPROBE_FORCE_SLIDER` and
-  `-DPROBE_DRAW_STATS` via `EXTRA_DEFINES`, always after `make clean`,
-  and never in `output/` when a nightly is cut from the local tree.
+* **Probe builds are explicit**: `-DPROBE_FORCE_SLIDER`,
+  `-DPROBE_DRAW_STATS`, `-DPROBE_SBS` (both eyes side by side) and
+  `-DPROBE_FBDUMP` (the emulator saves its own top screen) via
+  `EXTRA_DEFINES`, always after `make clean`, and never in `output/` when
+  a nightly is cut from the local tree.
+* **A boot without errors is not a visual proof.** A rendering change
+  ships with a capture looked at, or a measured scene - never with "it
+  compiled and the ROM loaded" (that is how a striped Mode 7 plane reached
+  the console, nightly 102a86a). When the Mac's display is locked, use a
+  `-DPROBE_FBDUMP` build with `validate.py run <scene> --fbdump`.
 * **CI is the publisher**: a nightly or stable exists only when the
   GitHub run is green - after every push, check the run and the release,
   not the push.
