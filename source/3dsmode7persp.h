@@ -21,6 +21,20 @@
 #define MODE7_PERSP_W_ONE 256
 #define MODE7_PERSP_W_MIN 8
 
+// The right-hand vertex of a scanline carries the geometry shader's
+// marker in y (any projected y < -1 reads as a scanline) PLUS the row's
+// depth (a multiple of 256 the left-hand vertex carries above its screen
+// row), so the tile vertex shader decodes the same plane for both ends
+// and they take the same stereo tier: the line moves, never stretches.
+#define MODE7_RIGHT_MARKER (-16384)
+
+static inline int16_t mode7RightVertexY(int leftY)
+{
+    int depth = leftY - (leftY & 0xFF);     // strip the screen row
+    if (depth < 0) depth = 0;
+    return (int16_t)(MODE7_RIGHT_MARKER + depth);
+}
+
 static inline int16_t mode7PerspEncode(float span, float spanRef)
 {
     if (!(span > 0.0f) || !(spanRef > 0.0f))

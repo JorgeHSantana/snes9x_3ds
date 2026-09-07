@@ -105,14 +105,27 @@ alpha_lt_1_0:
     mov     r11.w, r2.w                 ; alpha = 128
 
 depth_computation:
-    cmp     r0.y, lt, lt, r1.w          ; if r0.y < 0, 
-    jmpc    cmp.x, draw                 ; then do nothing, else:
-
-    mov     r1, c_depth
-    mul     r0.z, r0.y, r1.z            ; r0.z = r0.y / 256
-    flr     r0.z, r0.z                  ; r0.z = floor(r0.y / 256)
-    mad     r0.y, r0.z, r1.y, r0.y      ; r0.y = r0.y + r0.z * (-256) = r0.y - floor(r0.y / 256) * 256
-    mul     r0.z, r0.z, r1.x            ; r0.z = r0.z / 16
+    cmp     r0.y, lt, lt, r1.w          ; r0.y < 0: the right-hand vertex of a Mode 7 scanline
+    ifc     cmp.x
+        ; Its y is the geometry shader's marker (-16384) plus the row's depth
+        ; (3dsmode7persp.h mode7RightVertexY), so it decodes the SAME plane
+        ; as the left-hand vertex and picks the same stereo tier below -
+        ; otherwise the two ends could land on different tiers and the
+        ; scanline would stretch instead of moving (rcmz's technique).
+        mov     r1, c_depth
+        mov     r2, c_tex                   ; (32768, 16384, ...)
+        add     r0.z, r0.y, r2.y            ; depth = y + 16384
+        mul     r0.z, r0.z, r1.z            ; / 256
+        flr     r0.z, r0.z
+        mul     r0.z, r0.z, r1.x            ; / 16 = the plane, like a tile's
+        mov     r0.y, -r2.y                 ; hand the bare marker to the geometry shader
+    .else
+        mov     r1, c_depth
+        mul     r0.z, r0.y, r1.z            ; r0.z = r0.y / 256
+        flr     r0.z, r0.z                  ; r0.z = floor(r0.y / 256)
+        mad     r0.y, r0.z, r1.y, r0.y      ; r0.y = r0.y + r0.z * (-256) = r0.y - floor(r0.y / 256) * 256
+        mul     r0.z, r0.z, r1.x            ; r0.z = r0.z / 16
+    .end
 
 draw:
     ; pass through, set final values for projection, textureScale and color in geo shader

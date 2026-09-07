@@ -54,3 +54,10 @@ TEST_CASE("mode7 persp: fog amount follows the per-layer weights and caps") {
     CHECK(mode7FogAmount(8, 0, 0.5f) == doctest::Approx(0.35f));   // slider scales
     CHECK(mode7FogAmount(8, 0, -1.0f) == doctest::Approx(0.70f));  // sign-free
 }
+
+TEST_CASE("mode7 persp: the right-hand vertex carries the marker plus the row's depth") {
+    CHECK(mode7RightVertexY(100) == MODE7_RIGHT_MARKER);                 // depth 0, row 100
+    CHECK(mode7RightVertexY(100 + 2 * 256) == MODE7_RIGHT_MARKER + 512); // depth 2
+    CHECK(mode7RightVertexY(239 + 8 * 256) == MODE7_RIGHT_MARKER + 2048);
+    CHECK(mode7RightVertexY(12 * 256 + 5) < -1);                        // still a marker after projection
+}

@@ -761,8 +761,8 @@ static void m7FlushLines(void)
         float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
         s16 w = mode7PerspEncode(sqrtf(dx * dx + dy * dy), spanRef);
         groundRowSet(&s_groundAcc, q.y & 0xFF, w);   // q.y = screen row + depth (a multiple of 256)
-        // -16384 on the right vertex: the geometry shader's Mode 7 marker
-        gpu3dsAddMode7LineVertexes(q.x0, q.y, q.x1, -16384, w, q.tx0, q.ty0, q.tx1, q.ty1);
+        // the right vertex: the geometry shader's Mode 7 marker + the row's depth
+        gpu3dsAddMode7LineVertexes(q.x0, q.y, q.x1, mode7RightVertexY(q.y), w, q.tx0, q.ty0, q.tx1, q.ty1);
     }
 #ifdef PROBE_DRAW_STATS
     // probe: the encoder's ramp for this run of rows (a race: 256 at the
