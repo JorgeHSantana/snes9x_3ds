@@ -8,7 +8,7 @@
   "log_expect": [
     "ROM loaded: SUPER MARIO KART"
   ],
-  "title": "SMK attract race, BG1 -6, Mode 7 Perspective 8 - disparity must grow from horizon to bottom (PROBE_FORCE_SLIDER + PROBE_SBS build)",
+  "title": "SMK attract race, BG1 -6, Mode 7 Perspective 8 - the horizon must carry more disparity than the bottom rows (PROBE_FORCE_SLIDER + PROBE_SBS build)",
   "stereo3d": [
     {
       "file": "SUPER MARIO KART",
@@ -18,6 +18,7 @@
   "sbs_expect": {
     "top_rows": 60,
     "bottom_rows": 60,
+    "horizon_deeper": true,
     "min_growth": 2
   }
 }

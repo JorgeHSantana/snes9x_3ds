@@ -1919,8 +1919,8 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 AddMenuGauge(items, "  Perspective"_s, 0, 8, *stereoEditField(6),
                     []( int val ) { if (CheckAndUpdate( *stereoEditField(6), val )) s_stereoPreviewDirty = true; }, true);
                 if (!m7Used) items.back().TextColor = stereo3dDimColor();
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  Each Mode 7 scanline shifts by its own distance. 0 = flat,"_s, ""_s);
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  4 = full perspective, 5-8 push the near rows further out."_s, ""_s);
+                items.emplace_back(nullptr, MenuItemType::Textarea, "  The layer gauge is the nearest row; each step sinks the"_s, ""_s);
+                items.emplace_back(nullptr, MenuItemType::Textarea, "  horizon one level further in. 0 = flat, 4 = a track's natural look."_s, ""_s);
                 AddMenuCheckbox(items, "  Effects by Distance"_s, *stereoEditField(7) != 0,
                     []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(7), v )) s_stereoPreviewDirty = true; });
                 if (!m7Used) items.back().TextColor = stereo3dDimColor();

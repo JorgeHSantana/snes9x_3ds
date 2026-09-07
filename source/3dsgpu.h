@@ -311,7 +311,7 @@ typedef struct
     float                       stereoMode7Persp;   // the profile's gauge 0..8
     float                       stereoMode7Fx;      // 1 = fade/haze/blur by distance on the plane
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
-    float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
+    float                       mode7PerspSet[4];   // (horizon, 0, fog, ghost) the shader holds
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
     // false when the optional right-eye VRAM texture failed to allocate;
@@ -501,15 +501,17 @@ static inline void gpu3dsSetStereoParallaxHi(float t2, float t3,
     GPU3DS.stereoParallaxHiApplied = key;
 }
 
-// (k ramp, gain, fog amount, ghost offset) for the Mode 7 plane's draw;
-// the shader takes fog and ghost negated (d = w/256 - 1 is <= 0)
-static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float ghost)
+// (horizon shift, fog amount, ghost offset) for the Mode 7 plane's draw;
+// the shader takes all three negated (d = w/256 - 1 is <= 0). The horizon
+// shift is this eye's shift for the recession depth, in the same units as
+// the tier shifts (rounded like them in Discrete mode).
+static inline void gpu3dsSetMode7Persp(float horizon, float fog, float ghost)
 {
-    float key = k + gain * 8.0f + fog * 64.0f + ghost * 4096.0f;
+    float key = horizon + fog * 64.0f + ghost * 4096.0f;
     if (GPU3DS.mode7PerspApplied == key)
         return;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP], k, gain, -fog, -ghost);
-    GPU3DS.mode7PerspSet[0] = k; GPU3DS.mode7PerspSet[1] = gain;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP], -horizon, 0.0f, -fog, -ghost);
+    GPU3DS.mode7PerspSet[0] = horizon; GPU3DS.mode7PerspSet[1] = 0.0f;
     GPU3DS.mode7PerspSet[2] = fog; GPU3DS.mode7PerspSet[3] = ghost;
     GPU3DS.mode7PerspApplied = key;
 }

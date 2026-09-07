@@ -525,7 +525,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
     SLayer *layer = &list->layers[LAYER_WINDOW_LR];
 
     gpu3dsSetStereoParallax(0.0f);
-    gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
+    gpu3dsSetMode7Persp(0.0f, 0.0f, 0.0f);
     // neutral spotlight for the window/depth prepass: a stale dim from
     // the previous frame would alpha-discard the window masks
     gpu3dsSetStereoPrioDim(1.0f, 1.0f);
@@ -624,11 +624,17 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // Mode 7 perspective (issue #62): the strength reaches the
             // shader only for a Mode 7 scanline layer; every other layer
             // draws with 0, which the shader treats as an exact no-op
+            // The layer gauge is the nearest row; the horizon sinks the
+            // profile's recession past it, whatever the gauge's sign
+            // (the old multiplicative ramp inverted the plane with a
+            // negative gauge - Jorge's "feels different from f4mrfaux").
             bool isMode7Plane = list->sections[from].vboId == VBO_SCENE_MODE7_LINE;
-            float m7k = 0.0f, m7gain = 1.0f;
-            if (isMode7Plane)
-                mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
-            gpu3dsSetMode7Persp(m7k, m7gain, 0.0f, 0.0f);
+            float m7h = 0.0f;
+            if (isMode7Plane) {
+                m7h = GPU3DS.stereoEyeIOD * -mode7PerspRecede((int)GPU3DS.stereoMode7Persp) * STEREO_PARALLAX_SCALE;
+                if (settings3DS.StereoShiftMode == 0) m7h = roundf(m7h);
+            }
+            gpu3dsSetMode7Persp(m7h, 0.0f, 0.0f);
 
             GPU3DS.currentRenderState.depthTest = id < LAYER_OBJ ? SGPU_STATE_ENABLED : SGPU_STATE_DISABLED;
 
@@ -756,7 +762,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
                 if (fog >= 0.01f) gpu3dsApplyAtmosphereColorPerVertex(fogColor);
                 else              gpu3dsApplyAtmosphereColor(0xFFFFFFFF);
-                gpu3dsSetMode7Persp(m7k, m7gain, fog, 0.0f);
+                gpu3dsSetMode7Persp(m7h, fog, 0.0f);
                 drawPass();
 
                 float blur = (GPU3DS.stereoBlur / 8.0f) * slider;
@@ -769,18 +775,18 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     GPU3DS.stereoGhostPass = true;
                     gpu3dsSetGhostAlpha(light ? (ghostA * 1.4f > 0.55f ? 0.55f : ghostA * 1.4f) : ghostA);
                     if (light) {
-                        gpu3dsSetMode7Persp(m7k, m7gain, fog, lightSide == 0 ? off : -off);
+                        gpu3dsSetMode7Persp(m7h, fog, lightSide == 0 ? off : -off);
                         drawPass();
                     } else {
-                        gpu3dsSetMode7Persp(m7k, m7gain, fog, off);
+                        gpu3dsSetMode7Persp(m7h, fog, off);
                         drawPass();
-                        gpu3dsSetMode7Persp(m7k, m7gain, fog, -off);
+                        gpu3dsSetMode7Persp(m7h, fog, -off);
                         drawPass();
                     }
                     GPU3DS.stereoGhostPass = false;
                     gpu3dsSetGhostAlpha(0.0f);
                 }
-                gpu3dsSetMode7Persp(m7k, m7gain, 0.0f, 0.0f);
+                gpu3dsSetMode7Persp(m7h, 0.0f, 0.0f);
                 gpu3dsApplyAtmosphereColor(0xFFFFFFFF);
                 continue;
             }

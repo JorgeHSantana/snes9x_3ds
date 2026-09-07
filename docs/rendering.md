@@ -118,12 +118,16 @@ that span is the row's distance. `gfxhw` queues the frame's rows, takes
 the smallest span as the nearest row, and stores
 `w = 256 * spanNearest / span` (clamped 8..256) in the scanline vertex's
 w (`3dsmode7persp.h`). The tile vertex shader applies
-`shift *= 1 + k * (w/256 - 1)` with `mode7Persp.x = k` (the profile's
-`M7PERSP` 0..8 over 8) set only for the Mode 7 layer's draw and 0 for
-every other draw, so tiles and 2D are exact no-ops. The nearest row keeps
-the gauge's full shift, the horizon barely moves, and a top-down map
-(uniform span) stays flat by itself - nothing detects "which kind" of
-Mode 7 a game is drawing. Ghost passes inherit the factor.
+`shift += H * (1 - w/256)` where H is the eye's shift for the profile's
+recession (`M7PERSP` 0..8 depth units, `mode7PerspRecede`), set only for
+the Mode 7 layer's draw and 0 for every other draw, so tiles and 2D are
+exact no-ops. The layer gauge is the nearest row; the horizon sinks the
+recession past it whatever the gauge's sign (an earlier multiplicative
+ramp anchored the horizon at the screen and inverted the plane with a
+negative gauge). A top-down map (uniform span) stays flat by itself -
+nothing detects "which kind" of Mode 7 a game is drawing. Ghost passes
+inherit the shift. The edge crop sizes for the horizon row
+(`|BG1 - recede|`).
 
 ## Final composition
 

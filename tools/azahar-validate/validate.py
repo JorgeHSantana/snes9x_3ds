@@ -364,9 +364,18 @@ def main():
                 if exp:
                     top = [r[2] for r in rows if r[0] < exp.get("top_rows", 60)]
                     bot = [r[2] for r in rows if r[1] >= h_rows(rows) - exp.get("bottom_rows", 60)]
-                    grow = (sum(bot) / len(bot)) - (sum(top) / len(top)) if top and bot else 0
-                    good = exp.get("min_growth", 0) <= abs(grow)
-                    print(f"  bottom-top disparity growth: {grow:+.1f} px  {'OK' if good else 'FAIL'}")
+                    mt = sum(top) / len(top) if top else 0
+                    mb = sum(bot) / len(bot) if bot else 0
+                    if exp.get("horizon_deeper"):
+                        # the plane's anchor is the nearest row: the horizon
+                        # carries MORE shift than the bottom rows, by min_growth
+                        grow = abs(mt) - abs(mb)
+                        good = exp.get("min_growth", 0) <= grow
+                        print(f"  horizon-bottom |disparity| excess: {grow:+.1f} px  {'OK' if good else 'FAIL'}")
+                    else:
+                        grow = mb - mt
+                        good = exp.get("min_growth", 0) <= abs(grow)
+                        print(f"  bottom-top disparity growth: {grow:+.1f} px  {'OK' if good else 'FAIL'}")
                     ok &= good
             if sc.get("_temporal") is not None:
                 ok &= report(f"{sc['_name']} temporal (max consecutive-frame diff)", sc["_temporal"],
