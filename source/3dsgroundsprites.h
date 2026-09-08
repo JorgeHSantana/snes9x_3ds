@@ -324,20 +324,37 @@ static inline int groundClusterBoxes(const GroundBox *b, const bool *visible, in
 }
 
 // A character in the air sits above its shadow: when a cluster's box has
-// another cluster right below it (horizontal overlap, gap <= maxGap),
-// that lower cluster's feet are where the ground is. Returns the index of
-// the cluster below, or -1.
+// a FLAT cluster right below it (a shadow is a few px tall; the dust of a
+// drift or of dirt is not, and must not pass for the ground - Jorge:
+// "on dirt the same thing happens"), with horizontal overlap and a gap
+// <= maxGap, that lower cluster's feet are where the ground is. Returns
+// the index of the cluster below, or -1.
+#define GROUND_SHADOW_MAX_HEIGHT 8
+
 static inline int groundShadowBelow(const GroundBox *cb, const bool *valid, int n, int i, int maxGap)
 {
     int best = -1, bestGap = maxGap + 1;
     for (int j = 0; j < n; j++) {
         if (j == i || !valid[j]) continue;
+        if (cb[j].y1 - cb[j].y0 + 1 > GROUND_SHADOW_MAX_HEIGHT) continue;   // not flat: not a shadow
         if (cb[j].x1 < cb[i].x0 || cb[j].x0 > cb[i].x1) continue;      // no horizontal overlap
         int gap = cb[j].y0 - cb[i].y1;
         if (gap < 0 || gap > maxGap) continue;
         if (gap < bestGap) { bestGap = gap; best = j; }
     }
     return best;
+}
+
+// Which member of a cluster carries the feet: the LARGEST sprite (the
+// kart's body), not the lowest one - a puff of dust joining the cluster a
+// few px below the shadow would move the feet every time it appears and
+// vanishes. Ties go to the lower one.
+static inline bool groundFeetBetter(const GroundBox *cand, const GroundBox *cur)
+{
+    int ac = (cand->x1 - cand->x0 + 1) * (cand->y1 - cand->y0 + 1);
+    int au = (cur->x1 - cur->x0 + 1) * (cur->y1 - cur->y0 + 1);
+    if (ac != au) return ac > au;
+    return cand->y1 > cur->y1;
 }
 
 #endif

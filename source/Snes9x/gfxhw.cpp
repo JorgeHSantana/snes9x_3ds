@@ -735,6 +735,7 @@ static int s_layerUseBg = 0;
 // table, latched at frame end for the GPU draw and the editor
 static GroundFrame s_groundAcc, s_groundPrev, s_groundLast;
 static GroundTrack s_groundTrack;
+static bool s_groundPrepared = false;   // sprite ground data computed once per rendered frame
 struct M7QueuedLine { s16 x0, y, x1; float tx0, ty0, tx1, ty1; };
 static M7QueuedLine s_m7Queue[512];
 static int  s_m7QueueCount = 0;
@@ -798,11 +799,13 @@ void S9xLayerUseFrameStart()
     if (groundRowsPresent(&s_groundAcc))
         s_groundPrev = s_groundAcc;
     groundFrameStart(&s_groundAcc);
+    s_groundPrepared = false;
 }
 void S9xLayerUseFrameEnd()
 {
     layerUseFrameEnd(&s_layerUse); s_m7DrawnLast = s_m7DrawnAcc;
     s_groundLast = s_groundAcc;
+    groundTrackFrameStart(&s_groundTrack);   // memories age per rendered frame
 }
 bool S9xMode7DrawnLastFrame() { return s_m7DrawnLast; }
 bool     S9xGroundRowsLastFrame() { return groundRowsPresent(&s_groundPrev); }
@@ -824,8 +827,13 @@ static s16 s_spriteW[128];
 
 static void groundPrepareSprites(void)
 {
-    // memories age per DRAWN frame (this runs once per rendered frame)
-    groundTrackFrameStart(&s_groundTrack);
+    // S9xDrawOBJSHardware runs once per screen SEGMENT (split screen,
+    // HDMA windows), each time over ALL sprites: computed once per frame,
+    // or every later segment re-registered the same characters as new
+    // memories and the glide never happened (the probe showed
+    // target == used on every line)
+    if (s_groundPrepared) return;
+    s_groundPrepared = true;
     if (!groundRowsPresent(&s_groundPrev)) {
         memset(s_spriteW, 0, sizeof(s_spriteW));
         return;
@@ -853,7 +861,7 @@ static void groundPrepareSprites(void)
     for (int S = 0; S < 128; S++) {
         if (!vis[S]) continue;
         int r = cluster[S];
-        if (feetS[r] < 0 || box[S].y1 > box[feetS[r]].y1) feetS[r] = S;
+        if (feetS[r] < 0 || groundFeetBetter(&box[S], &box[feetS[r]])) feetS[r] = S;
         if (!cvalid[r]) { cbox[r] = box[S]; cvalid[r] = true; }
         else {
             if (box[S].x0 < cbox[r].x0) cbox[r].x0 = box[S].x0;
@@ -894,13 +902,12 @@ static void groundPrepareSprites(void)
             s_probe = pf ? 1 : 0;
             if (pf) fclose(pf);
         }
-        if (s_probe == 1 && (++s_probeFrames & 3) == 0) {
-            int low = -1;
-            for (int i = 0; i < nReq; i++)
-                if (low < 0 || req[i].y > req[low].y) low = i;
-            if (low >= 0)
-                log3dsWrite("[groundprobe] chars=%d low x=%d y=%d target=%d used=%d mem=%d",
-                    nReq, req[low].x, req[low].y, req[low].target, req[low].rowW, s_groundTrack.count);
+        if (s_probe == 1 && (++s_probeFrames & 7) == 0 && nReq > 0) {
+            char line[200]; int n = 0;
+            n += snprintf(line + n, sizeof(line) - n, "[groundprobe] seg=%d-%d mem=%d |", (int)GFX.StartY, (int)GFX.EndY, s_groundTrack.count);
+            for (int i = 0; i < nReq && n < (int)sizeof(line) - 24; i++)
+                n += snprintf(line + n, sizeof(line) - n, " %d,%d:%d>%d", req[i].x, req[i].y, req[i].target, req[i].rowW);
+            log3dsWrite("%s", line);
         }
     }
     s16 rootW[128];

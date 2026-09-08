@@ -184,7 +184,23 @@ TEST_CASE("ground: a cluster in the air adopts the cluster right below it (its s
     CHECK(groundShadowBelow(cb, valid, 3, 2, 24) == -1);
     valid[1] = false;
     CHECK(groundShadowBelow(cb, valid, 3, 0, 24) == -1);       // the shadow gone: no adoption
+    // a puff of dust below the kart is 16 px tall: not a shadow, never adopted
+    GroundBox dust[2] = { { 100, 120, 131, 151 }, { 108, 156, 123, 171 } };
+    bool v2[2] = { true, true };
+    CHECK(groundShadowBelow(dust, v2, 2, 0, 24) == -1);
 }
+
+TEST_CASE("ground: the feet belong to the largest sprite of a character, not the lowest") {
+    GroundBox body   = { 100, 150, 131, 181 };   // 32x32 kart
+    GroundBox shadow = { 104, 182, 127, 187 };   // 24x6, lower
+    GroundBox dust   = { 96, 184, 111, 199 };    // 16x16 puff, lowest
+    CHECK(groundFeetBetter(&body, &shadow));
+    CHECK(groundFeetBetter(&body, &dust));
+    CHECK_FALSE(groundFeetBetter(&dust, &body));
+    GroundBox body2 = { 100, 154, 131, 185 };    // same size, lower: wins the tie
+    CHECK(groundFeetBetter(&body2, &body));
+}
+
 
 TEST_CASE("ground: drift smoke next to the kart cannot steal the kart's memory") {
     GroundTrack t; memset(&t, 0, sizeof(t));
