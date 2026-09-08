@@ -791,9 +791,13 @@ static void m7FlushLines(void)
 void S9xLayerUseFrameStart()
 {
     layerUseFrameStart(&s_layerUse); s_m7DrawnAcc = false;
-    s_groundPrev = s_groundAcc;
+    // the plane rows of the last RENDERED frame: a skipped frame draws no
+    // plane, and latching its empty table put every sprite off the ground
+    // for one frame - the depth snapped on every skip (Old 3DS Mario
+    // Kart, Jorge's "ficou bom não" after three fixes on the wrong path)
+    if (groundRowsPresent(&s_groundAcc))
+        s_groundPrev = s_groundAcc;
     groundFrameStart(&s_groundAcc);
-    groundTrackFrameStart(&s_groundTrack);
 }
 void S9xLayerUseFrameEnd()
 {
@@ -820,6 +824,8 @@ static s16 s_spriteW[128];
 
 static void groundPrepareSprites(void)
 {
+    // memories age per DRAWN frame (this runs once per rendered frame)
+    groundTrackFrameStart(&s_groundTrack);
     if (!groundRowsPresent(&s_groundPrev)) {
         memset(s_spriteW, 0, sizeof(s_spriteW));
         return;
@@ -878,6 +884,25 @@ static void groundPrepareSprites(void)
         nReq++;
     }
     groundTrackAssign(&s_groundTrack, req, nReq);
+    // field probe: sdmc:/3ds/snes9x_3ds/groundprobe.txt present -> every 4th
+    // drawn frame logs the lowest character (the player's kart in a race)
+    {
+        static int s_probe = -1;
+        static int s_probeFrames = 0;
+        if (s_probe < 0) {
+            FILE *pf = fopen("sdmc:/3ds/snes9x_3ds/groundprobe.txt", "r");
+            s_probe = pf ? 1 : 0;
+            if (pf) fclose(pf);
+        }
+        if (s_probe == 1 && (++s_probeFrames & 3) == 0) {
+            int low = -1;
+            for (int i = 0; i < nReq; i++)
+                if (low < 0 || req[i].y > req[low].y) low = i;
+            if (low >= 0)
+                log3dsWrite("[groundprobe] chars=%d low x=%d y=%d target=%d used=%d mem=%d",
+                    nReq, req[low].x, req[low].y, req[low].target, req[low].rowW, s_groundTrack.count);
+        }
+    }
     s16 rootW[128];
     for (int r = 0; r < 128; r++) rootW[r] = 0;
     for (int i = 0; i < nReq; i++) {
