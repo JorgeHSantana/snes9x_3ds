@@ -153,24 +153,35 @@ TEST_CASE("ground: lift depths ride the plane's own ramp plus the lift") {
 TEST_CASE("ground: the row a character uses glides toward the row it stands on") {
     CHECK(groundSlew(0, 200, GROUND_SLEW_STEP) == 200);        // first sight: no glide
     CHECK(groundSlew(200, 0, GROUND_SLEW_STEP) == 0);          // leaving the plane: at once
-    CHECK(groundSlew(200, 240, GROUND_SLEW_STEP) == 206);      // a hop: 6 per frame
-    CHECK(groundSlew(200, 160, GROUND_SLEW_STEP) == 194);
+    CHECK(groundSlew(200, 240, GROUND_SLEW_STEP) == 204);      // a hop: 4 per frame
+    CHECK(groundSlew(200, 160, GROUND_SLEW_STEP) == 196);
     CHECK(groundSlew(200, 203, GROUND_SLEW_STEP) == 203);      // small moves land at once
 }
 
-TEST_CASE("ground: the tracker remembers a character by signature and coarse x, forgets after 2 frames") {
+TEST_CASE("ground: the tracker follows a character by position across animation changes") {
     GroundTrack t; memset(&t, 0, sizeof(t));
-    uint32_t kart = groundTrackKey(groundSigMake(0x40, 2), 100);
-    CHECK(groundTrackRow(&t, kart, 200) == 200);
+    CHECK(groundTrackRow(&t, 100, 180, 200) == 200);
     groundTrackFrameStart(&t);
-    CHECK(groundTrackRow(&t, kart, 240) == 206);               // hop: glides
+    CHECK(groundTrackRow(&t, 102, 176, 240) == 204);           // moved 4 px, hopped: glides
     groundTrackFrameStart(&t);
-    CHECK(groundTrackRow(&t, kart, 240) == 212);
-    // the same kind of kart 100 px to the right is another character
-    uint32_t other = groundTrackKey(groundSigMake(0x40, 2), 200);
-    CHECK(other != kart);
-    CHECK(groundTrackRow(&t, other, 100) == 100);
+    CHECK(groundTrackRow(&t, 104, 172, 240) == 208);
+    // another character 100 px away is not this one, even in the same frame
+    CHECK(groundTrackRow(&t, 204, 172, 100) == 100);
     // unseen for two frames: forgotten, the next sight starts fresh
     groundTrackFrameStart(&t); groundTrackFrameStart(&t); groundTrackFrameStart(&t);
-    CHECK(groundTrackRow(&t, kart, 100) == 100);
+    CHECK(groundTrackRow(&t, 104, 172, 100) == 100);
+}
+
+TEST_CASE("ground: a cluster in the air adopts the cluster right below it (its shadow)") {
+    GroundBox cb[3] = {
+        { 100, 120, 131, 151 },   // kart in the air
+        { 104, 158, 127, 165 },   // its shadow, 6 px below
+        { 100, 200, 131, 231 },   // another kart far below
+    };
+    bool valid[3] = { true, true, true };
+    CHECK(groundShadowBelow(cb, valid, 3, 0, 24) == 1);
+    CHECK(groundShadowBelow(cb, valid, 3, 1, 24) == -1);       // nothing within reach below the shadow
+    CHECK(groundShadowBelow(cb, valid, 3, 2, 24) == -1);
+    valid[1] = false;
+    CHECK(groundShadowBelow(cb, valid, 3, 0, 24) == -1);       // the shadow gone: no adoption
 }

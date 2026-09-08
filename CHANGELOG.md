@@ -56,9 +56,11 @@ Notable changes to this project will be documented in this file.
 
 ### Fixes
 * Sprites on the Mode 7 ground glide to a new row instead of snapping:
-  a hop or a drift that lifts the kart off its shadow moved its depth at
-  once (Jorge's report); the row a character uses now slides by at most
-  6/255 per frame. Ground Lift now defaults to 0 (glued to the track).
+  a hop, a drift or a wall hit moved the kart's depth at once (Jorge's
+  reports). A character is now tracked by its screen position (an
+  animation change no longer restarts it), the row it uses slides by at
+  most 4/255 per frame, and a character in the air above its shadow
+  takes the shadow's row - the ground. Ground Lift defaults to 0.
 * Mode 7 scanlines move as one piece in 3D: the right-hand end of each
   row now carries the row's depth with the marker, so both ends pick the
   same stereo tier (before, a BG whose two priorities sat at different

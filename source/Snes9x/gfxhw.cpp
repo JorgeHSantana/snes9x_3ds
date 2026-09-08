@@ -838,13 +838,23 @@ static void groundPrepareSprites(void)
     uint8_t cluster[128];
     groundClusterBoxes(box, vis, 128, 2, cluster);
 
-    // per cluster root: the feet (max bottom) and a marked member, if any
+    // per cluster root: the feet (max bottom), a marked member if any,
+    // and the cluster's own box (for the shadow rule)
     int feetS[128], excS[128];
-    for (int S = 0; S < 128; S++) { feetS[S] = -1; excS[S] = -1; }
+    GroundBox cbox[128];
+    bool cvalid[128];
+    for (int S = 0; S < 128; S++) { feetS[S] = -1; excS[S] = -1; cvalid[S] = false; }
     for (int S = 0; S < 128; S++) {
         if (!vis[S]) continue;
         int r = cluster[S];
         if (feetS[r] < 0 || box[S].y1 > box[feetS[r]].y1) feetS[r] = S;
+        if (!cvalid[r]) { cbox[r] = box[S]; cvalid[r] = true; }
+        else {
+            if (box[S].x0 < cbox[r].x0) cbox[r].x0 = box[S].x0;
+            if (box[S].y0 < cbox[r].y0) cbox[r].y0 = box[S].y0;
+            if (box[S].x1 > cbox[r].x1) cbox[r].x1 = box[S].x1;
+            if (box[S].y1 > cbox[r].y1) cbox[r].y1 = box[S].y1;
+        }
         if (excS[r] < 0 && groundIsException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount,
                                              groundSigMake(PPU.OBJ[S].Name, PPU.OBJ[S].Palette)))
             excS[r] = S;
@@ -855,10 +865,16 @@ static void groundPrepareSprites(void)
         if (feetS[r] < 0) continue;
         int lead = excS[r] >= 0 ? excS[r] : feetS[r];
         uint32_t leadSig = groundSigMake(PPU.OBJ[lead].Name, PPU.OBJ[lead].Palette);
-        int rowW = groundRowAt(&s_groundPrev, box[feetS[r]].y1);
-        // a hop or a split from the shadow moves the feet row at once:
-        // glide there instead (Jorge: the kart snapped while drifting)
-        rowW = groundTrackRow(&s_groundTrack, groundTrackKey(leadSig, box[lead].x0), rowW);
+        // in the air above its shadow: the shadow's row is the ground
+        int groundY = box[feetS[r]].y1;
+        int below = groundShadowBelow(cbox, cvalid, 128, r, 24);
+        if (below >= 0 && feetS[below] >= 0) groundY = box[feetS[below]].y1;
+        int rowW = groundRowAt(&s_groundPrev, groundY);
+        // a hop, a spin or a split from the shadow moves the feet row at
+        // once: glide there instead, tracked by position (Jorge: the kart
+        // snapped while drifting and on a wall hit)
+        int feetX = (cbox[r].x0 + cbox[r].x1) / 2;
+        rowW = groundTrackRow(&s_groundTrack, feetX, groundY, rowW);
         int slot = groundSlotFor(&s_groundAcc, leadSig, box[lead].x0, box[lead].y0 < 0 ? 0 : box[lead].y0);
         rootW[r] = groundVertexW(rowW, slot);
     }

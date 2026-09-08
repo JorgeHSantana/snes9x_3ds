@@ -134,12 +134,16 @@ static inline void groundLiftDepths(float bg1Depth, float k, float gain, float l
     *farDepth = bg1Depth * gain * (1.0f - k) + lift;
 }
 
-// A character's row jumps when it hops or its cluster splits from its
-// shadow (Mario Kart drifting: the depth snapped, Jorge's report). The
-// row a character USES slides toward the row it stands on by at most
-// `maxStep` per frame, so a hop is a short glide, not a snap. 6/255 per
-// frame crosses the whole plane in ~40 frames.
-#define GROUND_SLEW_STEP 6
+// A character's row jumps when it hops, spins or splits from its shadow
+// (Mario Kart drifting / hitting a wall: the depth snapped, Jorge's
+// reports). Two remedies:
+//  1. the row a character USES slides toward the row it stands on by at
+//     most GROUND_SLEW_STEP per frame (4/255: the whole plane in ~64
+//     frames, a hop's few rows in a handful);
+//  2. a character is tracked by POSITION, not by its tiles - a spin or a
+//     hit changes the animation frame (another sheet row) and would have
+//     restarted the glide as a "new" character.
+#define GROUND_SLEW_STEP 4
 
 static inline int groundSlew(int prev, int target, int maxStep)
 {
@@ -151,46 +155,52 @@ static inline int groundSlew(int prev, int target, int maxStep)
     return prev + d;
 }
 
-// per-character memory across frames, keyed by signature + a coarse x
-// (two karts of one kind side by side stay apart)
-#define GROUND_TRACK_MAX 32
+// per-character memory across frames: the feet's screen position last
+// frame, matched by proximity (a character moves a few px per frame)
+#define GROUND_TRACK_MAX   32
+#define GROUND_TRACK_REACH 24
 
 struct GroundTrack
 {
-    uint32_t key[GROUND_TRACK_MAX];
+    int16_t  x[GROUND_TRACK_MAX], y[GROUND_TRACK_MAX];   // feet: bottom-centre
     uint8_t  rowW[GROUND_TRACK_MAX];
     uint8_t  age[GROUND_TRACK_MAX];      // frames since last seen
+    uint8_t  claimed[GROUND_TRACK_MAX];  // matched this frame already
     int      count;
 };
-
-static inline uint32_t groundTrackKey(uint32_t sig, int x)
-{
-    return (sig << 4) | (uint32_t)((x < 0 ? 0 : x) / 32 & 0xF);
-}
 
 static inline void groundTrackFrameStart(GroundTrack *t)
 {
     int w = 0;
     for (int i = 0; i < t->count; i++) {
         if (t->age[i] >= 2) continue;             // not seen for 2 frames: forget
-        t->key[w] = t->key[i]; t->rowW[w] = t->rowW[i]; t->age[w] = (uint8_t)(t->age[i] + 1);
+        t->x[w] = t->x[i]; t->y[w] = t->y[i]; t->rowW[w] = t->rowW[i];
+        t->age[w] = (uint8_t)(t->age[i] + 1); t->claimed[w] = 0;
         w++;
     }
     t->count = w;
 }
 
-// the smoothed row for this character this frame (and remembers it)
-static inline int groundTrackRow(GroundTrack *t, uint32_t key, int targetRowW)
+// the smoothed row for the character whose feet are at (x, y) this frame
+static inline int groundTrackRow(GroundTrack *t, int x, int y, int targetRowW)
 {
+    int best = -1, bestD = GROUND_TRACK_REACH * GROUND_TRACK_REACH + 1;
     for (int i = 0; i < t->count; i++) {
-        if (t->key[i] != key) continue;
-        int r = groundSlew(t->rowW[i], targetRowW, GROUND_SLEW_STEP);
-        t->rowW[i] = (uint8_t)r; t->age[i] = 0;
+        if (t->claimed[i]) continue;
+        int dx = x - t->x[i], dy = y - t->y[i];
+        int d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best >= 0) {
+        int r = groundSlew(t->rowW[best], targetRowW, GROUND_SLEW_STEP);
+        t->rowW[best] = (uint8_t)r; t->x[best] = (int16_t)x; t->y[best] = (int16_t)y;
+        t->age[best] = 0; t->claimed[best] = 1;
         return r;
     }
     if (t->count < GROUND_TRACK_MAX) {
-        t->key[t->count] = key; t->rowW[t->count] = (uint8_t)targetRowW; t->age[t->count] = 0;
-        t->count++;
+        int i = t->count++;
+        t->x[i] = (int16_t)x; t->y[i] = (int16_t)y; t->rowW[i] = (uint8_t)targetRowW;
+        t->age[i] = 0; t->claimed[i] = 1;
     }
     return targetRowW;
 }
@@ -269,6 +279,23 @@ static inline int groundClusterBoxes(const GroundBox *b, const bool *visible, in
         if (cluster[i] == i && visible[i]) count++;
     }
     return count;
+}
+
+// A character in the air sits above its shadow: when a cluster's box has
+// another cluster right below it (horizontal overlap, gap <= maxGap),
+// that lower cluster's feet are where the ground is. Returns the index of
+// the cluster below, or -1.
+static inline int groundShadowBelow(const GroundBox *cb, const bool *valid, int n, int i, int maxGap)
+{
+    int best = -1, bestGap = maxGap + 1;
+    for (int j = 0; j < n; j++) {
+        if (j == i || !valid[j]) continue;
+        if (cb[j].x1 < cb[i].x0 || cb[j].x0 > cb[i].x1) continue;      // no horizontal overlap
+        int gap = cb[j].y0 - cb[i].y1;
+        if (gap < 0 || gap > maxGap) continue;
+        if (gap < bestGap) { bestGap = gap; best = j; }
+    }
+    return best;
 }
 
 #endif
