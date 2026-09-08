@@ -859,24 +859,33 @@ static void groundPrepareSprites(void)
                                              groundSigMake(PPU.OBJ[S].Name, PPU.OBJ[S].Palette)))
             excS[r] = S;
     }
-    s16 rootW[128];
-    for (int r = 0; r < 128; r++) {
-        rootW[r] = 0;
+    // every character's request for this frame, then one global match
+    // against the memories (closest pairs first) so the smoke of a drift
+    // or the sparks of a hit cannot steal the kart's memory
+    GroundTrackReq req[GROUND_TRACK_MAX];
+    int reqRoot[GROUND_TRACK_MAX];
+    int nReq = 0;
+    for (int r = 0; r < 128 && nReq < GROUND_TRACK_MAX; r++) {
         if (feetS[r] < 0) continue;
-        int lead = excS[r] >= 0 ? excS[r] : feetS[r];
-        uint32_t leadSig = groundSigMake(PPU.OBJ[lead].Name, PPU.OBJ[lead].Palette);
         // in the air above its shadow: the shadow's row is the ground
         int groundY = box[feetS[r]].y1;
         int below = groundShadowBelow(cbox, cvalid, 128, r, 24);
         if (below >= 0 && feetS[below] >= 0) groundY = box[feetS[below]].y1;
-        int rowW = groundRowAt(&s_groundPrev, groundY);
-        // a hop, a spin or a split from the shadow moves the feet row at
-        // once: glide there instead, tracked by position (Jorge: the kart
-        // snapped while drifting and on a wall hit)
-        int feetX = (cbox[r].x0 + cbox[r].x1) / 2;
-        rowW = groundTrackRow(&s_groundTrack, feetX, groundY, rowW);
+        req[nReq].x = (int16_t)((cbox[r].x0 + cbox[r].x1) / 2);
+        req[nReq].y = (int16_t)groundY;
+        req[nReq].target = groundRowAt(&s_groundPrev, groundY);
+        reqRoot[nReq] = r;
+        nReq++;
+    }
+    groundTrackAssign(&s_groundTrack, req, nReq);
+    s16 rootW[128];
+    for (int r = 0; r < 128; r++) rootW[r] = 0;
+    for (int i = 0; i < nReq; i++) {
+        int r = reqRoot[i];
+        int lead = excS[r] >= 0 ? excS[r] : feetS[r];
+        uint32_t leadSig = groundSigMake(PPU.OBJ[lead].Name, PPU.OBJ[lead].Palette);
         int slot = groundSlotFor(&s_groundAcc, leadSig, box[lead].x0, box[lead].y0 < 0 ? 0 : box[lead].y0);
-        rootW[r] = groundVertexW(rowW, slot);
+        rootW[r] = groundVertexW(req[i].rowW, slot);
     }
     for (int S = 0; S < 128; S++)
         s_spriteW[S] = vis[S] ? rootW[cluster[S]] : 0;

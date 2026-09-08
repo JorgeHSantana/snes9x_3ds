@@ -181,7 +181,49 @@ static inline void groundTrackFrameStart(GroundTrack *t)
     t->count = w;
 }
 
-// the smoothed row for the character whose feet are at (x, y) this frame
+// One character's request for this frame: where its feet are and the row
+// they stand on; `rowW` receives the smoothed row. All requests of a
+// frame are matched to the memories at once, closest pairs first: the
+// smoke of a drift or the sparks of a wall hit appear a few px from the
+// kart's feet and, matched one by one in sprite order, stole its memory
+// (the kart then restarted from scratch - the snap Jorge still saw).
+struct GroundTrackReq { int16_t x, y; uint8_t target; uint8_t rowW; };
+
+static inline void groundTrackAssign(GroundTrack *t, GroundTrackReq *req, int n)
+{
+    if (n > GROUND_TRACK_MAX) n = GROUND_TRACK_MAX;
+    bool reqDone[GROUND_TRACK_MAX];
+    for (int i = 0; i < n; i++) { reqDone[i] = false; req[i].rowW = req[i].target; }
+    // greedy by distance: pick the globally closest unclaimed pair until
+    // none is within reach (pairs <= 32 x 32, tiny)
+    const int reach2 = GROUND_TRACK_REACH * GROUND_TRACK_REACH;
+    for (;;) {
+        int bi = -1, bj = -1, bd = reach2 + 1;
+        for (int i = 0; i < n; i++) {
+            if (reqDone[i]) continue;
+            for (int j = 0; j < t->count; j++) {
+                if (t->claimed[j]) continue;
+                int dx = req[i].x - t->x[j], dy = req[i].y - t->y[j];
+                int d = dx * dx + dy * dy;
+                if (d < bd) { bd = d; bi = i; bj = j; }
+            }
+        }
+        if (bi < 0) break;
+        int r = groundSlew(t->rowW[bj], req[bi].target, GROUND_SLEW_STEP);
+        t->rowW[bj] = (uint8_t)r; t->x[bj] = req[bi].x; t->y[bj] = req[bi].y;
+        t->age[bj] = 0; t->claimed[bj] = 1;
+        req[bi].rowW = (uint8_t)r; reqDone[bi] = true;
+    }
+    // the rest are new characters
+    for (int i = 0; i < n; i++) {
+        if (reqDone[i] || t->count >= GROUND_TRACK_MAX) continue;
+        int j = t->count++;
+        t->x[j] = req[i].x; t->y[j] = req[i].y; t->rowW[j] = req[i].target;
+        t->age[j] = 0; t->claimed[j] = 1;
+    }
+}
+
+// one request on its own (tests / single character)
 static inline int groundTrackRow(GroundTrack *t, int x, int y, int targetRowW)
 {
     int best = -1, bestD = GROUND_TRACK_REACH * GROUND_TRACK_REACH + 1;

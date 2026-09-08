@@ -185,3 +185,17 @@ TEST_CASE("ground: a cluster in the air adopts the cluster right below it (its s
     valid[1] = false;
     CHECK(groundShadowBelow(cb, valid, 3, 0, 24) == -1);       // the shadow gone: no adoption
 }
+
+TEST_CASE("ground: drift smoke next to the kart cannot steal the kart's memory") {
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    GroundTrackReq first[1] = { { 100, 180, 200, 0 } };       // the kart, frame 1
+    groundTrackAssign(&t, first, 1);
+    groundTrackFrameStart(&t);
+    // frame 2: smoke appears 8 px away and is listed BEFORE the kart;
+    // the kart hopped to a farther row and must glide, not restart
+    GroundTrackReq req[2] = { { 108, 184, 120, 0 }, { 100, 180, 240, 0 } };
+    groundTrackAssign(&t, req, 2);
+    CHECK(req[1].rowW == 204);      // the kart kept its memory: 200 -> 204
+    CHECK(req[0].rowW == 120);      // the smoke is a new character: at once
+    CHECK(t.count == 2);
+}
