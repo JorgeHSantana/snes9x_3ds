@@ -134,6 +134,67 @@ static inline void groundLiftDepths(float bg1Depth, float k, float gain, float l
     *farDepth = bg1Depth * gain * (1.0f - k) + lift;
 }
 
+// A character's row jumps when it hops or its cluster splits from its
+// shadow (Mario Kart drifting: the depth snapped, Jorge's report). The
+// row a character USES slides toward the row it stands on by at most
+// `maxStep` per frame, so a hop is a short glide, not a snap. 6/255 per
+// frame crosses the whole plane in ~40 frames.
+#define GROUND_SLEW_STEP 6
+
+static inline int groundSlew(int prev, int target, int maxStep)
+{
+    if (prev <= 0) return target;                 // first sight / was off the plane
+    if (target <= 0) return target;               // left the plane: no glide into "nowhere"
+    int d = target - prev;
+    if (d > maxStep) d = maxStep;
+    if (d < -maxStep) d = -maxStep;
+    return prev + d;
+}
+
+// per-character memory across frames, keyed by signature + a coarse x
+// (two karts of one kind side by side stay apart)
+#define GROUND_TRACK_MAX 32
+
+struct GroundTrack
+{
+    uint32_t key[GROUND_TRACK_MAX];
+    uint8_t  rowW[GROUND_TRACK_MAX];
+    uint8_t  age[GROUND_TRACK_MAX];      // frames since last seen
+    int      count;
+};
+
+static inline uint32_t groundTrackKey(uint32_t sig, int x)
+{
+    return (sig << 4) | (uint32_t)((x < 0 ? 0 : x) / 32 & 0xF);
+}
+
+static inline void groundTrackFrameStart(GroundTrack *t)
+{
+    int w = 0;
+    for (int i = 0; i < t->count; i++) {
+        if (t->age[i] >= 2) continue;             // not seen for 2 frames: forget
+        t->key[w] = t->key[i]; t->rowW[w] = t->rowW[i]; t->age[w] = (uint8_t)(t->age[i] + 1);
+        w++;
+    }
+    t->count = w;
+}
+
+// the smoothed row for this character this frame (and remembers it)
+static inline int groundTrackRow(GroundTrack *t, uint32_t key, int targetRowW)
+{
+    for (int i = 0; i < t->count; i++) {
+        if (t->key[i] != key) continue;
+        int r = groundSlew(t->rowW[i], targetRowW, GROUND_SLEW_STEP);
+        t->rowW[i] = (uint8_t)r; t->age[i] = 0;
+        return r;
+    }
+    if (t->count < GROUND_TRACK_MAX) {
+        t->key[t->count] = key; t->rowW[t->count] = (uint8_t)targetRowW; t->age[t->count] = 0;
+        t->count++;
+    }
+    return targetRowW;
+}
+
 // the game's "not on ground" marks (.3d GROUNDX=)
 #define GROUND_EXCEPTIONS_MAX 32
 

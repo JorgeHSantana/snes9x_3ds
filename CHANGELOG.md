@@ -56,6 +56,10 @@ Notable changes to this project will be documented in this file.
   plane (`M7FX` in the .3d).
 
 ### Fixes
+* Sprites on the Mode 7 ground glide to a new row instead of snapping:
+  a hop or a drift that lifts the kart off its shadow moved its depth at
+  once (Jorge's report); the row a character uses now slides by at most
+  6/255 per frame. Ground Lift now defaults to 0 (glued to the track).
 * Mode 7 scanlines move as one piece in 3D: the right-hand end of each
   row now carries the row's depth with the marker, so both ends pick the
   same stereo tier (before, a BG whose two priorities sat at different

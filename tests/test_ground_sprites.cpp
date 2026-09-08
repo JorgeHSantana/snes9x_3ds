@@ -149,3 +149,28 @@ TEST_CASE("ground: lift depths ride the plane's own ramp plus the lift") {
         CHECK(f >= 0.0f);
     }
 }
+
+TEST_CASE("ground: the row a character uses glides toward the row it stands on") {
+    CHECK(groundSlew(0, 200, GROUND_SLEW_STEP) == 200);        // first sight: no glide
+    CHECK(groundSlew(200, 0, GROUND_SLEW_STEP) == 0);          // leaving the plane: at once
+    CHECK(groundSlew(200, 240, GROUND_SLEW_STEP) == 206);      // a hop: 6 per frame
+    CHECK(groundSlew(200, 160, GROUND_SLEW_STEP) == 194);
+    CHECK(groundSlew(200, 203, GROUND_SLEW_STEP) == 203);      // small moves land at once
+}
+
+TEST_CASE("ground: the tracker remembers a character by signature and coarse x, forgets after 2 frames") {
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    uint32_t kart = groundTrackKey(groundSigMake(0x40, 2), 100);
+    CHECK(groundTrackRow(&t, kart, 200) == 200);
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, kart, 240) == 206);               // hop: glides
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, kart, 240) == 212);
+    // the same kind of kart 100 px to the right is another character
+    uint32_t other = groundTrackKey(groundSigMake(0x40, 2), 200);
+    CHECK(other != kart);
+    CHECK(groundTrackRow(&t, other, 100) == 100);
+    // unseen for two frames: forgotten, the next sight starts fresh
+    groundTrackFrameStart(&t); groundTrackFrameStart(&t); groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, kart, 100) == 100);
+}

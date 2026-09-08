@@ -734,6 +734,7 @@ static int s_layerUseBg = 0;
 // order; one frame of latency is invisible) and this frame's signature
 // table, latched at frame end for the GPU draw and the editor
 static GroundFrame s_groundAcc, s_groundPrev, s_groundLast;
+static GroundTrack s_groundTrack;
 struct M7QueuedLine { s16 x0, y, x1; float tx0, ty0, tx1, ty1; };
 static M7QueuedLine s_m7Queue[512];
 static int  s_m7QueueCount = 0;
@@ -792,6 +793,7 @@ void S9xLayerUseFrameStart()
     layerUseFrameStart(&s_layerUse); s_m7DrawnAcc = false;
     s_groundPrev = s_groundAcc;
     groundFrameStart(&s_groundAcc);
+    groundTrackFrameStart(&s_groundTrack);
 }
 void S9xLayerUseFrameEnd()
 {
@@ -852,9 +854,12 @@ static void groundPrepareSprites(void)
         rootW[r] = 0;
         if (feetS[r] < 0) continue;
         int lead = excS[r] >= 0 ? excS[r] : feetS[r];
+        uint32_t leadSig = groundSigMake(PPU.OBJ[lead].Name, PPU.OBJ[lead].Palette);
         int rowW = groundRowAt(&s_groundPrev, box[feetS[r]].y1);
-        int slot = groundSlotFor(&s_groundAcc, groundSigMake(PPU.OBJ[lead].Name, PPU.OBJ[lead].Palette),
-                                 box[lead].x0, box[lead].y0 < 0 ? 0 : box[lead].y0);
+        // a hop or a split from the shadow moves the feet row at once:
+        // glide there instead (Jorge: the kart snapped while drifting)
+        rowW = groundTrackRow(&s_groundTrack, groundTrackKey(leadSig, box[lead].x0), rowW);
+        int slot = groundSlotFor(&s_groundAcc, leadSig, box[lead].x0, box[lead].y0 < 0 ? 0 : box[lead].y0);
         rootW[r] = groundVertexW(rowW, slot);
     }
     for (int S = 0; S < 128; S++)

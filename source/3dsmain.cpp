@@ -1953,7 +1953,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 if (*stereoEditField(8) != 0) {
                     AddMenuGauge(items, "  Ground Lift"_s, 0, 3, *stereoEditField(9),
                         []( int val ) { if (CheckAndUpdate( *stereoEditField(9), val )) s_stereoPreviewDirty = true; }, true);
-                    stereoHelp(items, "How far in front of the ground a sprite sits. The\nsprite's depth is the plane's own depth on its row,\nplus this - it can never sink behind the ground.");
+                    stereoHelp(items, "How much a sprite floats above the ground. 0 = glued\nto the track, at the exact depth of the ground under it.\n1..3 = that many levels in front, like an object resting\non the ground instead of painted on it.");
                     // sprites on the paused screen: one row per character,
                     // spotlit live under the cursor; unticked = not on ground
                     s_stereoGroundFirst = (int)items.size();
@@ -2777,7 +2777,7 @@ void settingsResetStereo3D()
     settings3DS.StereoMode7Persp = 8;   // full perspective on Mode 7 planes
     settings3DS.StereoMode7Fx = 1;      // effects by distance on the plane
     settings3DS.StereoSpritesGround = 0;
-    settings3DS.StereoGroundLift = 1;
+    settings3DS.StereoGroundLift = 0;
     settings3DS.StereoGroundXCount = 0;
     settings3DS.StereoProfilesCount = 0;
     settings3DS.StereoBindsCount = 0;
@@ -2844,7 +2844,7 @@ void settingsLoadStereo3D()
                 for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = stereoDepthDefault[4];
                 p->Fade = p->Haze = p->Blur = 0;
                 p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1; p->Mode7Persp = 8; p->Mode7Fx = 1;
-                p->SpritesGround = 0; p->GroundLift = 1;
+                p->SpritesGround = 0; p->GroundLift = 0;
                 tDepth = p->Depth; tDepthP1 = p->DepthP1; tObjHi = p->DepthOBJHi;
                 tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
