@@ -2072,7 +2072,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         AddMenuDisabledOption(items, ""_s);
 
         AddMenuHeader2(items, "Tools"_s);
-        // one row: the rarely used actions live in a dialog (issue #75)
+        // the actions, with their help on SELECT (issue #75)
         static std::vector<std::pair<std::string, std::function<void(int)>>> tools;
         tools.clear();
         tools.push_back({ "Scene Matcher Info", [&menuTabs, &currentMenuTab](int val) {
@@ -2232,19 +2232,19 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             menu3dsMarkTabDirty(TAB_3D);
         } });
 
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
-            SMenuTab dialogTab; bool isDialog = false;
-            std::vector<SMenuItem> opts;
-            for (size_t i = 0; i < tools.size(); i++)
-                AddMenuDialogOption(opts, (int)i, tools[i].first, ""_s);
-            int idx = menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "3D Tools",
-                "Scene matcher, global default, copy, backup, reset.",
-                Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, opts, -1, true);
-            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
-            if (idx >= 0 && idx < (int)tools.size())
-                tools[idx].second(0);
-        }, MenuItemType::Action, "  Tools..."_s, ""_s);
-        stereoHelp(items, "Scene Matcher Info, Set as Global Default, Copy 3D\nSettings From..., Backup / Restore, Reset.");
+        // the six actions as rows (Jorge: a dialog for them was one step too many)
+        static const char *toolHelp[6] = {
+            "What the scene matcher sees on the screen you paused on:\nthe PPU signature and the profile it picked.",
+            "Use this game's look (depths, focus, effects) as the\nstarting point for games without their own settings.",
+            "Import another game's look as this game's settings.\nThis game's profiles are removed.",
+            "Snapshot the current 3D setup before experimenting.\nRestore brings it back at any time.",
+            "Overwrites all current 3D settings and profiles of\nthis game with the snapshot.",
+            "Deletes every profile and restores factory values.",
+        };
+        for (size_t ti = 0; ti < tools.size(); ti++) {
+            items.emplace_back(tools[ti].second, MenuItemType::Action, "  " + tools[ti].first, ""_s);
+            if (ti < 6) stereoHelp(items, toolHelp[ti]);
+        }
     }
     AddMenuDisabledOption(items, ""_s);
 };

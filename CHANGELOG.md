@@ -9,8 +9,7 @@ Notable changes to this project will be documented in this file.
   now reads Effects by Distance, Sprites Follow the Ground, Ground Lift,
   the sprites on screen, Perspective, then the plane's own depth gauge
   (BG1 Prio 0, moved out of the Depth list; EXTBG games also get their
-  Priority Pixels gauge there). The six Tools actions live in one
-  dialog.
+  Priority Pixels gauge there). The Tools actions stay as rows.
 * **Ground Lift replaces Ground Near / Far**: a sprite on the Mode 7
   plane now takes the plane's own depth on its row (BG1 gauge and
   Perspective) plus a lift of 0..3 toward the viewer, so it can never
