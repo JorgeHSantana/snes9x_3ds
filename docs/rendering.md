@@ -144,7 +144,11 @@ plane row". The tile vertex shader, armed only for the sprite layer's draw
 (`ground.z = 256`, `-1` otherwise), reads `groundTab[slot]` (an indexed
 uniform: on-ground flag + editor spotlight alpha) and replaces the
 priority tier shift with `near + (far - near) * (1 - rowW/255)` for
-on-ground sprites. Profile: `GSPR` (switch), `GNEAR`, `GFAR` (depths);
+on-ground sprites, where near/far are the plane's own depths at its
+nearest row and at the horizon (BG1 gauge x the perspective gain, x
+(1 - k) at the horizon - the scanlines' ramp) plus the profile's Ground
+Lift toward the viewer (`groundLiftDepths`), so a sprite never sinks
+behind the ground under it. Profile: `GSPR` (switch), `GLIFT` (0..3);
 per game: `GROUNDX=` signatures marked "not on ground" in the editor
 (Lakitu, a HUD item), which the Mode 7 block lists for the paused screen
 with a live spotlight per sprite. A character is several hardware

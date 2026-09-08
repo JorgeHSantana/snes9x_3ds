@@ -12,7 +12,7 @@
   "stereo3d": [
     {
       "file": "SUPER MARIO KART",
-      "content": "BG1=0\nBG2=0\nBG3=0\nBG4=0\nOBJ=0\nFADE=0\nHAZE=0\nBLUR=0\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nM7PERSP=0\nGSPR=0\nGNEAR=4\nGFAR=-8"
+      "content": "BG1=0\nBG2=0\nBG3=0\nBG4=0\nOBJ=0\nFADE=0\nHAZE=0\nBLUR=0\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nM7PERSP=0\nGSPR=0\nGLIFT=3"
     }
   ],
   "sbs_expect": {

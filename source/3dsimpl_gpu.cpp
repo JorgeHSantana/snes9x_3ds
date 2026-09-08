@@ -396,8 +396,16 @@ static void gpu3dsArmGround(LAYER_ID id)
         gpu3dsSetGround(0.0f, 0.0f, false);
         return;
     }
-    float nearS = GPU3DS.stereoEyeIOD * GPU3DS.stereoGroundNear * STEREO_PARALLAX_SCALE;
-    float farS = GPU3DS.stereoEyeIOD * GPU3DS.stereoGroundFar * STEREO_PARALLAX_SCALE;
+    // interlocked with the plane (Jorge): a sprite's row takes the plane's
+    // own depth there - BG1 x gain at the nearest row, BG1 x gain x (1-k)
+    // at the horizon, the same ramp the scanlines use - plus the lift,
+    // so the sprite always sits just in front of the ground under it
+    float m7k, m7gain;
+    mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
+    float nearD, farD;
+    groundLiftDepths(GPU3DS.stereoLayerDepth[0], m7k, m7gain, GPU3DS.stereoGroundLift, &nearD, &farD);
+    float nearS = GPU3DS.stereoEyeIOD * nearD * STEREO_PARALLAX_SCALE;
+    float farS = GPU3DS.stereoEyeIOD * farD * STEREO_PARALLAX_SCALE;
     if (settings3DS.StereoShiftMode == 0) { nearS = roundf(nearS); farS = roundf(farS); }
     float tab[32][2];
     int n = S9xGroundSigCount();

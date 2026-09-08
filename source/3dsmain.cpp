@@ -953,7 +953,7 @@ static int *stereoEditField(int which) {
             case 2: return &p->Blur;      case 3: return &p->FocusBack;
             case 4: return &p->FocusFront; case 6: return &p->Mode7Persp;
             case 7: return &p->Mode7Fx;    case 8: return &p->SpritesGround;
-            case 9: return &p->GroundNear; case 10: return &p->GroundFar;
+            case 9: return &p->GroundLift;
             default: return &p->EdgeMode;
         }
     }
@@ -962,7 +962,7 @@ static int *stereoEditField(int which) {
         case 2: return &settings3DS.StereoBlur;      case 3: return &settings3DS.StereoFocusBack;
         case 4: return &settings3DS.StereoFocusFront; case 6: return &settings3DS.StereoMode7Persp;
         case 7: return &settings3DS.StereoMode7Fx;    case 8: return &settings3DS.StereoSpritesGround;
-        case 9: return &settings3DS.StereoGroundNear; case 10: return &settings3DS.StereoGroundFar;
+        case 9: return &settings3DS.StereoGroundLift;
         default: return &settings3DS.StereoEdgeMode;
     }
 }
@@ -1617,6 +1617,8 @@ static int stereo3dDimColor()
 }
 static int  s_stereoFxFirst = -1;       // first item of the Focus/Effects zone
 static int  s_stereoFxLast = -1;        // one past its last item
+static int  s_stereoPlaneGaugeIdx = -1; // the plane's own gauge inside the Mode 7 block (BG1 P0)
+static int  s_stereoExtbgGaugeIdx = -1; // EXTBG priority pixels (BG2 P1), when the game has them
 static int  s_stereoGroundFirst = -1;   // sprite rows of the Mode 7 block (issue #76)
 static int  s_stereoGroundCount = 0;
 static int  s_stereoGroundSlot[32];
@@ -1647,6 +1649,13 @@ static void stereo3dPreviewForget()
 // runs once per menu frame (idle): with the 3D tab focused on a depth
 // gauge, the game screen re-renders live - edited layer spotlit, value
 // changes moving it in real time; holding Y peeks at the plain scene.
+// the help text SELECT shows for the last item added (issue #75: the
+// tab lost its paragraphs; every control carries its own explanation)
+static void stereoHelp(std::vector<SMenuItem>& items, const char *text)
+{
+    if (!items.empty()) items.back().PickerDescription = text;
+}
+
 static void stereo3dIdleTick()
 {
     if (menuTabs.empty() || !settings3DS.isRomLoaded || !gpu3dsIs3DAvailable())
@@ -1670,6 +1679,10 @@ static void stereo3dIdleTick()
     bool inGauges = rel >= 0 && rel < s_stereoGaugeCount;
     int layer = !inGauges ? -1 : s_stereoGaugeLayer[rel];
     int prio  = !inGauges ? -1 : s_stereoGaugePrio[rel];
+    // the plane's gauges sit inside the Mode 7 block but spotlight like
+    // any depth row
+    if (sel >= 0 && sel == s_stereoPlaneGaugeIdx) { inGauges = true; layer = 0; prio = 0; }
+    if (sel >= 0 && sel == s_stereoExtbgGaugeIdx) { inGauges = true; layer = 1; prio = 1; }
     // Focus/Effects gauges: full-scene preview, effects applied live
     bool inFx = !inGauges && s_stereoFxFirst >= 0 &&
         sel >= s_stereoFxFirst && sel < s_stereoFxLast;
@@ -1716,7 +1729,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     items.clear();
 
     AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  Saved to /3ds/snes9x_3ds/stereo3d/<game title>.3d (shareable)."_s, ""_s);
+    items.emplace_back(nullptr, MenuItemType::Textarea, "  SELECT on any item shows its help."_s, ""_s);
     AddMenuDisabledOption(items, ""_s);
 
     if (gpu3dsIs3DAvailable()) {
@@ -1754,8 +1767,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                             p->Mode7Persp = settings3DS.StereoMode7Persp;
                             p->Mode7Fx = settings3DS.StereoMode7Fx;
                             p->SpritesGround = settings3DS.StereoSpritesGround;
-                            p->GroundNear = settings3DS.StereoGroundNear;
-                            p->GroundFar = settings3DS.StereoGroundFar;
+                            p->GroundLift = settings3DS.StereoGroundLift;
                         }
                         snprintf(p->Name, sizeof(p->Name), "Profile %d", (newCount + 1) & 0xFF);
                         settings3DS.StereoProfilesCount++;
@@ -1792,6 +1804,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 menu3dsMarkTabDirty(TAB_3D);
             }
         }, MenuItemType::Action, "  Rename Profile"_s, ""_s);
+        stereoHelp(items, "Renames the profile being edited (keyboard).");
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             if (s_stereoEditIdx < 0) return;
             SMenuTab dialogTab; bool isDialog = false;
@@ -1815,6 +1828,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             settings3DS.isDirty = true;
             menu3dsMarkTabDirty(TAB_3D);
         }, MenuItemType::Action, "  Delete Profile"_s, ""_s);
+        stereoHelp(items, "Deletes the profile being edited and the screens bound\nto it. Those screens use the Default profile again.");
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             if (s_stereoEditIdx < 0) {
@@ -1830,6 +1844,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
             menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
         }, MenuItemType::Action, "  Capture This Screen"_s, ""_s);
+        stereoHelp(items, "Binds the screen you paused on to the profile being\nedited: whenever the game shows this screen again, this\nprofile applies on its own (PPU signature match).");
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             bool removed = settings3dsStereoReleaseScreen();
@@ -1840,6 +1855,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
             menu3dsMarkTabDirty(TAB_3D);
         }, MenuItemType::Action, "  Release This Screen"_s, ""_s);
+        stereoHelp(items, "Unbinds the screen you paused on. It uses the Default\nprofile again.");
 
 
 
@@ -1867,9 +1883,9 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     stereo3dRestorePausedLook();
                 }
             });
+        stereoHelp(items, "Diagnostic: hides this layer in the paused preview and\nin game. Not saved - it comes back on the next load.");
         if (!used) items.back().TextColor = stereo3dDimColor();
     }
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  Enable/Disable Layers is temporary diagnostic. Not saved."_s, ""_s);
 
     if (gpu3dsIs3DAvailable()) {
         AddMenuHeader2(items, "Depth"_s);
@@ -1888,13 +1904,19 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             { "  Sprites Prio 2", 4, 2 }, { "  Sprites Prio 3", 4, 3 },
         };
         char rowLog[160]; rowLog[0] = '\0';
+        bool m7Block = !settings3DS.isRomLoaded || S9xMode7DrawnLastFrame() || PPU.BGMode == 7;
+        bool extbg = settings3DS.isRomLoaded && IPPU.Mode7EXTBGFlag;
         for (int r = 0; r < 12; r++) {
             int layer = rows[r].layer, prio = rows[r].prio;
+            // the plane's gauges live in the Mode 7 block (Jorge)
+            if (m7Block && layer == 0 && prio == 0) continue;
+            if (m7Block && extbg && layer == 1 && prio == 1) continue;
             bool used = stereo3dRowUsed(layer, prio);
             if (used) { size_t n = strlen(rowLog); snprintf(rowLog + n, sizeof(rowLog) - n, "%s%s", n ? " " : "", rows[r].name + 2); }
             if (!used && settings3DS.StereoHideUnused) continue;
             AddMenuGauge(items, rows[r].name, -8, 8, *stereo3dGaugeValue(layer, prio),
                 [layer, prio]( int val ) { if (CheckAndUpdate( *stereo3dGaugeValue(layer, prio), val )) s_stereoPreviewDirty = true; }, true, true);
+            stereoHelp(items, "Depth of this layer / priority. + pops out of the screen,\n- sinks into it. The cursor spotlights its tiles on the game\nscreen, moving live; hold X to see the full scene. A BG's\ntwo tile priorities (floor vs. detail) and the sprites'\nfour priorities can sit at different depths.");
             if (!used) items.back().TextColor = stereo3dDimColor();
             s_stereoGaugeLayer[s_stereoGaugeCount] = layer;
             s_stereoGaugePrio[s_stereoGaugeCount] = prio;
@@ -1903,98 +1925,97 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         // what the paused frame drew, for field reports and the harness
         log3dsWrite("[3dtab] used rows: %s | listed %d | mode7 block %s", rowLog, s_stereoGaugeCount,
                     (!settings3DS.isRomLoaded || S9xMode7DrawnLastFrame() || PPU.BGMode == 7) ? "yes" : "no");
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Editing a gauge spotlights its layer on the game"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  screen, moving live. Hold X to see the full scene."_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  + pops out of the screen, - sinks into it."_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Prio 0/1: a BG's two tile priorities can sit at"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  different depths (e.g. floor vs. detail planes)."_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Sprites split by their four priorities (0 = behind,"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  3 = in front). Most games keep one value for all."_s, ""_s);
 
         // the Focus/Effects zone previews live too: full scene, effects
         // applied as the gauges move (issue #61 follow-up, Jorge's ask)
         s_stereoFxFirst = (int)items.size();
+        s_stereoPlaneGaugeIdx = -1;
+        s_stereoExtbgGaugeIdx = -1;
+        s_stereoGroundFirst = -1;
+        s_stereoGroundCount = 0;
         {
-            // Mode 7 perspective (issue #62): lives in the live-preview
-            // zone (full scene); dims/hides like any row the paused
-            // screen did not draw
-            // "used" = a Mode 7 plane drew in the last rendered frame OR the
-            // PPU sits in mode 7 right now (Jorge's report: the block vanished
-            // under Hide Unused on hardware while racing - the draw flag
-            // missed, the register cannot)
+            // Mode 7 (issue #62 / #76): the block exists only while the game
+            // uses Mode 7 - "used" = a plane drew in the last rendered frame
+            // OR the PPU sits in mode 7 right now (Jorge's report: the block
+            // vanished under Hide Unused on hardware while racing)
             bool m7Used = !settings3DS.isRomLoaded || S9xMode7DrawnLastFrame() || PPU.BGMode == 7;
             log3dsWrite("[m7] menu: drawnLastFrame=%d bgMode=%d bg1used=%d hideUnused=%d",
                         S9xMode7DrawnLastFrame() ? 1 : 0, (int)PPU.BGMode,
                         S9xLayerUsedLastFrame(0, 0) ? 1 : 0, settings3DS.StereoHideUnused);
-            // the block exists only while the game actually uses Mode 7
-            // (Jorge's UX) - regardless of Hide Unused
             if (m7Used) {
                 AddMenuHeader2(items, "Mode 7"_s);
-                AddMenuGauge(items, "  Perspective"_s, 0, 8, *stereoEditField(6),
-                    []( int val ) { if (CheckAndUpdate( *stereoEditField(6), val )) s_stereoPreviewDirty = true; }, true);
-                if (!m7Used) items.back().TextColor = stereo3dDimColor();
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  Each Mode 7 scanline shifts by its own distance. 0 = flat,"_s, ""_s);
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  4 = full perspective, 5-8 push the near rows further out."_s, ""_s);
                 AddMenuCheckbox(items, "  Effects by Distance"_s, *stereoEditField(7) != 0,
                     []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(7), v )) s_stereoPreviewDirty = true; });
-                if (!m7Used) items.back().TextColor = stereo3dDimColor();
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  Fade, haze and blur grow towards the horizon on the plane"_s, ""_s);
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  instead of covering it evenly. A top-down map stays flat."_s, ""_s);
-                // sprites follow the ground (issue #76)
+                stereoHelp(items, "Fade, haze and blur grow towards the horizon on the\nMode 7 plane instead of covering it evenly.\nA top-down map stays flat.");
                 AddMenuCheckbox(items, "  Sprites Follow the Ground"_s, *stereoEditField(8) != 0,
-                    []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(8), v )) s_stereoPreviewDirty = true; });
-                AddMenuGauge(items, "  Ground Near"_s, -8, 8, *stereoEditField(9),
-                    []( int val ) { if (CheckAndUpdate( *stereoEditField(9), val )) s_stereoPreviewDirty = true; }, true);
-                AddMenuGauge(items, "  Ground Far"_s, -8, 8, *stereoEditField(10),
-                    []( int val ) { if (CheckAndUpdate( *stereoEditField(10), val )) s_stereoPreviewDirty = true; }, true);
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  A sprite standing on the plane takes the depth of its row,"_s, ""_s);
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  from Near (bottom row) to Far (horizon), instead of its"_s, ""_s);
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  Sprites gauge. Untick a sprite below that is not on the"_s, ""_s);
-                items.emplace_back(nullptr, MenuItemType::Textarea, "  ground (a flying enemy, a HUD item); saved for this game."_s, ""_s);
-                s_stereoGroundFirst = (int)items.size();
-                s_stereoGroundCount = 0;
-                int sigCount = settings3DS.isRomLoaded ? S9xGroundSigCount() : 1;
-                for (int gi = 1; gi < sigCount && s_stereoGroundCount < 31; gi++) {
-                    uint32_t sig = S9xGroundSig(gi);
-                    int sx, sy; S9xGroundSigPos(gi, &sx, &sy);
-                    char label[48];
-                    snprintf(label, sizeof(label), "  Sprite %03X/%d at %d,%d", groundSigName(sig), groundSigPalette(sig), sx, sy);
-                    bool onGround = !groundIsException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount, sig);
-                    AddMenuCheckbox(items, std::string(label), onGround,
-                        [sig]( int val ) {
-                            bool want = val != 0;
-                            bool now = !groundIsException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount, sig);
-                            if (want != now) {
-                                settings3DS.StereoGroundXCount = groundToggleException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount, sig);
-                                settings3DS.isDirty = true;
-                                s_stereoPreviewDirty = true;
-                            }
-                        });
-                    s_stereoGroundSlot[s_stereoGroundCount++] = gi;
+                    []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(8), v )) { s_stereoPreviewDirty = true; menu3dsMarkTabDirty(TAB_3D); } });
+                stereoHelp(items, "A sprite standing on the plane takes the depth of the\nground under its feet - a kart down the track sits far,\na box beside you sits near. Hardware sprites that touch\ncount as one character. Untick a sprite in the list below\nthat is not on the ground (a flying enemy, a HUD item);\nsaved for this game.");
+                if (*stereoEditField(8) != 0) {
+                    AddMenuGauge(items, "  Ground Lift"_s, 0, 3, *stereoEditField(9),
+                        []( int val ) { if (CheckAndUpdate( *stereoEditField(9), val )) s_stereoPreviewDirty = true; }, true);
+                    stereoHelp(items, "How far in front of the ground a sprite sits. The\nsprite's depth is the plane's own depth on its row,\nplus this - it can never sink behind the ground.");
+                    // sprites on the paused screen: one row per character,
+                    // spotlit live under the cursor; unticked = not on ground
+                    s_stereoGroundFirst = (int)items.size();
+                    int sigCount = settings3DS.isRomLoaded ? S9xGroundSigCount() : 1;
+                    for (int gi = 1; gi < sigCount && s_stereoGroundCount < 31; gi++) {
+                        uint32_t sig = S9xGroundSig(gi);
+                        int sx, sy; S9xGroundSigPos(gi, &sx, &sy);
+                        char label[48];
+                        snprintf(label, sizeof(label), "    Sprite %03X/%d at %d,%d", groundSigName(sig), groundSigPalette(sig), sx, sy);
+                        bool onGround = !groundIsException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount, sig);
+                        AddMenuCheckbox(items, std::string(label), onGround,
+                            [sig]( int val ) {
+                                bool want = val != 0;
+                                bool now = !groundIsException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount, sig);
+                                if (want != now) {
+                                    settings3DS.StereoGroundXCount = groundToggleException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount, sig);
+                                    settings3DS.isDirty = true;
+                                    s_stereoPreviewDirty = true;
+                                }
+                            });
+                        stereoHelp(items, "One character of the paused screen (sprite sheet row /\npalette, at its screen position). The cursor spotlights it\non the game screen. Ticked = stands on the ground;\nuntick a flying enemy or a HUD item. Saved for this game.");
+                        s_stereoGroundSlot[s_stereoGroundCount++] = gi;
+                    }
+                    if (sigCount <= 1)
+                        items.emplace_back(nullptr, MenuItemType::Textarea, "    (no sprites on the paused screen)"_s, ""_s);
                 }
-                if (sigCount <= 1)
-                    items.emplace_back(nullptr, MenuItemType::Textarea, "  (no sprites on the paused screen)"_s, ""_s);
+                AddMenuGauge(items, "  Perspective"_s, 0, 8, *stereoEditField(6),
+                    []( int val ) { if (CheckAndUpdate( *stereoEditField(6), val )) s_stereoPreviewDirty = true; }, true);
+                stereoHelp(items, "Each Mode 7 scanline shifts by its own distance, so the\nplane recedes instead of standing like a wall.\n0 = flat, 4 = full perspective, 5-8 push the near rows\nfurther out. The horizon stays on the screen plane.");
+                // the plane's own gauge lives here, not in the Depth list
+                // (Jorge): BG1 is the Mode 7 plane; with EXTBG the BG2
+                // Prio 1 pass carries the per-pixel priority
+                s_stereoPlaneGaugeIdx = (int)items.size();
+                AddMenuGauge(items, "  Plane Depth  (BG1 P0)"_s, -8, 8, *stereo3dGaugeValue(0, 0),
+                    []( int val ) { if (CheckAndUpdate( *stereo3dGaugeValue(0, 0), val )) s_stereoPreviewDirty = true; }, true, true);
+                stereoHelp(items, "The Mode 7 plane's depth at its nearest row (BG1).\n+ pops out of the screen, - sinks into it. The horizon\nstays on the screen plane; sprites on the ground follow\nthis gauge on their own row.");
+                if (settings3DS.isRomLoaded && IPPU.Mode7EXTBGFlag) {
+                    s_stereoExtbgGaugeIdx = (int)items.size();
+                    AddMenuGauge(items, "  Priority Pixels  (BG2 P1)"_s, -8, 8, *stereo3dGaugeValue(1, 1),
+                        []( int val ) { if (CheckAndUpdate( *stereo3dGaugeValue(1, 1), val )) s_stereoPreviewDirty = true; }, true, true);
+                    stereoHelp(items, "EXTBG: the plane's high-priority pixels are drawn again\nas BG2 above the sprites. Their depth, usually the same\nas the plane's.");
+                }
             }
         }
         AddMenuHeader2(items, "Focus"_s);
         AddMenuGauge(items, "  Back"_s, -8, 0, *stereoEditField(3),
             []( int val ) { if (CheckAndUpdate( *stereoEditField(3), val )) s_stereoPreviewDirty = true; }, true);
+        stereoHelp(items, "Back edge of the focus zone. Layers inside Back..Front\nare untouched; fade, haze and blur grow with the distance\nbeyond it (gray depth values in the list).");
         AddMenuGauge(items, "  Front"_s, 0, 8, *stereoEditField(4),
             []( int val ) { if (CheckAndUpdate( *stereoEditField(4), val )) s_stereoPreviewDirty = true; }, true);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Layers inside the Back..Front zone are untouched; effects"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  grow with the distance beyond it (gray depth values)."_s, ""_s);
+        stereoHelp(items, "Front edge of the focus zone (see Back).");
 
         AddMenuHeader2(items, "Effects"_s);
         AddMenuGauge(items, "  Fade"_s, 0, 8, *stereoEditField(0),
             []( int val ) { if (CheckAndUpdate( *stereoEditField(0), val )) s_stereoPreviewDirty = true; }, true);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Darkens layers behind the focus zone."_s, ""_s);
+        stereoHelp(items, "Darkens layers behind the focus zone, more the deeper\nthey sit.");
         AddMenuGauge(items, "  Haze"_s, 0, 8, *stereoEditField(1),
             []( int val ) { if (CheckAndUpdate( *stereoEditField(1), val )) s_stereoPreviewDirty = true; }, true);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Fogs layers behind the focus zone."_s, ""_s);
+        stereoHelp(items, "Fogs layers behind the focus zone, more the deeper\nthey sit.");
         AddMenuGauge(items, "  Blur"_s, 0, 8, *stereoEditField(2),
             []( int val ) { if (CheckAndUpdate( *stereoEditField(2), val )) s_stereoPreviewDirty = true; }, true);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Smudges layers outside the zone, back and front."_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Enabling it may cause small image artifacts."_s, ""_s);
+        stereoHelp(items, "Smudges layers outside the focus zone, back and front,\nmore the farther from it. Costs GPU time: Blur Quality\nAuto drops to Light when a frame is missed. May show\nsmall artifacts at layer edges.");
         s_stereoFxLast = (int)items.size();
 
         AddMenuDisabledOption(items, ""_s);
@@ -2038,8 +2059,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     stereo3dRestorePausedLook();   // live, like the layer toggles
                 }
             });
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Splitting a BG's two priorities uncovers a strip that"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  belongs to neither; this paints it with the far one."_s, ""_s);
+        stereoHelp(items, "Splitting a BG's two priorities uncovers a strip that\nbelongs to neither; this paints it with the far one.");
         AddMenuCheckbox(items, "  Hide Unused Layers"_s, settings3DS.StereoHideUnused != 0,
             []( int val ) {
                 int v = val ? 1 : 0;
@@ -2048,13 +2068,14 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     menu3dsMarkTabDirty(TAB_3D);   // rebuild with the rows filtered
                 }
             });
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Rows the paused screen did not draw are dimmed; this"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  hides them instead. Hidden layers keep their depth -"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  pause on a screen that uses them to edit."_s, ""_s);
+        stereoHelp(items, "Rows the paused screen did not draw are dimmed; this\nhides them instead. Hidden layers keep their depth -\npause on a screen that uses them to edit.");
         AddMenuDisabledOption(items, ""_s);
 
         AddMenuHeader2(items, "Tools"_s);
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+        // one row: the rarely used actions live in a dialog (issue #75)
+        static std::vector<std::pair<std::string, std::function<void(int)>>> tools;
+        tools.clear();
+        tools.push_back({ "Scene Matcher Info", [&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             char info[512];
             settings3dsStereoMatchInfo(info, sizeof(info));
@@ -2062,9 +2083,8 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 info, Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo,
                 makeOptionsForOk(), -1, false, 8);
             menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
-        }, MenuItemType::Action, "  Scene Matcher Info"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  What the matcher sees on the screen you paused on."_s, ""_s);
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+        } });
+        tools.push_back({ "Set as Global Default", [&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
                 "Set as Global Default",
@@ -2076,8 +2096,8 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 "Saved to stereo3d/default.3d. Games without a .3d\nfile now start from this look.",
                 Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
             menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
-        }, MenuItemType::Action, "  Set as Global Default"_s, ""_s);
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+        } });
+        tools.push_back({ "Copy 3D Settings From...", [&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
 
             char curPath[PATH_MAX], legacyPath[PATH_MAX];
@@ -2156,8 +2176,8 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             settings3dsStereoApplyDefault();
             settings3DS.isDirty = true;
             menu3dsMarkTabDirty(TAB_3D);
-        }, MenuItemType::Action, "  Copy 3D Settings From..."_s, ""_s);
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+        } });
+        tools.push_back({ "Backup 3D Settings", [&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             char path[PATH_MAX], bak[PATH_MAX];
             stereo3dGamePath(path, sizeof(path), "stereo3d");
@@ -2171,8 +2191,8 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                    : "Could not write the backup file.",
                 Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, makeOptionsForOk(), -1, false);
             menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
-        }, MenuItemType::Action, "  Backup 3D Settings"_s, ""_s);
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+        } });
+        tools.push_back({ "Restore 3D Settings Backup", [&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             char path[PATH_MAX], bak[PATH_MAX];
             stereo3dGamePath(path, sizeof(path), "stereo3d");
@@ -2198,9 +2218,8 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 settings3DS.isDirty = true;
                 menu3dsMarkTabDirty(TAB_3D);
             }
-        }, MenuItemType::Action, "  Restore 3D Settings Backup"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Snapshot the current 3D setup before experimenting."_s, ""_s);
-        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+        } });
+        tools.push_back({ "Reset 3D Settings", [&menuTabs, &currentMenuTab](int val) {
             SMenuTab dialogTab; bool isDialog = false;
             bool confirmed = confirmDialog(dialogTab, isDialog, currentMenuTab, menuTabs,
                 "Reset 3D Settings",
@@ -2211,10 +2230,22 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             settings3dsStereoApplyDefault();
             settings3DS.isDirty = true;
             menu3dsMarkTabDirty(TAB_3D);
-        }, MenuItemType::Action, "  Reset 3D Settings"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Deletes every profile and restores factory values."_s, ""_s);
-    }
+        } });
 
+        items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+            SMenuTab dialogTab; bool isDialog = false;
+            std::vector<SMenuItem> opts;
+            for (size_t i = 0; i < tools.size(); i++)
+                AddMenuDialogOption(opts, (int)i, tools[i].first, ""_s);
+            int idx = menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, "3D Tools",
+                "Scene matcher, global default, copy, backup, reset.",
+                Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo, opts, -1, true);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+            if (idx >= 0 && idx < (int)tools.size())
+                tools[idx].second(0);
+        }, MenuItemType::Action, "  Tools..."_s, ""_s);
+        stereoHelp(items, "Scene Matcher Info, Set as Global Default, Copy 3D\nSettings From..., Backup / Restore, Reset.");
+    }
     AddMenuDisabledOption(items, ""_s);
 };
 
@@ -2746,8 +2777,7 @@ void settingsResetStereo3D()
     settings3DS.StereoMode7Persp = 8;   // full perspective on Mode 7 planes
     settings3DS.StereoMode7Fx = 1;      // effects by distance on the plane
     settings3DS.StereoSpritesGround = 0;
-    settings3DS.StereoGroundNear = 0;
-    settings3DS.StereoGroundFar = -4;
+    settings3DS.StereoGroundLift = 1;
     settings3DS.StereoGroundXCount = 0;
     settings3DS.StereoProfilesCount = 0;
     settings3DS.StereoBindsCount = 0;
@@ -2786,8 +2816,7 @@ void settingsLoadStereo3D()
     int *tM7 = &settings3DS.StereoMode7Persp;
     int *tM7Fx = &settings3DS.StereoMode7Fx;
     int *tGS = &settings3DS.StereoSpritesGround;
-    int *tGN = &settings3DS.StereoGroundNear;
-    int *tGF = &settings3DS.StereoGroundFar;
+    int *tGL = &settings3DS.StereoGroundLift;
 
     char line[96], name[16];
     int v;
@@ -2815,12 +2844,12 @@ void settingsLoadStereo3D()
                 for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = stereoDepthDefault[4];
                 p->Fade = p->Haze = p->Blur = 0;
                 p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1; p->Mode7Persp = 8; p->Mode7Fx = 1;
-                p->SpritesGround = 0; p->GroundNear = 0; p->GroundFar = -4;
+                p->SpritesGround = 0; p->GroundLift = 1;
                 tDepth = p->Depth; tDepthP1 = p->DepthP1; tObjHi = p->DepthOBJHi;
                 tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
                 tEdge = &p->EdgeMode; tM7 = &p->Mode7Persp; tM7Fx = &p->Mode7Fx;
-                tGS = &p->SpritesGround; tGN = &p->GroundNear; tGF = &p->GroundFar;
+                tGS = &p->SpritesGround; tGL = &p->GroundLift;
             }
             continue;
         }
@@ -2885,10 +2914,8 @@ void settingsLoadStereo3D()
             *tM7Fx = v ? 1 : 0;
         if (sscanf(line, "GSPR=%d", &v) == 1)
             *tGS = v ? 1 : 0;
-        if (sscanf(line, "GNEAR=%d", &v) == 1)
-            *tGN = v < -8 ? -8 : (v > 8 ? 8 : v);
-        if (sscanf(line, "GFAR=%d", &v) == 1)
-            *tGF = v < -8 ? -8 : (v > 8 ? 8 : v);
+        if (sscanf(line, "GLIFT=%d", &v) == 1)
+            *tGL = v < 0 ? 0 : (v > 3 ? 3 : v);
     }
     fclose(f);
 }
@@ -2916,9 +2943,8 @@ static void settingsWriteStereo3DGlobals(FILE *f)
     fprintf(f, "M7PERSP=%d\n", settings3DS.StereoMode7Persp);
     fprintf(f, "# Mode 7 effects by distance: fade/haze/blur grow towards the horizon (0/1)\n");
     fprintf(f, "M7FX=%d\n", settings3DS.StereoMode7Fx);
-    fprintf(f, "# sprites follow the Mode 7 ground (0/1) between the near and far depths\n");
-    fprintf(f, "GSPR=%d\nGNEAR=%d\nGFAR=%d\n", settings3DS.StereoSpritesGround,
-        settings3DS.StereoGroundNear, settings3DS.StereoGroundFar);
+    fprintf(f, "# sprites follow the Mode 7 ground (0/1), sitting GLIFT (0..3) in front of it\n");
+    fprintf(f, "GSPR=%d\nGLIFT=%d\n", settings3DS.StereoSpritesGround, settings3DS.StereoGroundLift);
 }
 
 // Writes the current game's LOOK (depths/focus/effects/edge) as the global
@@ -2960,7 +2986,7 @@ void settingsSaveStereo3D()
         fprintf(f, "FADE=%d\nHAZE=%d\nBLUR=%d\n", p->Fade, p->Haze, p->Blur);
         fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\nM7PERSP=%d\nM7FX=%d\n",
             p->FocusBack, p->FocusFront, p->EdgeMode, p->Mode7Persp, p->Mode7Fx);
-        fprintf(f, "GSPR=%d\nGNEAR=%d\nGFAR=%d\n", p->SpritesGround, p->GroundNear, p->GroundFar);
+        fprintf(f, "GSPR=%d\nGLIFT=%d\n", p->SpritesGround, p->GroundLift);
     }
     // sprites marked "not on ground" (tile name + palette), per game
     for (int gi = 0; gi < settings3DS.StereoGroundXCount; gi++)

@@ -4,6 +4,19 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
+* **3D Stereo tab decluttered** (issue #75, Jorge): the 33 explanation
+  lines are gone; SELECT on any item opens its help. The Mode 7 block
+  now reads Effects by Distance, Sprites Follow the Ground, Ground Lift,
+  the sprites on screen, Perspective, then the plane's own depth gauge
+  (BG1 Prio 0, moved out of the Depth list; EXTBG games also get their
+  Priority Pixels gauge there). The six Tools actions live in one
+  dialog.
+* **Ground Lift replaces Ground Near / Far**: a sprite on the Mode 7
+  plane now takes the plane's own depth on its row (BG1 gauge and
+  Perspective) plus a lift of 0..3 toward the viewer, so it can never
+  sink behind the ground under it and moving the plane moves the sprites
+  with it. `.3d` key `GLIFT`; `GNEAR`/`GFAR` from the 2026-09-07 nightly
+  are ignored.
 * **Blur Quality Auto starts in Light** and turns Full after the run of
   clean seconds proves the game holds its rate (the two eyes fuse one
   ghost each into the same smear Full gives); an Old 3DS that never

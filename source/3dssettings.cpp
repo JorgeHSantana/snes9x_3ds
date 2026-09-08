@@ -315,15 +315,16 @@ static void settings3dsStereoApplyValues(const float depths[5],
         float bg1 = depths[0] < 0.0f ? -depths[0] : depths[0];
         if (bg1 * m7gain > maxAbs) maxAbs = bg1 * m7gain;
     }
-    // sprites on the Mode 7 ground span the near/far gauges (issue #76)
+    // sprites on the Mode 7 ground ride the plane's own ramp plus the
+    // lift (issue #76): the nearest row is BG1 x gain, the lift on top
     if (GPU3DS.stereoGroundOn > 0.0f) {
-        float gn = GPU3DS.stereoGroundNear, gf = GPU3DS.stereoGroundFar;
+        float m7k, m7gain;
+        mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
+        float gn = depths[0] * m7gain + GPU3DS.stereoGroundLift;
         if (gn > maxPop) maxPop = gn;
-        if (gf > maxPop) maxPop = gf;
+        if (GPU3DS.stereoGroundLift > maxPop) maxPop = GPU3DS.stereoGroundLift;
         if (gn < 0.0f) gn = -gn;
-        if (gf < 0.0f) gf = -gf;
         if (gn > maxAbs) maxAbs = gn;
-        if (gf > maxAbs) maxAbs = gf;
     }
     GPU3DS.stereoMaxPop = maxPop;
     GPU3DS.stereoMaxAbs = maxAbs;
@@ -349,8 +350,7 @@ static void settings3dsStereoDefaultProfile(S9xSettings3DS::SStereoProfile *p)
     p->Mode7Persp = settings3DS.StereoMode7Persp;
     p->Mode7Fx = settings3DS.StereoMode7Fx;
     p->SpritesGround = settings3DS.StereoSpritesGround;
-    p->GroundNear = settings3DS.StereoGroundNear;
-    p->GroundFar = settings3DS.StereoGroundFar;
+    p->GroundLift = settings3DS.StereoGroundLift;
 }
 
 static int s_stereoActiveIdx = -1;   // -1 = default profile
@@ -477,8 +477,7 @@ void settings3dsStereoApplyProfile(int idx)
     GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;   // read by ApplyValues (edge crop)
     GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
     GPU3DS.stereoGroundOn = (float)p->SpritesGround;
-    GPU3DS.stereoGroundNear = (float)p->GroundNear;
-    GPU3DS.stereoGroundFar = (float)p->GroundFar;
+    GPU3DS.stereoGroundLift = (float)p->GroundLift;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);
@@ -499,8 +498,7 @@ void settings3dsStereoApplyDefault()
     GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;   // read by ApplyValues (edge crop)
     GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
     GPU3DS.stereoGroundOn = (float)p->SpritesGround;
-    GPU3DS.stereoGroundNear = (float)p->GroundNear;
-    GPU3DS.stereoGroundFar = (float)p->GroundFar;
+    GPU3DS.stereoGroundLift = (float)p->GroundLift;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);   // edge is game-global (Jorge's UX)

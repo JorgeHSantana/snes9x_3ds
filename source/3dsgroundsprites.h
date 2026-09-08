@@ -124,6 +124,16 @@ static inline float groundRowShift(int rowW, float nearShift, float farShift)
     return nearShift + (farShift - nearShift) * t;
 }
 
+// the depths a sprite on the ground takes at the nearest row and at the
+// horizon: the plane's own ramp (BG1 depth x the perspective gain at the
+// nearest row, x (1 - k) at the horizon) plus the lift toward the viewer
+static inline void groundLiftDepths(float bg1Depth, float k, float gain, float lift,
+                                    float *nearDepth, float *farDepth)
+{
+    *nearDepth = bg1Depth * gain + lift;
+    *farDepth = bg1Depth * gain * (1.0f - k) + lift;
+}
+
 // the game's "not on ground" marks (.3d GROUNDX=)
 #define GROUND_EXCEPTIONS_MAX 32
 

@@ -224,6 +224,8 @@ With "Sprites Follow the Ground" on (3D Stereo tab > Mode 7):
   not offset for them.
 * Ghost/HUD sprites drawn inside the plane's rows take the ground depth
   until unticked (the mark is saved in the game's `.3d`).
+* The sprite list lives inline under Ground Lift (not in a sub-dialog):
+  the live spotlight needs the tab's idle preview, which dialogs do not run.
 
 ## Super Road Blaster (MSU-1): brief flicker during FMV gameplay
 

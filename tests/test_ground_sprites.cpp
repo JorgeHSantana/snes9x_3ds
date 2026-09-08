@@ -130,3 +130,22 @@ TEST_CASE("ground: sprite top follows the vertical wrap") {
     CHECK(groundSpriteTop(100) == 100);
     CHECK(groundSpriteTop(250) == -6);
 }
+
+TEST_CASE("ground: lift depths ride the plane's own ramp plus the lift") {
+    float n, f;
+    groundLiftDepths(-4.0f, 1.0f, 1.0f, 1.0f, &n, &f);   // BG1 -4, Perspective 4, lift 1
+    CHECK(n == doctest::Approx(-3.0f));                   // nearest row: -4 + 1
+    CHECK(f == doctest::Approx(1.0f));                    // horizon on the screen plane + 1
+    groundLiftDepths(-4.0f, 0.0f, 1.0f, 0.0f, &n, &f);   // flat plane, no lift: sprites = plane
+    CHECK(n == doctest::Approx(-4.0f));
+    CHECK(f == doctest::Approx(-4.0f));
+    groundLiftDepths(-6.0f, 1.0f, 2.0f, 2.0f, &n, &f);   // Perspective 8: gain 2 at the nearest row
+    CHECK(n == doctest::Approx(-10.0f));
+    CHECK(f == doctest::Approx(2.0f));
+    // a sprite is never behind the ground under it, whatever the gauges
+    for (int d = -8; d <= 8; d++) {
+        groundLiftDepths((float)d, 1.0f, 1.5f, 1.0f, &n, &f);
+        CHECK(n >= (float)d * 1.5f);
+        CHECK(f >= 0.0f);
+    }
+}

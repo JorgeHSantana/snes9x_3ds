@@ -1054,6 +1054,27 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
                 }
             }
         }
+        // SELECT: the item's help text (issue #75) - the same field a
+        // picker shows above its options, so any gauge, checkbox or
+        // action can carry one without a paragraph under it in the tab
+        if ((keysDown & KEY_SELECT) && !isDialog &&
+            !currentTab->MenuItems[currentTab->SelectedItemIndex].PickerDescription.empty())
+        {
+            const SMenuItem &help = currentTab->MenuItems[currentTab->SelectedItemIndex];
+            const char *title = help.Text.c_str();
+            while (*title == ' ') title++;
+            std::vector<SMenuItem> okOnly;
+            okOnly.emplace_back(nullptr, MenuItemType::Action, "OK", std::string(), 0);
+            menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title,
+                help.PickerDescription, Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo,
+                okOnly, -1, true, -1);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+            secondScreenDirty = true;
+            hidScanInput();
+            lastKeysHeld = hidKeysHeld();
+            continue;
+        }
+
         if (keysDown & KEY_A)
         {
             if (currentTab->MenuItems[currentTab->SelectedItemIndex].Type == MenuItemType::Action)

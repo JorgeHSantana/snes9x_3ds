@@ -541,8 +541,7 @@ bool gpu3dsInitialize()
     GPU3DS.mode7PerspSet[0] = GPU3DS.mode7PerspSet[2] = GPU3DS.mode7PerspSet[3] = 0.0f;
     GPU3DS.mode7PerspSet[1] = 1.0f;
     GPU3DS.stereoGroundOn = 0.0f;
-    GPU3DS.stereoGroundNear = 0.0f;
-    GPU3DS.stereoGroundFar = -4.0f;
+    GPU3DS.stereoGroundLift = 1.0f;
     GPU3DS.groundApplied = -1.0f;
     GPU3DS.groundSet[0] = GPU3DS.groundSet[1] = GPU3DS.groundSet[3] = 0.0f;
     GPU3DS.groundSet[2] = -1.0f;

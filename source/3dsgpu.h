@@ -362,8 +362,7 @@ typedef struct
     // profile switch + the near/far gauges (depth units), the uniform
     // mirror for the resync, and the per-slot table (ground flag, dim)
     float                       stereoGroundOn;
-    float                       stereoGroundNear;
-    float                       stereoGroundFar;
+    float                       stereoGroundLift;
     float                       groundSet[4];
     float                       groundApplied;
     float                       groundTab[32][2];
