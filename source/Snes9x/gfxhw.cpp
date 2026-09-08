@@ -887,7 +887,7 @@ static void groundPrepareSprites(void)
         if (below >= 0 && feetS[below] >= 0) groundY = box[feetS[below]].y1;
         req[nReq].x = (int16_t)((cbox[r].x0 + cbox[r].x1) / 2);
         req[nReq].y = (int16_t)groundY;
-        req[nReq].target = groundRowAt(&s_groundPrev, groundY);
+        req[nReq].target = groundRowNear(&s_groundPrev, groundY, 16);
         reqRoot[nReq] = r;
         nReq++;
     }

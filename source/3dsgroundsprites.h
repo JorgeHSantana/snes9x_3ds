@@ -72,6 +72,19 @@ static inline uint8_t groundRowAt(const GroundFrame *f, int y)
     return f->rowW[y];
 }
 
+// the ground under a sprite whose feet fell just below the plane's last
+// row - the band between the track and the map in Mario Kart, where a
+// spinning or drifting kart's box dips (Jorge's log: "127,110:0" while
+// the kart normally stands on row 101): the nearest plane row above,
+// within `reach` rows, is the ground there
+static inline uint8_t groundRowNear(const GroundFrame *f, int y, int reach)
+{
+    uint8_t r = groundRowAt(f, y);
+    for (int k = 1; r == 0 && k <= reach; k++)
+        r = groundRowAt(f, y - k);
+    return r;
+}
+
 static inline bool groundRowsPresent(const GroundFrame *f)
 {
     for (int y = 0; y < GROUND_ROWS; y++)
@@ -196,6 +209,10 @@ static inline void groundTrackAssign(GroundTrack *t, GroundTrackReq *req, int n)
     for (int i = 0; i < n; i++) { reqDone[i] = false; req[i].rowW = req[i].target; }
     // greedy by distance: pick the globally closest unclaimed pair until
     // none is within reach (pairs <= 32 x 32, tiny)
+    // cost = distance^2 + (row difference / 4)^2: a memory whose row is far
+    // from the character's own is a worse match than one a few px away
+    // (a passing item left its memory on the kart's spot and the kart
+    // glided from the item's row - Jorge's log at 13.8 s)
     const int reach2 = GROUND_TRACK_REACH * GROUND_TRACK_REACH;
     for (;;) {
         int bi = -1, bj = -1, bd = reach2 + 1;
@@ -204,7 +221,8 @@ static inline void groundTrackAssign(GroundTrack *t, GroundTrackReq *req, int n)
             for (int j = 0; j < t->count; j++) {
                 if (t->claimed[j]) continue;
                 int dx = req[i].x - t->x[j], dy = req[i].y - t->y[j];
-                int d = dx * dx + dy * dy;
+                int dr = ((int)req[i].target - (int)t->rowW[j]) / 4;
+                int d = dx * dx + dy * dy + dr * dr;
                 if (d < bd) { bd = d; bi = i; bj = j; }
             }
         }

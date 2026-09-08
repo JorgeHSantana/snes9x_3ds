@@ -70,7 +70,13 @@ Notable changes to this project will be documented in this file.
   glide never happened), a character's feet are its largest sprite (the
   kart's body, not a puff of dust joining it a few px lower - dirt, drift
   and wall hits all spawn dust), and only a flat sprite below counts as a
-  shadow. Ground Lift defaults to 0.
+  shadow. The console log then showed the real snap: a spinning or
+  drifting kart's box dips into the band between the track and the map,
+  where the plane has no rows, and fell off the ground for those frames -
+  the nearest plane row above (up to 16 rows) is the ground there; and a
+  passing item's memory on the kart's spot made the kart glide from the
+  item's row - matching now weighs the row difference too. Ground Lift
+  defaults to 0.
 * Mode 7 scanlines move as one piece in 3D: the right-hand end of each
   row now carries the row's depth with the marker, so both ends pick the
   same stereo tier (before, a BG whose two priorities sat at different

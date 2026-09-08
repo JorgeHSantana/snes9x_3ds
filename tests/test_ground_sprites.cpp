@@ -215,3 +215,27 @@ TEST_CASE("ground: drift smoke next to the kart cannot steal the kart's memory")
     CHECK(req[0].rowW == 120);      // the smoke is a new character: at once
     CHECK(t.count == 2);
 }
+
+TEST_CASE("ground: feet just below the plane's last row stand on that row") {
+    GroundFrame f; groundFrameReset(&f);
+    for (int y = 24; y <= 104; y++) groundRowSet(&f, y, 8 + (y - 24) * 3);   // a race view, rows 24..104
+    CHECK(groundRowNear(&f, 101, 16) == groundRowAt(&f, 101));   // on the plane: unchanged
+    CHECK(groundRowNear(&f, 110, 16) == groundRowAt(&f, 104));   // the band below: the last row
+    CHECK(groundRowNear(&f, 121, 16) == 0);                      // too far below: off the plane
+    CHECK(groundRowNear(&f, 10, 16) == 0);                       // above the horizon: off
+}
+
+TEST_CASE("ground: a memory on the kart's spot with a far-off row loses to the kart's own") {
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    GroundTrackReq f1[2] = { { 127, 101, 239, 0 }, { 127, 60, 120, 0 } };   // kart + an item above it
+    groundTrackAssign(&t, f1, 2);
+    groundTrackFrameStart(&t);
+    // the item drops onto the kart's spot for a frame, then vanishes
+    GroundTrackReq f2[2] = { { 127, 101, 239, 0 }, { 127, 104, 120, 0 } };
+    groundTrackAssign(&t, f2, 2);
+    CHECK(f2[0].rowW == 239);        // the kart kept its own memory
+    groundTrackFrameStart(&t);
+    GroundTrackReq f3[1] = { { 127, 101, 239, 0 } };
+    groundTrackAssign(&t, f3, 1);
+    CHECK(f3[0].rowW == 239);        // and still: no glide from the item's 120
+}
