@@ -162,14 +162,37 @@ TEST_CASE("ground: the tracker follows a character by position across animation 
     GroundTrack t; memset(&t, 0, sizeof(t));
     CHECK(groundTrackRow(&t, 100, 180, 200) == 200);
     groundTrackFrameStart(&t);
-    CHECK(groundTrackRow(&t, 102, 176, 240) == 204);           // moved 4 px, hopped: glides
+    CHECK(groundTrackRow(&t, 102, 176, 240) == 200);           // first frame confirms the new direction
     groundTrackFrameStart(&t);
-    CHECK(groundTrackRow(&t, 104, 172, 240) == 208);
+    CHECK(groundTrackRow(&t, 104, 172, 240) == 204);           // sustained movement: glide begins
     // another character 100 px away is not this one, even in the same frame
     CHECK(groundTrackRow(&t, 204, 172, 100) == 100);
     // unseen for two frames: forgotten, the next sight starts fresh
     groundTrackFrameStart(&t); groundTrackFrameStart(&t); groundTrackFrameStart(&t);
     CHECK(groundTrackRow(&t, 104, 172, 100) == 100);
+}
+
+TEST_CASE("ground: a one-frame sprite-size change cannot wobble depth") {
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    CHECK(groundTrackRow(&t, 127, 101, 239) == 239);
+    for (int frame = 0; frame < 12; frame++) {
+        groundTrackFrameStart(&t);
+        // A 16/32px animation alternates the inferred foot and therefore the
+        // plane row. Neither direction survives for two rendered frames.
+        int tall = (frame & 1) == 0;
+        CHECK(groundTrackRow(&t, 127, tall ? 117 : 101, tall ? 200 : 239) == 239);
+    }
+}
+
+TEST_CASE("ground: sustained motion survives size-change filtering") {
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    CHECK(groundTrackRow(&t, 127, 101, 239) == 239);
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, 127, 105, 220) == 239); // confirmation frame
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, 127, 109, 210) == 235); // same direction: follows
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, 127, 113, 200) == 231);
 }
 
 TEST_CASE("ground: a cluster in the air adopts the cluster right below it (its shadow)") {
@@ -211,7 +234,7 @@ TEST_CASE("ground: drift smoke next to the kart cannot steal the kart's memory")
     // the kart hopped to a farther row and must glide, not restart
     GroundTrackReq req[2] = { { 108, 184, 120, 0 }, { 100, 180, 240, 0 } };
     groundTrackAssign(&t, req, 2);
-    CHECK(req[1].rowW == 204);      // the kart kept its memory: 200 -> 204
+    CHECK(req[1].rowW == 200);      // the kart kept its memory; direction awaits confirmation
     CHECK(req[0].rowW == 120);      // the smoke is a new character: at once
     CHECK(t.count == 2);
 }

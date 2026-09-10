@@ -157,6 +157,7 @@ static inline void groundLiftDepths(float bg1Depth, float k, float gain, float l
 //     hit changes the animation frame (another sheet row) and would have
 //     restarted the glide as a "new" character.
 #define GROUND_SLEW_STEP 4
+#define GROUND_REVERSE_CONFIRM_FRAMES 2
 
 static inline int groundSlew(int prev, int target, int maxStep)
 {
@@ -177,6 +178,8 @@ struct GroundTrack
 {
     int16_t  x[GROUND_TRACK_MAX], y[GROUND_TRACK_MAX];   // feet: bottom-centre
     uint8_t  rowW[GROUND_TRACK_MAX];
+    int8_t   pendingDir[GROUND_TRACK_MAX]; // unconfirmed target direction (-1/0/+1)
+    uint8_t  pendingFrames[GROUND_TRACK_MAX];
     uint8_t  age[GROUND_TRACK_MAX];      // frames since last seen
     uint8_t  claimed[GROUND_TRACK_MAX];  // matched this frame already
     int      count;
@@ -188,6 +191,7 @@ static inline void groundTrackFrameStart(GroundTrack *t)
     for (int i = 0; i < t->count; i++) {
         if (t->age[i] >= 2) continue;             // not seen for 2 frames: forget
         t->x[w] = t->x[i]; t->y[w] = t->y[i]; t->rowW[w] = t->rowW[i];
+        t->pendingDir[w] = t->pendingDir[i]; t->pendingFrames[w] = t->pendingFrames[i];
         t->age[w] = (uint8_t)(t->age[i] + 1); t->claimed[w] = 0;
         w++;
     }
@@ -201,6 +205,38 @@ static inline void groundTrackFrameStart(GroundTrack *t)
 // kart's feet and, matched one by one in sprite order, stole its memory
 // (the kart then restarted from scratch - the snap Jorge still saw).
 struct GroundTrackReq { int16_t x, y; uint8_t target; uint8_t rowW; };
+
+// Sprite animations can change an OAM entry's size for one frame. Because the
+// OAM position is its top-left corner, that moves the inferred bottom edge and
+// makes the ground target alternate even though the character did not move.
+// A plain slew limiter turns that alternating target into a permanent depth
+// wobble. Require a direction change to survive two rendered frames; motion
+// along the road keeps the same direction and then proceeds every frame.
+static inline int groundTrackStableSlew(GroundTrack *t, int i, int target)
+{
+    int current = t->rowW[i];
+    if (current <= 0 || target <= 0) {
+        t->pendingDir[i] = 0; t->pendingFrames[i] = 0;
+        return target;
+    }
+    int dir = target > current ? 1 : (target < current ? -1 : 0);
+    if (dir == 0) {
+        t->pendingDir[i] = 0; t->pendingFrames[i] = 0;
+        return current;
+    }
+    if (t->pendingDir[i] != dir) {
+        t->pendingDir[i] = (int8_t)dir;
+        t->pendingFrames[i] = 1;
+        return current;
+    }
+    if (t->pendingFrames[i] < GROUND_REVERSE_CONFIRM_FRAMES)
+        t->pendingFrames[i]++;
+    if (t->pendingFrames[i] < GROUND_REVERSE_CONFIRM_FRAMES)
+        return current;
+    int next = groundSlew(current, target, GROUND_SLEW_STEP);
+    if (next == target) { t->pendingDir[i] = 0; t->pendingFrames[i] = 0; }
+    return next;
+}
 
 static inline void groundTrackAssign(GroundTrack *t, GroundTrackReq *req, int n)
 {
@@ -227,7 +263,7 @@ static inline void groundTrackAssign(GroundTrack *t, GroundTrackReq *req, int n)
             }
         }
         if (bi < 0) break;
-        int r = groundSlew(t->rowW[bj], req[bi].target, GROUND_SLEW_STEP);
+        int r = groundTrackStableSlew(t, bj, req[bi].target);
         t->rowW[bj] = (uint8_t)r; t->x[bj] = req[bi].x; t->y[bj] = req[bi].y;
         t->age[bj] = 0; t->claimed[bj] = 1;
         req[bi].rowW = (uint8_t)r; reqDone[bi] = true;
@@ -237,6 +273,7 @@ static inline void groundTrackAssign(GroundTrack *t, GroundTrackReq *req, int n)
         if (reqDone[i] || t->count >= GROUND_TRACK_MAX) continue;
         int j = t->count++;
         t->x[j] = req[i].x; t->y[j] = req[i].y; t->rowW[j] = req[i].target;
+        t->pendingDir[j] = 0; t->pendingFrames[j] = 0;
         t->age[j] = 0; t->claimed[j] = 1;
     }
 }
@@ -252,7 +289,7 @@ static inline int groundTrackRow(GroundTrack *t, int x, int y, int targetRowW)
         if (d < bestD) { bestD = d; best = i; }
     }
     if (best >= 0) {
-        int r = groundSlew(t->rowW[best], targetRowW, GROUND_SLEW_STEP);
+        int r = groundTrackStableSlew(t, best, targetRowW);
         t->rowW[best] = (uint8_t)r; t->x[best] = (int16_t)x; t->y[best] = (int16_t)y;
         t->age[best] = 0; t->claimed[best] = 1;
         return r;
@@ -260,6 +297,7 @@ static inline int groundTrackRow(GroundTrack *t, int x, int y, int targetRowW)
     if (t->count < GROUND_TRACK_MAX) {
         int i = t->count++;
         t->x[i] = (int16_t)x; t->y[i] = (int16_t)y; t->rowW[i] = (uint8_t)targetRowW;
+        t->pendingDir[i] = 0; t->pendingFrames[i] = 0;
         t->age[i] = 0; t->claimed[i] = 1;
     }
     return targetRowW;

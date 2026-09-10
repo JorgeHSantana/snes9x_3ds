@@ -55,6 +55,11 @@ Notable changes to this project will be documented in this file.
   plane (`M7FX` in the .3d).
 
 ### Fixes
+* Mode 7 ground sprites no longer wobble when an animation alternates the
+  hardware sprite size: a one-frame size change moves the inferred feet and
+  used to make the depth slew reverse every frame. Direction changes now need
+  two consecutive rendered frames of confirmation; sustained motion still
+  follows the plane normally.
 * Sprites on the Mode 7 ground glide to a new row instead of snapping:
   a hop, a drift or a wall hit moved the kart's depth at once (Jorge's
   reports). A character is now tracked by its screen position (an
