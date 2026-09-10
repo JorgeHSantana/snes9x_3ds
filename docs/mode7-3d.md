@@ -42,17 +42,14 @@ feet. Pieces:
 * **Row table**: `gfxhw` records each plane row's w at the Mode 7 flush;
   sprites read the table of the last *rendered* frame (a skipped frame
   draws no plane and must not empty it).
-* **Characters**: hardware sprites whose boxes touch (2 px) form one
-  character (union-find). Its feet are its **largest** sprite (the kart's
-  body - a puff of dust joining a few px lower must not move the feet).
-  A character right above a **flat** cluster (a shadow, <= 8 px tall)
-  takes the shadow's row: the kart in the air stays on the ground.
+* **Physical OAM sprites**: every entry follows the plane row under its
+  own bottom edge. Nearby boxes are not grouped, so animation, smoke,
+  shadows and sparks cannot change group membership and move their depth.
 * **Feet just below the plane** (the band between the track and the map
   in Mario Kart, where a spinning kart's box dips) stand on the nearest
   plane row above, up to 16 rows.
-* **Memory across frames**: characters are tracked by feet position
-  (not by tiles - an animation change would restart them), memories are
-  matched closest-first with the row difference weighed in, and the row
+* **Memory across frames**: each of the 128 physical OAM slots owns its
+  memory; no screen-position matching can join or swap nearby pieces. The row
   a character uses glides toward the row it stands on by at most 4/255
   per frame. Memories age once per rendered frame; the sprite data is
   computed once per frame (S9xDrawOBJSHardware runs once per screen
@@ -102,8 +99,8 @@ EXTBG** (measured: the branch never runs), so it gains nothing here.
   impossible configurations and made one gauge do the job.
 * **Sprite list inline, not a sub-dialog**: the live spotlight needs the
   tab's idle preview, which dialogs do not run.
-* **Character identity by position**: signatures (sheet row + palette)
-  change with the animation; positions move a few px per frame.
+* **Sprite identity by OAM slot**: signatures (sheet row + palette) remain
+  editor labels only and do not determine temporal depth.
 * **Sprites on the ground draw sharp**: blur ghosts are not offset for
   them (v1 limit, see open items).
 
@@ -113,7 +110,7 @@ EXTBG** (measured: the branch never runs), so it gains nothing here.
   `tests/test_blur_auto.cpp`): the encodings, the slew, the tracker
   (including the scenarios read off the console log: dust stealing a
   memory, an item's memory on the kart's spot, feet in the band below
-  the plane), clustering, shadow adoption, the lift depths, the EXTBG
+  the plane), the lift depths, the EXTBG
   predicate, the right-vertex marker with every alpha value.
 * **Azahar harness** (`tools/azahar-validate/`, scenes `smk-race-*` from
   Jorge's race state): side-by-side disparity per row band on a

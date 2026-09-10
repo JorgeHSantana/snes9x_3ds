@@ -734,7 +734,7 @@ static int s_layerUseBg = 0;
 // order; one frame of latency is invisible) and this frame's signature
 // table, latched at frame end for the GPU draw and the editor
 static GroundFrame s_groundAcc, s_groundPrev, s_groundLast;
-static GroundTrack s_groundTrack;
+static GroundOamTrack s_groundTrack;
 static bool s_groundPrepared = false;   // sprite ground data computed once per rendered frame
 struct M7QueuedLine { s16 x0, y, x1; float tx0, ty0, tx1, ty1; };
 static M7QueuedLine s_m7Queue[512];
@@ -805,7 +805,7 @@ void S9xLayerUseFrameEnd()
 {
     layerUseFrameEnd(&s_layerUse); s_m7DrawnLast = s_m7DrawnAcc;
     s_groundLast = s_groundAcc;
-    groundTrackFrameStart(&s_groundTrack);   // memories age per rendered frame
+    groundOamFrameStart(&s_groundTrack);   // per-slot memories age per rendered frame
 }
 bool S9xMode7DrawnLastFrame() { return s_m7DrawnLast; }
 bool     S9xGroundRowsLastFrame() { return groundRowsPresent(&s_groundPrev); }
@@ -818,18 +818,17 @@ void     S9xGroundSigPos(int slot, int *x, int *y)
     *y = ok ? s_groundLast.sigY[slot] : 0;
 }
 
-// every sprite's vertex w for this frame, computed once before the
-// sprites are emitted: sprites that touch form one character and share
-// the lowest member's row (the feet) and one signature slot - the feet
-// sprite's, or a member marked "not on ground" (so the whole character
-// stays off the ground and the editor's spotlight lights all of it)
+// Every physical OAM sprite's vertex w for this frame, computed once before
+// sprites are emitted. Nearby pieces are deliberately not joined: automatic
+// spatial groups changed membership as animation boxes moved and made depth
+// (and apparent sprite size) wobble.
 static s16 s_spriteW[128];
 
 static void groundPrepareSprites(void)
 {
     // S9xDrawOBJSHardware runs once per screen SEGMENT (split screen,
     // HDMA windows), each time over ALL sprites: computed once per frame,
-    // or every later segment re-registered the same characters as new
+    // or every later segment re-registered the same OAM pieces as new
     // memories and the glide never happened (the probe showed
     // target == used on every line)
     if (s_groundPrepared) return;
@@ -838,62 +837,27 @@ static void groundPrepareSprites(void)
         memset(s_spriteW, 0, sizeof(s_spriteW));
         return;
     }
-    GroundBox box[128];
-    bool vis[128];
+    memset(s_spriteW, 0, sizeof(s_spriteW));
+
+    int grounded = 0;
     for (int S = 0; S < 128; S++) {
         int x = PPU.OBJ[S].HPos;
         if (x == -256) x = 256;
         int top = groundSpriteTop(PPU.OBJ[S].VPos);
         int w = GFX.OBJWidths[S], h = GFX.OBJHeights[S];
-        box[S].x0 = (int16_t)x; box[S].x1 = (int16_t)(x + w - 1);
-        box[S].y0 = (int16_t)top; box[S].y1 = (int16_t)(top + h - 1);
-        vis[S] = x + w > 0 && x < 256 && top + h > 0 && top < 240 && w > 0 && h > 0;
+        if (w <= 0 || h <= 0 || x + w <= 0 || x >= 256 || top + h <= 0 || top >= 240)
+            continue;
+        int groundY = groundSpriteBottom(PPU.OBJ[S].VPos, h);
+        uint8_t target = groundRowNear(&s_groundPrev, groundY, 16);
+        if (!target) continue;
+        int rowW = groundOamRow(&s_groundTrack, S, target);
+        uint32_t sig = groundSigMake(PPU.OBJ[S].Name, PPU.OBJ[S].Palette);
+        int slot = groundSlotFor(&s_groundAcc, sig, x, top < 0 ? 0 : top);
+        s_spriteW[S] = groundVertexW(rowW, slot);
+        grounded++;
     }
-    uint8_t cluster[128];
-    groundClusterBoxes(box, vis, 128, 2, cluster);
-
-    // per cluster root: the feet (max bottom), a marked member if any,
-    // and the cluster's own box (for the shadow rule)
-    int feetS[128], excS[128];
-    GroundBox cbox[128];
-    bool cvalid[128];
-    for (int S = 0; S < 128; S++) { feetS[S] = -1; excS[S] = -1; cvalid[S] = false; }
-    for (int S = 0; S < 128; S++) {
-        if (!vis[S]) continue;
-        int r = cluster[S];
-        if (feetS[r] < 0 || groundFeetBetter(&box[S], &box[feetS[r]])) feetS[r] = S;
-        if (!cvalid[r]) { cbox[r] = box[S]; cvalid[r] = true; }
-        else {
-            if (box[S].x0 < cbox[r].x0) cbox[r].x0 = box[S].x0;
-            if (box[S].y0 < cbox[r].y0) cbox[r].y0 = box[S].y0;
-            if (box[S].x1 > cbox[r].x1) cbox[r].x1 = box[S].x1;
-            if (box[S].y1 > cbox[r].y1) cbox[r].y1 = box[S].y1;
-        }
-        if (excS[r] < 0 && groundIsException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount,
-                                             groundSigMake(PPU.OBJ[S].Name, PPU.OBJ[S].Palette)))
-            excS[r] = S;
-    }
-    // every character's request for this frame, then one global match
-    // against the memories (closest pairs first) so the smoke of a drift
-    // or the sparks of a hit cannot steal the kart's memory
-    GroundTrackReq req[GROUND_TRACK_MAX];
-    int reqRoot[GROUND_TRACK_MAX];
-    int nReq = 0;
-    for (int r = 0; r < 128 && nReq < GROUND_TRACK_MAX; r++) {
-        if (feetS[r] < 0) continue;
-        // in the air above its shadow: the shadow's row is the ground
-        int groundY = box[feetS[r]].y1;
-        int below = groundShadowBelow(cbox, cvalid, 128, r, 24);
-        if (below >= 0 && feetS[below] >= 0) groundY = box[feetS[below]].y1;
-        req[nReq].x = (int16_t)((cbox[r].x0 + cbox[r].x1) / 2);
-        req[nReq].y = (int16_t)groundY;
-        req[nReq].target = groundRowNear(&s_groundPrev, groundY, 16);
-        reqRoot[nReq] = r;
-        nReq++;
-    }
-    groundTrackAssign(&s_groundTrack, req, nReq);
     // field probe: sdmc:/3ds/snes9x_3ds/groundprobe.txt present -> every 4th
-    // drawn frame logs the lowest character (the player's kart in a race)
+    // drawn frame logs physical OAM sprites standing on the plane
     {
         static int s_probe = -1;
         static int s_probeFrames = 0;
@@ -902,25 +866,11 @@ static void groundPrepareSprites(void)
             s_probe = pf ? 1 : 0;
             if (pf) fclose(pf);
         }
-        if (s_probe == 1 && (++s_probeFrames & 7) == 0 && nReq > 0) {
-            char line[200]; int n = 0;
-            n += snprintf(line + n, sizeof(line) - n, "[groundprobe] seg=%d-%d mem=%d |", (int)GFX.StartY, (int)GFX.EndY, s_groundTrack.count);
-            for (int i = 0; i < nReq && n < (int)sizeof(line) - 24; i++)
-                n += snprintf(line + n, sizeof(line) - n, " %d,%d:%d>%d", req[i].x, req[i].y, req[i].target, req[i].rowW);
-            log3dsWrite("%s", line);
+        if (s_probe == 1 && (++s_probeFrames & 7) == 0 && grounded > 0) {
+            log3dsWrite("[groundprobe] seg=%d-%d grounded=%d",
+                        (int)GFX.StartY, (int)GFX.EndY, grounded);
         }
     }
-    s16 rootW[128];
-    for (int r = 0; r < 128; r++) rootW[r] = 0;
-    for (int i = 0; i < nReq; i++) {
-        int r = reqRoot[i];
-        int lead = excS[r] >= 0 ? excS[r] : feetS[r];
-        uint32_t leadSig = groundSigMake(PPU.OBJ[lead].Name, PPU.OBJ[lead].Palette);
-        int slot = groundSlotFor(&s_groundAcc, leadSig, box[lead].x0, box[lead].y0 < 0 ? 0 : box[lead].y0);
-        rootW[r] = groundVertexW(req[i].rowW, slot);
-    }
-    for (int S = 0; S < 128; S++)
-        s_spriteW[S] = vis[S] ? rootW[cluster[S]] : 0;
 }
 
 static inline s16 groundSpriteW(int S)

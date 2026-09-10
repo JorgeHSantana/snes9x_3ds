@@ -1949,12 +1949,12 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 stereoHelp(items, "Fade, haze and blur grow towards the horizon on the\nMode 7 plane instead of covering it evenly.\nA top-down map stays flat.");
                 AddMenuCheckbox(items, "  Sprites Follow the Ground"_s, *stereoEditField(8) != 0,
                     []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(8), v )) { s_stereoPreviewDirty = true; menu3dsMarkTabDirty(TAB_3D); } });
-                stereoHelp(items, "A sprite standing on the plane takes the depth of the\nground under its feet - a kart down the track sits far,\na box beside you sits near. Hardware sprites that touch\ncount as one character. Untick a sprite in the list below\nthat is not on the ground (a flying enemy, a HUD item);\nsaved for this game.");
+                stereoHelp(items, "A hardware sprite standing on the plane takes the depth\nof the ground under its own bottom edge. Nearby sprites\nare not joined automatically, preventing groups from\nchanging during animation. Untick a sprite below if it is\nnot on the ground (a flying enemy or HUD item); saved for\nthis game.");
                 if (*stereoEditField(8) != 0) {
                     AddMenuGauge(items, "  Ground Lift"_s, 0, 3, *stereoEditField(9),
                         []( int val ) { if (CheckAndUpdate( *stereoEditField(9), val )) s_stereoPreviewDirty = true; }, true);
                     stereoHelp(items, "How much a sprite floats above the ground. 0 = glued\nto the track, at the exact depth of the ground under it.\n1..3 = that many levels in front, like an object resting\non the ground instead of painted on it.");
-                    // sprites on the paused screen: one row per character,
+                    // sprites on the paused screen: one row per signature,
                     // spotlit live under the cursor; unticked = not on ground
                     s_stereoGroundFirst = (int)items.size();
                     int sigCount = settings3DS.isRomLoaded ? S9xGroundSigCount() : 1;

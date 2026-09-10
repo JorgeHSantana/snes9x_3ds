@@ -151,12 +151,11 @@ Lift toward the viewer (`groundLiftDepths`), so a sprite never sinks
 behind the ground under it. Profile: `GSPR` (switch), `GLIFT` (0..3);
 per game: `GROUNDX=` signatures marked "not on ground" in the editor
 (Lakitu, a HUD item), which the Mode 7 block lists for the paused screen
-with a live spotlight per sprite. A character is several hardware
-sprites with different bottom rows; `groundPrepareSprites` clusters the
-visible boxes that touch (union-find, 2 px tolerance) once per frame and
-every member takes the cluster's lowest row and one slot - the feet
-sprite's, or a marked member's, so a mark or a spotlight covers the whole
-character.
+with a live spotlight per sprite. `groundPrepareSprites` treats every
+physical OAM entry independently: its own bottom edge selects the plane
+row, and nearby boxes are never joined automatically. Temporal memory is
+kept by the physical OAM slot, so entries are neither matched nor merged
+by screen position.
 
 ## Final composition
 
