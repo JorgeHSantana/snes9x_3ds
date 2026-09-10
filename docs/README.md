@@ -13,6 +13,7 @@ Generated 2026-08-08 from source analysis of the codebase at version **v1.61** (
 | [Platform Layer](platform-layer.md) | `3dsmain`, `3dsimpl`, `3dsgpu`, input, files, config, and the other `3ds*` modules |
 | [Emulation Core](emulation-core.md) | Snes9x 1.43 provenance, 65c816 CPU, APU/SPC700, PPU, memory map, DMA/HDMA |
 | [Rendering Pipeline](rendering.md) | GPU-accelerated PPU: tile cache, shaders, layer batching, Mode 7, composition |
+| [Mode 7 in 3D](mode7-3d.md) | The Mode 7 work in full: perspective, sprites on the ground, editor, proofs, decisions, open items |
 | [Audio and Timing](audio-and-timing.md) | NDSP pipeline, mixing thread, LCD refresh retuning, frame pacing |
 | [Settings and Storage](settings-and-storage.md) | Global vs per-game settings, config file format, SD card layout |
 | [Save States and Cheats](saves-and-cheats.md) | Savestate format, SRAM autosave, screenshots, cheat formats and engine |
