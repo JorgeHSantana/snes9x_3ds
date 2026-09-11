@@ -7,7 +7,6 @@
 #include "3dsimpl.h"
 #include "3dsimpl_gpu.h"
 #include "3dsmode7persp.h"
-#include "3dsgroundsprites.h"
 #include "3dslog.h"
 
 SGPU3DSExtended GPU3DSExt;
@@ -375,58 +374,6 @@ static void gpu3dsSetGhostAlpha(float a)
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
 }
 
-// sprites-on-ground (issue #76): the editor's sprite spotlight (a slot of
-// the last frame's signature table, -1 = none). The frame tables live in
-// gfxhw (Snes9x/gfxhw.h).
-bool     S9xGroundRowsLastFrame();
-int      S9xGroundSigCount();
-uint32_t S9xGroundSig(int slot);
-static int s_groundHighlightSlot = -1;
-
-void gpu3dsSetGroundHighlight(int slot)
-{
-    s_groundHighlightSlot = slot;
-}
-
-static void gpu3dsArmGround(LAYER_ID id)
-{
-    bool armed = id == LAYER_OBJ && GPU3DS.stereoGroundOn > 0.0f &&
-        GPU3DS.stereoEyeIOD != 0.0f && S9xGroundRowsLastFrame();
-    if (!armed) {
-        gpu3dsSetGround(0.0f, 0.0f, false);
-        return;
-    }
-    // interlocked with the plane (Jorge): a sprite's row takes the plane's
-    // own depth there - BG1 x gain at the nearest row, BG1 x gain x (1-k)
-    // at the horizon, the same ramp the scanlines use - plus the lift,
-    // so the sprite always sits just in front of the ground under it
-    float m7k, m7gain;
-    mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
-    float nearD, farD;
-    groundLiftDepths(GPU3DS.stereoLayerDepth[0], m7k, m7gain, GPU3DS.stereoGroundLift, &nearD, &farD);
-    float nearS = GPU3DS.stereoEyeIOD * nearD * STEREO_PARALLAX_SCALE;
-    float farS = GPU3DS.stereoEyeIOD * farD * STEREO_PARALLAX_SCALE;
-    if (settings3DS.StereoShiftMode == 0) { nearS = roundf(nearS); farS = roundf(farS); }
-    float tab[32][2];
-    int n = S9xGroundSigCount();
-    for (int i = 0; i < 32; i++) {
-        bool onGround = true;
-        if (i > 0 && i < n)
-            onGround = !groundIsException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount, S9xGroundSig(i));
-        tab[i][0] = onGround ? 1.0f : 0.0f;
-        tab[i][1] = (s_groundHighlightSlot < 0 || s_groundHighlightSlot == i) ? 1.0f : 0.0f;
-    }
-    gpu3dsSetGroundTable(tab);
-    gpu3dsFlushGroundTable();
-    gpu3dsSetGround(nearS, farS - nearS, true);
-    // field/harness proof that the path armed (once per boot)
-    static bool s_logged = false;
-    if (!s_logged) {
-        s_logged = true;
-        log3dsWrite("[ground] armed: near=%.1f far=%.1f sigs=%d", nearS, farS, n - 1);
-    }
-}
-
 // 3D-tab editor preview (issue #61): while >= 0, every layer except
 // this one is dimmed hard so the edited layer reads instantly.
 static int s_previewHighlightLayer = -1;
@@ -679,15 +626,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // draws with 0, which the shader treats as an exact no-op
             bool isMode7Plane = list->sections[from].vboId == VBO_SCENE_MODE7_LINE;
             float m7k = 0.0f, m7gain = 1.0f;
-            if (isMode7Plane)
+            if (isMode7Plane && GPU3DS.stereoMode7DepthMode != 0)
                 mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
             gpu3dsSetMode7Persp(m7k, m7gain, 0.0f, 0.0f);
-
-            // sprites follow the Mode 7 ground (issue #76): armed only for
-            // the sprite layer, in 3D, with the profile switch on and a
-            // plane drawn last frame; the slot table carries the game's
-            // "not on ground" marks and the editor's sprite spotlight
-            gpu3dsArmGround(id);
 
             GPU3DS.currentRenderState.depthTest = id < LAYER_OBJ ? SGPU_STATE_ENABLED : SGPU_STATE_DISABLED;
 
@@ -948,7 +889,6 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
     gpu3dsSetStereoParallax(0.0f);
     gpu3dsSetStereoPrioDim(1.0f, 1.0f);
-    gpu3dsSetGround(0.0f, 0.0f, false);
     gpu3dsResetStereoAtmosphere();   // the composites must not inherit it
 }
 
@@ -1035,6 +975,7 @@ void gpu3dsPrepareSnesScreenForNextFrame() {
 	gpu3dsPrepareListForNextFrame(&GPU3DS.vertices[VBO_SCENE_TILE], true);
 	gpu3dsPrepareListForNextFrame(&GPU3DS.vertices[VBO_SCENE_OBJ], true);
 	gpu3dsPrepareListForNextFrame(&GPU3DS.vertices[VBO_SCENE_MODE7_LINE], true);
+	gpu3dsResetMode7Spans();
 
     if (GPU3DSExt.render2x.dirty) {
         gpu3dsClearTexture(&GPU3DS.textures[SNES_MAIN], 0);
@@ -1050,6 +991,9 @@ void gpu3dsPrepareSnesScreenForNextFrame() {
 }
 
 void gpu3dsDrawSnesScreen() {
+    // Normalized mode needs the complete frame range; Direct already encoded
+    // each queued run, and Layer never enters this pass.
+    gpu3dsApplyMode7LineDepths();
     SLayerList *list = &GPU3DSExt.layerList;
 
     if (!list->verticesTotal || list->hasSkippedSections)

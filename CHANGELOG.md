@@ -4,18 +4,16 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Features
-* **3D Stereo tab decluttered** (issue #75, Jorge): the 33 explanation
-  lines are gone; SELECT on any item opens its help. The Mode 7 block
-  now reads Effects by Distance, Sprites Follow the Ground, Ground Lift,
-  the sprites on screen, Perspective, then the plane's own depth gauge
-  (BG1 Prio 0, moved out of the Depth list; EXTBG games also get their
-  Priority Pixels gauge there). The Tools actions stay as rows.
-* **Ground Lift replaces Ground Near / Far**: a sprite on the Mode 7
-  plane now takes the plane's own depth on its row (BG1 gauge and
-  Perspective) plus a lift of 0..3 toward the viewer, so it can never
-  sink behind the ground under it and moving the plane moves the sprites
-  with it. `.3d` key `GLIFT`; `GNEAR`/`GFAR` from the 2026-09-07 nightly
-  are ignored.
+* **Three Mode 7 depth models** in the rewritten 3D Stereo menu: Layer
+  keeps the plane at one BG priority depth (fastest), Direct derives the
+  scanline ramp from the game's scale, and Normalized maps the complete
+  visible plane across the selected range (rcmz-style). Only the controls
+  relevant to the selected model are shown; saved per profile as `M7MODE`.
+* **Stable composite sprites**: Mode 7 changes only its plane. OBJ tiles
+  stay together in the SNES's four native priority depths, removing the
+  proximity grouping that could split a kart or make its size wobble.
+  The retired ground-tracking path, its per-tile vertex component, 33
+  shader uniforms and its vertex-shader branch were removed.
 * **Blur Quality Auto starts in Light** and turns Full after the run of
   clean seconds proves the game holds its rate (the two eyes fuse one
   ghost each into the same smear Full gives); an Old 3DS that never
@@ -28,17 +26,6 @@ Notable changes to this project will be documented in this file.
   mask - one full-screen fill of the Mode 7 texture less per frame.
   `[m7] extbg: BG2 low pass ...` in the log tells whether it applied.
   Super Mario Kart does not use EXTBG (measured), so it gains nothing here.
-* **Sprites follow the Mode 7 ground** (issue #76, Jorge's idea): with the
-  option on, a sprite standing on the plane takes the depth of the row its
-  feet touch, from Ground Near (bottom row) to Ground Far (horizon) - an
-  opponent down the track sits far, a box beside you sits near. Sprites
-  not on the ground (a flying enemy, a HUD item) keep the Sprites gauges;
-  the Mode 7 block lists the sprites on the paused screen with a live
-  spotlight, and unticking one marks it "not on ground" for this game.
-  Hardware sprites that touch (kart + driver + shadow) count as one
-  character and follow its feet, so a character never splits across
-  depths. 3D Stereo tab > Mode 7; `.3d` keys `GSPR`, `GNEAR`, `GFAR`,
-  `GROUNDX`.
 * **Mode 7 perspective** (issue #62): in 3D, the ground plane of Mode 7
   screens recedes scanline by scanline (each row shifts by its own
   distance) instead of moving as a flat wall. Automatic on Mode 7 rows;

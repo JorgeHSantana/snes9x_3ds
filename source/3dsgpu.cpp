@@ -398,11 +398,6 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP],
             GPU3DS.mode7PerspSet[0], GPU3DS.mode7PerspSet[1],
             -GPU3DS.mode7PerspSet[2], -GPU3DS.mode7PerspSet[3]);
-        // sprites-on-ground uniforms: whatever the last draw set + the table
-        C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GROUND],
-            GPU3DS.groundSet[0], GPU3DS.groundSet[1], GPU3DS.groundSet[2], GPU3DS.groundSet[3]);
-        GPU3DS.groundTabDirty = true;
-        gpu3dsFlushGroundTable();
     }
 
     if (shaderUpdated && state->shader == SPROGRAM_MODE7) {
@@ -536,17 +531,11 @@ bool gpu3dsInitialize()
     // (0 is a real value - it alpha-hides a priority in the 3D editor)
     GPU3DS.stereoPrioDimP0 = 1.0f;
     GPU3DS.stereoMode7Persp = 0.0f;
+    GPU3DS.stereoMode7DepthMode = 0;
     GPU3DS.stereoMode7Fx = 0.0f;
     GPU3DS.mode7PerspApplied = -1.0f;
     GPU3DS.mode7PerspSet[0] = GPU3DS.mode7PerspSet[2] = GPU3DS.mode7PerspSet[3] = 0.0f;
     GPU3DS.mode7PerspSet[1] = 1.0f;
-    GPU3DS.stereoGroundOn = 0.0f;
-    GPU3DS.stereoGroundLift = 0.0f;
-    GPU3DS.groundApplied = -1.0f;
-    GPU3DS.groundSet[0] = GPU3DS.groundSet[1] = GPU3DS.groundSet[3] = 0.0f;
-    GPU3DS.groundSet[2] = -1.0f;
-    for (int i = 0; i < 32; i++) { GPU3DS.groundTab[i][0] = 1.0f; GPU3DS.groundTab[i][1] = 1.0f; }
-    GPU3DS.groundTabDirty = true;
     GPU3DS.stereoPrioDimP1 = 1.0f;
     GPU3DS.stereoPrioDimP2 = 1.0f;
     GPU3DS.stereoPrioDimP3 = 1.0f;
@@ -923,8 +912,6 @@ bool gpu3dsInitializeShaderUniformLocations()
     GPU3DS.shaderULocs[ULOC_STEREO_DIM] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoDim");
     GPU3DS.shaderULocs[ULOC_STEREO_IOD2] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoIOD2");
     GPU3DS.shaderULocs[ULOC_MODE7_PERSP] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "mode7Persp");
-    GPU3DS.shaderULocs[ULOC_GROUND] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "ground");
-    GPU3DS.shaderULocs[ULOC_GROUND_TAB] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "groundTab");
 
 	bool uLocsInvalid = false;
 

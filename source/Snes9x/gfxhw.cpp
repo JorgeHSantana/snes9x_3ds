@@ -728,14 +728,6 @@ static int s_layerUseBg = 0;
 // callers (the plain plane and the repeat-tile0 pass) each flush their own
 // run. s_m7Drawn* latch "a Mode 7 plane drew this frame" for the editor.
 #include "3dsmode7persp.h"
-#include "3dsgroundsprites.h"
-// sprites-on-ground frames (issue #76): the rows the plane drew (sprites
-// read the PREVIOUS frame's - the plane may flush after them in draw
-// order; one frame of latency is invisible) and this frame's signature
-// table, latched at frame end for the GPU draw and the editor
-static GroundFrame s_groundAcc, s_groundPrev, s_groundLast;
-static GroundTrack s_groundTrack;
-static bool s_groundPrepared = false;   // sprite ground data computed once per rendered frame
 struct M7QueuedLine { s16 x0, y, x1; float tx0, ty0, tx1, ty1; };
 static M7QueuedLine s_m7Queue[512];
 static int  s_m7QueueCount = 0;
@@ -752,7 +744,7 @@ static void m7FlushLines(void)
 {
     if (s_m7QueueCount == 0) return;
     float spanRef = 0.0f;
-    for (int i = 0; i < s_m7QueueCount; i++) {
+    if (GPU3DS.stereoMode7DepthMode == 1) for (int i = 0; i < s_m7QueueCount; i++) {
         const M7QueuedLine &q = s_m7Queue[i];
         float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
         float span = sqrtf(dx * dx + dy * dy);
@@ -761,8 +753,10 @@ static void m7FlushLines(void)
     for (int i = 0; i < s_m7QueueCount; i++) {
         const M7QueuedLine &q = s_m7Queue[i];
         float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
-        s16 w = mode7PerspEncode(sqrtf(dx * dx + dy * dy), spanRef);
-        groundRowSet(&s_groundAcc, q.y & 0xFF, w);   // q.y = screen row + depth (a multiple of 256)
+        float span = GPU3DS.stereoMode7DepthMode == 0 ? 0.0f : sqrtf(dx * dx + dy * dy);
+        s16 w = GPU3DS.stereoMode7DepthMode == 1
+            ? mode7PerspEncode(span, spanRef) : MODE7_PERSP_W_ONE;
+        if (GPU3DS.stereoMode7DepthMode == 2) gpu3dsRecordMode7Span(span);
         // the right vertex: the geometry shader's Mode 7 marker + the row's depth
         gpu3dsAddMode7LineVertexes(q.x0, q.y, q.x1, mode7RightVertexY(q.y), w, q.tx0, q.ty0, q.tx1, q.ty1);
     }
@@ -792,145 +786,12 @@ static void m7FlushLines(void)
 void S9xLayerUseFrameStart()
 {
     layerUseFrameStart(&s_layerUse); s_m7DrawnAcc = false;
-    // the plane rows of the last RENDERED frame: a skipped frame draws no
-    // plane, and latching its empty table put every sprite off the ground
-    // for one frame - the depth snapped on every skip (Old 3DS Mario
-    // Kart, Jorge's "ficou bom não" after three fixes on the wrong path)
-    if (groundRowsPresent(&s_groundAcc))
-        s_groundPrev = s_groundAcc;
-    groundFrameStart(&s_groundAcc);
-    s_groundPrepared = false;
 }
 void S9xLayerUseFrameEnd()
 {
     layerUseFrameEnd(&s_layerUse); s_m7DrawnLast = s_m7DrawnAcc;
-    s_groundLast = s_groundAcc;
-    groundTrackFrameStart(&s_groundTrack);   // memories age per rendered frame
 }
 bool S9xMode7DrawnLastFrame() { return s_m7DrawnLast; }
-bool     S9xGroundRowsLastFrame() { return groundRowsPresent(&s_groundPrev); }
-int      S9xGroundSigCount()      { return s_groundLast.sigCount; }
-uint32_t S9xGroundSig(int slot)   { return (slot > 0 && slot < s_groundLast.sigCount) ? s_groundLast.sig[slot] : 0; }
-void     S9xGroundSigPos(int slot, int *x, int *y)
-{
-    bool ok = slot > 0 && slot < s_groundLast.sigCount;
-    *x = ok ? s_groundLast.sigX[slot] : 0;
-    *y = ok ? s_groundLast.sigY[slot] : 0;
-}
-
-// every sprite's vertex w for this frame, computed once before the
-// sprites are emitted: sprites that touch form one character and share
-// the lowest member's row (the feet) and one signature slot - the feet
-// sprite's, or a member marked "not on ground" (so the whole character
-// stays off the ground and the editor's spotlight lights all of it)
-static s16 s_spriteW[128];
-
-static void groundPrepareSprites(void)
-{
-    // S9xDrawOBJSHardware runs once per screen SEGMENT (split screen,
-    // HDMA windows), each time over ALL sprites: computed once per frame,
-    // or every later segment re-registered the same characters as new
-    // memories and the glide never happened (the probe showed
-    // target == used on every line)
-    if (s_groundPrepared) return;
-    s_groundPrepared = true;
-    if (GPU3DS.stereoGroundOn <= 0.0f) {
-        memset(s_spriteW, 0, sizeof(s_spriteW));
-        return;
-    }
-    if (!groundRowsPresent(&s_groundPrev)) {
-        memset(s_spriteW, 0, sizeof(s_spriteW));
-        return;
-    }
-    GroundBox box[128];
-    bool vis[128];
-    for (int S = 0; S < 128; S++) {
-        int x = PPU.OBJ[S].HPos;
-        if (x == -256) x = 256;
-        int top = groundSpriteTop(PPU.OBJ[S].VPos);
-        int w = GFX.OBJWidths[S], h = GFX.OBJHeights[S];
-        box[S].x0 = (int16_t)x; box[S].x1 = (int16_t)(x + w - 1);
-        box[S].y0 = (int16_t)top; box[S].y1 = (int16_t)(top + h - 1);
-        vis[S] = x + w > 0 && x < 256 && top + h > 0 && top < 240 && w > 0 && h > 0;
-    }
-    uint8_t cluster[128];
-    groundClusterBoxes(box, vis, 128, 2, cluster);
-
-    // per cluster root: the feet (max bottom), a marked member if any,
-    // and the cluster's own box (for the shadow rule)
-    int feetS[128], excS[128];
-    GroundBox cbox[128];
-    bool cvalid[128];
-    for (int S = 0; S < 128; S++) { feetS[S] = -1; excS[S] = -1; cvalid[S] = false; }
-    for (int S = 0; S < 128; S++) {
-        if (!vis[S]) continue;
-        int r = cluster[S];
-        if (feetS[r] < 0 || groundFeetBetter(&box[S], &box[feetS[r]])) feetS[r] = S;
-        if (!cvalid[r]) { cbox[r] = box[S]; cvalid[r] = true; }
-        else {
-            if (box[S].x0 < cbox[r].x0) cbox[r].x0 = box[S].x0;
-            if (box[S].y0 < cbox[r].y0) cbox[r].y0 = box[S].y0;
-            if (box[S].x1 > cbox[r].x1) cbox[r].x1 = box[S].x1;
-            if (box[S].y1 > cbox[r].y1) cbox[r].y1 = box[S].y1;
-        }
-        if (excS[r] < 0 && groundIsException(settings3DS.StereoGroundX, settings3DS.StereoGroundXCount,
-                                             groundSigMake(PPU.OBJ[S].Name, PPU.OBJ[S].Palette)))
-            excS[r] = S;
-    }
-    // every character's request for this frame, then one global match
-    // against the memories (closest pairs first) so the smoke of a drift
-    // or the sparks of a hit cannot steal the kart's memory
-    GroundTrackReq req[GROUND_TRACK_MAX];
-    int reqRoot[GROUND_TRACK_MAX];
-    int nReq = 0;
-    for (int r = 0; r < 128 && nReq < GROUND_TRACK_MAX; r++) {
-        if (feetS[r] < 0) continue;
-        // in the air above its shadow: the shadow's row is the ground
-        int groundY = box[feetS[r]].y1;
-        int below = groundShadowBelow(cbox, cvalid, 128, r, 24);
-        if (below >= 0 && feetS[below] >= 0) groundY = box[feetS[below]].y1;
-        req[nReq].x = (int16_t)((cbox[r].x0 + cbox[r].x1) / 2);
-        req[nReq].y = (int16_t)groundY;
-        req[nReq].target = groundRowNear(&s_groundPrev, groundY, 16);
-        reqRoot[nReq] = r;
-        nReq++;
-    }
-    groundTrackAssign(&s_groundTrack, req, nReq);
-    // field probe: sdmc:/3ds/snes9x_3ds/groundprobe.txt present -> every 4th
-    // drawn frame logs the lowest character (the player's kart in a race)
-    {
-        static int s_probe = -1;
-        static int s_probeFrames = 0;
-        if (s_probe < 0) {
-            FILE *pf = fopen("sdmc:/3ds/snes9x_3ds/groundprobe.txt", "r");
-            s_probe = pf ? 1 : 0;
-            if (pf) fclose(pf);
-        }
-        if (s_probe == 1 && (++s_probeFrames & 7) == 0 && nReq > 0) {
-            char line[200]; int n = 0;
-            n += snprintf(line + n, sizeof(line) - n, "[groundprobe] seg=%d-%d mem=%d |", (int)GFX.StartY, (int)GFX.EndY, s_groundTrack.count);
-            for (int i = 0; i < nReq && n < (int)sizeof(line) - 24; i++)
-                n += snprintf(line + n, sizeof(line) - n, " %d,%d:%d>%d", req[i].x, req[i].y, req[i].target, req[i].rowW);
-            log3dsWrite("%s", line);
-        }
-    }
-    s16 rootW[128];
-    for (int r = 0; r < 128; r++) rootW[r] = 0;
-    for (int i = 0; i < nReq; i++) {
-        int r = reqRoot[i];
-        int lead = excS[r] >= 0 ? excS[r] : feetS[r];
-        uint32_t leadSig = groundSigMake(PPU.OBJ[lead].Name, PPU.OBJ[lead].Palette);
-        int slot = groundSlotFor(&s_groundAcc, leadSig, box[lead].x0, box[lead].y0 < 0 ? 0 : box[lead].y0);
-        rootW[r] = groundVertexW(req[i].rowW, slot);
-    }
-    for (int S = 0; S < 128; S++)
-        s_spriteW[S] = vis[S] ? rootW[cluster[S]] : 0;
-}
-
-static inline s16 groundSpriteW(int S)
-{
-    return s_spriteW[S];
-}
 bool S9xLayerUsedLastFrame(int layer, int prio) { return layerUseUsed(&s_layerUse, layer, prio); }
 bool S9xLayerUsedLastFrameAny(int layer)        { return layerUseLayerUsed(&s_layerUse, layer); }
 
@@ -2911,7 +2772,7 @@ void S9xDrawHiresBackgroundHardwarePriority0Inline_16Color
 inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
 	bool sub, int depth, 
 	uint32 snesTile,
-	int screenX, int screenY, uint32 textureYOffset, int height, s16 groundW)
+	int screenX, int screenY, uint32 textureYOffset, int height)
 {
     uint32 TileAddr = BG.TileAddress + ((snesTile & 0x1ff) << 5);
 
@@ -2979,7 +2840,7 @@ inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
 	gpu3dsAddObjTileVertexes(
 		x0, y0, x1, y1,
 		tx0, ty0,
-		tx1, ty1, (snesTile & (V_FLIP | H_FLIP)) + texturePos, groundW);
+		tx1, ty1, (snesTile & (V_FLIP | H_FLIP)) + texturePos);
 }
 
 
@@ -3030,8 +2891,6 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 
 	GFX.PixSize = 1;
 
-	groundPrepareSprites();   // sprites follow the ground (issue #76): once per frame
-	
 	// Wonder what is the best value for this to get the optimal performance? 
 	if (PPU.PriorityDrawFromSprite >= 0 && GFX.EndY - LayerRender.startY[LAYER_OBJ] >= 16)
 	{
@@ -3076,7 +2935,6 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 				
 				int priorityOffset = (PPU.OBJ[S].Priority + 1) * 3 * 256 + depth;
 				layerUseMark(&s_layerUse, 4, PPU.OBJ[S].Priority & 3);
-				s16 groundW = groundSpriteW(S);
 				bool isVFlipped = PPU.OBJ[S].VFlip;
 				bool isHFlipped = PPU.OBJ[S].HFlip;
 				int objWidth = GFX.OBJWidths[S];
@@ -3114,7 +2972,7 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 						//
 						for (; X<=256 && X<PPU.OBJ[S].HPos+objWidth; X += 8)
 						{
-							S9xDrawOBJTileHardware2 (sub, priorityOffset, BaseTile|TileX, X, Y, TileLine, TileHeight, groundW);
+							S9xDrawOBJTileHardware2 (sub, priorityOffset, BaseTile|TileX, X, Y, TileLine, TileHeight);
 							TileX=(TileX+TileInc) & 0x0f;
 
 						}
@@ -3165,13 +3023,11 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 		
 				int X = (ppuObj.HPos == -256) ? 256 : ppuObj.HPos;
 				int endX = X + GFX.OBJWidths[S];
-				s16 groundW = groundSpriteW(S);
-		
 				while (X <= 256 && X < endX)
 				{
 					S9xDrawOBJTileHardware2(sub, 
 						priorityDepthOffset + ppuObj.Priority * 768, 
-						BaseTile | TileX, X, Y, TileLine, 1, groundW);
+						BaseTile | TileX, X, Y, TileLine, 1);
 		
 					TileX = (TileX + TileInc) & 0x0f;
 					X += 8;

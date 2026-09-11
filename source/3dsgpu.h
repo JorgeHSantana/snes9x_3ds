@@ -86,8 +86,6 @@ typedef enum {
     ULOC_STEREO_DIM,
     ULOC_STEREO_IOD2,
     ULOC_MODE7_PERSP,
-    ULOC_GROUND,
-    ULOC_GROUND_TAB,
     ULOC_COUNT
 } SGPU_SHADER_ULOC;
 
@@ -180,7 +178,7 @@ typedef enum
 {
     VBO_SCENE_RECT,
     VBO_SCENE_TILE,
-    VBO_SCENE_OBJ,          // sprite tiles: 4-short position, w = ground row + slot (issue #76)
+    VBO_SCENE_OBJ,
     VBO_SCENE_MODE7_LINE,
     VBO_MODE7_TILE,
     VBO_SCREEN,
@@ -312,6 +310,7 @@ typedef struct
     // Mode 7 perspective (issue #62): the profile's strength (0..1) and the
     // value the shader currently holds - set per layer draw, 0 off Mode 7
     float                       stereoMode7Persp;   // the profile's gauge 0..8
+    int                         stereoMode7DepthMode;// 0 layer, 1 direct, 2 normalized
     float                       stereoMode7Fx;      // 1 = fade/haze/blur by distance on the plane
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
@@ -358,15 +357,6 @@ typedef struct
     float                       stereoMaxPop;
     float                       stereoMaxAbs;
     int                         stereoEdgeMode;   // 0 Off, 1 Trim, 2 Zoom
-    // sprites follow the Mode 7 ground (issue #76, 3dsgroundsprites.h):
-    // profile switch + the near/far gauges (depth units), the uniform
-    // mirror for the resync, and the per-slot table (ground flag, dim)
-    float                       stereoGroundOn;
-    float                       stereoGroundLift;
-    float                       groundSet[4];
-    float                       groundApplied;
-    float                       groundTab[32][2];
-    bool                        groundTabDirty;
     // true while a hazed layer's ghost (blur) passes are being drawn:
     // the tiled-layer draw helpers enable alpha blending for these
     bool                        stereoGhostPass;
@@ -472,7 +462,6 @@ static inline void gpu3dsWaitForVBlank(gfxScreen_t screen) {
 // 3D-tab editor preview highlight (issue #61); layer -1 = off,
 // prio -1 = whole layer; 0/1 (BGs) or 0..3 (sprites) = that priority only
 void gpu3dsSetStereoPreviewHighlight(int layerId, int prio);
-void gpu3dsSetGroundHighlight(int slot);   // sprite signature slot to spotlight (issue #76), -1 none
 
 // Push the stereo parallax uniform immediately (dedup'd). Must NOT rely on
 // gpu3dsApplyRenderState: its `if (!diff) return` early-out skips uniform
@@ -525,40 +514,6 @@ static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float gho
     GPU3DS.mode7PerspSet[0] = k; GPU3DS.mode7PerspSet[1] = gain;
     GPU3DS.mode7PerspSet[2] = fog; GPU3DS.mode7PerspSet[3] = ghost;
     GPU3DS.mode7PerspApplied = key;
-}
-
-// (near shift, far - near, armed) for the sprite layer's draw; disarmed
-// (z = -1) for every other draw so the shader's ground branch never takes
-static inline void gpu3dsSetGround(float nearShift, float span, bool armed)
-{
-    float z = armed ? 256.0f : -1.0f;
-    float key = nearShift + span * 64.0f + z * 4096.0f;
-    if (GPU3DS.groundApplied == key)
-        return;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GROUND], nearShift, span, z, armed ? 1.0f : 0.0f);
-    GPU3DS.groundSet[0] = nearShift; GPU3DS.groundSet[1] = span;
-    GPU3DS.groundSet[2] = z; GPU3DS.groundSet[3] = armed ? 1.0f : 0.0f;
-    GPU3DS.groundApplied = key;
-}
-
-// the frame's slot table: x = 1 on the ground / 0 keeps the sprite gauges,
-// y = editor spotlight alpha (1 = visible). Sent whole (32 vec4) when dirty.
-static inline void gpu3dsSetGroundTable(const float (*tab)[2])
-{
-    for (int i = 0; i < 32; i++) {
-        GPU3DS.groundTab[i][0] = tab[i][0];
-        GPU3DS.groundTab[i][1] = tab[i][1];
-    }
-    GPU3DS.groundTabDirty = true;
-}
-
-static inline void gpu3dsFlushGroundTable()
-{
-    if (!GPU3DS.groundTabDirty) return;
-    for (int i = 0; i < 32; i++)
-        C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GROUND_TAB] + i,
-            GPU3DS.groundTab[i][0], GPU3DS.groundTab[i][1], 0.0f, 0.0f);
-    GPU3DS.groundTabDirty = false;
 }
 
 static inline void gpu3dsSetStereoParallax(float v)

@@ -64,12 +64,6 @@ typedef struct {
 	STexCoord2i  TexCoord;
 } STileVertex;
 
-// a sprite tile: w = ground row + 256 * signature slot (3dsgroundsprites.h)
-typedef struct {
-    SVector4i    Position;
-	STexCoord2i  TexCoord;
-} SObjTileVertex;
-
 typedef struct {
     SVector2i   Position;
 	u32         Color;
@@ -199,6 +193,13 @@ typedef struct
     u32             newCacheTexturePosition;
 
     u16             mode7FrameCount;
+
+    // Normalized Mode 7: spans are collected while scanlines are emitted,
+    // then mapped over the full visible near..far range before either eye.
+    float           mode7Span[MAX_VERTICES_MODE7_LINE / 2];
+    int             mode7Lines;
+    float           mode7Near;
+    float           mode7Far;
 
     GPU_TEXCOLOR    mode7TextureFormat;
     bool            mode7SectionsModified[4];
@@ -359,13 +360,13 @@ inline void __attribute__((always_inline)) gpu3dsAddTileVertexes(
 inline void __attribute__((always_inline)) gpu3dsAddObjTileVertexes(
     s16 x0, s16 y0, s16 x1, s16 y1,
     s16 tx0, s16 ty0, s16 tx1, s16 ty1,
-    s16 z, s16 groundW)
+    s16 z)
 {
     SVertexList *list = &GPU3DS.vertices[VBO_SCENE_OBJ];
-    SObjTileVertex *vertices = &((SObjTileVertex *) list->data)[list->from + list->count];
+    STileVertex *vertices = &((STileVertex *) list->data)[list->from + list->count];
 
-    vertices[0].Position = (SVector4i){x0, y0, z, groundW};
-    vertices[1].Position = (SVector4i){x1, y1, z, groundW};
+    vertices[0].Position = (SVector3i){x0, y0, z};
+    vertices[1].Position = (SVector3i){x1, y1, z};
 
     vertices[0].TexCoord = (STexCoord2i){tx0, ty0};
     vertices[1].TexCoord = (STexCoord2i){tx1, ty1};
@@ -387,6 +388,49 @@ inline void __attribute__((always_inline)) gpu3dsAddMode7LineVertexes(
     vertices[1].TexCoord = {tx1, ty1};
 
     list->count += 2;
+}
+
+static inline float gpu3dsMode7Span(float dx, float dy)
+{
+    return sqrtf(dx * dx + dy * dy);
+}
+
+inline void gpu3dsResetMode7Spans()
+{
+    GPU3DSExt.mode7Lines = 0;
+    GPU3DSExt.mode7Near = 1e30f;
+    GPU3DSExt.mode7Far = 0.0f;
+}
+
+inline void gpu3dsRecordMode7Span(float span)
+{
+    if (GPU3DS.stereoMode7DepthMode != 2 ||
+        GPU3DSExt.mode7Lines >= (int)(sizeof(GPU3DSExt.mode7Span) / sizeof(float)))
+        return;
+    GPU3DSExt.mode7Span[GPU3DSExt.mode7Lines++] = span;
+    if (span < GPU3DSExt.mode7Near) GPU3DSExt.mode7Near = span;
+    if (span > GPU3DSExt.mode7Far) GPU3DSExt.mode7Far = span;
+}
+
+inline void gpu3dsApplyMode7LineDepths()
+{
+    if (GPU3DS.stereoMode7DepthMode != 2 || GPU3DSExt.mode7Lines <= 0 ||
+        GPU3DSExt.mode7Near <= 0.0f || GPU3DSExt.mode7Far <= 0.0f)
+        return;
+    float invNear = 1.0f / GPU3DSExt.mode7Near;
+    float range = invNear - 1.0f / GPU3DSExt.mode7Far;
+    if (range < invNear * 0.01f) return;
+    float invRange = 1.0f / range;
+    SMode7LineVertex *v = (SMode7LineVertex *)GPU3DS.vertices[VBO_SCENE_MODE7_LINE].data;
+    for (int i = 0; i < GPU3DSExt.mode7Lines; i++) {
+        float f = (invNear - 1.0f / GPU3DSExt.mode7Span[i]) * invRange;
+        if (f < 0.0f) f = 0.0f;
+        if (f > 1.0f) f = 1.0f;
+        const int wOne = 256, wMin = 8;
+        s16 w = (s16)(wOne - (int)(f * wOne + 0.5f));
+        if (w < wMin) w = wMin;
+        v[i * 2].Position.w = v[i * 2 + 1].Position.w = w;
+    }
 }
 
 
