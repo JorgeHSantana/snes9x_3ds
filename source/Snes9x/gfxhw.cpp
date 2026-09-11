@@ -744,7 +744,7 @@ static void m7FlushLines(void)
 {
     if (s_m7QueueCount == 0) return;
     float spanRef = 0.0f;
-    if (GPU3DS.stereoMode7DepthMode == 1) for (int i = 0; i < s_m7QueueCount; i++) {
+    if (GPU3DS.stereoMode7DepthMode != 0) for (int i = 0; i < s_m7QueueCount; i++) {
         const M7QueuedLine &q = s_m7Queue[i];
         float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
         float span = sqrtf(dx * dx + dy * dy);
@@ -754,9 +754,8 @@ static void m7FlushLines(void)
         const M7QueuedLine &q = s_m7Queue[i];
         float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
         float span = GPU3DS.stereoMode7DepthMode == 0 ? 0.0f : sqrtf(dx * dx + dy * dy);
-        s16 w = GPU3DS.stereoMode7DepthMode == 1
+        s16 w = GPU3DS.stereoMode7DepthMode != 0
             ? mode7PerspEncode(span, spanRef) : MODE7_PERSP_W_ONE;
-        if (GPU3DS.stereoMode7DepthMode == 2) gpu3dsRecordMode7Span(span);
         // the right vertex: the geometry shader's Mode 7 marker + the row's depth
         gpu3dsAddMode7LineVertexes(q.x0, q.y, q.x1, mode7RightVertexY(q.y), w, q.tx0, q.ty0, q.tx1, q.ty1);
     }

@@ -310,7 +310,7 @@ typedef struct {
     int                 StereoFocusBack;       // -8..0: back edge of the focus zone (default -1)
     int                 StereoFocusFront;      // 0..+8: front edge of the focus zone (default +1)
     int                 StereoMode7Persp;      // Mode 7 perspective strength 0..8 (issue #62)
-    int                 StereoMode7DepthMode;  // 0 layer, 1 direct scale, 2 normalized range
+    int                 StereoMode7DepthMode;  // 0 layer, 1 direct scale
     int                 StereoMode7Fx;         // Mode 7 effects by distance 0/1
     int                 StereoSpritesGround;   // sprites follow the Mode 7 ground 0/1 (issue #76)
     int                 StereoGroundLift;      // 0..3: how far in front of the ground a sprite sits
@@ -337,7 +337,7 @@ typedef struct {
         int  FocusBack, FocusFront;
         int  EdgeMode;
         int  Mode7Persp;   // 0 = flat plane .. 8 = full per-scanline perspective (issue #62)
-        int  Mode7DepthMode;// 0 layer, 1 direct scale, 2 normalized range
+        int  Mode7DepthMode;// 0 layer, 1 direct scale
         int  Mode7Fx;      // 1 = fade/haze/blur grow with each row's distance on the plane
         int  SpritesGround;// 1 = sprites on the plane follow their row's depth (issue #76)
         int  GroundLift;   // 0..3 sprites sit this much in front of the ground row's depth

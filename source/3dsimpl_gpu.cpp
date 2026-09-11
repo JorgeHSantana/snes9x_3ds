@@ -975,7 +975,6 @@ void gpu3dsPrepareSnesScreenForNextFrame() {
 	gpu3dsPrepareListForNextFrame(&GPU3DS.vertices[VBO_SCENE_TILE], true);
 	gpu3dsPrepareListForNextFrame(&GPU3DS.vertices[VBO_SCENE_OBJ], true);
 	gpu3dsPrepareListForNextFrame(&GPU3DS.vertices[VBO_SCENE_MODE7_LINE], true);
-	gpu3dsResetMode7Spans();
 
     if (GPU3DSExt.render2x.dirty) {
         gpu3dsClearTexture(&GPU3DS.textures[SNES_MAIN], 0);
@@ -991,9 +990,6 @@ void gpu3dsPrepareSnesScreenForNextFrame() {
 }
 
 void gpu3dsDrawSnesScreen() {
-    // Normalized mode needs the complete frame range; Direct already encoded
-    // each queued run, and Layer never enters this pass.
-    gpu3dsApplyMode7LineDepths();
     SLayerList *list = &GPU3DSExt.layerList;
 
     if (!list->verticesTotal || list->hasSkippedSections)

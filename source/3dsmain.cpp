@@ -1941,8 +1941,8 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 AddMenuHeader2(items, "Mode 7"_s);
                 int m7Mode = *stereoEditField(10);
                 AddMenuPicker(items, "  Depth Mode"_s,
-                    "Layer: one fixed BG depth, cheapest.\nDirect: uses the game's Mode 7 scale directly.\nNormalized: spends the full selected range across the\nvisible plane, like rcmz."_s,
-                    makePickerOptions({"Layer (fixed)", "Direct (game scale)", "Normalized (full range)"}),
+                    "Layer: one fixed BG depth, cheapest.\nDirect: uses the game's Mode 7 scale to make the\nplane recede scanline by scanline."_s,
+                    makePickerOptions({"Layer (fixed)", "Direct (game scale)"}),
                     m7Mode, DIALOG_TYPE_INFO, true,
                     []( int val ) {
                         if (CheckAndUpdate(*stereoEditField(10), val)) {
@@ -2892,7 +2892,7 @@ void settingsLoadStereo3D()
         if (sscanf(line, "M7PERSP=%d", &v) == 1)
             *tM7 = v < 0 ? 0 : (v > 8 ? 8 : v);
         if (sscanf(line, "M7MODE=%d", &v) == 1)
-            *tM7Mode = v < 0 ? 0 : (v > 2 ? 2 : v);
+            *tM7Mode = v == 0 ? 0 : 1; // old experimental mode 2 migrates to Direct
         if (sscanf(line, "M7FX=%d", &v) == 1)
             *tM7Fx = v ? 1 : 0;
         if (sscanf(line, "GSPR=%d", &v) == 1)

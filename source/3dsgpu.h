@@ -310,7 +310,7 @@ typedef struct
     // Mode 7 perspective (issue #62): the profile's strength (0..1) and the
     // value the shader currently holds - set per layer draw, 0 off Mode 7
     float                       stereoMode7Persp;   // the profile's gauge 0..8
-    int                         stereoMode7DepthMode;// 0 layer, 1 direct, 2 normalized
+    int                         stereoMode7DepthMode;// 0 layer, 1 direct
     float                       stereoMode7Fx;      // 1 = fade/haze/blur by distance on the plane
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
