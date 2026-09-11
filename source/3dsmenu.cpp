@@ -902,8 +902,16 @@ SMenuTab *menu3dsAnimateTab(SMenuTab& dialogTab, bool& isDialog, int& currentMen
 // Displays the menu and allows the user to select from
 // a list of choices.
 //
+#ifdef PROBE_MENU_HELP
+// Capture the menu's RGB565 buffer, not the game's RGB8 screenshot path.
+#include "../tools/azahar-validate/menu_help_probe.h"
+#endif
+
 int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuTab, std::vector<SMenuTab>& menuTabs)
 {
+#ifdef PROBE_MENU_HELP
+    int probe_frames = 0;
+#endif
     s_currentTabForIdle = currentMenuTab;
     int framesDKeyHeld = 0;
     int returnResult = -1;
@@ -950,6 +958,10 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
         u32 keysDown = firstFrame ? 0 : (~lastKeysHeld) & thisKeysHeld;
         firstFrame = false;
         lastKeysHeld = thisKeysHeld;
+
+#ifdef PROBE_MENU_HELP
+        menu_help_probe_tick(probe_frames, isDialog, currentMenuTab, menuTabs, currentTab, keysDown);
+#endif
 
         int maxItems = MENU_HEIGHT;
         if (isDialog)

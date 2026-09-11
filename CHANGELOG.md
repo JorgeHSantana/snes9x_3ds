@@ -3,6 +3,11 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
+### Fixes
+* Move the remaining inline option explanations in Emulator, Settings and
+  Controls into SELECT help, including savestates, screenshots, logging,
+  SRAM, palette redraw reduction and Circle Pad hotkeys. Status rows remain visible.
+
 ### Features
 * **Two Mode 7 depth models** in the rewritten 3D Stereo menu: Layer keeps
   the plane at one BG priority depth (fastest), while Direct derives the

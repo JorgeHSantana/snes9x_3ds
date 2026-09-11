@@ -565,8 +565,7 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     AddMenuHeader1(items, "SAVESTATES"_s);
     AddMenuCheckbox(items, "  Auto Save / Auto Load"_s, settings3DS.AutoSaveLoad,
         []( int val ) { CheckAndUpdateToggle( settings3DS.AutoSaveLoad, val ); });
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  Saves the game when the menu opens, on HOME, lid close"_s, ""_s);
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  and exit; loads that save when the game starts."_s, ""_s);
+    items.back().PickerDescription = "Saves the game when the menu opens, on HOME,\nlid close and exit; loads that save when the\ngame starts. This is the global switch.";
     AddMenuCheckbox(items, "  Create screenshot when saving"_s, settings3DS.SaveStateScreenshots,
         []( int val ) {
             bool wasEnabled = settings3DS.SaveStateScreenshots;
@@ -578,7 +577,7 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 }
             }
         });
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  (disabling removes existing savestate screenshots)"_s, ""_s);
+    items.back().PickerDescription = "Creates a screenshot alongside each savestate.\nDisabling this removes existing savestate\nscreenshots, but does not delete the savestates.";
 
     AddMenuDisabledOption(items, ""_s);
     AddMenuHeader1(items, "REWIND"_s);
@@ -647,8 +646,7 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
 
     AddMenuCheckbox(items, "  Enable Logging (use when issues occur)"_s, settings3DS.LogFileEnabled,
         []( int val ) { CheckAndUpdateToggle( settings3DS.LogFileEnabled, val ); });
-    std::string logfileInfo = "  Creates a session log in \"3ds/snes9x_3ds\". Restart required";
-    AddMenuDisabledOption(items, logfileInfo);
+    items.back().PickerDescription = "Creates a session log in 3ds/snes9x_3ds\nfor troubleshooting. Restart the emulator\nafter changing this setting.";
     AddMenuDisabledOption(items, ""_s);
 
     if (cfgFileAvailable[0] || cfgFileAvailable[1]) {
@@ -1555,14 +1553,14 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     AddMenuCheckbox(items, "  Automatically save state on exit, load state on start"_s, settings3DS.AutoSavestate,
         []( int val ) { CheckAndUpdateToggle( settings3DS.AutoSavestate, val ); });
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  (this game only; the global switch is in the Emulator tab)"_s, ""_s);
+    items.back().PickerDescription = "Automatically saves and resumes this game's\nstate. This setting is for the current game;\nthe global switch is in the Emulator tab.";
 
     AddMenuPicker(items, "  SRAM Auto-Save Delay"_s, "Periodically writes SRAM to the SD card.\nEach write can briefly freeze the game.\nDisabled still saves on exit/sleep."_s, makeOptionsForAutoSaveSRAMDelay(), settings3DS.SRAMSaveInterval, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.SRAMSaveInterval, val ); });
     AddMenuCheckbox(items, "  Force SRAM Write on Pause"_s, settings3DS.ForceSRAMWriteOnPause,
                     []( int val ) { CheckAndUpdateToggle( settings3DS.ForceSRAMWriteOnPause, val ); });
 
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  (some games like Yoshi's Island require this)"_s, ""_s);
+    items.back().PickerDescription = "Forces SRAM to be written when pausing.\nSome games, such as Yoshi's Island, require\nthis to save correctly.";
 
     AddMenuDisabledOption(items, ""_s);
 
@@ -1582,9 +1580,8 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
                         : (settings3DS.PaletteDeferBgMask & ~(1 << bg));
                     CheckAndUpdate( settings3DS.PaletteDeferBgMask, newMask );
                 });
+            items.back().PickerDescription = "Reduces redraws of this layer when palettes\nchange mid-frame. Can speed up games such as\nTop Gear. Disable if colors render incorrectly.";
         }
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  Can speed up games like Top Gear that change colors"_s, ""_s);
-        items.emplace_back(nullptr, MenuItemType::Textarea, "  mid-frame by drawing a layer fewer times."_s, ""_s);
 
         AddMenuDisabledOption(items, ""_s);
     }
@@ -2313,7 +2310,7 @@ void makeControlsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                         menu3dsMarkTabDirty(TAB_CONTROLS);
                     }
                 });
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  (when disabled, Circle Pad is available for hotkeys)"_s, ""_s);
+    items.back().PickerDescription = "Makes the Circle Pad act as the SNES D-Pad.\nWhen disabled, the Circle Pad is available\nfor hotkeys.";
                 
     for (size_t i = 0; i < 10; ++i) {
         // skip option for ZL and ZR button when device is O3DS/O2DS

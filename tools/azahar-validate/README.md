@@ -98,6 +98,27 @@ directions** - a probe build shipped by accident is a real risk.
 
 ## Adding a scene
 
+### Menu SELECT help
+
+`menu_help.py` runs `scenes/menu-help.json` with a clean
+`-DPROBE_MENU_HELP` build. Close Azahar first. The probe enters the menu
+after the resume marker loads the scene, visits nine migrated controls,
+invokes the real SELECT path and closes each help dialog with B. It dumps
+the RGB565 menu framebuffer without keyboard automation or screen capture.
+The runner restores staged SD files and reports menu/dialog pixel changes
+in the menu-body region; inspect the generated PNGs for text/clipping as
+well (a nonzero diff alone is not proof of correct wording).
+Azahar 2126 may first show its direct-executable warning; acknowledge OK
+to start the test. No game/menu navigation keys are required.
+
+```
+python3 tools/azahar-validate/menu_help.py
+```
+
+The probe forces palette controls visible and suppresses autosavestates
+in its test session. It is compiled out of ordinary builds. Always clean
+again before building without this flag; never upload probe binaries.
+
 Make a savestate on the console or in Azahar (slot 1 = `<rom>.1.frz`),
 copy it into `states/`, write the scene JSON, run with `--update-golden`
 once you have checked the capture by eye, and commit both.

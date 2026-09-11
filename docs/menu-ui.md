@@ -15,6 +15,7 @@
 * Input loop (`menu3dsMenuSelectItem`): START resumes the game, B = cancel/parent-dir/tab-left, X = file context menu, L/R or D-pad = tab switch / gauge adjust, Y+Up/Down = page jump, key-repeat after 15 frames. Battery state is queried once per menu entry (not per frame).
 * Chrome: top bar, tab strip with even pixel distribution, cheats-active indicator, hand-drawn battery widget, bottom button hints. Slide-in animations for menus/dialogs and 3-step tab slide transitions.
 * Dialogs: message dialogs, confirmation dialogs, and a ROM-loading dialog that can host a thumbnail.
+* SELECT opens the selected control's `PickerDescription` as a help dialog. Explanations belong to their controls, not extra `Textarea`/disabled rows: this applies to Emulator, Settings, Controls and 3D Stereo. Each BG palette-deferral checkbox carries its own help. Build/version status and the empty-cheats message remain visible because they are status, not control explanations.
 * `menu3dsShowSplashMessage()` draws directly to the framebuffer before the GPU is initialized ("Loading", "Saving & Exiting").
 
 ## Software rasterizer (`3dsui`)

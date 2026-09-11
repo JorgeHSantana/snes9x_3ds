@@ -1,0 +1,10 @@
+{
+  "title": "All migrated menu explanations open through SELECT",
+  "rom": "sdmc:/snes/vanilla/Super Mario Kart (USA).sfc",
+  "state": "states/smk-race.frz",
+  "settings": {"GameScreen": "0", "LogFileEnabled": "1", "UpdateAutoCheck": "0", "AutoSaveLoad": "0"},
+  "probe": "PROBE_MENU_HELP",
+  "cases": 9,
+  "regions": {"menu_body": [0, 30, 320, 220]},
+  "ab_expect": {"menu_body": [1, 100]}
+}

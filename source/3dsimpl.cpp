@@ -1094,6 +1094,16 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		}
 	gpu3dsFrameEnd();
 
+#ifdef PROBE_MENU_HELP
+    // Enter the menu after autoboot; expose conditional palette controls.
+    static unsigned menu_probe_frames = 0;
+    if (++menu_probe_frames == 120) {
+        settings3DS.PaletteFix = 1;
+        settings3DS.AutoSaveLoad = false;
+        settings3DS.AutoSavestate = false;
+        GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
+    }
+#endif
 #ifdef PROBE_FBDUMP
 	// harness probe (tools/azahar-validate --fbdump): the presented top
 	// screen saved to the SD at fixed frames after the ROM loaded, so a
