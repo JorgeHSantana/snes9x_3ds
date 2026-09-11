@@ -31,49 +31,23 @@ vertex colour; a TexEnv variant interpolates it) and the blur's ghost
 offset grows with the row's distance. Nothing at the nearest row, the
 full gauge at the horizon.
 
-### Sprites follow the ground (issue #76)
-A sprite standing on the plane takes the depth of the ground under its
-feet. Pieces:
+### Stable sprite depth
 
-* **Own VBO** for sprites (`VBO_SCENE_OBJ`, 4-short position); the
-  vertex's `w = rowW + 256 * slot`. `rowW` 1..255 is the feet row's
-  distance byte (255 nearest), 0 = not on the plane; `slot` indexes this
-  frame's signature table (up to 31 characters).
-* **Row table**: `gfxhw` records each plane row's w at the Mode 7 flush;
-  sprites read the table of the last *rendered* frame (a skipped frame
-  draws no plane and must not empty it).
-* **Characters**: hardware sprites whose boxes touch (2 px) form one
-  character (union-find). Its feet are its **largest** sprite (the kart's
-  body - a puff of dust joining a few px lower must not move the feet).
-  A character right above a **flat** cluster (a shadow, <= 8 px tall)
-  takes the shadow's row: the kart in the air stays on the ground.
-* **Feet just below the plane** (the band between the track and the map
-  in Mario Kart, where a spinning kart's box dips) stand on the nearest
-  plane row above, up to 16 rows.
-* **Memory across frames**: characters are tracked by feet position
-  (not by tiles - an animation change would restart them), memories are
-  matched closest-first with the row difference weighed in, and the row
-  a character uses glides toward the row it stands on by at most 4/255
-  per frame. Memories age once per rendered frame; the sprite data is
-  computed once per frame (S9xDrawOBJSHardware runs once per screen
-  segment).
-* **Depth**: the shader replaces the sprite's priority-tier shift with
-  `near + (far - near) * (1 - rowW/255)`, where near/far are the plane's
-  own depths at the nearest row and the horizon (BG1 gauge x the
-  perspective gain, x (1 - k) at the horizon) plus **Ground Lift**
-  (0..3, default 0) toward the viewer. A sprite can never sink behind the
-  ground under it; moving the plane moves the sprites with it.
-* **Marks**: a character can be unticked ("not on ground") in the editor;
-  saved per game by signature (sheet row + palette) as `GROUNDX=` lines.
-  The shader reads the mark and the editor spotlight from an indexed
-  uniform table per slot, so both apply live without rebuilding the frame.
+Sprites use the same model as rcmz: perspective is applied only to the
+Mode 7 plane, while every sprite remains whole in one of the four fixed
+SNES OBJ-priority depths. The retired ground-following experiment tried
+both proximity grouping and independent OAM pieces; the former changed
+membership during animation and wobbled, while the latter visibly pulled
+composite sprites apart. OAM provides no reliable logical-character ID.
+
+Legacy `GSPR`, `GLIFT` and `GROUNDX` profile data is still accepted so old
+files remain readable, but it no longer affects rendering.
 
 ### Editor (3D Stereo tab)
 No paragraphs in the tab; SELECT on any item opens its help. The Mode 7
 block exists only while the game uses Mode 7 and reads, in order:
-Effects by Distance, Sprites Follow the Ground, Ground Lift, the sprites
-on the paused screen (one row each, spotlit live under the cursor, only
-with the switch on), Perspective, Plane Depth (the BG1 Prio 0 gauge,
+Effects by Distance, a note that sprites use stable OBJ priorities,
+Perspective, Plane Depth (the BG1 Prio 0 gauge,
 moved out of the Depth list), Priority Pixels (BG2 Prio 1, EXTBG games
 only). Tools are rows with help.
 

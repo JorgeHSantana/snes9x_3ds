@@ -130,7 +130,15 @@ and carries the row's depth nibble on top (`mode7RightVertexY`: `-16384 +
 positive and every row draws as a tile), so both ends decode the same
 plane and take the same stereo tier: the row moves, it never stretches.
 
-### Sprites follow the Mode 7 ground (issue #76)
+### Stable sprites over Mode 7
+
+As in rcmz, Mode 7 scanline perspective applies only to the plane.
+Sprites retain the four fixed OBJ-priority depths, keeping every hardware
+tile of a composite sprite together. `GSPR`, `GLIFT` and `GROUNDX` remain
+parseable for profile compatibility but no longer affect rendering.
+
+The retired ground-following implementation is still present internally
+for now, but is disarmed. It encoded the following experimental data:
 
 A sprite standing on the plane takes the depth of the row its feet touch.
 `gfxhw` keeps two small tables (`3dsgroundsprites.h`): the plane rows'

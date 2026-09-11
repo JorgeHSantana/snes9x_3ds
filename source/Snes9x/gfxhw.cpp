@@ -834,6 +834,10 @@ static void groundPrepareSprites(void)
     // target == used on every line)
     if (s_groundPrepared) return;
     s_groundPrepared = true;
+    if (GPU3DS.stereoGroundOn <= 0.0f) {
+        memset(s_spriteW, 0, sizeof(s_spriteW));
+        return;
+    }
     if (!groundRowsPresent(&s_groundPrev)) {
         memset(s_spriteW, 0, sizeof(s_spriteW));
         return;

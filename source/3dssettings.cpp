@@ -476,8 +476,10 @@ void settings3dsStereoApplyProfile(int idx)
     for (int i = 0; i < 2; i++) objHi[i] = (float)p->DepthOBJHi[i];
     GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;   // read by ApplyValues (edge crop)
     GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
-    GPU3DS.stereoGroundOn = (float)p->SpritesGround;
-    GPU3DS.stereoGroundLift = (float)p->GroundLift;
+    // Stable OBJ-depth model used by rcmz: Mode 7 perspective belongs to the
+    // plane only. Sprites remain whole in their four hardware priority tiers.
+    GPU3DS.stereoGroundOn = 0.0f;
+    GPU3DS.stereoGroundLift = 0.0f;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);
@@ -497,8 +499,8 @@ void settings3dsStereoApplyDefault()
     for (int i = 0; i < 2; i++) objHi[i] = (float)p->DepthOBJHi[i];
     GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;   // read by ApplyValues (edge crop)
     GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
-    GPU3DS.stereoGroundOn = (float)p->SpritesGround;
-    GPU3DS.stereoGroundLift = (float)p->GroundLift;
+    GPU3DS.stereoGroundOn = 0.0f;
+    GPU3DS.stereoGroundLift = 0.0f;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);   // edge is game-global (Jorge's UX)

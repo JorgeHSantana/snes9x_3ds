@@ -8,11 +8,11 @@
   "log_expect": [
     "ROM loaded: SUPER MARIO KART"
   ],
-  "title": "SMK race (Jorge's state), every layer flat, sprites follow the ground (flat plane at 0, lift 3) - the kart rows carry the lift (PROBE_FORCE_SLIDER + PROBE_SBS build)",
+  "title": "SMK race (Jorge's state), stable rcmz-style OBJ priorities over Mode 7",
   "stereo3d": [
     {
       "file": "SUPER MARIO KART",
-      "content": "BG1=0\nBG2=0\nBG3=0\nBG4=0\nOBJ=0\nFADE=0\nHAZE=0\nBLUR=0\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nM7PERSP=0\nGSPR=1\nGLIFT=3"
+      "content": "BG1=0\nBG2=0\nBG3=0\nBG4=0\nOBJ=0\nFADE=0\nHAZE=0\nBLUR=0\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nM7PERSP=0\nGSPR=0\nGLIFT=0"
     }
   ],
   "sbs_expect": {
@@ -20,6 +20,6 @@
       60,
       112
     ],
-    "min_abs": 3
+    "min_abs": 0
   }
 }

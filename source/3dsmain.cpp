@@ -1947,10 +1947,10 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 AddMenuCheckbox(items, "  Effects by Distance"_s, *stereoEditField(7) != 0,
                     []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(7), v )) s_stereoPreviewDirty = true; });
                 stereoHelp(items, "Fade, haze and blur grow towards the horizon on the\nMode 7 plane instead of covering it evenly.\nA top-down map stays flat.");
-                AddMenuCheckbox(items, "  Sprites Follow the Ground"_s, *stereoEditField(8) != 0,
-                    []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(8), v )) { s_stereoPreviewDirty = true; menu3dsMarkTabDirty(TAB_3D); } });
-                stereoHelp(items, "A sprite standing on the plane takes the depth of the\nground under its feet - a kart down the track sits far,\na box beside you sits near. Hardware sprites that touch\ncount as one character. Untick a sprite in the list below\nthat is not on the ground (a flying enemy, a HUD item);\nsaved for this game.");
-                if (*stereoEditField(8) != 0) {
+                items.emplace_back(nullptr, MenuItemType::Textarea,
+                    "  Sprites: stable OBJ priorities"_s, ""_s);
+                stereoHelp(items, "Sprites retain the SNES four hardware priority depths.\nOnly the Mode 7 plane changes depth by scanline. This\nkeeps every composite sprite together without guessing\nwhich hardware tiles form a character.");
+                if (false) { // legacy ground editor retained only for profile compatibility
                     AddMenuGauge(items, "  Ground Lift"_s, 0, 3, *stereoEditField(9),
                         []( int val ) { if (CheckAndUpdate( *stereoEditField(9), val )) s_stereoPreviewDirty = true; }, true);
                     stereoHelp(items, "How much a sprite floats above the ground. 0 = glued\nto the track, at the exact depth of the ground under it.\n1..3 = that many levels in front, like an object resting\non the ground instead of painted on it.");
@@ -1989,7 +1989,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 s_stereoPlaneGaugeIdx = (int)items.size();
                 AddMenuGauge(items, "  Plane Depth  (BG1 P0)"_s, -8, 8, *stereo3dGaugeValue(0, 0),
                     []( int val ) { if (CheckAndUpdate( *stereo3dGaugeValue(0, 0), val )) s_stereoPreviewDirty = true; }, true, true);
-                stereoHelp(items, "The Mode 7 plane's depth at its nearest row (BG1).\n+ pops out of the screen, - sinks into it. The horizon\nstays on the screen plane; sprites on the ground follow\nthis gauge on their own row.");
+                stereoHelp(items, "The Mode 7 plane's depth at its nearest row (BG1).\n+ pops out of the screen, - sinks into it. The horizon\nstays on the screen plane; sprites keep their stable OBJ\npriority depths.");
                 if (settings3DS.isRomLoaded && IPPU.Mode7EXTBGFlag) {
                     s_stereoExtbgGaugeIdx = (int)items.size();
                     AddMenuGauge(items, "  Priority Pixels  (BG2 P1)"_s, -8, 8, *stereo3dGaugeValue(1, 1),
