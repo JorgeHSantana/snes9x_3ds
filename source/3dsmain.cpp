@@ -1724,7 +1724,6 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     items.clear();
 
     AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
-    items.emplace_back(nullptr, MenuItemType::Textarea, "  SELECT on any item shows its help."_s, ""_s);
     AddMenuDisabledOption(items, ""_s);
 
     if (gpu3dsIs3DAvailable()) {
@@ -1857,11 +1856,6 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
 
 
 
-        {
-            char matchLine[48];
-            snprintf(matchLine, sizeof(matchLine), "  This screen matches: %s", settings3dsStereoActiveName());
-            items.emplace_back(nullptr, MenuItemType::Textarea, std::string(matchLine), ""_s);
-        }
     }
 
     AddMenuHeader2(items, "Enable / Disable Layers"_s);
@@ -1900,14 +1894,13 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             { "  Sprites Prio 2", 4, 2 }, { "  Sprites Prio 3", 4, 3 },
         };
         char rowLog[160]; rowLog[0] = '\0';
-        bool m7Block = !settings3DS.isRomLoaded || S9xMode7DrawnLastFrame() || PPU.BGMode == 7;
+        bool m7Block = settings3DS.isRomLoaded && (S9xMode7DrawnLastFrame() || PPU.BGMode == 7);
         bool extbg = settings3DS.isRomLoaded && IPPU.Mode7EXTBGFlag;
         for (int r = 0; r < 12; r++) {
             int layer = rows[r].layer, prio = rows[r].prio;
             // the plane's gauges live in the Mode 7 block (Jorge)
-            bool m7OwnDepth = m7Block && *stereoEditField(10) != 0;
-            if (m7OwnDepth && layer == 0 && prio == 0) continue;
-            if (m7OwnDepth && extbg && layer == 1 && prio == 1) continue;
+            if (m7Block && layer == 0 && prio == 0) continue;
+            if (m7Block && extbg && layer == 1 && prio == 1) continue;
             bool used = stereo3dRowUsed(layer, prio);
             if (used) { size_t n = strlen(rowLog); snprintf(rowLog + n, sizeof(rowLog) - n, "%s%s", n ? " " : "", rows[r].name + 2); }
             if (!used && settings3DS.StereoHideUnused) continue;
@@ -1933,7 +1926,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             // uses Mode 7 - "used" = a plane drew in the last rendered frame
             // OR the PPU sits in mode 7 right now (Jorge's report: the block
             // vanished under Hide Unused on hardware while racing)
-            bool m7Used = !settings3DS.isRomLoaded || S9xMode7DrawnLastFrame() || PPU.BGMode == 7;
+            bool m7Used = settings3DS.isRomLoaded && (S9xMode7DrawnLastFrame() || PPU.BGMode == 7);
             log3dsWrite("[m7] menu: drawnLastFrame=%d bgMode=%d bg1used=%d hideUnused=%d",
                         S9xMode7DrawnLastFrame() ? 1 : 0, (int)PPU.BGMode,
                         S9xLayerUsedLastFrame(0, 0) ? 1 : 0, settings3DS.StereoHideUnused);
@@ -1941,7 +1934,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 AddMenuHeader2(items, "Mode 7"_s);
                 int m7Mode = *stereoEditField(10);
                 AddMenuPicker(items, "  Depth Mode"_s,
-                    "Layer: one fixed BG depth, cheapest.\nDirect: uses the game's Mode 7 scale to make the\nplane recede scanline by scanline."_s,
+                    "Layer: one fixed BG depth, cheapest.\nDirect: uses the game's Mode 7 scale to make the\nplane recede scanline by scanline. Sprites always keep\ntheir four stable OBJ priority depths."_s,
                     makePickerOptions({"Layer (fixed)", "Direct (game scale)"}),
                     m7Mode, DIALOG_TYPE_INFO, true,
                     []( int val ) {
@@ -1957,23 +1950,23 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 AddMenuGauge(items, "  Perspective"_s, 0, 8, *stereoEditField(6),
                     []( int val ) { if (CheckAndUpdate( *stereoEditField(6), val )) s_stereoPreviewDirty = true; }, true);
                 stereoHelp(items, "Each Mode 7 scanline shifts by its own distance, so the\nplane recedes instead of standing like a wall.\n0 = flat, 4 = full perspective, 5-8 push the near rows\nfurther out. The horizon stays on the screen plane.");
+                }
                 // the plane's own gauge lives here, not in the Depth list
                 // (Jorge): BG1 is the Mode 7 plane; with EXTBG the BG2
                 // Prio 1 pass carries the per-pixel priority
                 s_stereoPlaneGaugeIdx = (int)items.size();
-                AddMenuGauge(items, "  Plane Depth  (BG1 P0)"_s, -8, 8, *stereo3dGaugeValue(0, 0),
+                AddMenuGauge(items, m7Mode == 0 ? "  Layer Depth  (BG1 P0)"_s : "  Plane Depth  (BG1 P0)"_s,
+                    -8, 8, *stereo3dGaugeValue(0, 0),
                     []( int val ) { if (CheckAndUpdate( *stereo3dGaugeValue(0, 0), val )) s_stereoPreviewDirty = true; }, true, true);
-                stereoHelp(items, "The Mode 7 plane's depth at its nearest row (BG1).\n+ pops out of the screen, - sinks into it. The horizon\nstays on the screen plane; sprites keep their stable OBJ\npriority depths.");
+                stereoHelp(items, m7Mode == 0
+                    ? "Fixed depth of the Mode 7 BG layer. The complete plane\nmoves together: + pops out, - sinks into the screen."
+                    : "The Mode 7 plane's depth at its nearest row (BG1).\n+ pops out of the screen, - sinks into it. The horizon\nstays on the screen plane; sprites keep their stable OBJ\npriority depths.");
                 if (settings3DS.isRomLoaded && IPPU.Mode7EXTBGFlag) {
                     s_stereoExtbgGaugeIdx = (int)items.size();
                     AddMenuGauge(items, "  Priority Pixels  (BG2 P1)"_s, -8, 8, *stereo3dGaugeValue(1, 1),
                         []( int val ) { if (CheckAndUpdate( *stereo3dGaugeValue(1, 1), val )) s_stereoPreviewDirty = true; }, true, true);
                     stereoHelp(items, "EXTBG: the plane's high-priority pixels are drawn again\nas BG2 above the sprites. Their depth, usually the same\nas the plane's.");
                 }
-                }
-                items.emplace_back(nullptr, MenuItemType::Textarea,
-                    "  Sprites use stable OBJ priorities"_s, ""_s);
-                stereoHelp(items, "Mode 7 changes only the plane. Composite sprites stay\ntogether in the four Sprite Priority depth controls.");
             }
         }
         AddMenuHeader2(items, "Focus"_s);

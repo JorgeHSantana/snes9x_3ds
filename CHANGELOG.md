@@ -7,7 +7,8 @@ Notable changes to this project will be documented in this file.
 * **Two Mode 7 depth models** in the rewritten 3D Stereo menu: Layer keeps
   the plane at one BG priority depth (fastest), while Direct derives the
   scanline ramp from the game's scale. Only the controls relevant to the
-  selected model are shown; saved per profile as `M7MODE`.
+  selected model are shown; the responsible BG depth stays in the Mode 7
+  section in both modes. Saved per profile as `M7MODE`.
 * **Stable composite sprites**: Mode 7 changes only its plane. OBJ tiles
   stay together in the SNES's four native priority depths, removing the
   proximity grouping that could split a kart or make its size wobble.
