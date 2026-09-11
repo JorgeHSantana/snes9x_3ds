@@ -1949,7 +1949,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 stereoHelp(items, "Fade, haze and blur grow towards the horizon on the\nMode 7 plane instead of covering it evenly.\nA top-down map stays flat.");
                 AddMenuCheckbox(items, "  Sprites Follow the Ground"_s, *stereoEditField(8) != 0,
                     []( int val ) { int v = val ? 1 : 0; if (CheckAndUpdate( *stereoEditField(8), v )) { s_stereoPreviewDirty = true; menu3dsMarkTabDirty(TAB_3D); } });
-                stereoHelp(items, "A sprite standing on the plane takes the depth of the\nground under its feet - a kart down the track sits far,\na box beside you sits near. Hardware sprites that touch\ncount as one character. Untick a sprite in the list below\nthat is not on the ground (a flying enemy, a HUD item);\nsaved for this game.");
+                stereoHelp(items, "A sprite standing on the plane takes the depth of the\nground under its feet - a kart down the track sits far,\na box beside you sits near. Touching hardware sprites\nform a persistent character so animation cannot pull its\ntiles apart. Untick flying enemies or HUD items below;\nsaved for this game.");
                 if (*stereoEditField(8) != 0) {
                     AddMenuGauge(items, "  Ground Lift"_s, 0, 3, *stereoEditField(9),
                         []( int val ) { if (CheckAndUpdate( *stereoEditField(9), val )) s_stereoPreviewDirty = true; }, true);

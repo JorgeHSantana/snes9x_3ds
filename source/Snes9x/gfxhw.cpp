@@ -819,11 +819,12 @@ void     S9xGroundSigPos(int slot, int *x, int *y)
 }
 
 // every sprite's vertex w for this frame, computed once before the
-// sprites are emitted: sprites that touch form one character and share
-// the lowest member's row (the feet) and one signature slot - the feet
+// sprites are emitted: sprites that first appear touching form one stable
+// character and share the leader's row (the feet) and one signature slot - the feet
 // sprite's, or a member marked "not on ground" (so the whole character
 // stays off the ground and the editor's spotlight lights all of it)
 static s16 s_spriteW[128];
+static GroundStableGroups s_groundGroups;
 
 static void groundPrepareSprites(void)
 {
@@ -836,6 +837,7 @@ static void groundPrepareSprites(void)
     s_groundPrepared = true;
     if (!groundRowsPresent(&s_groundPrev)) {
         memset(s_spriteW, 0, sizeof(s_spriteW));
+        memset(&s_groundGroups, 0, sizeof(s_groundGroups));
         return;
     }
     GroundBox box[128];
@@ -850,7 +852,7 @@ static void groundPrepareSprites(void)
         vis[S] = x + w > 0 && x < 256 && top + h > 0 && top < 240 && w > 0 && h > 0;
     }
     uint8_t cluster[128];
-    groundClusterBoxes(box, vis, 128, 2, cluster);
+    groundStableGroupsAssign(&s_groundGroups, box, vis, 128, 2, cluster);
 
     // per cluster root: the feet (max bottom), a marked member if any,
     // and the cluster's own box (for the shadow rule)
@@ -861,7 +863,10 @@ static void groundPrepareSprites(void)
     for (int S = 0; S < 128; S++) {
         if (!vis[S]) continue;
         int r = cluster[S];
-        if (feetS[r] < 0 || groundFeetBetter(&box[S], &box[feetS[r]])) feetS[r] = S;
+        // The group's initial leader is its stable representative. Only fall
+        // back to another member while that slot is temporarily invisible.
+        if (feetS[r] < 0 || S == r || (feetS[r] != r && groundFeetBetter(&box[S], &box[feetS[r]])))
+            feetS[r] = S;
         if (!cvalid[r]) { cbox[r] = box[S]; cvalid[r] = true; }
         else {
             if (box[S].x0 < cbox[r].x0) cbox[r].x0 = box[S].x0;
