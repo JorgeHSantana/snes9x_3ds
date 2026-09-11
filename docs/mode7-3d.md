@@ -42,10 +42,8 @@ feet. Pieces:
 * **Row table**: `gfxhw` records each plane row's w at the Mode 7 flush;
   sprites read the table of the last *rendered* frame (a skipped frame
   draws no plane and must not empty it).
-* **Characters**: hardware sprites whose boxes touch (2 px) when their
-  OAM slots first appear form one persistent character (union-find).
-  Later animation-box movement cannot split or merge established groups.
-  Its stable leader is the **largest** sprite at formation (the kart's
+* **Characters**: hardware sprites whose boxes touch (2 px) form one
+  character (union-find). Its feet are its **largest** sprite (the kart's
   body - a puff of dust joining a few px lower must not move the feet).
   A character right above a **flat** cluster (a shadow, <= 8 px tall)
   takes the shadow's row: the kart in the air stays on the ground.
@@ -115,8 +113,7 @@ EXTBG** (measured: the branch never runs), so it gains nothing here.
   `tests/test_blur_auto.cpp`): the encodings, the slew, the tracker
   (including the scenarios read off the console log: dust stealing a
   memory, an item's memory on the kart's spot, feet in the band below
-  the plane), persistent clustering and bridge prevention, shadow
-  adoption, the lift depths, the EXTBG
+  the plane), clustering, shadow adoption, the lift depths, the EXTBG
   predicate, the right-vertex marker with every alpha value.
 * **Azahar harness** (`tools/azahar-validate/`, scenes `smk-race-*` from
   Jorge's race state): side-by-side disparity per row band on a

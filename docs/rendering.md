@@ -153,11 +153,10 @@ per game: `GROUNDX=` signatures marked "not on ground" in the editor
 (Lakitu, a HUD item), which the Mode 7 block lists for the paused screen
 with a live spotlight per sprite. A character is several hardware
 sprites with different bottom rows; `groundPrepareSprites` clusters the
-visible boxes that touch when their OAM slots first appear (union-find,
-2 px tolerance), then retains that membership across animation frames.
-Every member takes the stable leader's row and one slot - the feet
-sprite's, or a marked member's - so tiles cannot split across depths and
-a mark or spotlight covers the whole character.
+visible boxes that touch (union-find, 2 px tolerance) once per frame and
+every member takes the cluster's lowest row and one slot - the feet
+sprite's, or a marked member's, so a mark or a spotlight covers the whole
+character.
 
 ## Final composition
 

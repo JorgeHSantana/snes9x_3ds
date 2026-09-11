@@ -126,54 +126,6 @@ TEST_CASE("ground: clusters chain through a middle sprite") {
     CHECK(c[1] == c[2]);
 }
 
-TEST_CASE("ground: persistent groups do not split when animation boxes move") {
-    GroundStableGroups s; memset(&s, 0, sizeof(s));
-    GroundBox b[3] = {
-        { 100, 150, 131, 181 }, { 104, 134, 127, 151 }, { 200, 40, 215, 55 }
-    };
-    bool vis[3] = { true, true, true };
-    uint8_t g[3];
-    groundStableGroupsAssign(&s, b, vis, 3, 2, g);
-    CHECK(g[0] == g[1]);
-    CHECK(g[2] != g[0]);
-
-    // Driver and kart no longer touch for this animation frame. Membership
-    // remains unchanged instead of rebuilding two different depths.
-    b[1] = { 104, 110, 127, 127 };
-    groundStableGroupsAssign(&s, b, vis, 3, 2, g);
-    CHECK(g[0] == g[1]);
-    CHECK(g[2] != g[0]);
-}
-
-TEST_CASE("ground: a new nearby sprite cannot bridge established groups") {
-    GroundStableGroups s; memset(&s, 0, sizeof(s));
-    GroundBox b[3] = { { 0, 0, 15, 15 }, { 32, 0, 47, 15 }, { 16, 0, 31, 15 } };
-    bool vis[3] = { true, true, false };
-    uint8_t g[3];
-    groundStableGroupsAssign(&s, b, vis, 3, 0, g);
-    CHECK(g[0] != g[1]);
-    vis[2] = true;
-    groundStableGroupsAssign(&s, b, vis, 3, 0, g);
-    CHECK(g[0] != g[1]);
-    CHECK((g[2] == g[0] || g[2] == g[1]));
-}
-
-TEST_CASE("ground: an OAM slot can be regrouped after two absent frames") {
-    GroundStableGroups s; memset(&s, 0, sizeof(s));
-    GroundBox b[2] = { { 0, 0, 15, 15 }, { 16, 0, 31, 15 } };
-    bool vis[2] = { true, true };
-    uint8_t g[2];
-    groundStableGroupsAssign(&s, b, vis, 2, 0, g);
-    CHECK(g[0] == g[1]);
-    vis[1] = false;
-    groundStableGroupsAssign(&s, b, vis, 2, 0, g);
-    groundStableGroupsAssign(&s, b, vis, 2, 0, g);
-    b[1] = { 100, 0, 115, 15 };
-    vis[1] = true;
-    groundStableGroupsAssign(&s, b, vis, 2, 0, g);
-    CHECK(g[0] != g[1]);
-}
-
 TEST_CASE("ground: sprite top follows the vertical wrap") {
     CHECK(groundSpriteTop(100) == 100);
     CHECK(groundSpriteTop(250) == -6);
