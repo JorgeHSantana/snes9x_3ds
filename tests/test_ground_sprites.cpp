@@ -99,6 +99,33 @@ TEST_CASE("ground: the sprite bottom row follows the SNES vertical wrap") {
     CHECK(groundSpriteBottom(250, 32) == 25);    // hanging off the top (VPos 250 = -6)
 }
 
+TEST_CASE("ground: touching sprites cluster, separate ones do not, invisible ones are ignored") {
+    GroundBox b[5] = {
+        { 100, 150, 131, 181 },   // kart body
+        { 104, 134, 127, 151 },   // driver, sitting on the body (touching)
+        { 100, 182, 131, 189 },   // shadow, 1 px below the body
+        { 200, 40, 215, 55 },     // an opponent far away
+        { 100, 150, 131, 181 },   // a duplicate box, but off screen
+    };
+    bool vis[5] = { true, true, true, true, false };
+    uint8_t c[5];
+    int n = groundClusterBoxes(b, vis, 5, 2, c);
+    CHECK(n == 2);
+    CHECK(c[0] == c[1]);
+    CHECK(c[0] == c[2]);
+    CHECK(c[3] != c[0]);
+    CHECK(c[4] == 4);          // invisible: its own root, not merged
+}
+
+TEST_CASE("ground: clusters chain through a middle sprite") {
+    GroundBox b[3] = { { 0, 0, 15, 15 }, { 40, 0, 55, 15 }, { 16, 0, 39, 15 } };
+    bool vis[3] = { true, true, true };
+    uint8_t c[3];
+    CHECK(groundClusterBoxes(b, vis, 3, 0, c) == 1);
+    CHECK(c[0] == c[1]);
+    CHECK(c[1] == c[2]);
+}
+
 TEST_CASE("ground: sprite top follows the vertical wrap") {
     CHECK(groundSpriteTop(100) == 100);
     CHECK(groundSpriteTop(250) == -6);
@@ -131,42 +158,85 @@ TEST_CASE("ground: the row a character uses glides toward the row it stands on")
     CHECK(groundSlew(200, 203, GROUND_SLEW_STEP) == 203);      // small moves land at once
 }
 
-TEST_CASE("ground: each physical OAM slot has independent depth memory") {
-    GroundOamTrack t; memset(&t, 0, sizeof(t));
-    CHECK(groundOamRow(&t, 12, 200) == 200);
-    CHECK(groundOamRow(&t, 13, 100) == 100);
-    groundOamFrameStart(&t);
-    CHECK(groundOamRow(&t, 12, 240) == 200); // confirmation frame
-    CHECK(groundOamRow(&t, 13, 60) == 100);  // cannot steal slot 12's memory
-    groundOamFrameStart(&t);
-    CHECK(groundOamRow(&t, 12, 240) == 204);
-    CHECK(groundOamRow(&t, 13, 60) == 96);
-    // Missing for two frames forgets the old occupant of that OAM slot.
-    groundOamFrameStart(&t); groundOamFrameStart(&t);
-    CHECK(groundOamRow(&t, 12, 100) == 100);
+TEST_CASE("ground: the tracker follows a character by position across animation changes") {
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    CHECK(groundTrackRow(&t, 100, 180, 200) == 200);
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, 102, 176, 240) == 200);           // first frame confirms the new direction
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, 104, 172, 240) == 204);           // sustained movement: glide begins
+    // another character 100 px away is not this one, even in the same frame
+    CHECK(groundTrackRow(&t, 204, 172, 100) == 100);
+    // unseen for two frames: forgotten, the next sight starts fresh
+    groundTrackFrameStart(&t); groundTrackFrameStart(&t); groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, 104, 172, 100) == 100);
 }
 
 TEST_CASE("ground: a one-frame sprite-size change cannot wobble depth") {
-    GroundOamTrack t; memset(&t, 0, sizeof(t));
-    CHECK(groundOamRow(&t, 42, 239) == 239);
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    CHECK(groundTrackRow(&t, 127, 101, 239) == 239);
     for (int frame = 0; frame < 12; frame++) {
-        groundOamFrameStart(&t);
+        groundTrackFrameStart(&t);
         // A 16/32px animation alternates the inferred foot and therefore the
         // plane row. Neither direction survives for two rendered frames.
         int tall = (frame & 1) == 0;
-        CHECK(groundOamRow(&t, 42, tall ? 200 : 239) == 239);
+        CHECK(groundTrackRow(&t, 127, tall ? 117 : 101, tall ? 200 : 239) == 239);
     }
 }
 
 TEST_CASE("ground: sustained motion survives size-change filtering") {
-    GroundOamTrack t; memset(&t, 0, sizeof(t));
-    CHECK(groundOamRow(&t, 42, 239) == 239);
-    groundOamFrameStart(&t);
-    CHECK(groundOamRow(&t, 42, 220) == 239); // confirmation frame
-    groundOamFrameStart(&t);
-    CHECK(groundOamRow(&t, 42, 210) == 235); // same direction: follows
-    groundOamFrameStart(&t);
-    CHECK(groundOamRow(&t, 42, 200) == 231);
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    CHECK(groundTrackRow(&t, 127, 101, 239) == 239);
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, 127, 105, 220) == 239); // confirmation frame
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, 127, 109, 210) == 235); // same direction: follows
+    groundTrackFrameStart(&t);
+    CHECK(groundTrackRow(&t, 127, 113, 200) == 231);
+}
+
+TEST_CASE("ground: a cluster in the air adopts the cluster right below it (its shadow)") {
+    GroundBox cb[3] = {
+        { 100, 120, 131, 151 },   // kart in the air
+        { 104, 158, 127, 165 },   // its shadow, 6 px below
+        { 100, 200, 131, 231 },   // another kart far below
+    };
+    bool valid[3] = { true, true, true };
+    CHECK(groundShadowBelow(cb, valid, 3, 0, 24) == 1);
+    CHECK(groundShadowBelow(cb, valid, 3, 1, 24) == -1);       // nothing within reach below the shadow
+    CHECK(groundShadowBelow(cb, valid, 3, 2, 24) == -1);
+    valid[1] = false;
+    CHECK(groundShadowBelow(cb, valid, 3, 0, 24) == -1);       // the shadow gone: no adoption
+    // a puff of dust below the kart is 16 px tall: not a shadow, never adopted
+    GroundBox dust[2] = { { 100, 120, 131, 151 }, { 108, 156, 123, 171 } };
+    bool v2[2] = { true, true };
+    CHECK(groundShadowBelow(dust, v2, 2, 0, 24) == -1);
+}
+
+TEST_CASE("ground: the feet belong to the largest sprite of a character, not the lowest") {
+    GroundBox body   = { 100, 150, 131, 181 };   // 32x32 kart
+    GroundBox shadow = { 104, 182, 127, 187 };   // 24x6, lower
+    GroundBox dust   = { 96, 184, 111, 199 };    // 16x16 puff, lowest
+    CHECK(groundFeetBetter(&body, &shadow));
+    CHECK(groundFeetBetter(&body, &dust));
+    CHECK_FALSE(groundFeetBetter(&dust, &body));
+    GroundBox body2 = { 100, 154, 131, 185 };    // same size, lower: wins the tie
+    CHECK(groundFeetBetter(&body2, &body));
+}
+
+
+TEST_CASE("ground: drift smoke next to the kart cannot steal the kart's memory") {
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    GroundTrackReq first[1] = { { 100, 180, 200, 0 } };       // the kart, frame 1
+    groundTrackAssign(&t, first, 1);
+    groundTrackFrameStart(&t);
+    // frame 2: smoke appears 8 px away and is listed BEFORE the kart;
+    // the kart hopped to a farther row and must glide, not restart
+    GroundTrackReq req[2] = { { 108, 184, 120, 0 }, { 100, 180, 240, 0 } };
+    groundTrackAssign(&t, req, 2);
+    CHECK(req[1].rowW == 200);      // the kart kept its memory; direction awaits confirmation
+    CHECK(req[0].rowW == 120);      // the smoke is a new character: at once
+    CHECK(t.count == 2);
 }
 
 TEST_CASE("ground: feet just below the plane's last row stand on that row") {
@@ -176,4 +246,19 @@ TEST_CASE("ground: feet just below the plane's last row stand on that row") {
     CHECK(groundRowNear(&f, 110, 16) == groundRowAt(&f, 104));   // the band below: the last row
     CHECK(groundRowNear(&f, 121, 16) == 0);                      // too far below: off the plane
     CHECK(groundRowNear(&f, 10, 16) == 0);                       // above the horizon: off
+}
+
+TEST_CASE("ground: a memory on the kart's spot with a far-off row loses to the kart's own") {
+    GroundTrack t; memset(&t, 0, sizeof(t));
+    GroundTrackReq f1[2] = { { 127, 101, 239, 0 }, { 127, 60, 120, 0 } };   // kart + an item above it
+    groundTrackAssign(&t, f1, 2);
+    groundTrackFrameStart(&t);
+    // the item drops onto the kart's spot for a frame, then vanishes
+    GroundTrackReq f2[2] = { { 127, 101, 239, 0 }, { 127, 104, 120, 0 } };
+    groundTrackAssign(&t, f2, 2);
+    CHECK(f2[0].rowW == 239);        // the kart kept its own memory
+    groundTrackFrameStart(&t);
+    GroundTrackReq f3[1] = { { 127, 101, 239, 0 } };
+    groundTrackAssign(&t, f3, 1);
+    CHECK(f3[0].rowW == 239);        // and still: no glide from the item's 120
 }
