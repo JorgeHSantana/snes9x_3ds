@@ -41,6 +41,13 @@ Three themes — **Dark mode** (default), **RetroArch-style** (checkerboard back
 
 ## Notifications (`3dsui_notif`)
 
+The 3D editor's Hide Unused filter must never remove a disabled layer's
+enable/disable checkbox: the renderer skips that layer, so last-frame usage
+alone cannot distinguish a diagnostic disable from game inactivity. Disabled
+checkboxes remain visible (dimmed when unused); depth rows still follow actual
+usage. This is a menu-only visibility rule, with no retained usage history and
+no extra per-frame work. Regression scene: `layer-toggle` in the Azahar harness.
+
 * Small GPU-drawn toasts: save/load state, saving-in-progress, slot changed, controller swapped, screenshot, fast-forward, broken-audio warning, paused, plus an FPS overlay (top-left, re-uploaded only when the text changes).
 * Text is rasterized into a dedicated RGBA4 texture; a 2×2 white block planted in the corner lets the background rectangle and the text draw from the same texture in one batch.
 * Types (Success/Error/Warning/Info) map to fixed background colors at 85% alpha. "Paused" is a persistent full-width overlay drawn together with a dim rectangle over the game.

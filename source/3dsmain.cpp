@@ -18,6 +18,7 @@
 
 #include "3dsutils.h"
 #include "3dssettings.h"
+#include "3dslayeruse.h"
 #include "3dsgroundsprites.h"
 #include "3dsstereokey.h"
 #include "3dslog.h"
@@ -1860,7 +1861,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     static const char *layerNames[LAYER_BRIGHTNESS + 1] = { "  BG1", "  BG2", "  BG3", "  BG4", "  Sprites", "  Backdrop", "  Color Math", "  Brightness" };
     for (int layer = LAYER_BG0; layer <= LAYER_BRIGHTNESS; layer++) {
         bool used = layer > LAYER_OBJ || stereo3dRowUsed(layer, -1);
-        if (!used && settings3DS.StereoHideUnused) continue;
+        if (!layer_toggle_visible(used, settings3DS.LayerEnabled[layer], settings3DS.StereoHideUnused)) continue;
         AddMenuCheckbox(items, layerNames[layer], settings3DS.LayerEnabled[layer],
             [layer]( int val ) {
                 if (CheckAndUpdateToggle( settings3DS.LayerEnabled[layer], val )
@@ -2036,7 +2037,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                     menu3dsMarkTabDirty(TAB_3D);   // rebuild with the rows filtered
                 }
             });
-        stereoHelp(items, "Rows the paused screen did not draw are dimmed; this\nhides them instead. Hidden layers keep their depth -\npause on a screen that uses them to edit.");
+        stereoHelp(items, "Rows the paused screen did not draw are dimmed; this\nhides them instead. Disabled layer toggles stay visible\nso you can reenable them. Hidden depths are preserved.");
         AddMenuDisabledOption(items, ""_s);
 
         AddMenuHeader2(items, "Tools"_s);

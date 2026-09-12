@@ -45,10 +45,18 @@ static bool menu_help_probe_save(const char* path)
     return fclose(file) == 0 && ok;
 }
 
+#ifdef PROBE_LAYER_TOGGLE
+#include "layer_toggle_probe.h"
+#endif
+
 static void menu_help_probe_tick(int& frames, bool is_dialog, int& tab_index,
                                 std::vector<SMenuTab>& tabs, SMenuTab*& current,
                                 u32& keys_down)
 {
+#ifdef PROBE_LAYER_TOGGLE
+    layer_toggle_probe_tick(frames, is_dialog, tab_index, tabs, current, keys_down);
+    return;
+#endif
     const size_t count = sizeof(MENU_HELP_PROBE_CASES) / sizeof(MENU_HELP_PROBE_CASES[0]);
     if (menu_help_probe_case >= count) {
         return;

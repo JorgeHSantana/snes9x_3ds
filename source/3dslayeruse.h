@@ -15,6 +15,13 @@
 #define LAYER_USE_LAYERS 5
 #define LAYER_USE_PRIOS  4
 
+// Diagnostic toggles must remain reachable even after disabling a layer
+// stops its draw calls (and therefore its last-frame usage marks).
+static inline bool layer_toggle_visible(bool used, bool enabled, bool hide_unused)
+{
+    return used || !enabled || !hide_unused;
+}
+
 struct LayerUse
 {
     uint16_t acc[LAYER_USE_LAYERS][LAYER_USE_PRIOS];    // current frame

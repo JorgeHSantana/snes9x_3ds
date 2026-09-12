@@ -1098,7 +1098,13 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 #ifdef PROBE_MENU_HELP
     // Enter the menu after autoboot; expose conditional palette controls.
     static unsigned menu_probe_frames = 0;
-    if (++menu_probe_frames == 120) {
+    ++menu_probe_frames;
+#ifdef PROBE_LAYER_TOGGLE
+    settings3DS.StereoHideUnused = 1;
+    if (menu_probe_frames == 120 || menu_probe_frames == 240) {
+#else
+    if (menu_probe_frames == 120) {
+#endif
         settings3DS.PaletteFix = 1;
         settings3DS.AutoSaveLoad = false;
         settings3DS.AutoSavestate = false;

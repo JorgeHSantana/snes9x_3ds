@@ -1,6 +1,34 @@
 #include "doctest.h"
 #include "../source/3dslayeruse.h"
 
+TEST_CASE("layer toggle: hide unused never hides a disabled layer") {
+    for (bool used : {false, true}) {
+        for (bool enabled : {false, true}) {
+            for (bool hide_unused : {false, true}) {
+                CHECK(layer_toggle_visible(used, enabled, hide_unused) ==
+                      !(hide_unused && enabled && !used));
+            }
+        }
+    }
+}
+
+TEST_CASE("layer toggle: disable, render, reopen and reenable") {
+    for (int layer = 0; layer < LAYER_USE_LAYERS; ++layer) {
+        LayerUse usage;
+        layerUseReset(&usage);
+        layerUseMark(&usage, layer, 0);
+        layerUseFrameEnd(&usage);
+        CHECK(layer_toggle_visible(layerUseLayerUsed(&usage, layer), true, true));
+        layerUseFrameStart(&usage);
+        layerUseFrameEnd(&usage); // Disabled layer no longer draws.
+        CHECK_FALSE(layerUseLayerUsed(&usage, layer));
+        CHECK(layer_toggle_visible(layerUseLayerUsed(&usage, layer), false, true));
+        layerUseMark(&usage, layer, 0); // Reenabled layer draws again.
+        layerUseFrameEnd(&usage);
+        CHECK(layer_toggle_visible(layerUseLayerUsed(&usage, layer), true, true));
+    }
+}
+
 TEST_CASE("layer use: nothing is used before a frame is latched") {
     LayerUse u; layerUseReset(&u);
     layerUseMark(&u, 0, 0);
