@@ -28,6 +28,13 @@ This does not group sprites, move their stereo depth or reorder OBJ.
 
 ## Host validation
 
+Final host run: 208 cases / 139414 assertions, including ASan+UBSan.
+Startup config reads are explicitly tested with an absent write buffer;
+writable opens must fail before truncation in that condition.
+The ARM ELF reserves 65,596 bytes of BSS for the serialization workspace
+(64 KiB + 60 bytes); this is a deliberate resident-memory tradeoff, not
+a reduction in steady-state RAM use.
+
 Run `make -C tests test`. New cases exercise real stdio write failure, fake
 open/short-write/close failures, retry/silence state, memory-writer overflow,
 all 65,536 attribute-byte transitions, all 128 sprite offsets, and equivalent
@@ -47,6 +54,12 @@ Compare baseline/candidate for `smk-m7-direct`, `smk-m7-layer`, and
 to ensure the hidden option no longer affects Layer. Record actual results
 in the journal, not merely successful boot. Builds used for publication must
 be clean and omit all PROBE flags.
+
+Completed with candidate `b893227` and ARM CI run `34665296669`: exact RGB
+equality in all three baseline/candidate comparisons; exact full savestate
+equality and successful save/load in each scene. Layer M7FX=0/1 is also RGB
+identical. See the journal and committed captures under
+`tools/azahar-validate/goldens/optimization-78-79/` for the evidence.
 
 ## Work explicitly still open
 

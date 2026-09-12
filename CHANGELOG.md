@@ -4,9 +4,22 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Fixes
+* Preserve pending SRAM changes on write/close failure and restore the previous
+  audio-silence state. File savestates also report buffered write failures.
+* Ignore hidden Mode 7 distance-effect settings in Layer mode.
+* Make clean release builds require the same patched citro3d as local builds.
 * Move the remaining inline option explanations in Emulator, Settings and
   Controls into SELECT help, including savestates, screenshots, logging,
   SRAM, palette redraw reduction and Circle Pad hotkeys. Status rows remain visible.
+
+### Optimizations
+* Reuse a bounded serialization workspace instead of allocating temporary
+  blocks for each savestate/rewind field group. Save format is unchanged.
+* Reuse sprite scanline lists for appearance-only OAM changes, preserving
+  redraw timing and geometry/rotation invalidation.
+* Avoid repeated reference-pass square roots in Mode 7 Direct.
+* These are the first changes for #78/#79, not completion of every proposed
+  experiment. Hardware FPS/latency improvements remain to be measured.
 
 ### Features
 * **Two Mode 7 depth models** in the rewritten 3D Stereo menu: Layer keeps
