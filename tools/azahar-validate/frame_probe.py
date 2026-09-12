@@ -11,6 +11,20 @@ import subprocess
 import time
 import validate as harness
 
+PNG_IEND = b"\x00\x00\x00\x00IEND\xaeB\x60\x82"
+
+
+def capture_complete(path):
+    """True only after the PNG writer has committed its final IEND chunk."""
+    try:
+        if os.path.getsize(path) < len(PNG_IEND):
+            return False
+        with open(path, "rb") as capture:
+            capture.seek(-len(PNG_IEND), os.SEEK_END)
+            return capture.read() == PNG_IEND
+    except OSError:
+        return False
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -55,7 +69,7 @@ def main():
         while time.monotonic() < deadline:
             if proc.poll() is not None:
                 raise RuntimeError("Azahar exited before capture")
-            if os.path.exists(capture) and os.path.getsize(capture) > 0:
+            if capture_complete(capture):
                 current_logs = [sd.path(name) for name in os.listdir(sd.app)
                                 if name.startswith("debug_") and name.endswith("_session.log")]
                 if current_logs:

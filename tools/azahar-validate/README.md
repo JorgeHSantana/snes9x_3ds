@@ -89,7 +89,10 @@ directions** - a probe build shipped by accident is a real risk.
 * **The display must be awake and unlocked** for `screencapture` ("could not
   create image" otherwise; the harness runs `caffeinate -d`). With a
   `-DPROBE_FBDUMP` build and `--fbdump` the emulator writes the top screen
-  itself and the lock does not matter. Azahar's own `-d/--dump-video` was
+  itself and the lock does not matter. `frame_probe.py` waits for the PNG's
+  final IEND chunk before copying it; file existence alone is not sufficient
+  because the 3DS process creates the file before finishing the write.
+  Azahar's own `-d/--dump-video` was
   tried: launched from the CLI it never ran the 3dsx (a dialog behind the
   lock, most likely), so it is not used.
 * The session log is named by version (`debug_v2.1_session.log`).

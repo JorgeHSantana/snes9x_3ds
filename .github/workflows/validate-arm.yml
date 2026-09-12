@@ -36,7 +36,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Host tests
-        run: make -C tests test -j2
+        run: |
+          make -C tests test -j2
+          python3 tools/azahar-validate/test_frame_probe.py
       - name: Build capture-only validation binary
         run: |
           docker run --rm -v "$PWD":/snes9x_3ds -w /snes9x_3ds \
