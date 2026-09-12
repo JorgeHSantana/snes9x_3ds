@@ -4,6 +4,7 @@
 void log3dsInitialize();
 void log3dsWrite(const char *fmt, ...);
 void log3dsClose(void);
+void log3dsTick();
 const char* log3dsGetCurrentDate();
 
 #define DUMP_VECTOR_INFO(name, vec) \

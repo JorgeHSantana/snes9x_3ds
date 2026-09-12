@@ -36,7 +36,18 @@ Implements both the `impl3ds*` API consumed by `3dsmain` and the `S9x*` callback
 | `3dssettings` | `S9xSettings3DS settings3DS` global; global vs per-game split with `UseGlobal*` switches; `settings3dsUpdate()` recomputes derived values (`TicksPerFrame`, palette-fix mode → `SNESGameFixes.PaletteCommitLine`, SRAM autosave delay); per-title heuristic default for the palette fix on Old 3DS |
 | `3dsconfig` | Versioned INI-ish `key=value` read/write (global file v1.6, game file v1.5); the file starts with `# v<x.y>` so newer keys are skipped when reading older files; primitives for int (with clamping), string, bitmask and enums |
 | `3dsexit` | APT hooks (`handleAptHook`): HOME/sleep → restore CPU limit, stop audio (prevents a hung looped sample), restore LCD rate, conditionally autosave SRAM, drop to pause menu; resume → reapply CPU limit, mark screens dirty |
-| `3dslog` | Session log `debug_v<ver>_session.log` (truncated each run), gated on `LogFileEnabled`; `[SS.mmm]` elapsed-time prefixes; `fflush` after every write |
+| `3dslog` | Session log `debug_v<ver>_session.log` (truncated each run); logging choice latched at initialization (restart to change); `[SS.mmm]` prefixes; dedicated fixed 32 KiB stdio buffer, flushed periodically and at close |
+
+Logging no longer forces `fflush` for every message. Writes and gameplay/menu
+ticks request a flush after one second; a full buffer can write earlier. Ticks
+use the existing log lock non-blockingly, but the flush itself is synchronous:
+this reduces write frequency, not all SD stalls. If the main thread is stalled,
+suspended or in a long operation, the time window can exceed one second. Normal
+shutdown drains the buffer; abrupt crashes/power loss may lose its recent tail.
+I/O errors disable that session's sink without recursive diagnostics. The atomic
+ready flag publishes lock initialization and gates producers; all FILE/timestamp
+access stays under the log lock, including close. Worker producers no longer
+read mutable menu settings to decide whether to log.
 | `3dstimer` | Profiling buckets (main loop, SuperFX, draws, GPU wait…), compiled out unless `PROFILING_DISABLED` is undefined; toggled in-game with SELECT+L+Right/Left; 120-frame window |
 | `3dsutils` | DJB2 string hash (thumbnail cache keys), sanitized paths, trimmed basenames, RNG helpers |
 | `png_utils` | libpng decode — everything normalized to 8-bit RGBA into `g_fileBuffer`, size-capped; fast encode with compression level 1; RAII handles |

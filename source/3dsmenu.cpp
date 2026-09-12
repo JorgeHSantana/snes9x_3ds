@@ -11,6 +11,7 @@
 #include "3dsui_img.h"
 #include "3dsimpl.h"
 #include "3dsmenu.h"
+#include "3dslog.h"
 
 #define ANIMATE_TAB_STEPS 3
 #define ANIMATE_DIALOG_STEPS 8
@@ -938,6 +939,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
 
     while (aptMainLoop())
     {
+        log3dsTick();
         if (GPU3DS.emulatorState == EMUSTATE_END)
         {
             returnResult = -1;

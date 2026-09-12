@@ -1,87 +1,100 @@
-
+#include <atomic>
 #include <time.h>
 #include <stdio.h>
 #include <stdarg.h>
-#include <stdbool.h>
-#include <sys/stat.h>
-
+#include <3ds.h>
 #include "3dssettings.h"
 #include "3dslog.h"
-#include <3ds.h>
+#include "buffered_log.h"
 
-// The MSU-1 read-ahead thread logs through msu1_diag while the main
-// thread logs too (and closes the file at exit): newlib FILE state is not
-// thread-safe, and a check-then-fprintf on a file being closed reads a
-// NULL FILE. One lock around every use.
-static LightLock s_logLock;
-static bool s_logLockInit = false;
-static inline void logLockEnsure(void) { if (!s_logLockInit) { LightLock_Init(&s_logLock); s_logLockInit = true; } }
+// Initialize/close are main-thread-only. READY publishes the initialized
+// lock. Every file/timestamp access is serialized with background producers.
+static LightLock LOG_LOCK;
+static bool LOCK_INITIALIZED = false;
+static std::atomic<bool> READY{false};
+static BufferedLog LOG;
+static uint64_t START_MS = 0;
+static uint64_t LAST_ELAPSED_MS = 0;
 
-static const bool FORCE_DEBUG_LOGS = false;
-
-static FILE *logFile = NULL;
-static u64 osTime;
-static u64 elapsedMs = 0;
-
-void setElapsedTime(u64 ms) {
-    char timestamp[16];
-    int seconds = ((int)(ms / 1000)) % 100;
-    int milliseconds = ((int)ms) % 1000;
-
-    snprintf(timestamp, sizeof(timestamp) - 1, "[%02d.%03d]", seconds, milliseconds);
-    fprintf(logFile, "%s ", timestamp);
+void log3dsInitialize()
+{
+    if (READY.load() || !settings3DS.LogFileEnabled) {
+        return;
+    }
+    if (!LOCK_INITIALIZED) {
+        LightLock_Init(&LOG_LOCK);
+        LOCK_INITIALIZED = true;
+    }
+    char path[PATH_MAX];
+    const int32_t count = snprintf(path, sizeof(path), "%s/debug_%s_session.log",
+        settings3DS.RootDir, settings3dsGetAppVersion("v"));
+    if (count < 0 || static_cast<size_t>(count) >= sizeof(path)) {
+        return;
+    }
+    LightLock_Lock(&LOG_LOCK);
+    START_MS = osGetTime();
+    LAST_ELAPSED_MS = 0;
+    READY.store(LOG.open(path, START_MS));
+    LightLock_Unlock(&LOG_LOCK);
 }
 
-void log3dsInitialize() {
-    if (logFile || (!settings3DS.LogFileEnabled && !FORCE_DEBUG_LOGS)) return;
-
-    // only needed if we also want to debug the very first run
-    if (FORCE_DEBUG_LOGS) {
-        mkdir(settings3DS.RootDir, 0777);
+void log3dsWrite(const char* format, ...)
+{
+    if (format == nullptr || !READY.load()) {
+        return;
     }
-
-    char filepath[PATH_MAX];
-    snprintf(filepath, sizeof(filepath), "%s/debug_%s_session.log", settings3DS.RootDir, settings3dsGetAppVersion("v"));
-
-    logFile = fopen(filepath, "w"); // overwrite file on each run
-    if (logFile) {
-        setvbuf(logFile, NULL, _IOLBF, 512);   // line-buffered: diagnostics reach the file immediately
-        osTime = osGetTime();
+    LightLock_Lock(&LOG_LOCK);
+    if (!READY.load()) {
+        LightLock_Unlock(&LOG_LOCK);
+        return;
     }
-}
-
-void log3dsWrite(const char *fmt, ...) {
-    if (!logFile || (!settings3DS.LogFileEnabled && !FORCE_DEBUG_LOGS)) return;
-    logLockEnsure();
-    LightLock_Lock(&s_logLock);
-    if (!logFile) { LightLock_Unlock(&s_logLock); return; }   // closed while we waited
-
-    u64 currentElapsedMs = osGetTime() - osTime;
-
-    if (currentElapsedMs > elapsedMs) {
-        setElapsedTime(currentElapsedMs);
-        elapsedMs = currentElapsedMs;
+    const uint64_t now_ms = osGetTime();
+    const uint64_t elapsed_ms = now_ms >= START_MS ? now_ms - START_MS : 0;
+    bool ok;
+    if (elapsed_ms > LAST_ELAPSED_MS) {
+        ok = LOG.write("[%02u.%03u] ", static_cast<uint32_t>((elapsed_ms / 1000) % 100),
+            static_cast<uint32_t>(elapsed_ms % 1000));
+        LAST_ELAPSED_MS = elapsed_ms;
     } else {
-        fprintf(logFile, "%s ", "       |");
+        ok = LOG.write("       | ");
     }
-    
     va_list args;
-    va_start(args, fmt);
-    vfprintf(logFile, fmt, args);
-    fprintf(logFile, "\n");
-    fflush(logFile);
+    va_start(args, format);
+    if (ok) {
+        ok = LOG.write_v(format, args);
+    }
     va_end(args);
-    LightLock_Unlock(&s_logLock);
+    if (ok) {
+        ok = LOG.write("\n") && LOG.tick(now_ms);
+    }
+    if (!ok) {
+        READY.store(false);
+        (void)LOG.close(); // Failed sink: stop; never recursively log I/O errors.
+    }
+    LightLock_Unlock(&LOG_LOCK);
 }
 
-void log3dsClose(void) {
-    logLockEnsure();
-    LightLock_Lock(&s_logLock);
-    if (logFile) {
-        fclose(logFile);
-        logFile = NULL;
+void log3dsTick()
+{
+    if (!READY.load() || LightLock_TryLock(&LOG_LOCK) != 0) {
+        return;
     }
-    LightLock_Unlock(&s_logLock);
+    if (READY.load() && !LOG.tick(osGetTime())) {
+        READY.store(false);
+        (void)LOG.close(); // Preserve gameplay when the SD rejects log writes.
+    }
+    LightLock_Unlock(&LOG_LOCK);
+}
+
+void log3dsClose()
+{
+    if (!LOCK_INITIALIZED) {
+        return;
+    }
+    LightLock_Lock(&LOG_LOCK);
+    READY.store(false);
+    (void)LOG.close(); // Best-effort shutdown; no working diagnostic sink.
+    LightLock_Unlock(&LOG_LOCK);
 }
 
 const char* log3dsGetCurrentDate() {

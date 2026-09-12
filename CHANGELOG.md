@@ -13,6 +13,9 @@ Notable changes to this project will be documented in this file.
   SRAM, palette redraw reduction and Circle Pad hotkeys. Status rows remain visible.
 
 ### Optimizations
+* Buffer session logs in a dedicated 32 KiB buffer with periodic/shutdown
+  flushing instead of flushing every message. Recent messages may be lost on
+  an abrupt crash; SD writes remain synchronous when the buffer is drained.
 * Reuse a bounded serialization workspace instead of allocating temporary
   blocks for each savestate/rewind field group. Save format is unchanged.
 * Reuse sprite scanline lists for appearance-only OAM changes, preserving

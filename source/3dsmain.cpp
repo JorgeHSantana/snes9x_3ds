@@ -4018,6 +4018,7 @@ void emulatorLoop()
         }
 
         updateProfilingOutput(++totalFrames);
+        log3dsTick();
 
         t3dsStartTimer(TIMER_RUN_ONE_FRAME);
         impl3dsRunOneFrame(firstFrame, skipDrawing);
