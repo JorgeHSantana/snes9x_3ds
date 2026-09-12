@@ -47,7 +47,9 @@ shutdown drains the buffer; abrupt crashes/power loss may lose its recent tail.
 I/O errors disable that session's sink without recursive diagnostics. The atomic
 ready flag publishes lock initialization and gates producers; all FILE/timestamp
 access stays under the log lock, including close. Worker producers no longer
-read mutable menu settings to decide whether to log.
+read mutable menu settings to decide whether to log. Timing instrumentation
+uses `log3dsIsReady()` for the same reason: the open sink, not a setting that
+configuration loading may subsequently mutate, is the source of truth.
 | `3dstimer` | Profiling buckets (main loop, SuperFX, draws, GPU wait…), compiled out unless `PROFILING_DISABLED` is undefined; toggled in-game with SELECT+L+Right/Left; 120-frame window |
 | `perf_stats.h` | Fixed-storage timing aggregate and overflow-safe ARM tick conversion. Rewind uses it only when session logging is enabled; every 16 successful captures it reports serialize, delta/keyframe commit, thumbnail and total average/maximum, plus mixer-busy deferrals and failures |
 | `3dsutils` | DJB2 string hash (thumbnail cache keys), sanitized paths, trimmed basenames, RNG helpers |

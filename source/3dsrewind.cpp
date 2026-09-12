@@ -404,7 +404,7 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             // (issue #55 field logs: lock 15-40ms typical, 385ms worst).
             // A capture is opportunistic by design - on a busy mixer the
             // schedule is left untouched so it retries next frame.
-            const bool measure_perf = settings3DS.LogFileEnabled;
+            const bool measure_perf = log3dsIsReady();
             u64 capStartTick = svcGetSystemTick();
             u64 freeze_ticks = 0;
             u64 commit_ticks = 0;

@@ -86,6 +86,11 @@ void log3dsTick()
     LightLock_Unlock(&LOG_LOCK);
 }
 
+bool log3dsIsReady()
+{
+    return READY.load();
+}
+
 void log3dsClose()
 {
     if (!LOCK_INITIALIZED) {

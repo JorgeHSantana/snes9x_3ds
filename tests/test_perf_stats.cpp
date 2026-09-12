@@ -2,6 +2,9 @@
 #include "perf_stats.h"
 
 #include <limits>
+#include <fstream>
+#include <iterator>
+#include <string>
 
 TEST_CASE("timing stats aggregate count average and maximum without allocation")
 {
@@ -46,4 +49,14 @@ TEST_CASE("tick conversion is exact across whole seconds without overflow")
     CHECK(ticks_to_microseconds(clock_hz, clock_hz) == 1000000);
     CHECK(ticks_to_microseconds(clock_hz + clock_hz / 2, clock_hz) == 1500000);
     CHECK(ticks_to_microseconds(clock_hz, 0) == 0);
+}
+
+TEST_CASE("rewind timing follows latched logger readiness, not mutable settings")
+{
+    std::ifstream file("../source/3dsrewind.cpp");
+    REQUIRE(file.is_open());
+    const std::string source((std::istreambuf_iterator<char>(file)),
+                             std::istreambuf_iterator<char>());
+    CHECK(source.find("const bool measure_perf = log3dsIsReady();") != std::string::npos);
+    CHECK(source.find("const bool measure_perf = settings3DS.LogFileEnabled;") == std::string::npos);
 }
