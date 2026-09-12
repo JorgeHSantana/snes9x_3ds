@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        probe: [frame, layer-toggle]
+        probe: [frame, layer-toggle, io-timing]
     steps:
       - uses: actions/checkout@v4
       - name: Host tests
@@ -40,10 +40,10 @@ jobs:
       - name: Build capture-only validation binary
         run: |
           docker run --rm -v "$PWD":/snes9x_3ds -w /snes9x_3ds \
-            devkitpro/devkitarm bash -c 'make clean && make 3dsx -j2 EXTRA_DEFINES="-DPROBE_FBDUMP -DPROBE_FORCE_SLIDER -DPROBE_SBS ${{ matrix.probe == 'layer-toggle' && '-DPROBE_MENU_HELP -DPROBE_LAYER_TOGGLE' || '' }}"'
+            devkitpro/devkitarm bash -c 'make clean && make 3dsx -j2 EXTRA_DEFINES="-DPROBE_FBDUMP -DPROBE_FORCE_SLIDER -DPROBE_SBS ${{ matrix.probe == 'layer-toggle' && '-DPROBE_MENU_HELP -DPROBE_LAYER_TOGGLE' || matrix.probe == 'io-timing' && '-DPROBE_IO_TIMING' || '' }}"'
       - uses: actions/upload-artifact@v4
         with:
-          name: azahar-${{ matrix.probe == 'frame' && 'probe' || 'layer-toggle' }}-${{ github.sha }}
+          name: azahar-${{ matrix.probe == 'frame' && 'probe' || matrix.probe }}-${{ github.sha }}
           path: |
             output/snes9x_3ds.3dsx
             output/snes9x_3ds.elf

@@ -94,6 +94,18 @@ can delay it, while a full stdio buffer can write sooner.
 Old/New hardware timings, audio underruns, frame-time tails and compatibility
 scenes remain required. Passing tests alone does not settle these candidates.
 
+### Instrumentation prepared for the next hardware pass
+
+The current candidate adds bounded diagnostics, not an optimization claim.
+`[perf][sram]` reports total/path/write microseconds, bytes and result for each
+save. `[perf][rewind]` aggregates 16 successful captures: serialization,
+delta/keyframe commit, thumbnail and total average/maximum microseconds, plus
+mixer-busy deferrals and failures. Rewind phase timers run only when logging is
+enabled; no log is written per frame. `PROBE_IO_TIMING` and the `smk-perf-io`
+scene validate record production in Azahar, but only the 3DS can establish SD
+latency and real frame-time impact. SRAM open/write/close are intentionally one
+phase until hardware data shows that splitting the writer is worthwhile.
+
 ## Latest menu regression (separate from optimization)
 
 Nightly `32130cc`, release CI `34669950832` green: disabled layer checkboxes

@@ -37,6 +37,7 @@ Exit code 1 when a region falls outside its `expect` / `ab_expect` band.
 | `-DPROBE_DRAW_STATS` | `[drawstats]` per-frame draw/vertex counts in the session log every 60 frames | perf numbers |
 | `-DPROBE_SBS` | both eyes composite side by side on the top screen (left half = left eye) so one capture carries the per-row disparity (`"sbs": true` scenes) | stereo geometry (Mode 7 perspective) |
 | `-DPROBE_FBDUMP` | the emulator saves the presented top screen to `sdmc:/3ds/snes9x_3ds/probe_top_600.png` (and `_1200`) 10 s / 20 s after the ROM loads; run with `--fbdump` and the capture never touches the Mac's screen - **works with the display locked** | every scene when the Mac is locked |
+| `-DPROBE_IO_TIMING` | forces one SRAM save at frame 900 so the instrumentation's SRAM and rewind log records can be validated; the runner backs up and restores that game's SRAM | `smk-perf-io` at frame 1200 |
 
 ```
 make clean && make 3dsx EXTRA_DEFINES='-DPROBE_FORCE_SLIDER'

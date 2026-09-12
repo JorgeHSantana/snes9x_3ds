@@ -25,7 +25,7 @@ Implements both the `impl3ds*` API consumed by `3dsmain` and the `S9x*` callback
 * `impl3dsQuickSaveLoad()` (`:1019`): drains the mixer, shows an in-progress notification and renders one frame before the blocking save, then shows the result.
 * **Broken-audio savestate detection**: `impl3dsHasBrokenAudioStateSignature()` (`:527`) heuristically detects states saved with dead audio (SPC stuck in IPL ROM, DSP FLG = mute|echo-off, no keyed channels, other DSP regs zero) and warns before loading; context logged to `<state>.broken-audio.log`.
 * `impl3dsTakeScreenshot()` (`:1135`): waits for the display transfer (`GSPGPU_EVENT_PPF`), **undoes** the frame-end buffer swap, reads back the framebuffer and saves a PNG. Savestate screenshots are captured at 0.5 scale.
-* `S9xAutoSaveSRAM()` (`:1274`): sets the mixer's `generateSilence` flag (instead of stopping NDSP) while writing `.srm`.
+* `S9xAutoSaveSRAM()` (`3dsimpl.cpp`): sets the mixer's `generateSilence` flag (instead of stopping NDSP) while writing `.srm`. Its single `[perf][sram]` line records total/path/write microseconds and the bounded payload size; the write phase still includes SRTC preparation plus open/write/close and is not an asynchronous implementation.
 
 ## Other platform modules
 
@@ -49,6 +49,7 @@ ready flag publishes lock initialization and gates producers; all FILE/timestamp
 access stays under the log lock, including close. Worker producers no longer
 read mutable menu settings to decide whether to log.
 | `3dstimer` | Profiling buckets (main loop, SuperFX, draws, GPU wait…), compiled out unless `PROFILING_DISABLED` is undefined; toggled in-game with SELECT+L+Right/Left; 120-frame window |
+| `perf_stats.h` | Fixed-storage timing aggregate and overflow-safe ARM tick conversion. Rewind uses it only when session logging is enabled; every 16 successful captures it reports serialize, delta/keyframe commit, thumbnail and total average/maximum, plus mixer-busy deferrals and failures |
 | `3dsutils` | DJB2 string hash (thumbnail cache keys), sanitized paths, trimmed basenames, RNG helpers |
 | `png_utils` | libpng decode — everything normalized to 8-bit RGBA into `g_fileBuffer`, size-capped; fast encode with compression level 1; RAII handles |
 | `bufferedfilewriter.h` | Write-buffering RAII wrapper over the shared `g_fileBuffer`; flushes on overflow, bypasses for >512 KB writes; used by config and savestate writers |

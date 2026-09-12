@@ -22,6 +22,17 @@ struct FakeSramWriter {
     int close() { ++closes; return close_result; }
 };
 
+TEST_CASE("SRAM payload size matches the encoded size and bounded RTC pad")
+{
+    CHECK(sram_save_size_bytes(0, 0) == 0);
+    CHECK(sram_save_size_bytes(1, 0) == 2048);
+    CHECK(sram_save_size_bytes(7, 0) == 0x20000);
+    CHECK(sram_save_size_bytes(8, 0) == 0x20000);
+    CHECK(sram_save_size_bytes(0, 20) == 20);
+    CHECK(sram_save_size_bytes(7, 20) == 0x20000);
+    CHECK(sram_save_size_bytes(UINT8_MAX, 0) == 0x20000);
+}
+
 TEST_CASE("SRAM success requires complete write and successful close") {
     const uint8_t data[4] = {1, 2, 3, 4};
     FakeSramWriter writer;

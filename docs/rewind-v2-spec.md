@@ -97,4 +97,15 @@ and console reset already did.
 3. **Anchor + window engine on New 3DS** (Old stays on snapshots); same UI,
    different moment provider.
 4. **Delta tick-states** (window budget) + final constant calibration
+
+## Performance diagnostics
+
+With session logging enabled, capture instrumentation adds no heap or per-frame
+I/O. It times only capture work and emits one `[perf][rewind]` summary after 16
+successful captures. Values are `average/maximum` microseconds for full-state
+serialization (`freeze`), delta and keyframe commits separately, thumbnail
+decimation and the whole operation. `busy` counts opportunistic captures
+deferred by the mixer's try-lock; `failed` counts non-lock failures. Reporting
+occurs after the measured work, so formatting and buffered-log locking are not
+included in `total`. Disabling logging skips the added phase timers.
    (tick, segment, thumbs).

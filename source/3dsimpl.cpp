@@ -16,6 +16,7 @@
 #include "snapshot.h"
 #include "cheats.h"
 #include "soundux.h"
+#include "srtc.h"
 
 #include "3dsutils.h"
 #include "3dslog.h"
@@ -34,6 +35,7 @@
 #include "3dsimpl_gpu.h"
 #include "3dsblurauto.h"
 #include "sram_save.h"
+#include "perf_stats.h"
 
 // Compiled shaders
 #include "shader_tiles_shbin.h"
@@ -1121,6 +1123,11 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		settings3DS.MaxFrameSkips = 0; // Deterministic capture cadence, probe only.
 		if (firstFrame) s_probeFrames = 0;
 		s_probeFrames++;
+#ifdef PROBE_IO_TIMING
+		if (!skipDrawingFrame && s_probeFrames == 900) {
+			S9xAutoSaveSRAM();
+		}
+#endif
 		if (!skipDrawingFrame && (s_probeFrames == 600 || s_probeFrames == 1200 || s_probeFrames == 3600)) {
 			gspWaitForEvent(GSPGPU_EVENT_PPF, GPU3DS.isReal3DS);
 			gfxScreenSwapBuffers(GFX_TOP, false);
@@ -1584,13 +1591,21 @@ bool8 S9xDeinitUpdate (int width, int height, bool8 sixteen_bit)
 void S9xAutoSaveSRAM (void)
 {
     const u64 start = svcGetSystemTick();
-    const bool saved = attempt_sram_save(CPU.SRAMModified, snd3DS.generateSilence, []() {
-        char path[PATH_MAX] = {};
-        file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".srm", "saves");
+    char path[PATH_MAX] = {};
+    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".srm", "saves");
+    const u64 path_done = svcGetSystemTick();
+    const size_t save_size = sram_save_size_bytes(
+        Memory.SRAMSize, Settings.SRTC ? SRTC_SRAM_PAD : 0);
+    const u64 write_start = svcGetSystemTick();
+    const bool saved = attempt_sram_save(CPU.SRAMModified, snd3DS.generateSilence, [&path]() {
         return path[0] != '\0' && Memory.SaveSRAM(path);
     });
-    log3dsWrite("[sram] autosave: %ums (%s)",
-        (unsigned)((svcGetSystemTick() - start) / 268123), saved ? "ok" : "FAILED; retry pending");
+    const u64 finished = svcGetSystemTick();
+    log3dsWrite("[perf][sram] total=%lluus path=%lluus write=%lluus bytes=%u result=%s",
+        (unsigned long long)ticks_to_microseconds(finished - start, SYSCLOCK_ARM11),
+        (unsigned long long)ticks_to_microseconds(path_done - start, SYSCLOCK_ARM11),
+        (unsigned long long)ticks_to_microseconds(finished - write_start, SYSCLOCK_ARM11),
+        (unsigned)save_size, saved ? "ok" : "FAILED; retry pending");
 }
 
 void S9xGenerateSound ()

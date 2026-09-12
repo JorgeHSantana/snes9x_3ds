@@ -1441,22 +1441,20 @@ bool8 CMemory::SaveSRAM (const char *filename)
   if(Settings.SA1 && Memory.ROMType == 0x34)
     return TRUE;
 
-  int size = Memory.SRAMSize ?
-    (1 << (Memory.SRAMSize + 3)) * 128 : 0;
+  size_t rtc_pad = 0;
   if (Settings.SRTC)
   {
-    size += SRTC_SRAM_PAD;
+    rtc_pad = SRTC_SRAM_PAD;
     S9xSRTCPreSaveState ();
   }
 
-  if (size > 0x20000)
-    size = 0x20000;
+  const size_t size = sram_save_size_bytes(Memory.SRAMSize, rtc_pad);
 
   if (size)
   {
 	BufferedFileWriter stream;
     
-    if (write_sram_file(stream, filename, ::SRAM, static_cast<size_t>(size)))
+        if (write_sram_file(stream, filename, ::SRAM, size))
     {
       if(Settings.SPC7110RTC)
       {

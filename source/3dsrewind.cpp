@@ -9,6 +9,7 @@
 #include "3dsimpl_gpu.h"
 #include "3dsui_notif.h"
 #include "3dslog.h"
+#include "perf_stats.h"
 
 #include "Snes9x/snes9x.h"
 #include "Snes9x/snapshot.h"
@@ -31,6 +32,8 @@
 #define REWIND_CAPTURE_FRAMES   (settings3DS.isNew3DS ? 30 : 120)
 #define REWIND_FORCE_GAP_FRAMES (REWIND_CAPTURE_FRAMES * 4)
 
+static constexpr uint32_t REWIND_PERF_REPORT_CAPTURES = 16;
+
 // all state below is emu-thread only
 static RewindDeltaRing s_ring;
 static uint8_t *s_readBuf = nullptr;   // delta reads decode here before unfreeze
@@ -48,12 +51,54 @@ static bool s_timelineFromMenu = false;
 static bool s_timelineActive = false;
 static uint32_t s_nowFrame = 0;        // emulated frames since ROM load
 
+static TimingStats REWIND_PERF_FREEZE;
+static TimingStats REWIND_PERF_DELTA;
+static TimingStats REWIND_PERF_KEYFRAME;
+static TimingStats REWIND_PERF_THUMB;
+static TimingStats REWIND_PERF_TOTAL;
+static uint32_t REWIND_PERF_MIXER_BUSY = 0;
+static uint32_t REWIND_PERF_FAILED = 0;
+
 // timeline extras, allocated with the ring:
 static uint8_t  *s_thumbPool = nullptr;    // slots * REWIND_THUMB_BYTES, RGB565 row-major
 static uint8_t  *s_presentBuf = nullptr;   // the "present" snapshot while browsing
 static uint32_t  s_presentLen = 0;
 
 static bool rewind3dsRestoreState(const uint8_t *data, uint32_t length);
+
+static void rewind_perf_reset()
+{
+    REWIND_PERF_FREEZE.reset();
+    REWIND_PERF_DELTA.reset();
+    REWIND_PERF_KEYFRAME.reset();
+    REWIND_PERF_THUMB.reset();
+    REWIND_PERF_TOTAL.reset();
+    REWIND_PERF_MIXER_BUSY = 0;
+    REWIND_PERF_FAILED = 0;
+}
+
+static void rewind_perf_report()
+{
+    log3dsWrite(
+        "[perf][rewind] n=%u busy=%u failed=%u freeze=%llu/%lluus "
+        "delta=%u:%llu/%lluus key=%u:%llu/%lluus thumb=%llu/%lluus total=%llu/%lluus",
+        (unsigned)REWIND_PERF_TOTAL.sample_count(),
+        (unsigned)REWIND_PERF_MIXER_BUSY,
+        (unsigned)REWIND_PERF_FAILED,
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_FREEZE.average_ticks(), SYSCLOCK_ARM11),
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_FREEZE.maximum_ticks(), SYSCLOCK_ARM11),
+        (unsigned)REWIND_PERF_DELTA.sample_count(),
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_DELTA.average_ticks(), SYSCLOCK_ARM11),
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_DELTA.maximum_ticks(), SYSCLOCK_ARM11),
+        (unsigned)REWIND_PERF_KEYFRAME.sample_count(),
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_KEYFRAME.average_ticks(), SYSCLOCK_ARM11),
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_KEYFRAME.maximum_ticks(), SYSCLOCK_ARM11),
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_THUMB.average_ticks(), SYSCLOCK_ARM11),
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_THUMB.maximum_ticks(), SYSCLOCK_ARM11),
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_TOTAL.average_ticks(), SYSCLOCK_ARM11),
+        (unsigned long long)ticks_to_microseconds(REWIND_PERF_TOTAL.maximum_ticks(), SYSCLOCK_ARM11));
+    rewind_perf_reset();
+}
 
 // The feature is governed by the explicit Rewind setting (Emulator tab),
 // NOT by the hotkey being mapped - the menu's Rewind action must work
@@ -278,6 +323,7 @@ void rewind3dsFinalize()
     free(s_readBuf);    s_readBuf = nullptr;
     s_presentLen = 0;
     s_allocTried = false;
+    rewind_perf_reset();
 }
 
 void rewind3dsReset()
@@ -289,6 +335,7 @@ void rewind3dsReset()
     s_holdRequested = false;
     s_nowFrame = 0;
     s_timelineRequested = false;
+    rewind_perf_reset();
     if (s_msuDeferred) {
         msu1_restore_deferred_cancel();   // never apply another game's snap
         s_msuDeferred = false;
@@ -357,16 +404,27 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             // (issue #55 field logs: lock 15-40ms typical, 385ms worst).
             // A capture is opportunistic by design - on a busy mixer the
             // schedule is left untouched so it retries next frame.
+            const bool measure_perf = settings3DS.LogFileEnabled;
             u64 capStartTick = svcGetSystemTick();
+            u64 freeze_ticks = 0;
+            u64 commit_ticks = 0;
+            u64 thumb_ticks = 0;
             uint8_t *staging = s_ring.push_ptr();
             bool ok = false;
             bool mixerBusy = false;
             if (staging != nullptr) {
                 if (LightLock_TryLock(&snd3DS.snesAccessLock) == 0) {
+                    const u64 freeze_start = measure_perf ? svcGetSystemTick() : 0;
                     ok = S9xFreezeGameMem(staging, REWIND_SLOT_SIZE, &length);
+                    if (measure_perf) {
+                        freeze_ticks = svcGetSystemTick() - freeze_start;
+                    }
                     LightLock_Unlock(&snd3DS.snesAccessLock);
                 } else {
                     mixerBusy = true;
+                    if (measure_perf && REWIND_PERF_MIXER_BUSY != UINT32_MAX) {
+                        ++REWIND_PERF_MIXER_BUSY;
+                    }
                 }
             }
             if (!mixerBusy) {
@@ -374,26 +432,58 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
                 s_framesSinceCapture = 0;
             }
             if (ok) {
+                const u64 commit_start = measure_perf ? svcGetSystemTick() : 0;
                 s_ring.push_commit(length, s_nowFrame);
+                if (measure_perf) {
+                    commit_ticks = svcGetSystemTick() - commit_start;
+                }
+                const uint32_t cap_ms = (uint32_t)((svcGetSystemTick() - capStartTick) / 268123);
+                const u64 thumb_start = measure_perf ? svcGetSystemTick() : 0;
+                rewind3dsCaptureThumb(
+                    s_thumbPool + (size_t)s_ring.entry_pos(0) * REWIND_THUMB_BYTES);
+                if (measure_perf) {
+                    thumb_ticks = svcGetSystemTick() - thumb_start;
+                }
+
+                // Max History ceiling (menu): drop whole oldest groups
+                if (settings3DS.RewindMaxWindow < 2) {
+                    int seconds = settings3DS.RewindMaxWindow == 0 ? 30 : 60;
+                    s_ring.trim_to(seconds * 60 / REWIND_CAPTURE_FRAMES);
+                }
+
+                if (measure_perf) {
+                    REWIND_PERF_FREEZE.record(freeze_ticks);
+                    if (s_ring.at(0).kind == RewindDeltaRing::KIND_DELTA) {
+                        REWIND_PERF_DELTA.record(commit_ticks);
+                    } else {
+                        REWIND_PERF_KEYFRAME.record(commit_ticks);
+                    }
+                    REWIND_PERF_THUMB.record(thumb_ticks);
+                    REWIND_PERF_TOTAL.record(svcGetSystemTick() - capStartTick);
+                    if (REWIND_PERF_TOTAL.sample_count() >= REWIND_PERF_REPORT_CAPTURES) {
+                        rewind_perf_report();
+                    }
+                }
 
                 // A capture that outruns the frame budget is a visible
                 // stutter - name it in the log so field reports can tell
                 // capture spikes from SRAM/SD writes.
-                uint32_t capMs = (uint32_t)((svcGetSystemTick() - capStartTick) / 268123);
-                if (capMs >= 8)
-                    log3dsWrite("[rewind] capture slow: %ums (%s, %uKB)", capMs,
+                if (cap_ms >= 8) {
+                    log3dsWrite("[rewind] capture slow: %ums (%s, %uKB)", cap_ms,
                         s_ring.at(0).kind == RewindDeltaRing::KIND_DELTA ? "delta" : "keyframe",
                         (unsigned)(s_ring.at(0).len / 1024));
+                }
 
-                // calibration feed (log enabled only): real delta sizes
-                // and promotion rate decide pageSize/K for issue #37
-                s_statCaptures++;
+                // Calibration feed: real delta sizes and promotion rate
+                // decide pageSize/K for issue #37.
+                ++s_statCaptures;
                 if (s_ring.at(0).kind == RewindDeltaRing::KIND_DELTA) {
-                    s_statDeltas++;
+                    ++s_statDeltas;
                     s_statDeltaBytes += s_ring.at(0).len;
                 }
                 if ((s_statCaptures % 64) == 0) {
-                    uint32_t first = 0, last = 0;
+                    uint32_t first = 0;
+                    uint32_t last = 0;
                     s_ring.tag_at(0, &first);
                     s_ring.tag_at(s_ring.count - 1, &last);
                     log3dsWrite("[rewind] calib: %u caps, %u%% delta, avg %uKB, window %us (%d entries)",
@@ -403,14 +493,8 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
                         (unsigned)((first - last) / (uint32_t)rewind3dsEmulatedFps()),
                         s_ring.count);
                 }
-                rewind3dsCaptureThumb(
-                    s_thumbPool + (size_t)s_ring.entry_pos(0) * REWIND_THUMB_BYTES);
-
-                // Max History ceiling (menu): drop whole oldest groups
-                if (settings3DS.RewindMaxWindow < 2) {
-                    int seconds = settings3DS.RewindMaxWindow == 0 ? 30 : 60;
-                    s_ring.trim_to(seconds * 60 / REWIND_CAPTURE_FRAMES);
-                }
+            } else if (!mixerBusy && measure_perf && REWIND_PERF_FAILED != UINT32_MAX) {
+                ++REWIND_PERF_FAILED;
             }
         }
     }

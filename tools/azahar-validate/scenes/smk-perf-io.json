@@ -1,0 +1,19 @@
+{
+  "title": "SMK SRAM and rewind timing log validation",
+  "rom": "sdmc:/snes/vanilla/Super Mario Kart (USA).sfc",
+  "state": "states/smk-race.frz",
+  "wait": 24,
+  "settings": {
+    "GameScreen": "0",
+    "LogFileEnabled": "1",
+    "UpdateAutoCheck": "0",
+    "AutoSaveLoad": "0",
+    "RewindEnabled": "1",
+    "RewindMaxWait": "0"
+  },
+  "log_expect": [
+    "ROM loaded: SUPER MARIO KART",
+    "[perf][rewind]",
+    "[perf][sram]"
+  ]
+}
