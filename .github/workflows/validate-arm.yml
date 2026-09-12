@@ -4,18 +4,12 @@ on:
   push:
     branches: [next-development]
   workflow_dispatch:
-    inputs:
-      layer_toggle_probe:
-        description: Build the disable/resume/reenable menu probe
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 jobs:
   baseline:
-    if: ${{ !inputs.layer_toggle_probe }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +30,9 @@ jobs:
           if-no-files-found: error
   validate:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        probe: [frame, layer-toggle]
     steps:
       - uses: actions/checkout@v4
       - name: Host tests
@@ -43,10 +40,10 @@ jobs:
       - name: Build capture-only validation binary
         run: |
           docker run --rm -v "$PWD":/snes9x_3ds -w /snes9x_3ds \
-            devkitpro/devkitarm bash -c 'make clean && make 3dsx -j2 EXTRA_DEFINES="-DPROBE_FBDUMP -DPROBE_FORCE_SLIDER -DPROBE_SBS ${{ inputs.layer_toggle_probe && '-DPROBE_MENU_HELP -DPROBE_LAYER_TOGGLE' || '' }}"'
+            devkitpro/devkitarm bash -c 'make clean && make 3dsx -j2 EXTRA_DEFINES="-DPROBE_FBDUMP -DPROBE_FORCE_SLIDER -DPROBE_SBS ${{ matrix.probe == 'layer-toggle' && '-DPROBE_MENU_HELP -DPROBE_LAYER_TOGGLE' || '' }}"'
       - uses: actions/upload-artifact@v4
         with:
-          name: azahar-probe-${{ github.sha }}
+          name: azahar-${{ matrix.probe == 'frame' && 'probe' || 'layer-toggle' }}-${{ github.sha }}
           path: |
             output/snes9x_3ds.3dsx
             output/snes9x_3ds.elf

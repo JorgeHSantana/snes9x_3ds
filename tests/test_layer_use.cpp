@@ -1,4 +1,5 @@
 #include "doctest.h"
+#include <initializer_list>
 #include "../source/3dslayeruse.h"
 
 TEST_CASE("layer toggle: hide unused never hides a disabled layer") {
