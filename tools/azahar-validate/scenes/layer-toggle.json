@@ -5,6 +5,6 @@
   "settings": {"GameScreen": "0", "LogFileEnabled": "1", "UpdateAutoCheck": "0", "AutoSaveLoad": "0"},
   "probe": "PROBE_MENU_HELP PROBE_LAYER_TOGGLE",
   "captures": ["menu_layer_0.ppm", "menu_layer_1.ppm", "menu_layer_2.ppm", "menu_layer_3.ppm"],
-  "regions": {"menu_body": [0, 30, 320, 220]},
-  "ab_expect": {"menu_body": [0.001, 100]}
+  "regions": {"menu_body": [0, 30, 320, 220], "bg1_row": [0, 55, 320, 69]},
+  "ab_expect": {"menu_body": [0.001, 100], "bg1_row": [0.001, 100]}
 }

@@ -26,6 +26,9 @@ def main():
     proc = None
     try:
         harness.arm_scene(sd, scene)
+        base = harness.rom_base(scene["rom"])
+        sd._backup(sd.path(f"configs/{base}.cfg"))
+        sd._backup(sd.path(f"saves/{base}.srm"))
         for path in glob.glob(sd.path("debug*session.log")):
             sd._backup(path)
             os.remove(path)

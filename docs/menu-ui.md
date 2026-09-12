@@ -39,7 +39,7 @@ Three themes — **Dark mode** (default), **RetroArch-style** (checkerboard back
 * **Bezel overlay** auto-fit scales against a 320×239 inner window; **scanlines** are an odd-row alpha texture (intensity 1-8) drawn as a repeating quad.
 * **Thumbnails**: read on demand from single `.cache` pack files (format in [Settings and Storage](settings-and-storage.md)); pixels are pre-swizzled so drawing is a per-column `memcpy` into the framebuffer. The second screen shows boxart/title/gameplay for the selected ROM, or the save-state PNG preview on the Emulator tab. Thumbnail loads are deferred until the slide animation finishes to avoid stutter.
 
-## Notifications (`3dsui_notif`)
+## Layer toggle visibility
 
 The 3D editor's Hide Unused filter must never remove a disabled layer's
 enable/disable checkbox: the renderer skips that layer, so last-frame usage
@@ -47,6 +47,8 @@ alone cannot distinguish a diagnostic disable from game inactivity. Disabled
 checkboxes remain visible (dimmed when unused); depth rows still follow actual
 usage. This is a menu-only visibility rule, with no retained usage history and
 no extra per-frame work. Regression scene: `layer-toggle` in the Azahar harness.
+
+## Notifications (`3dsui_notif`)
 
 * Small GPU-drawn toasts: save/load state, saving-in-progress, slot changed, controller swapped, screenshot, fast-forward, broken-audio warning, paused, plus an FPS overlay (top-left, re-uploaded only when the text changes).
 * Text is rasterized into a dedicated RGBA4 texture; a 2×2 white block planted in the corner lets the background rectangle and the text draw from the same texture in one batch.
