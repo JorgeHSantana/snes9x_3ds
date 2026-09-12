@@ -1125,8 +1125,10 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			log3dsWrite("[probe] top screen dump %s: %s", probePath, ok ? "v" : "x");
 			if (s_probeFrames == 600) {
 				snprintf(probePath, sizeof(probePath), "sdmc:/3ds/snes9x_3ds/probe_state_600.frz");
+				LightLock_Lock(&snd3DS.snesAccessLock);
 				const bool saved = S9xFreezeGame(probePath);
 				const bool loaded = saved && S9xUnfreezeGame(probePath);
+				LightLock_Unlock(&snd3DS.snesAccessLock);
 				log3dsWrite("[probe] state roundtrip: %s", loaded ? "ok" : "FAILED");
 			}
 		}

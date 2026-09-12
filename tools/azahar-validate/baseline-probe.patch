@@ -9,14 +9,16 @@ diff --git a/source/3dsimpl.cpp b/source/3dsimpl.cpp
  		if (firstFrame) s_probeFrames = 0;
  		s_probeFrames++;
  		if (!skipDrawingFrame && (s_probeFrames == 600 || s_probeFrames == 1200 || s_probeFrames == 3600)) {
-@@ -1121,6 +1122,12 @@
+@@ -1121,6 +1122,14 @@
  			snprintf(probePath, sizeof(probePath), "sdmc:/3ds/snes9x_3ds/probe_top_%d.png", s_probeFrames);
  			bool ok = img3dsSaveScreenRegion(probePath, 400, 240, 0, 0, GFX_TOP, false);
  			log3dsWrite("[probe] top screen dump %s: %s", probePath, ok ? "v" : "x");
 +			if (s_probeFrames == 600) {
 +				snprintf(probePath, sizeof(probePath), "sdmc:/3ds/snes9x_3ds/probe_state_600.frz");
++				LightLock_Lock(&snd3DS.snesAccessLock);
 +				const bool saved = S9xFreezeGame(probePath);
 +				const bool loaded = saved && S9xUnfreezeGame(probePath);
++				LightLock_Unlock(&snd3DS.snesAccessLock);
 +				log3dsWrite("[probe] state roundtrip: %s", loaded ? "ok" : "FAILED");
 +			}
  		}
