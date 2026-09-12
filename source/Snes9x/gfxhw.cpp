@@ -743,13 +743,13 @@ static inline void m7QueueLine(s16 x0, s16 y, s16 x1, float tx0, float ty0, floa
 static void m7FlushLines(void)
 {
     if (s_m7QueueCount == 0) return;
-    float spanRef = 0.0f;
+    float spanRefSquared = 0.0f;
     if (GPU3DS.stereoMode7DepthMode != 0) for (int i = 0; i < s_m7QueueCount; i++) {
         const M7QueuedLine &q = s_m7Queue[i];
         float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;
-        float span = sqrtf(dx * dx + dy * dy);
-        if (span > 0.0f && (spanRef == 0.0f || span < spanRef)) spanRef = span;
+        spanRefSquared = mode7MinPositiveSquared(spanRefSquared, dx * dx + dy * dy);
     }
+    const float spanRef = spanRefSquared > 0.0f ? sqrtf(spanRefSquared) : 0.0f;
     for (int i = 0; i < s_m7QueueCount; i++) {
         const M7QueuedLine &q = s_m7Queue[i];
         float dx = q.tx1 - q.tx0, dy = q.ty1 - q.ty0;

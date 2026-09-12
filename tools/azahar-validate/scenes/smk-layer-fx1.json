@@ -1,0 +1,11 @@
+{
+  "title": "Mode 7 Layer: stale hidden distance switch must have no effect",
+  "rom": "sdmc:/snes/vanilla/Super Mario Kart (USA).sfc",
+  "state": "states/smk-race.frz",
+  "regions": {"screen": [0, 0, 400, 240]},
+  "log_expect": ["ROM loaded: SUPER MARIO KART"],
+  "stereo3d": [{
+    "file": "SUPER MARIO KART",
+    "content": "BG1=4\nBG2=0\nBG3=0\nBG4=0\nOBJ=0\nFADE=4\nHAZE=4\nBLUR=6\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nM7PERSP=4\nM7MODE=0\nM7FX=1\nGSPR=0\nGLIFT=0"
+  }]
+}

@@ -21,6 +21,19 @@
 #define MODE7_PERSP_W_ONE 256
 #define MODE7_PERSP_W_MIN 8
 
+// sqrt is monotonic: select the reference in squared space, then take one
+// square root per run instead of one per row during the reference pass.
+static inline float mode7MinPositiveSquared(float reference, float candidate)
+{
+    return candidate > 0.0f && (reference == 0.0f || candidate < reference)
+        ? candidate : reference;
+}
+
+static inline bool mode7DistanceEffectsEnabled(bool isPlane, int32_t depthMode, float effects)
+{
+    return isPlane && depthMode != 0 && effects > 0.0f;
+}
+
 // The right-hand vertex of a scanline carries the geometry shader's
 // marker in y (any projected y < -1 reads as a scanline) PLUS the row's
 // depth (a multiple of 256 the left-hand vertex carries above its screen

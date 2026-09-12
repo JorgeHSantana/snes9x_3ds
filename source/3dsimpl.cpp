@@ -33,6 +33,7 @@
 #include "3dsimpl_tilecache.h"
 #include "3dsimpl_gpu.h"
 #include "3dsblurauto.h"
+#include "sram_save.h"
 
 // Compiled shaders
 #include "shader_tiles_shbin.h"
@@ -1111,6 +1112,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 	// whole sessions of measurements). Same dance as a screenshot.
 	{
 		static int s_probeFrames = 0;
+		settings3DS.MaxFrameSkips = 0; // Deterministic capture cadence, probe only.
 		if (firstFrame) s_probeFrames = 0;
 		s_probeFrames++;
 		if (!skipDrawingFrame && (s_probeFrames == 600 || s_probeFrames == 1200 || s_probeFrames == 3600)) {
@@ -1121,6 +1123,12 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			snprintf(probePath, sizeof(probePath), "sdmc:/3ds/snes9x_3ds/probe_top_%d.png", s_probeFrames);
 			bool ok = img3dsSaveScreenRegion(probePath, 400, 240, 0, 0, GFX_TOP, false);
 			log3dsWrite("[probe] top screen dump %s: %s", probePath, ok ? "v" : "x");
+			if (s_probeFrames == 600) {
+				snprintf(probePath, sizeof(probePath), "sdmc:/3ds/snes9x_3ds/probe_state_600.frz");
+				const bool saved = S9xFreezeGame(probePath);
+				const bool loaded = saved && S9xUnfreezeGame(probePath);
+				log3dsWrite("[probe] state roundtrip: %s", loaded ? "ok" : "FAILED");
+			}
 		}
 	}
 #endif
@@ -1567,25 +1575,14 @@ bool8 S9xDeinitUpdate (int width, int height, bool8 sixteen_bit)
 
 void S9xAutoSaveSRAM (void)
 {
-    // Ensure that the timer is reset
-    //
-    //CPU.AccumulatedAutoSaveTimer = 0;
-    CPU.SRAMModified = false;
-
-    // generate silence instead of stopping NDSP
-    snd3DS.generateSilence = true;
-
-	char path[PATH_MAX];
-	file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".srm", "saves");
-
-	if (path[0] != '\0') {
-		u64 t0 = svcGetSystemTick();
-		Memory.SaveSRAM (path);
-		log3dsWrite("[sram] autosave: %ums", (unsigned)((svcGetSystemTick() - t0) / 268123));
-	}
-
-    // instead of starting NDSP, we continue to mix 
-    snd3DS.generateSilence = false;
+    const u64 start = svcGetSystemTick();
+    const bool saved = attempt_sram_save(CPU.SRAMModified, snd3DS.generateSilence, []() {
+        char path[PATH_MAX] = {};
+        file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".srm", "saves");
+        return path[0] != '\0' && Memory.SaveSRAM(path);
+    });
+    log3dsWrite("[sram] autosave: %ums (%s)",
+        (unsigned)((svcGetSystemTick() - start) / 268123), saved ? "ok" : "FAILED; retry pending");
 }
 
 void S9xGenerateSound ()

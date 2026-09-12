@@ -9,6 +9,7 @@
 #include "3dsimpl_gpu.h"
 #include "ppuvsect.h"
 #include "cliphw.h"
+#include "oam_change.h"
 
 
 #define FIRST_VISIBLE_LINE 1
@@ -401,9 +402,11 @@ STATIC inline void REGISTER_2104 (uint8 byte)
             highbyte != PPU.OAMData [addr+1])
         {
             DEBUG_FLUSH_REDRAW(0x2104, byte); FLUSH_REDRAW ();
+            const bool geometryChanged = oam_word_changes_geometry(
+                static_cast<uint16_t>(addr), PPU.OAMData[addr], PPU.OAMData[addr+1], lowbyte, highbyte);
             PPU.OAMData [addr] = lowbyte;
             PPU.OAMData [addr+1] = highbyte;
-            IPPU.OBJChanged = TRUE;
+            if (geometryChanged) IPPU.OBJChanged = TRUE;
             if (addr & 2)
             {
                 // Tile
@@ -864,4 +867,3 @@ bool JustifierOffscreen();
 
 
 #endif
-

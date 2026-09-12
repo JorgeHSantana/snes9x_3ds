@@ -47,7 +47,7 @@ Auto-globbed: `source/*.s`, `source/*.v.pica`, `gfx/*.t3s`.
 ### Gotchas
 
 * A bare `make` builds **only the citro3d dependency** (the `$(CITRO3D_LIB)` rule is the default goal) — use `make release` or a named target.
-* The `release` target does **not** depend on `$(CITRO3D_LIB)`, so CI links the stock container citro3d, not the patched one.
+* `release` now requires `$(CITRO3D_LIB)` like the individual artifact targets. Previously a clean CI checkout could silently link the container's stock library while local builds used the patched one. `USE_CUSTOM_CITRO3D=0` remains the explicit opt-out.
 * `TARGET := $(notdir $(CURDIR))` — renaming the checkout directory renames the output binary.
 * `make clean` deletes the tracked `romfs/gfx/splash.t3x`.
 

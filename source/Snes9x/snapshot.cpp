@@ -29,6 +29,7 @@
 #include "spc7110.h"
 #include "bufferedfilewriter.h"
 #include "msu1.h"
+#include "snapshot_workspace.h"
 
 #include "3dsimpl.h"
 
@@ -452,6 +453,19 @@ static FreezeData SnapMSU1 [] = {
 
 static char ROMFilename [_MAX_PATH];
 
+// No nested serializers: the emulation/main thread owns snapshot operations;
+// rewind calls them under snesAccessLock. Size follows the actual target ABI.
+static constexpr size_t snapshot_workspace_capacity()
+{
+    const size_t sizes[] = {sizeof(CPU), sizeof(Registers), sizeof(PPU), sizeof(DMA),
+        sizeof(APU), sizeof(APURegisters), sizeof(SoundData), sizeof(SA1),
+        sizeof(SA1Registers), sizeof(s7r), sizeof(rtc_f9), sizeof(Msu1Snapshot)};
+    size_t largest = 0;
+    for (size_t size : sizes) if (size > largest) largest = size;
+    return largest;
+}
+static SnapshotWorkspace<snapshot_workspace_capacity()> snapshot_workspace;
+
 void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, FreezeData *fields,
 				   int num_fields);
 void FreezeBlock (BufferedFileWriter& stream, const char *name, uint8 *block, int size);
@@ -477,11 +491,11 @@ bool8 S9xFreezeGame (const char *filename)
 
         // we do this manually here so it happens while sound is still muted
         // to avoid audio to crackle or stutter
-        stream.close(); 
+        const bool saved = stream.close() == 0;
 
         S9xPrepareSoundForSnapshotSave (TRUE);
         
-        return (TRUE);
+        return saved;
     }
     return (FALSE);
 }
@@ -881,13 +895,10 @@ void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, Fre
         if (l > len) len = l;
     }
 	
-	uint8 stackBuf[2048] = {};
-    uint8 *block = stackBuf;
-    bool allocated = false;
-
-    if (len > (int)sizeof(stackBuf)) {
-        block = new uint8[len]();
-        allocated = true;
+    uint8 *block = len > 0 ? snapshot_workspace.prepare(static_cast<size_t>(len)) : nullptr;
+    if (block == nullptr) {
+        stream.fail();
+        return;
     }
 
     uint8 *ptr = block;
@@ -957,7 +968,6 @@ void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, Fre
     }
 
 	FreezeBlock (stream, name, block, len);
-    if (allocated) delete[] block;
 }
 
 void FreezeBlock (BufferedFileWriter& stream, const char *name, uint8 *block, int size)
@@ -981,14 +991,8 @@ int UnfreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fie
         if (l > len) len = l;
     }
 
-	uint8 stackBuf[2048] = {};
-    uint8 *block = stackBuf;
-    bool allocated = false;
-
-    if (len > (int)sizeof(stackBuf)) {
-        block = new uint8[len]();
-        allocated = true;
-    }
+    uint8 *block = len > 0 ? snapshot_workspace.prepare(static_cast<size_t>(len)) : nullptr;
+    if (block == nullptr) return WRONG_FORMAT;
 
     uint8 *ptr = block;
     uint16 word;
@@ -998,7 +1002,6 @@ int UnfreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fie
 	
     if ((result = UnfreezeBlock (stream, name, block, len)) != SUCCESS)
     {
-        if (allocated) delete[] block;
         return (result);
     }
 	
@@ -1063,7 +1066,6 @@ int UnfreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fie
 		}
     }
 
-	if (allocated) delete [] block;
     return (result);
 }
 

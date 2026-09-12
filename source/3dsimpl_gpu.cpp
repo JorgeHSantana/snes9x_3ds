@@ -744,7 +744,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // row's fog into color.b (interpolated by the TexEnv variant)
             // and widens the ghost offset by (1 - w/256). Nothing at the
             // nearest row, the full gauge at the horizon.
-            if (isMode7Plane && GPU3DS.stereoMode7Fx > 0.0f && !spotlight &&
+            if (mode7DistanceEffectsEnabled(isMode7Plane, GPU3DS.stereoMode7DepthMode,
+                    GPU3DS.stereoMode7Fx) && !spotlight &&
                 s_previewHighlightLayer < 0 && GPU3DS.stereoEyeIOD != 0.0f &&
                 (GPU3DS.stereoFade > 0.0f || GPU3DS.stereoHaze > 0.0f || GPU3DS.stereoBlur > 0.0f)) {
                 float slider = GPU3DS.stereoEyeIOD < 0.0f ? -GPU3DS.stereoEyeIOD : GPU3DS.stereoEyeIOD;

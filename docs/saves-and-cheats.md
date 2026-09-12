@@ -40,6 +40,8 @@ Field serialization is table-driven (`FreezeData` offset/size/type tables) and e
 
 * Auto-saved via `Settings.AutoSaveDelay` frames (setting: 1 s / 10 s / 60 s / disabled), plus on menu entry and HOME/sleep. Old 3DS users are advised to use larger intervals (SD writes pause emulation).
 * During the write the audio mixer generates silence rather than stopping the NDSP channel.
+* Autosave clears `CPU.SRAMModified` only after a complete write and successful close; failures remain dirty for the next save attempt. The previous silence setting is restored. `BufferedFileWriter` retains short-write/flush errors through close, including for file savestates.
+* This remains synchronous I/O, not atomic replacement or an asynchronous snapshot worker. An I/O failure can leave a partial file; retaining dirty state enables retry while the emulator remains running, not recovery after power loss.
 * SRAM size/mask from the ROM header; per-game initial fill value (`SNESGameFixes.SRAMInitialValue`, default `0x60`).
 
 ## Screenshots

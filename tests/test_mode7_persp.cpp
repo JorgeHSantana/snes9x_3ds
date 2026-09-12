@@ -1,5 +1,40 @@
 #include "doctest.h"
 #include "../source/3dsmode7persp.h"
+#include <cmath>
+
+TEST_CASE("Mode 7 Layer never enables hidden distance effects") {
+    CHECK_FALSE(mode7DistanceEffectsEnabled(true, 0, 1.0f));
+    CHECK_FALSE(mode7DistanceEffectsEnabled(false, 1, 1.0f));
+    CHECK_FALSE(mode7DistanceEffectsEnabled(true, 1, 0.0f));
+    CHECK(mode7DistanceEffectsEnabled(true, 1, 1.0f));
+}
+
+TEST_CASE("Mode 7 squared reference preserves the original encoded depth") {
+    uint32_t random = 0x7a319b05;
+    for (uint32_t run = 0; run < 128; ++run) {
+        float squared[512];
+        float old_reference = 0.0f;
+        float new_squared = 0.0f;
+        for (uint32_t row = 0; row < 512; ++row) {
+            random = random * 1664525u + 1013904223u;
+            const float dx = static_cast<int32_t>(random & 0xffff) - 32768;
+            random = random * 1664525u + 1013904223u;
+            const float dy = static_cast<int32_t>(random & 0xffff) - 32768;
+            squared[row] = row % 11 == 0 ? 0.0f : dx * dx + dy * dy;
+            const float span = sqrtf(squared[row]);
+            if (span > 0.0f && (old_reference == 0.0f || span < old_reference)) old_reference = span;
+            new_squared = mode7MinPositiveSquared(new_squared, squared[row]);
+        }
+        const float new_reference = sqrtf(new_squared);
+        CHECK(new_reference == old_reference);
+        for (float square : squared) {
+            CHECK(mode7PerspEncode(sqrtf(square), new_reference)
+                == mode7PerspEncode(sqrtf(square), old_reference));
+        }
+    }
+    CHECK(mode7MinPositiveSquared(0.0f, 0.0f) == 0.0f);
+    CHECK(mode7MinPositiveSquared(4.0f, 0.0f) == 4.0f);
+}
 
 TEST_CASE("mode7 persp: the nearest row keeps the full shift") {
     CHECK(mode7PerspEncode(2.0f, 2.0f) == MODE7_PERSP_W_ONE);

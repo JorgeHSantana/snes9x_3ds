@@ -267,7 +267,7 @@ citra : buildsha $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFI
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $@
 
 
-release : buildsha $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+release : buildsha $(CITRO3D_LIB) $(BUILD) $(GFXBUILD) $(OUTPUT_DIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile OPT_FLAGS="$(RELEASE_OPT_FLAGS)" $@
 
 

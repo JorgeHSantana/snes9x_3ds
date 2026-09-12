@@ -26,6 +26,7 @@
 
 #include "3dsimpl.h"
 #include "bufferedfilewriter.h"
+#include "sram_save.h"
 
 
 #include "fxemu.h"
@@ -1454,13 +1455,8 @@ bool8 CMemory::SaveSRAM (const char *filename)
   {
 	BufferedFileWriter stream;
     
-    if (stream.open(filename, "wb"))
+    if (write_sram_file(stream, filename, ::SRAM, static_cast<size_t>(size)))
     {
-      stream.write((char *) ::SRAM, size);
-      
-      // flush before we handle RTC
-      stream.close(); 
-
       if(Settings.SPC7110RTC)
       {
         S9xSaveSPC7110RTC (&rtc_f9);
@@ -1468,7 +1464,7 @@ bool8 CMemory::SaveSRAM (const char *filename)
       return (TRUE);
     }
   }
-  return (FALSE);
+  return size == 0;
 }
 
 void CMemory::FixROMSpeed ()

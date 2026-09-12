@@ -1,0 +1,28 @@
+name: ARM validation (no release)
+
+on:
+  push:
+    branches: [next-development]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host tests
+        run: make -C tests test -j2
+      - name: Build capture-only validation binary
+        run: |
+          docker run --rm -v "$PWD":/snes9x_3ds -w /snes9x_3ds \
+            devkitpro/devkitarm bash -c 'make clean && make 3dsx -j2 EXTRA_DEFINES="-DPROBE_FBDUMP -DPROBE_FORCE_SLIDER -DPROBE_SBS"'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: azahar-probe-${{ github.sha }}
+          path: |
+            output/snes9x_3ds.3dsx
+            output/snes9x_3ds.elf
+          if-no-files-found: error
