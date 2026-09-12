@@ -52,7 +52,11 @@ public:
     }
 
     bool open(const char* filename, const char* mode) {
-        if (RawFilePointer || MemBuffer || !filename || !mode || !g_fileBuffer) return false;
+        if (RawFilePointer || MemBuffer || !filename || !mode) return false;
+        // Early startup reads settings before the linear write buffer exists.
+        // Only writable modes require it; validate before fopen can truncate.
+        const bool writable = strchr(mode, 'w') || strchr(mode, 'a') || strchr(mode, '+');
+        if (writable && !g_fileBuffer) return false;
         RawFilePointer = file3dsOpen(filename, mode);
         if (!RawFilePointer) return false;
         WriteFailed = false;

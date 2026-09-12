@@ -38,6 +38,11 @@ def main():
         sd._backup(state_capture)
         if os.path.exists(state_capture):
             os.remove(state_capture)
+        for name in os.listdir(sd.app):
+            if name.startswith("debug_") and name.endswith("_session.log"):
+                path = sd.path(name)
+                sd._backup(path)
+                os.remove(path)  # A previous session must never satisfy the probe gate.
         for frame in (600, 1200, 3600):
             path = sd.path(f"probe_top_{frame}.png")
             sd._backup(path)

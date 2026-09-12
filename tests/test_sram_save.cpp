@@ -100,6 +100,11 @@ TEST_CASE("file writer reports a real stdio write failure on close and can be re
     CHECK(writer.close() == 0);
     g_fileBuffer = nullptr;
     CHECK_FALSE(writer.open(path, "wb")); // Must fail before truncating the saved file.
+    CHECK(writer.open(path, "rb")); // Startup config reads precede buffer allocation.
+    if (writer.get()) {
+        CHECK(fgetc(writer.get()) == data[0]);
+        CHECK(writer.close() == 0);
+    }
     g_fileBuffer = test_file_buffer;
     FILE* saved = fopen(path, "rb");
     REQUIRE(saved != nullptr);
