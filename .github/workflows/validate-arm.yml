@@ -9,6 +9,25 @@ permissions:
   contents: read
 
 jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare stable baseline with identical capture instrumentation
+        run: |
+          git fetch --depth=1 origin stable
+          git worktree add --detach /tmp/snes9x-baseline FETCH_HEAD
+          git -C /tmp/snes9x-baseline apply "$GITHUB_WORKSPACE/tools/azahar-validate/baseline-probe.patch" || \
+            git -C /tmp/snes9x-baseline apply --reverse --check "$GITHUB_WORKSPACE/tools/azahar-validate/baseline-probe.patch"
+      - name: Build baseline probe
+        run: |
+          docker run --rm -v /tmp/snes9x-baseline:/snes9x_3ds -w /snes9x_3ds \
+            devkitpro/devkitarm bash -c 'make clean && make 3dsx -j2 EXTRA_DEFINES="-DPROBE_FBDUMP -DPROBE_FORCE_SLIDER -DPROBE_SBS"'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: azahar-baseline-${{ github.sha }}
+          path: /tmp/snes9x-baseline/output/snes9x_3ds.3dsx
+          if-no-files-found: error
   validate:
     runs-on: ubuntu-latest
     steps:

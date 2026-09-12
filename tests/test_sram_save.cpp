@@ -2,6 +2,8 @@
 #include "bufferedfilewriter.h"
 #include "sram_save.h"
 #include <limits>
+#include <initializer_list>
+#include <stdlib.h>
 #include <unistd.h>
 
 static uint8_t test_file_buffer[MAX_IO_BUFFER_SIZE];
