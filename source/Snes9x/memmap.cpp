@@ -26,6 +26,7 @@
 
 #include "3dsimpl.h"
 #include "bufferedfilewriter.h"
+#include "3dsfiles.h"
 #include "sram_save.h"
 
 
