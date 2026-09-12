@@ -95,6 +95,12 @@ Key mechanisms:
 
 ## Key global structs
 
+Current optimization delivery and pending experiments are tracked in
+[the #78/#79/#63 status report](testing/optimization-78-79.md). In particular,
+appearance-only OAM invalidation is optimized, but DMA batching and CPU/APU
+dispatch experiments remain pending. The original SuperFX switch/fetch series
+is already present; it must not be counted as a new optimization.
+
 All instantiated in `globals.cpp`:
 
 | Struct | Contents |

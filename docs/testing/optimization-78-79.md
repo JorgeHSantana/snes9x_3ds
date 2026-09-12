@@ -1,6 +1,11 @@
-# Issues #78 / #79: first implementation batch
+# Issues #78 / #79 / #63: implementation status and validation
 
 Baseline: `bbef7fae6ddfc99eb4fc848f27afa7cc70983c8d`.
+
+Status updated 2026-09-12. All three issues remain open: delivered changes
+are not completion of the broader investigations. Published nightlies:
+`e7b3e5c` (first optimization batch), `1e72a38` (buffered logging), and
+`32130cc` (disabled-layer menu control; no renderer optimization).
 
 ## Implemented changes
 
@@ -8,6 +13,7 @@ Baseline: `bbef7fae6ddfc99eb4fc848f27afa7cc70983c8d`.
 |---|---|---|
 | SRAM (#78) | Complete-write and close checks; sticky buffered errors; dirty retained on failure; silence restored | Still synchronous, no atomic file replacement; hardware I/O latency not measured |
 | Savestates/rewind (#78) | Propagate file close errors; reuse bounded core-owned serialization workspace, preserving zero padding | `fmemopen` still allocates on memory-load; no claim of removing all rewind allocations or latency |
+| Logging (#78) | Fixed 32 KiB buffer; periodic gameplay/menu ticks and close drain it, replacing per-message flush | Flush remains synchronous; signature coalescing and hardware timing pending; recent tail may be lost on crash; adds resident memory |
 | Mode 7 Direct (#78) | Select minimum squared span, then one reference square root per run | No claimed FPS percentage |
 | Mode 7 Layer (#78) | Distance effects require Direct; stale hidden M7FX cannot select that branch | Ordinary layer effects remain available |
 | Build (#78) | Release requires custom citro3d dependency | Hardware performance still needs measurement |
@@ -28,7 +34,11 @@ This does not group sprites, move their stereo depth or reorder OBJ.
 
 ## Host validation
 
-Final host run: 208 cases / 139414 assertions, including ASan+UBSan.
+First-batch host run: 208 cases / 139414 assertions, including ASan+UBSan.
+Buffered-logging batch: 211 / 141972 on macOS with ASan+UBSan, and
+212 / 141984 on Linux (extra `/dev/full` failure test). Latest layer-menu
+regression: 213 / 142000 on macOS, 214 / 142012 on Linux. These totals
+describe distinct validation runs, not additional performance measurements.
 Startup config reads are explicitly tested with an absent write buffer;
 writable opens must fail before truncation in that condition.
 The ARM ELF reserves 65,596 bytes of BSS for the serialization workspace
@@ -64,13 +74,36 @@ identical. See the journal and committed captures under
 ## Work explicitly still open
 
 The issues are broad investigation tracks, not all proven optimizations.
-This batch does **not** implement asynchronous SRAM, log
-buffering, sparse Mode 7 reverse indices/bakes, DMA batching, mixer/FIR
-rewrites, CPU/APU dispatch experiments, tile-conversion alternatives or
-optional UI/FLAC allocation changes. None is claimed solved by passing the
-existing tests. Further candidates need bounded prototypes and their own
-correctness/performance evidence. Old/New hardware timings, audio underruns,
-frame-time tails and compatibility scenes remain required.
+Suggested order, subject to measured costs:
+
+1. SRAM/rewind stalls: SRAM is still synchronous and lacks atomic replacement;
+   profile capture, serialization, delta, memory-load allocation and lock time.
+2. Sparse Mode 7 reverse indices/bakes: prototype bounded storage and a dense
+   fallback, including reset/load/VRAM invalidation correctness.
+3. DMA cache-invalidation batching, mixer/interleaving/FIR, and MSU-1 fallback
+   I/O/prefetch misses and lock waits. None is implemented by these batches.
+4. Blur/fade/haze extra draws, CPU/APU dispatch, tile conversion, optional
+   UI/FLAC allocations and staging copies. These remain investigations, not
+   proven gains. Menu resources have not been made nonresident.
+
+Log buffering **is delivered**; signature-message coalescing is not. With
+logging disabled, the buffering change does not improve performance. The
+one-second flush target depends on writes/ticks running; suspension or a stall
+can delay it, while a full stdio buffer can write sooner.
+
+Old/New hardware timings, audio underruns, frame-time tails and compatibility
+scenes remain required. Passing tests alone does not settle these candidates.
+
+## Latest menu regression (separate from optimization)
+
+Nightly `32130cc`, release CI `34669950832` green: disabled layer checkboxes
+remain visible with Hide Unused, even when their last-frame usage becomes zero.
+The `layer-toggle` Azahar scene disabled BG1, resumed for 120 frames, reopened
+and reenabled it using the real checkbox path. Four captures were inspected.
+Disabled before/after gameplay: 0% changed pixels. Toggle A/B: 0.0390625%
+whole screen, 0.0493421% menu body, 0.6696429% BG1 row. Goldens are under
+`tools/azahar-validate/goldens/layer-toggle/`. Hardware confirmation remains
+the final check; this is not evidence of increased FPS.
 
 ## Issue #63
 
@@ -79,3 +112,8 @@ The original f4mrfaux `ef11ac0` SuperFX series is already cherry-picked as
 program-bank pointer fetch are present; reapplying them is not new work.
 The open follow-up concerns further Star Fox optimization. Keep that separate
 from verification of the already-delivered series and do not invent a speedup.
+Still pending: broader Star Fox/Yoshi's Island/Stunt Race FX/Doom timing tests,
+Old/New profiling and the #57 idle-loop investigation. A Star Fox speedhack
+requires ROM/revision identification and synchronization evidence; it is not
+already implemented or a guaranteed gain. Layer depth for a GSU framebuffer
+does not automatically provide independent depth for its individual polygons.
