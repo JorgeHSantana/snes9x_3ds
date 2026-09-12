@@ -62,7 +62,7 @@ static void layer_toggle_probe_tick(int& frames, bool is_dialog, int& tab_index,
     if (frames == 61) {
         ++LAYER_TOGGLE_PROBE_VISIT;
         if (LAYER_TOGGLE_PROBE_VISIT == 1) {
-            keys_down = KEY_B; // Resume the ROM; impl3ds reopens after 120 frames.
+            keys_down = KEY_START; // Resume the ROM; impl3ds reopens after 120 frames.
         }
     }
 }
