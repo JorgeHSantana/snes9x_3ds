@@ -35,6 +35,15 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   effects + Blur Quality Auto/Full/Light with adaptive hysteresis (#71),
   dimmed/hidden unused rows, .3d keyed by ROM title with migration,
   update mid-game with in-session reload (#66, #73), dialog sizing.
+* **Stable v2.3 (2026-09-26)** — Mode 7 perspective closed (#62); sprites
+  on the ground retired (#76); 3D tab decluttered with SELECT help; Old
+  3DS stutter work (#59): SRAM autosave on a worker thread, rewind delta
+  encode on a worker, raw ring freeze, buffered log with a 1 s drain;
+  Blur Auto starts in Light, gains "Auto, Off under load"; rewind
+  patience "Idle frames only"; SRAM/savestate hardening, OAM
+  appearance-only invalidation, snapshot workspace (#78, #79); crash
+  fixes (post-update exit, caching indicator on an empty list); dead
+  ground-sprite code and the redundant Mode 7 Depth Mode removed.
 * **Stable v2.2 (2026-09-06, a26c295)** — Auto Save / Auto Load (#72); Blur Light
   steady per eye (blurred backgrounds no longer wobble); Blur Auto
   warm-up; post-update exit crash fixed from the Luma dump (background
@@ -111,10 +120,10 @@ and pending hardware evidence. These deliveries do not close #78/#79/#63.
 | 56 | Zelda ALTTP MSU: FMV corrompido | ABERTA | Diagnóstico completo: HDMA ch6/7 → $2126/$2128 (letterbox por window) não aplicado no path de FMV; NÃO é tearing de DMA. Correção pendente (meio período) |
 | 57 | DBZ Hyper Dimension lento (SA-1) | ABERTA | Speedhacks aplicam ("SKIPPED bytes differ" era alarme falso); falta idle-loop — probe caça-loops planejado |
 | 58 | Edge Cleanup por cena com "Global" | ABERTA | Parcialmente absorvida: edge virou game-global; revisar se o por-cena ainda é desejado |
-| 59 | Stuttering progressivo no Old | ABERTA | Relatos históricos: capturas de 20ms e autosave de 225–259ms, além de logs por linha. Buffering de logs entregue em 1e72a38; storms de assinaturas, picos de rewind/SRAM e novas medições no console pendentes. Não são novos benchmarks |
+| 59 | Stuttering progressivo no Old | ABERTA (3 de 3 fontes atacadas, Stable v2.3) | Relatos históricos: capturas de 20ms e autosave de 225–259ms, além de logs por linha. Buffering de logs entregue em 1e72a38; storms de assinaturas, picos de rewind/SRAM e novas medições no console pendentes. Não são novos benchmarks |
 | 60 | Profundidade por PRIORIDADE (rcmz) | FECHADA | ENTREGUE nas nightlies: cascata de 4 tiers no shader, BGs P0/P1 + sprites Prio 0-3, zero draws extras; aguarda validação em hardware p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
 | 61 | Editor 3D ao vivo (rcmz, harmônico) | FECHADA | ENTREGUE: aba 3D Stereo, spotlight por prioridade, gauges em tempo real, Y peek, caption restaurada; aguarda validação p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
-| 62 | Perspectiva real no Mode 7 | ENTREGUE | perspectiva por scanline (fator no w do vértice + mad no shader dos tiles, k só na camada de Mode 7), gauge Mode 7 > Perspective, M7PERSP no .3d; céu do 2P corrigido (flush antes do commit); validado pelo Jorge no hardware 2026-09-06 ('foi'); pendente: benchmark no Old e vértice direito transladar |
+| 62 | Perspectiva real no Mode 7 | FECHADA (Stable v2.3) | perspectiva por scanline (fator no w do vértice + mad no shader dos tiles, k só na camada de Mode 7), gauge Mode 7 > Perspective, M7PERSP no .3d; céu do 2P corrigido (flush antes do commit); validado pelo Jorge no hardware 2026-09-06 ('foi'); pendente: benchmark no Old e vértice direito transladar |
 | 63 | SuperFX: série aplicada; validação e Star Fox | ABERTA | Três fx* confirmados idênticos a ef11ac0, via 738dbc5. Switch/fetch já entregues; porcentagens históricas não são novas medições. Cobertura ampliada, profiling e investigação de idle loops com #57 pendentes |
 | 64 | Updater integrado | FECHADA | Entregue e validado em hardware (primeira OTA do fork): curl+mbedtls, worker thread, canais isolados, janela de 10min no auto-check |
 | 65 | Deslocamento fracionário racha camadas | FECHADA | Causa-raiz: slider contínuo × arredondamento por seção; fix: roundf por camada + edge crop coerente + opção Discrete/Continuous; aguarda validação p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
