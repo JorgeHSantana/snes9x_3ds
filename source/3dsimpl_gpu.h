@@ -198,6 +198,7 @@ typedef struct
     bool            mode7SectionsModified[4];
     bool            mode7TilesModified;
 
+    bool            blurAutoOff;    // Blur Quality "Auto, Off under load": the ghost passes are skipped
     bool            blurAutoLight;  // Blur Quality Auto verdict (issue #71): true while
                                     // the frame loop reports load - fed per emulated
                                     // frame from 3dsblurauto.h, read by the ghost passes

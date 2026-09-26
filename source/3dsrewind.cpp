@@ -518,11 +518,13 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
     s_framesSinceCapture++;
     if (s_frameCounter >= REWIND_CAPTURE_FRAMES) {
         static const int patienceFrames[4] = { 60, 120, 240, 480 };
+        bool idleOnly = settings3DS.RewindMaxWait >= 4;   // never force (Jorge: MMX3's water stage on an Old 3DS)
         int waitLimit = patienceFrames[settings3DS.RewindMaxWait & 3];
         int waited = s_frameCounter - REWIND_CAPTURE_FRAMES;
 
         int loadBar;
-        if (waited >= waitLimit)              loadBar = 1000;   // force
+        if (idleOnly)                         loadBar = 50;     // a really idle frame, or nothing
+        else if (waited >= waitLimit)         loadBar = 1000;   // force
         else if (waited >= waitLimit * 2 / 3) loadBar = 90;
         else if (waited >= waitLimit / 3)     loadBar = 75;
         else                                  loadBar = 50;

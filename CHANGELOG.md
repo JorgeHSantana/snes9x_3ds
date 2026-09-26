@@ -50,6 +50,12 @@ Notable changes to this project will be documented in this file.
   experiment. Hardware FPS/latency improvements remain to be measured.
 
 ### Features
+* **Blur Quality "Auto, Off under load"**: a fourth mode that, when Light
+  still drops frames for two seconds, switches the blur off until a few
+  clean seconds pass (Jorge: Mega Man X3's water stage on an Old 3DS).
+* **Rewind Capture Patience "Idle frames only"**: a capture is never
+  forced, so a heavy stretch has no capture hiccup at all and a thinner
+  history instead.
 * **Sprites keep their OBJ priority depths over Mode 7**: the
   sprites-follow-the-ground model of the 2026-09-08 nightlies was retired
   (the kart's depth still snapped on drifts and wall hits, and OAM gives

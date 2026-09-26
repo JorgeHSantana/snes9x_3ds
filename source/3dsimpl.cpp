@@ -986,10 +986,13 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 	{
 		if (firstFrame)
 			blurAutoReset(&s_blurAuto);   // warm-up: a load's first frames skip for non-load reasons
-		bool wasLight = GPU3DSExt.blurAutoLight;
-		GPU3DSExt.blurAutoLight = blurAutoStep(&s_blurAuto, skipDrawingFrame);
-		if (GPU3DSExt.blurAutoLight != wasLight)
-			log3dsWrite("[blur] auto -> %s", GPU3DSExt.blurAutoLight ? "light" : "full");
+		int wasTier = GPU3DSExt.blurAutoOff ? 2 : (GPU3DSExt.blurAutoLight ? 1 : 0);
+		blurAutoStep(&s_blurAuto, skipDrawingFrame);
+		int tier = blurAutoTier(&s_blurAuto, settings3DS.StereoBlurQuality == 3);
+		GPU3DSExt.blurAutoLight = tier >= 1;
+		GPU3DSExt.blurAutoOff = tier == 2;
+		if (tier != wasTier)
+			log3dsWrite("[blur] auto -> %s", tier == 2 ? "off" : (tier == 1 ? "light" : "full"));
 	}
 
 	// per-scene 3D profiles (issue #23): match the PPU scene signature and

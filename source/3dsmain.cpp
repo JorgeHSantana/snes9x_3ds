@@ -597,8 +597,8 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         []( int val ) { CheckAndUpdate(settings3DS.RewindMaxWindow, val); });
 
     AddMenuPicker(items, "  Capture Patience"_s,
-        "How long a due capture may wait for an idle frame.\nThe idleness bar lowers as the wait grows, and at\nthe limit the capture happens regardless."_s,
-        makePickerOptions({"1 second", "2 seconds", "4 seconds", "8 seconds"}), settings3DS.RewindMaxWait, DIALOG_TYPE_INFO, true,
+        "How long a due capture may wait for an idle frame.\nThe idleness bar lowers as the wait grows, and at\nthe limit the capture happens regardless. Idle frames\nonly: never forced - no capture hiccup in a heavy\nstretch, at the cost of a thinner history there."_s,
+        makePickerOptions({"1 second", "2 seconds", "4 seconds", "8 seconds", "Idle frames only"}), settings3DS.RewindMaxWait, DIALOG_TYPE_INFO, true,
         []( int val ) { CheckAndUpdate(settings3DS.RewindMaxWait, val); });
 
     AddMenuPicker(items, "  Resume Countdown"_s,
@@ -1989,8 +1989,8 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 }
             });
         AddMenuPicker(items, "  Blur Quality"_s,
-            "Auto: Full while the game holds its frame rate, Light the moment a frame drops, back to Full after a run of clean seconds - a longer run each time it has to switch again soon. Full: two ghost copies smear both sides - the softest look. Light: one ghost per eye, on opposite sides in the two eyes - half the blur's cost.",
-            makePickerOptions({"Auto (Full, Light under load)", "Full (two ghosts)", "Light (one, faster)"}),
+            "Auto: Full while the game holds its frame rate, Light the moment a frame drops, back to Full after a run of clean seconds - a longer run each time it has to switch again soon. Auto with Off: the same, and if Light still drops frames for two seconds the blur switches off until a few clean seconds pass - for games that sit at the limit of an Old 3DS. Full: two ghost copies smear both sides - the softest look. Light: one ghost per eye, on opposite sides in the two eyes - half the blur's cost.",
+            makePickerOptions({"Auto (Full, Light under load)", "Full (two ghosts)", "Light (one, faster)", "Auto, Off under load"}),
             settings3DS.StereoBlurQuality, DIALOG_TYPE_INFO, true,
             []( int val ) {
                 if (CheckAndUpdate( settings3DS.StereoBlurQuality, val )) {
@@ -2610,7 +2610,7 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     }
 
     if (writeMode || detectedConfigVersion >= 2.5f) {
-        config3dsReadWriteInt32(stream, writeMode, "StereoBlurQuality=%d\n", &settings3DS.StereoBlurQuality, 0, 2);
+        config3dsReadWriteInt32(stream, writeMode, "StereoBlurQuality=%d\n", &settings3DS.StereoBlurQuality, 0, 3);
         // v2.5 wrote 0 = Full as an implicit default; v2.6 renumbers to
         // 0 = Auto, 1 = Full, 2 = Light and adopts Auto for those files
         if (!writeMode && detectedConfigVersion < 2.6f)
@@ -2691,7 +2691,7 @@ bool settingsReadWriteFullListGlobal(bool writeMode)
     config3dsReadWriteEnum(stream, writeMode, "RewindCountdown=%d\n", &settings3DS.RewindCountdown, 0, 3);
     config3dsReadWriteEnum(stream, writeMode, "RewindEnabled=%d\n", &settings3DS.RewindEnabled, 0, 1);
     config3dsReadWriteEnum(stream, writeMode, "RewindMaxWindow=%d\n", &settings3DS.RewindMaxWindow, 0, 2);
-    config3dsReadWriteEnum(stream, writeMode, "RewindMaxWait=%d\n", &settings3DS.RewindMaxWait, 0, 3);
+    config3dsReadWriteEnum(stream, writeMode, "RewindMaxWait=%d\n", &settings3DS.RewindMaxWait, 0, 4);
 
     return true;
 }

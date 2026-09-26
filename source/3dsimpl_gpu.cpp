@@ -660,6 +660,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // shifted clean off the screen - the parallax is per tier and
             // the clipper drops them for free. NULL = every tier.
             auto drawGhostPasses = [&](float ghost, const float *tierMask) {
+                if (GPU3DSExt.blurAutoOff) return;   // "Auto, Off under load" engaged
                 const float offscreen = 4096.0f;
                 float ghostShift[4][2];
                 for (int t = 0; t < 4; t++) {
@@ -684,7 +685,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // Full). Alpha is boosted to keep the perceived smear
                 // weight close to Full.
                 bool light = settings3DS.StereoBlurQuality == 2 ||
-                    (settings3DS.StereoBlurQuality == 0 && GPU3DSExt.blurAutoLight);
+                    ((settings3DS.StereoBlurQuality == 0 || settings3DS.StereoBlurQuality == 3) && GPU3DSExt.blurAutoLight);
                 int lightSide = GPU3DS.stereoRightPass ? 1 : 0;
                 GPU3DS.stereoGhostPass = true;
                 if (light) {
@@ -760,11 +761,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 drawPass();
 
                 float blur = (GPU3DS.stereoBlur / 8.0f) * slider;
-                if (blur > 0.02f) {
+                if (blur > 0.02f && !GPU3DSExt.blurAutoOff) {
                     float ghostA = 0.25f + 0.25f * blur;
                     float off = (1.0f + 2.0f * blur) * (GPU3DSExt.render2x.enabled ? 1.875f : 1.0f) * 2.0f;
                     bool light = settings3DS.StereoBlurQuality == 2 ||
-                        (settings3DS.StereoBlurQuality == 0 && GPU3DSExt.blurAutoLight);
+                        ((settings3DS.StereoBlurQuality == 0 || settings3DS.StereoBlurQuality == 3) && GPU3DSExt.blurAutoLight);
                     int lightSide = GPU3DS.stereoRightPass ? 1 : 0;
                     GPU3DS.stereoGhostPass = true;
                     gpu3dsSetGhostAlpha(light ? (ghostA * 1.4f > 0.55f ? 0.55f : ghostA * 1.4f) : ghostA);

@@ -27,6 +27,11 @@
 #define BLUR_AUTO_CLEAN_MAX        60
 #define BLUR_AUTO_RELAPSE_WINDOWS  10
 #define BLUR_AUTO_STABLE_WINDOWS   30
+// Off tier (Jorge, MMX3's water stage on an Old 3DS): Light still
+// dropping frames for this many consecutive windows turns the blur off;
+// BLUR_AUTO_OFF_CLEAN clean windows bring Light back.
+#define BLUR_AUTO_OFF_AFTER         2
+#define BLUR_AUTO_OFF_CLEAN         3
 
 struct BlurAutoState
 {
@@ -40,6 +45,9 @@ struct BlurAutoState
                        // that are not load (caches filling, threads starting)
     bool light;        // current verdict
     bool promoted;     // Full reached at least once since the reset
+    bool off;          // Off tier engaged (only reported when the caller allows it)
+    int  lightDirty;   // consecutive Light windows with skips (Off trigger)
+    int  offClean;     // consecutive clean windows while Off
 };
 
 #define BLUR_AUTO_WARMUP_FRAMES 60
@@ -54,6 +62,17 @@ static inline void blurAutoReset(BlurAutoState *s)
     s->warmup = BLUR_AUTO_WARMUP_FRAMES;
     s->light = true;
     s->promoted = false;
+    s->off = false;
+    s->lightDirty = 0;
+    s->offClean = 0;
+}
+
+// the verdict as a tier: 0 Full, 1 Light, 2 Off
+static inline int blurAutoTier(const BlurAutoState *s, bool allowOff)
+{
+    if (s == nullptr) return 0;
+    if (allowOff && s->off) return 2;
+    return s->light ? 1 : 0;
 }
 
 // One emulated frame. Returns the verdict after this frame.
@@ -89,8 +108,22 @@ static inline bool blurAutoStep(BlurAutoState *s, bool skippedFrame)
 
     // window closed
     if (s->light) {
+        // Off tier bookkeeping: Light that keeps dropping frames escalates,
+        // Off that runs clean de-escalates (back to Light, then the Full
+        // rule below applies as usual)
+        bool leftOff = false;
+        if (s->off) {
+            if (s->skips > 0) s->offClean = 0;
+            else if (++s->offClean >= BLUR_AUTO_OFF_CLEAN) { s->off = false; s->offClean = 0; s->lightDirty = 0; leftOff = true; }
+        } else if (s->skips > 0) {
+            if (++s->lightDirty >= BLUR_AUTO_OFF_AFTER) { s->off = true; s->offClean = 0; }
+        } else {
+            s->lightDirty = 0;
+        }
         if (s->skips > 0)
             s->clean = 0;                         // not clean: the run restarts
+        else if (s->off || leftOff)
+            s->clean = 0;                         // Off first goes back to Light; Full's run starts after
         else if (++s->clean >= s->required) {
             s->light = false;
             // the first Full after a start is not a return: a skip soon

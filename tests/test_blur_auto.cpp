@@ -112,3 +112,34 @@ TEST_CASE("blur auto: reset clears everything (back to the Light start)") {
     CHECK(s.light == true); CHECK(s.promoted == false); CHECK(s.required == BLUR_AUTO_CLEAN_BASE);
     CHECK(s.clean == 0); CHECK(s.frames == 0); CHECK(s.skips == 0);
 }
+
+TEST_CASE("blur auto: Light that keeps dropping frames turns Off, and only when the caller allows it") {
+    BlurAutoState s; full(&s);
+    blurAutoStep(&s, true);                              // Full -> Light
+    CHECK(blurAutoTier(&s, true) == 1);
+    CHECK(runWindow(&s, 1) == true);                     // one dirty window: still Light
+    CHECK(blurAutoTier(&s, true) == 1);
+    CHECK(runWindow(&s, 1) == true);                     // second: Off
+    CHECK(blurAutoTier(&s, true) == 2);
+    CHECK(blurAutoTier(&s, false) == 1);                 // the two-tier mode never reports Off
+}
+
+TEST_CASE("blur auto: Off returns to Light after clean windows, then Full by the usual rule") {
+    BlurAutoState s; full(&s);
+    blurAutoStep(&s, true);
+    runWindow(&s, 1); runWindow(&s, 1);
+    REQUIRE(blurAutoTier(&s, true) == 2);
+    runWindow(&s, 0); runWindow(&s, 0);
+    CHECK(blurAutoTier(&s, true) == 2);                  // not yet
+    runWindow(&s, 0);
+    CHECK(blurAutoTier(&s, true) == 1);                  // Light again
+    CHECK(windowsToFull(&s) == BLUR_AUTO_CLEAN_BASE);    // then Full
+    CHECK(blurAutoTier(&s, true) == 0);
+}
+
+TEST_CASE("blur auto: a clean window between dirty ones resets the Off trigger") {
+    BlurAutoState s; full(&s);
+    blurAutoStep(&s, true);
+    runWindow(&s, 1); runWindow(&s, 0); runWindow(&s, 1);
+    CHECK(blurAutoTier(&s, true) == 1);
+}
