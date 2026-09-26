@@ -3,7 +3,19 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
-(nothing yet)
+### Fixes
+* MSU-1: a track loaded right after a missing one (Zelda MSU's absent
+  track 0) counted every fill as a stall while the read-ahead thread was
+  still adopting it, and gave up after a second - silence for the rest
+  of the track. The read-ahead now reports itself alive from the moment
+  a playable track is posted. The adopt line logs the thread's latency
+  (`wait`) and the decoder open time.
+
+### Optimizations
+* Tile conversion (issue #79, item 6): the per-byte "is this bitplane
+  byte zero" branches are gone; the tables map zero to zero, so the
+  output is identical (Azahar byte-exact) with 16 fewer branches per
+  8-bpp tile line.
 
 ## Stable v2.3 (2026-09-26, 3ae0954)
 

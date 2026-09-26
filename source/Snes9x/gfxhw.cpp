@@ -351,61 +351,31 @@ void S9xCommitBackdropSections() {
 //-------------------------------------------------------------------
 uint8 S9xConvertTileTo8Bit (uint8 *pCache, uint32 TileAddr)
 {
-    //printf ("Tile Addr: %04x\n", TileAddr);
+    // Issue #79 item 6: the bitplane tables (gfx.cpp S9xInitTileRenderer)
+    // map nibble 0 to 0, so the "if (pix)" guard before every lookup only
+    // saved a table read at the cost of a data-dependent branch per byte -
+    // 16 of them per line at 8 bpp. Straight-line lookups produce the same
+    // pixels (Azahar byte-exact against the pre-change golden).
     uint8 *tp = &Memory.VRAM[TileAddr];
     uint32 *p = (uint32 *) pCache;
     uint32 non_zero = 0;
     uint8 line;
+
+#define TILE_PLANE_PAIR(plane, off) \
+    pix = tp[(off)];      p1 |= odd_high[plane][pix >> 4];  p2 |= odd_low[plane][pix & 0xf]; \
+    pix = tp[(off) + 1];  p1 |= even_high[plane][pix >> 4]; p2 |= even_low[plane][pix & 0xf];
 
     switch (BG.BitShift)
     {
     case 8:
 		for (line = 8; line != 0; line--, tp += 2)
 		{
-			uint32 p1 = 0;
-			uint32 p2 = 0;
+			uint32 p1 = 0, p2 = 0;
 			uint8 pix;
-
-			if ((pix = *(tp + 0)))
-			{
-				p1 |= odd_high[0][pix >> 4];
-				p2 |= odd_low[0][pix & 0xf];
-			}
-			if ((pix = *(tp + 1)))
-			{
-				p1 |= even_high[0][pix >> 4];
-				p2 |= even_low[0][pix & 0xf];
-			}
-			if ((pix = *(tp + 16)))
-			{
-				p1 |= odd_high[1][pix >> 4];
-				p2 |= odd_low[1][pix & 0xf];
-			}
-			if ((pix = *(tp + 17)))
-			{
-				p1 |= even_high[1][pix >> 4];
-				p2 |= even_low[1][pix & 0xf];
-			}
-			if ((pix = *(tp + 32)))
-			{
-				p1 |= odd_high[2][pix >> 4];
-				p2 |= odd_low[2][pix & 0xf];
-			}
-			if ((pix = *(tp + 33)))
-			{
-				p1 |= even_high[2][pix >> 4];
-				p2 |= even_low[2][pix & 0xf];
-			}
-			if ((pix = *(tp + 48)))
-			{
-				p1 |= odd_high[3][pix >> 4];
-				p2 |= odd_low[3][pix & 0xf];
-			}
-			if ((pix = *(tp + 49)))
-			{
-				p1 |= even_high[3][pix >> 4];
-				p2 |= even_low[3][pix & 0xf];
-			}
+			TILE_PLANE_PAIR(0, 0)
+			TILE_PLANE_PAIR(1, 16)
+			TILE_PLANE_PAIR(2, 32)
+			TILE_PLANE_PAIR(3, 48)
 			*p++ = p1;
 			*p++ = p2;
 			non_zero |= p1 | p2;
@@ -415,29 +385,10 @@ uint8 S9xConvertTileTo8Bit (uint8 *pCache, uint32 TileAddr)
     case 4:
 		for (line = 8; line != 0; line--, tp += 2)
 		{
-			uint32 p1 = 0;
-			uint32 p2 = 0;
+			uint32 p1 = 0, p2 = 0;
 			uint8 pix;
-			if ((pix = *(tp + 0)))
-			{
-				p1 |= odd_high[0][pix >> 4];
-				p2 |= odd_low[0][pix & 0xf];
-			}
-			if ((pix = *(tp + 1)))
-			{
-				p1 |= even_high[0][pix >> 4];
-				p2 |= even_low[0][pix & 0xf];
-			}
-			if ((pix = *(tp + 16)))
-			{
-				p1 |= odd_high[1][pix >> 4];
-				p2 |= odd_low[1][pix & 0xf];
-			}
-			if ((pix = *(tp + 17)))
-			{
-				p1 |= even_high[1][pix >> 4];
-				p2 |= even_low[1][pix & 0xf];
-			}
+			TILE_PLANE_PAIR(0, 0)
+			TILE_PLANE_PAIR(1, 16)
 			*p++ = p1;
 			*p++ = p2;
 			non_zero |= p1 | p2;
@@ -447,25 +398,16 @@ uint8 S9xConvertTileTo8Bit (uint8 *pCache, uint32 TileAddr)
     case 2:
 		for (line = 8; line != 0; line--, tp += 2)
 		{
-			uint32 p1 = 0;
-			uint32 p2 = 0;
+			uint32 p1 = 0, p2 = 0;
 			uint8 pix;
-			if ((pix = *(tp + 0)))
-			{
-				p1 |= odd_high[0][pix >> 4];
-				p2 |= odd_low[0][pix & 0xf];
-			}
-			if ((pix = *(tp + 1)))
-			{
-				p1 |= even_high[0][pix >> 4];
-				p2 |= even_low[0][pix & 0xf];
-			}
+			TILE_PLANE_PAIR(0, 0)
 			*p++ = p1;
 			*p++ = p2;
 			non_zero |= p1 | p2;
 		}
 		break;
     }
+#undef TILE_PLANE_PAIR
     return (non_zero ? TRUE : BLANK_TILE);
 }
 

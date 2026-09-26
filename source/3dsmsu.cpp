@@ -355,6 +355,7 @@ struct AudioReadahead {
     // adopt request: written by the notify hook (emu thread, SNES lock
     // held), consumed by the tick. Guarded by the leaf lock.
     bool     adopt_pending;
+    uint64_t notify_tick;    // when the stream change was posted (adopt latency diag)
     bool     want_stream;    // a playable track is loaded
     bool     is_flac;
     uint32_t size;           // bytes past header
@@ -401,6 +402,7 @@ void ra_on_stream_change(const Msu1State* st)
     }
     ra_lock();
     g_audio_ra.adopt_pending = true;
+    g_audio_ra.notify_tick   = ra_ticks();
     g_audio_ra.want_stream   = ready;
     g_audio_ra.is_flac       = st->audio_flac != nullptr;
     g_audio_ra.size          = st->audio_size;
@@ -409,8 +411,13 @@ void ra_on_stream_change(const Msu1State* st)
     memcpy(g_audio_ra.path, path, sizeof(path));
     if (ready) {
         // rebase the window at the new position; the consumer serves
-        // silence (alive) until the producer lands data here
+        // silence (alive) until the producer lands data here. producer_ok
+        // must say so explicitly: a previous failed track (Zelda MSU's
+        // missing track 0) had left it false, the next track's fills all
+        // counted as stalls, and the track "gave up" a second before the
+        // read-ahead adopted it (Jorge's Old 3DS log, 2026-09-26).
         g_audio_ra.ring.reset(g_audio_ra.pos, g_audio_ra.size, g_audio_ra.loop_bytes);
+        g_audio_ra.ring.producer_ok = true;
     } else {
         g_audio_ra.ring.reset(0, 0, 0);
         g_audio_ra.ring.producer_ok = false;
@@ -501,10 +508,12 @@ void msu3dsAudioReadaheadTick(void)
     ra_unlock();
 
     if (adopt) {
+        uint64_t adoptT0 = ra_ticks();
         if (!want) {
             ra_close_decoder();
             return;
         }
+        uint32_t openMs = 0;
         if (strcmp(g_audio_ra.open_path, path) != 0) {
             ra_close_decoder();
             if (is_flac) {
@@ -520,9 +529,13 @@ void msu3dsAudioReadaheadTick(void)
             }
             memcpy(g_audio_ra.open_path, path, sizeof(g_audio_ra.open_path));
             g_audio_ra.decoder_pos = UINT32_MAX;
+            openMs = (uint32_t)((ra_ticks() - adoptT0) / 268123u);
         }
-        msu1_diag("readahead adopt: pos %u%s", (unsigned)g_audio_ra.pos,
-                  g_audio_ra.flac != nullptr ? " (flac)" : "");
+        // wait = notify -> this tick (the thread's latency: on an Old 3DS
+        // it shares the 30% syscore slice with the mixer), open = decoder
+        msu1_diag("readahead adopt: pos %u%s (wait %ums, open %ums)", (unsigned)g_audio_ra.pos,
+                  g_audio_ra.flac != nullptr ? " (flac)" : "",
+                  (unsigned)((adoptT0 - g_audio_ra.notify_tick) / 268123u), (unsigned)openMs);
     }
     if (!want) { return; }
 
