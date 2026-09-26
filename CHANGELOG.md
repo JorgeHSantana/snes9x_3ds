@@ -31,6 +31,14 @@ Notable changes to this project will be documented in this file.
   ~1400 such transfers a second (their cost fell by a third), Mario Kart
   ~80. Frame dumps byte-identical on Mario Kart, MMX3 and the Zelda
   transition.
+* Mode 7 char index (issue #79, item 1): when a char's pixels or palette
+  change, the map positions showing it were found by walking all 16384
+  tilemap entries, once per frame with any dirty char (Mario Kart: every
+  frame, for ~24 chars on the map). A reverse index char -> positions,
+  relinked on each tilemap write and rebuilt lazily from VRAM after a
+  reset, savestate or rewind, replaces the walk (`m7map_index.h`, 64 KiB).
+  Mode 7 preparation -55% in Mario Kart; frame dumps byte-identical on
+  the race, boot, MMX3 and Zelda scenes.
 * Sprite line lists (issue #78, renderer): S9xSetupOBJ rebuilt all 240
   scanlines' sprite lists on every OBJ change; Mario Kart changes the
   table four times a frame (OBSEL and the OAM upload, once per split

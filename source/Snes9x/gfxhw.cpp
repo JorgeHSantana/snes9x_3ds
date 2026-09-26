@@ -1,4 +1,5 @@
 #include "../layer_defer.h"
+#include "../m7map_index.h"
 #include "copyright.h"
 
 
@@ -3036,149 +3037,70 @@ void S9xPrepareMode7CheckAndMarkPaletteChangedTiles()
 	}
 }
 
+static Mode7MapIndex s_m7map;   // 64 KiB, see m7map_index.h
+
+void S9xMode7MapRelink (int pos, uint8 oldChar, uint8 newChar)
+{
+	if (!s_m7map.valid) return;
+	s_m7map.relink (pos, oldChar, newChar);
+	IPPU.Mode7CharUsed[oldChar] = s_m7map.used (oldChar);
+	IPPU.Mode7CharUsed[newChar] = true;
+}
+
+void S9xMode7MapInvalidate ()
+{
+	s_m7map.invalidate ();
+	IPPU.Mode7CharUsedValid = false;
+}
+
+static void S9xMode7MapRebuild ()
+{
+	s_m7map.rebuild (Memory.VRAM);
+	for (int c = 0; c < 256; c++)
+		IPPU.Mode7CharUsed[c] = s_m7map.used (c);
+	IPPU.Mode7CharUsedValid = true;
+}
+
+// Re-cache the chars whose pixels or palette changed and mark every map
+// position that shows them for the re-blit into the plane texture. Only
+// chars on the map are converted; off-map dirty chars keep their flag
+// and are converted when a tilemap write brings them in (REGISTER_2118
+// raises Mode7CharDirtyFlagCount for a char still marked 2).
 void S9xPrepareMode7CheckAndUpdateCharTiles()
 {
-	uint8 *tileMap = &Memory.VRAM[0];
 	uint8 *charDirtyFlag = IPPU.Mode7CharDirtyFlag;
 
-	//register int tileNumber;
-	int tileNumber;
-	uint8 charFlag;
+	if (!s_m7map.valid)
+		S9xMode7MapRebuild ();
 
-	// Clear first to drop stale entries
+	const bool extbg = IPPU.Mode7EXTBGFlag != 0;
+	if (extbg)
+	{
+		for (int i = 0; i < 128; i++)
+			GFX.ScreenColors128[i] = GFX.ScreenRGB555toRGBA4[GFX.ScreenColors[i]] & 0xfffe;
+		for (int i = 0; i < 128; i++)
+			GFX.ScreenColors128[i + 128] = GFX.ScreenRGB555toRGBA4[GFX.ScreenColors[i]];
+	}
+
+	// Repeat tile 0 is drawn outside the tilemap, so it is cached even off-map.
+	if (PPU.Mode7Repeat == 3 && charDirtyFlag[0] == 2)
+	{
+		if (extbg) S9xPrepareMode7ExtBGUpdateCharTile(0); else S9xPrepareMode7UpdateCharTile(0);
+		charDirtyFlag[0] = 1;
+		GPU3DSExt.mode7TilesModified = true;
+	}
+
 	for (int c = 0; c < 256; c++)
-		IPPU.Mode7CharUsed[c] = false;
-
-	#define CACHE_MODE7_TILE \
-			tileNumber = tileMap[i * 2]; \
-			IPPU.Mode7CharUsed[tileNumber] = true; \
-			charFlag = charDirtyFlag[tileNumber]; \
-			if (charFlag) \
-			{  \
-				gpu3dsSetMode7TileModified(i, tileNumber); \
-				if (charFlag == 2) \
-				{ \
-					S9xPrepareMode7UpdateCharTile(tileNumber); \
-					charDirtyFlag[tileNumber] = 1; \
-				} \
-			} \
-			i++; 
-
-	#define CACHE_MODE7_EXTBG_TILE \
-			tileNumber = tileMap[i * 2]; \
-			IPPU.Mode7CharUsed[tileNumber] = true; \
-			charFlag = charDirtyFlag[tileNumber]; \
-			if (charFlag) \
-			{  \
-				gpu3dsSetMode7TileModified(i, tileNumber); \
-				if (charFlag == 2) \
-				{ \
-					S9xPrepareMode7ExtBGUpdateCharTile(tileNumber); \
-					charDirtyFlag[tileNumber] = 1; \
-				} \
-			} \
-			i++; 
-
-	// Bug fix: The logic for the test was previously wrong.
-	// This fixes some of the mode 7 tile problems in Secret of Mana.
-	//
-	//if (!Memory.FillRAM [0x2133] & 0x40)
-	if (!IPPU.Mode7EXTBGFlag)
 	{
-		// Bug fix: Super Mario Kart Bowser Castle's tile 0 
-		//
-		if (PPU.Mode7Repeat == 3)
+		const uint8 flag = charDirtyFlag[c];
+		if (!flag || !s_m7map.used (c)) continue;
+		if (flag == 2)
 		{
-			tileNumber = 0;
-			charFlag = charDirtyFlag[tileNumber]; 
-			if (charFlag == 2)
-			{
-				S9xPrepareMode7UpdateCharTile(tileNumber);
-				charDirtyFlag[tileNumber] = 1;
-				GPU3DSExt.mode7TilesModified = true;
-			}
-		} 
-		
-		// Normal BG with 256 colours
-		//
-		for (int i = 0; i < 16384; )
-		{
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-			
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
-			CACHE_MODE7_TILE
+			if (extbg) S9xPrepareMode7ExtBGUpdateCharTile(c); else S9xPrepareMode7UpdateCharTile(c);
+			charDirtyFlag[c] = 1;
 		}
+		s_m7map.for_each_position (c, [c](int pos) { gpu3dsSetMode7TileModified(pos, (u8) c); });
 	}
-	else
-	{
-		// Bug fix: Super Mario Kart Bowser Castle's tile 0 
-		//
-		if (PPU.Mode7Repeat == 3)
-		{
-			tileNumber = 0;
-			charFlag = charDirtyFlag[tileNumber]; 
-			if (charFlag == 2)
-			{
-				S9xPrepareMode7ExtBGUpdateCharTile(tileNumber);
-				charDirtyFlag[tileNumber] = 1;
-				GPU3DSExt.mode7TilesModified = true;
-			}
-		} 
-		
-		// Prepare the 128 color palette by duplicate colors from 0-127 to 128-255
-		//
-		// Low priority (set the alpha to 0xe, and make use of the inprecise
-		// floating point math to achieve the same alpha translucency)
-		//
-		for (int i = 0; i < 128; i++)
-			GFX.ScreenColors128[i] = GFX.ScreenRGB555toRGBA4[GFX.ScreenColors[i]] & 0xfffe;		
-		// High priority 	
-		for (int i = 0; i < 128; i++)
-			GFX.ScreenColors128[i + 128] = GFX.ScreenRGB555toRGBA4[GFX.ScreenColors[i]];		
-
-		// Ext BG with 128 colours
-		//
-		for (int i = 0; i < 16384; )
-		{
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-			
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-			CACHE_MODE7_EXTBG_TILE
-
-		}
-	}
-
-	IPPU.Mode7CharUsedValid = true;
 }
 
 

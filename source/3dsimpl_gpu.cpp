@@ -1210,6 +1210,7 @@ void gpu3dsCopyVRAMTilesIntoMode7TileVertexes(uint8 *VRAM)
     {
         IPPU.Mode7CharDirtyFlag[i] = 2;
     }
+    S9xMode7MapInvalidate ();
 }
 
 void gpu3dsIncrementMode7UpdateFrameCount()

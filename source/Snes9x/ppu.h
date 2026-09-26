@@ -472,11 +472,16 @@ STATIC inline void REGISTER_2104 (uint8 byte)
 
 #define COMPARE_WRITE_VRAM(addr, data) if (Memory.VRAM[(addr)] != data) { notEqual = true; Memory.VRAM[(addr)] = data; }
 
+// Mode 7 tilemap reverse index (m7map_index.h, kept in gfxhw.cpp)
+void S9xMode7MapRelink (int pos, uint8 oldChar, uint8 newChar);
+void S9xMode7MapInvalidate ();
+
 
 STATIC inline void REGISTER_2118 (uint8 Byte)
 {
     uint32 address;
     bool notEqual = false;
+    uint8 oldByte = 0;
 
     if (PPU.VMA.FullGraphicCount)
     {
@@ -486,12 +491,15 @@ STATIC inline void REGISTER_2118 (uint8 Byte)
                 ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3)) << 1) & 0xffff;
 
         //Memory.VRAM [address] = Byte;
+        oldByte = Memory.VRAM[address];
         COMPARE_WRITE_VRAM(address, Byte);
     }
     else
     {
 	    //Memory.VRAM[address = (PPU.VMA.Address << 1) & 0xFFFF] = Byte;
-        COMPARE_WRITE_VRAM(address = (PPU.VMA.Address << 1) & 0xFFFF, Byte);
+        address = (PPU.VMA.Address << 1) & 0xFFFF;
+        oldByte = Memory.VRAM[address];
+        COMPARE_WRITE_VRAM(address, Byte);
     }
 
     if (notEqual)
@@ -517,6 +525,7 @@ STATIC inline void REGISTER_2118 (uint8 Byte)
 
                 gpu3dsSetMode7TileModified(tileIdx, Byte);
                 IPPU.Mode7CharUsed[Byte] = true;
+                S9xMode7MapRelink(tileIdx, oldByte, Byte);
 
                 //if (Byte != 0)
                 //    printf ("2118 m7 idx=%x, byte=%x \n", tileIdx, Byte);
@@ -550,6 +559,7 @@ STATIC inline void REGISTER_2118_tile (uint8 Byte)
 		 ((rem & (PPU.VMA.FullGraphicCount - 1)) << 3)) << 1) & 0xffff;
     
     //Memory.VRAM [address] = Byte;
+    const uint8 oldByte = Memory.VRAM[address];
     COMPARE_WRITE_VRAM(address, Byte);
 
     if (notEqual)
@@ -576,6 +586,7 @@ STATIC inline void REGISTER_2118_tile (uint8 Byte)
 
                 gpu3dsSetMode7TileModified(tileIdx, Byte);
                 IPPU.Mode7CharUsed[Byte] = true;
+                S9xMode7MapRelink(tileIdx, oldByte, Byte);
 
                 //if (Byte != 0)
                 //    printf ("2118 t m7 idx=%x, byte=%x \n", tileIdx, Byte);
@@ -595,6 +606,7 @@ STATIC inline void REGISTER_2118_linear (uint8 Byte)
 
     //Memory.VRAM[address = (PPU.VMA.Address << 1) & 0xFFFF] = Byte;
     address = (PPU.VMA.Address << 1) & 0xFFFF;
+    const uint8 oldByte = Memory.VRAM[address];
     COMPARE_WRITE_VRAM(address, Byte);
 
     if (notEqual)
@@ -620,6 +632,7 @@ STATIC inline void REGISTER_2118_linear (uint8 Byte)
                 
                 gpu3dsSetMode7TileModified(tileIdx, Byte);
                 IPPU.Mode7CharUsed[Byte] = true;
+                S9xMode7MapRelink(tileIdx, oldByte, Byte);
 
                 //if (Byte != 0)
                 //    printf ("2118 l m7 idx=%x, byte=%x \n", tileIdx, Byte);
