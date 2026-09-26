@@ -13,6 +13,13 @@ Notable changes to this project will be documented in this file.
   SRAM, palette redraw reduction and Circle Pad hotkeys. Status rows remain visible.
 
 ### Optimizations
+* **Rewind capture costs the game less** (issue #59, source 2: 19-20 ms
+  per capture on the Old 3DS, over a frame): the delta encode - a
+  compare and copy over the whole state, ~40% of the capture - now runs
+  on a background thread and the entry lands on the next frame; and the
+  in-memory ring freezes only the SRAM the cart has instead of the
+  format's fixed 128 KiB (a cart without SRAM skips 128 KiB of copy and
+  compare per capture). Savestate files are unchanged.
 * **SRAM autosave no longer freezes the game** (issue #59: 225-259 ms per
   periodic save on the Old 3DS): the emulation thread copies the SRAM
   (at most 128 KiB) and a background thread writes the file. One write

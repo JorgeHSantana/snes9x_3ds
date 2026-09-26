@@ -41,6 +41,23 @@ struct RewindDeltaRing
     int start, count;            // FIFO window over entries[]
     int sinceKeyframe;
     int stagingKf;               // slot handed out by push_ptr, -1 = none
+    int pendingDelta;            // delta slot reserved by commit_begin, -1 = none
+
+    // A commit split in two so the delta encode (a memcmp/memcpy over the
+    // whole state) can run off the emulation thread: commit_begin picks
+    // the slots and evicts, the encode runs anywhere with the pointers it
+    // returns, commit_end appends the entry. Between the two, push_ptr is
+    // refused and both slots stay reserved.
+    struct Pending
+    {
+        bool     valid;
+        bool     tryDelta;       // encode allowed (discipline + slot found)
+        uint32_t length, tag;
+        int      pos;            // where the entry will land (thumbnails key off it)
+        const uint8_t *kf; uint32_t kfLen; uint8_t kfSlot;
+        const uint8_t *state;
+        uint8_t *out; uint32_t outCapacity;
+    };
 
     void init(uint8_t *kfBuf, int kfCount, uint32_t stateSlotSize,
               uint8_t *deltaBuf, int deltaCount, uint32_t deltaSlotBytes,
@@ -61,7 +78,11 @@ struct RewindDeltaRing
         start = 0; count = 0;
         sinceKeyframe = 0;
         stagingKf = -1;
+        pendingDelta = -1;
     }
+
+    bool commit_pending() const { return pendingDelta >= 0 || (stagingKf >= 0 && pendingStaging); }
+    bool pendingStaging = false;
 
     const Entry &at(int back) const
     {
@@ -76,8 +97,10 @@ private:
     {
         for (int i = 0; i < count; i++)
             if (fifoAt(i).kind == kind && fifoAt(i).slot == slot) return true;
-        // the staging slot is reserved even before its entry exists
-        return kind == KIND_KEYFRAME && slot == stagingKf;
+        // the staging slot is reserved even before its entry exists, and so
+        // is the delta slot of a commit in flight
+        if (kind == KIND_KEYFRAME && slot == stagingKf) return true;
+        return kind == KIND_DELTA && slot == pendingDelta;
     }
 
     int freeSlot(uint8_t kind, int slotCount) const
@@ -119,7 +142,7 @@ public:
     // groups until a keyframe slot frees up
     uint8_t *push_ptr()
     {
-        if (!valid()) return nullptr;
+        if (!valid() || commit_pending()) return nullptr;
         int s = freeSlot(KIND_KEYFRAME, kfSlots);
         while (s < 0 && count > 0) {
             dropOldestGroup();
@@ -130,11 +153,24 @@ public:
         return kfPool + (size_t)s * slotSize;
     }
 
-    void push_commit(uint32_t length, uint32_t tag)
+    // step 1 (emulation thread): decide delta vs keyframe, reserve the
+    // slots, evict so the entry has a place, and hand out the pointers
+    bool commit_begin(uint32_t length, uint32_t tag, Pending *pc)
     {
-        if (!valid() || stagingKf < 0) return;
+        if (pc) pc->valid = false;
+        if (!valid() || stagingKf < 0 || pc == nullptr || commit_pending()) return false;
 
-        // try a delta while the discipline allows it and a keyframe exists
+        // an entry slot for the coming append, decided now so the entry's
+        // position is known before commit_end (thumbnails are stored by it)
+        while (count >= entryCapacity)
+            dropOldestGroup();
+
+        pc->valid = true; pc->tryDelta = false;
+        pc->length = length; pc->tag = tag;
+        pc->state = kfPool + (size_t)stagingKf * slotSize;
+        pc->kf = nullptr; pc->kfLen = 0; pc->kfSlot = 0;
+        pc->out = nullptr; pc->outCapacity = 0;
+
         int kfBack = newestKeyframe();
         if (kfBack >= 0 && sinceKeyframe < keyframeInterval && deltaSlots > 0) {
             int kfCount = 0;
@@ -152,31 +188,55 @@ public:
             kfBack = newestKeyframe();
             if (kfBack >= 0 && dslot >= 0) {
                 const Entry &kfe = at(kfBack);
-                uint32_t encoded = RewindDelta::encode(
-                    kfPool + (size_t)kfe.slot * slotSize, kfe.len,
-                    kfPool + (size_t)stagingKf * slotSize, length,
-                    pageSize,
-                    deltaPool + (size_t)dslot * deltaSlotSize, deltaSlotSize);
-                if (encoded > 0) {
-                    Entry e = {};
-                    e.kind = KIND_DELTA; e.slot = (uint8_t)dslot;
-                    e.kfSlot = kfe.slot; e.len = encoded;
-                    e.kfLen = kfe.len; e.tag = tag;
-                    stagingKf = -1;
-                    append(e);
-                    sinceKeyframe++;
-                    return;
-                }
+                pc->tryDelta = true;
+                pc->kf = kfPool + (size_t)kfe.slot * slotSize;
+                pc->kfLen = kfe.len; pc->kfSlot = kfe.slot;
+                pc->out = deltaPool + (size_t)dslot * deltaSlotSize;
+                pc->outCapacity = deltaSlotSize;
+                pendingDelta = dslot;
             }
         }
+        pc->pos = (start + count) % entryCapacity;
+        pendingStaging = true;
+        return true;
+    }
 
-        // keyframe commit: the staged state stays where it is
+    // the encode itself (pure; the worker runs this): 0 = keyframe fallback
+    static uint32_t commit_encode(const Pending &pc, uint32_t pageSize)
+    {
+        if (!pc.valid || !pc.tryDelta) return 0;
+        return RewindDelta::encode(pc.kf, pc.kfLen, pc.state, pc.length,
+                                   pageSize, pc.out, pc.outCapacity);
+    }
+
+    // step 2 (emulation thread): append the entry the encode produced
+    void commit_end(const Pending &pc, uint32_t encoded)
+    {
+        if (!valid() || !pc.valid || stagingKf < 0) return;
         Entry e = {};
+        if (pc.tryDelta && encoded > 0 && pendingDelta >= 0) {
+            e.kind = KIND_DELTA; e.slot = (uint8_t)pendingDelta;
+            e.kfSlot = pc.kfSlot; e.len = encoded;
+            e.kfLen = pc.kfLen; e.tag = pc.tag;
+            pendingDelta = -1; stagingKf = -1; pendingStaging = false;
+            append(e);
+            sinceKeyframe++;
+            return;
+        }
+        // keyframe commit: the staged state stays where it is
         e.kind = KIND_KEYFRAME; e.slot = (uint8_t)stagingKf;
-        e.len = length; e.tag = tag;
-        stagingKf = -1;
+        e.len = pc.length; e.tag = pc.tag;
+        pendingDelta = -1; stagingKf = -1; pendingStaging = false;
         append(e);
         sinceKeyframe = 1;
+    }
+
+    // the synchronous form (tests, and any caller without a worker)
+    void push_commit(uint32_t length, uint32_t tag)
+    {
+        Pending pc;
+        if (!commit_begin(length, tag, &pc)) return;
+        commit_end(pc, commit_encode(pc, pageSize));
     }
 
     // stable position of the entry in entries[] - callers key per-entry

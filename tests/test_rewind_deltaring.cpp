@@ -152,3 +152,71 @@ TEST_CASE("deltaring: trim_to drops whole oldest groups, survivors decode")
     for (int back = 0; back < f.ring.count; back++)
         CHECK(f.ring.read_at(back, f.out.data(), RingFixture::STATE) == RingFixture::STATE);
 }
+
+TEST_CASE("deltaring: a split commit reserves both slots, refuses a new push, then lands the delta")
+{
+    RingFixture f;
+    f.play();                                  // keyframe
+    f.state[0] += 1;
+    uint8_t *dst = f.ring.push_ptr();
+    REQUIRE(dst != nullptr);
+    memcpy(dst, f.state.data(), RingFixture::STATE);
+
+    RewindDeltaRing::Pending pc;
+    REQUIRE(f.ring.commit_begin(RingFixture::STATE, 99, &pc));
+    CHECK(pc.tryDelta);
+    CHECK(f.ring.commit_pending());
+    CHECK(f.ring.push_ptr() == nullptr);       // no second capture while pending
+    CHECK(f.ring.count == 1);                  // the entry is not there yet
+    int pos = pc.pos;
+
+    uint32_t encoded = RewindDeltaRing::commit_encode(pc, RingFixture::PAGE);
+    CHECK(encoded > 0);
+    f.ring.commit_end(pc, encoded);
+    CHECK_FALSE(f.ring.commit_pending());
+    CHECK(f.ring.count == 2);
+    CHECK(f.ring.at(0).kind == RewindDeltaRing::KIND_DELTA);
+    CHECK(f.ring.entry_pos(0) == pos);         // thumbnails keyed off pc.pos are right
+    uint32_t n = f.ring.read_at(0, f.out.data(), RingFixture::STATE);
+    REQUIRE(n == RingFixture::STATE);
+    CHECK(memcmp(f.out.data(), f.state.data(), n) == 0);
+    CHECK(f.ring.push_ptr() != nullptr);       // free again
+}
+
+TEST_CASE("deltaring: a split commit whose encode fails lands a keyframe")
+{
+    RingFixture f;
+    f.play();
+    f.state[0] += 1;
+    memcpy(f.ring.push_ptr(), f.state.data(), RingFixture::STATE);
+    RewindDeltaRing::Pending pc;
+    REQUIRE(f.ring.commit_begin(RingFixture::STATE, 7, &pc));
+    f.ring.commit_end(pc, 0);                  // the worker could not fit the delta
+    CHECK(f.ring.at(0).kind == RewindDeltaRing::KIND_KEYFRAME);
+    CHECK_FALSE(f.ring.commit_pending());
+    uint32_t n = f.ring.read_at(0, f.out.data(), RingFixture::STATE);
+    REQUIRE(n == RingFixture::STATE);
+    CHECK(memcmp(f.out.data(), f.state.data(), n) == 0);
+}
+
+TEST_CASE("deltaring: the reserved delta slot is never handed out while pending")
+{
+    RingFixture f;
+    f.play();
+    f.state[0] += 1;
+    memcpy(f.ring.push_ptr(), f.state.data(), RingFixture::STATE);
+    RewindDeltaRing::Pending pc;
+    REQUIRE(f.ring.commit_begin(RingFixture::STATE, 1, &pc));
+    REQUIRE(pc.tryDelta);
+    int reserved = f.ring.pendingDelta;
+    CHECK(reserved >= 0);
+    // land it, then push more deltas: the entry keeps its slot, so the
+    // later deltas must have gone to other slots (no clobbering)
+    f.ring.commit_end(pc, RewindDeltaRing::commit_encode(pc, RingFixture::PAGE));
+    CHECK(f.ring.at(0).slot == reserved);
+    std::vector<uint8_t> landed = f.state;
+    f.play(); f.play();
+    uint32_t n = f.ring.read_at(2, f.out.data(), RingFixture::STATE);
+    REQUIRE(n == RingFixture::STATE);
+    CHECK(memcmp(f.out.data(), landed.data(), n) == 0);
+}

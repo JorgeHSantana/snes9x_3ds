@@ -519,7 +519,7 @@ bool8 S9xFreezeGameMem (uint8 *buffer, uint32 capacity, uint32 *lengthOut)
     memcpy (savedChannels, SoundData.channels, sizeof (savedChannels));
 
     S9xPrepareSoundForSnapshotSave (FALSE);
-    S9xFreezeToStream (stream);
+    S9xFreezeToStream (stream, true);
 
     memcpy (SoundData.channels, savedChannels, sizeof (savedChannels));
 
@@ -596,7 +596,7 @@ bool8 S9xUnfreezeGame (const char *filename)
     return (FALSE);
 }
 
-void S9xFreezeToStream (BufferedFileWriter& stream)
+void S9xFreezeToStream (BufferedFileWriter& stream, bool compactSram)
 {
     char buffer [1024];
     int i;
@@ -634,7 +634,17 @@ void S9xFreezeToStream (BufferedFileWriter& stream)
 	// RAM and VRAM
     FreezeBlock (stream, "VRA", Memory.VRAM, 0x10000);
     FreezeBlock (stream, "RAM", Memory.RAM, 0x20000);
-    FreezeBlock (stream, "SRA", ::SRAM, 0x20000);
+    // rewind ring: freeze (and later diff) only the SRAM the cart has -
+    // a cart without SRAM skips 128 KiB of memcpy + memcmp per capture.
+    // The header must not say 0 (UnfreezeBlock treats it as a bad block).
+    int sraLen = 0x20000;
+    if (compactSram) {
+        int have = Memory.SRAMSize ? (1 << (Memory.SRAMSize + 3)) * 128 : 0;
+        if (Settings.SRTC) have += SRTC_SRAM_PAD;
+        if (have < 16) have = 16;
+        if (have < sraLen) sraLen = have;
+    }
+    FreezeBlock (stream, "SRA", ::SRAM, sraLen);
     FreezeBlock (stream, "FIL", Memory.FillRAM, 0x8000);
     if (Settings.APUEnabled)
     {

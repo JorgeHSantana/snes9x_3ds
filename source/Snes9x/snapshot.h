@@ -32,7 +32,10 @@ bool8 S9xUnfreezeGameMem (const uint8 *buffer, uint32 length);
 bool8 Snapshot (const char *filename);
 bool8 S9xLoadSnapshot (const char *filename);
 bool8 S9xSPCDump (const char *filename);
-void S9xFreezeToStream (BufferedFileWriter& stream);
+// compactSram: the SRA block carries the cart's own SRAM size instead of
+// the format's fixed 128 KiB - for the in-memory rewind ring only (files
+// keep the format; UnfreezeBlock reads the header's length either way)
+void S9xFreezeToStream (BufferedFileWriter& stream, bool compactSram = false);
 int S9xUnfreezeFromStream (STREAM);
 END_EXTERN_C
 

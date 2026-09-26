@@ -16,6 +16,8 @@ void rewind3dsMsuApplyEarly();
 
 // --- timeline (3dsrewindui.cpp) --------------------------------------------
 
+void rewind3dsCommitDrain();   // lands an in-flight capture commit (readers call it first)
+
 #define REWIND_THUMB_W      150
 #define REWIND_THUMB_H      90
 #define REWIND_THUMB_BYTES  (REWIND_THUMB_W * REWIND_THUMB_H * 2)   // RGB565

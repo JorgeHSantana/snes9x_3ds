@@ -10,6 +10,7 @@
 #include "3dsui_notif.h"
 #include "3dslog.h"
 #include "perf_stats.h"
+#include <atomic>
 
 #include "Snes9x/snes9x.h"
 #include "Snes9x/snapshot.h"
@@ -51,6 +52,70 @@ static bool s_timelineFromMenu = false;
 static bool s_timelineActive = false;
 static uint32_t s_nowFrame = 0;        // emulated frames since ROM load
 
+// The delta encode runs on a lowest-priority worker (issue #59: on the Old
+// 3DS a capture cost 19-20 ms on the emulation thread, over a frame; the
+// encode was ~40% of it and only touches ring memory). The emulation
+// thread freezes into the staging slot, commit_begin reserves the slots,
+// the worker encodes, and the next frame's tick runs commit_end. Every
+// reader of the ring drains first.
+static RewindDeltaRing::Pending s_pending;
+static uint32_t s_pendingEncoded = 0;
+static u64      s_pendingFreezeTicks = 0, s_pendingStartTick = 0, s_pendingEmuTicks = 0;
+static bool     s_pendingMeasure = false;
+static std::atomic<int> s_workerState{0};   // 0 idle, 1 encoding, 2 done
+static std::atomic<bool> s_workerQuit{false};
+static LightEvent s_workerReq, s_workerDone;
+static Thread     s_worker = nullptr;
+static u64        s_workerTicks = 0;
+
+static void rewindWorker(void*)
+{
+    for (;;) {
+        LightEvent_Wait(&s_workerReq);
+        if (s_workerQuit.load()) break;
+        if (s_workerState.load() != 1) continue;
+        u64 t0 = svcGetSystemTick();
+        s_pendingEncoded = RewindDeltaRing::commit_encode(s_pending, s_ring.pageSize);
+        s_workerTicks = svcGetSystemTick() - t0;
+        s_workerState.store(2);
+        LightEvent_Signal(&s_workerDone);
+    }
+}
+
+static void rewind3dsWorkerStart()
+{
+    if (s_worker) return;
+    LightEvent_Init(&s_workerReq, RESET_ONESHOT);
+    LightEvent_Init(&s_workerDone, RESET_STICKY);
+    s_workerQuit.store(false);
+    s_workerState.store(0);
+    s_worker = threadCreate(rewindWorker, NULL, 0x2000, 0x3F, -2, false);
+    if (!s_worker) log3dsWrite("[rewind] worker thread failed; commits stay synchronous");
+}
+
+static void rewind3dsWorkerStop()
+{
+    if (!s_worker) return;
+    s_workerQuit.store(true);
+    LightEvent_Signal(&s_workerReq);
+    threadJoin(s_worker, U64_MAX);
+    threadFree(s_worker);
+    s_worker = nullptr;
+    s_workerState.store(0);
+}
+
+static void rewind3dsCommitFinish();   // below: the entry, thumbnail slot, stats
+
+// waits for an in-flight encode and lands its entry - every reader of
+// the ring (hold, timeline, rollback, reset, finalize) calls this first
+void rewind3dsCommitDrain()
+{
+    if (!s_ring.valid() || !s_ring.commit_pending()) return;
+    if (s_workerState.load() == 1)
+        LightEvent_Wait(&s_workerDone);
+    rewind3dsCommitFinish();
+}
+
 static TimingStats REWIND_PERF_FREEZE;
 static TimingStats REWIND_PERF_DELTA;
 static TimingStats REWIND_PERF_KEYFRAME;
@@ -81,7 +146,7 @@ static void rewind_perf_report()
 {
     log3dsWrite(
         "[perf][rewind] n=%u busy=%u failed=%u freeze=%llu/%lluus "
-        "delta=%u:%llu/%lluus key=%u:%llu/%lluus thumb=%llu/%lluus total=%llu/%lluus",
+        "delta(worker)=%u:%llu/%lluus key=%u:%llu/%lluus thumb=%llu/%lluus emu=%llu/%lluus",
         (unsigned)REWIND_PERF_TOTAL.sample_count(),
         (unsigned)REWIND_PERF_MIXER_BUSY,
         (unsigned)REWIND_PERF_FAILED,
@@ -123,6 +188,7 @@ static void rewind3dsAllocate()
 
         if (kfPool && deltaPool && entryBuf && s_thumbPool && s_presentBuf && s_readBuf) {
             memset(s_thumbPool, 0, (size_t)entryCount * REWIND_THUMB_BYTES);
+            rewind3dsWorkerStart();
             s_ring.init(kfPool, kfSlots, REWIND_SLOT_SIZE,
                         deltaPool, deltaSlots, REWIND_DELTA_SLOT_SIZE,
                         entryBuf, entryCount,
@@ -168,6 +234,62 @@ static void rewind3dsCaptureThumb(uint8_t *dst)
     }
 }
 
+// lands a finished commit: the entry, Max History trim, stats and logs
+static void rewind3dsCommitFinish()
+{
+    if (!s_ring.valid() || !s_ring.commit_pending()) return;
+    if (s_workerState.load() == 1) return;   // still encoding: next tick
+    s_workerState.store(0);
+    s_ring.commit_end(s_pending, s_pendingEncoded);
+    s_pending.valid = false;
+
+    // Max History ceiling (menu): drop whole oldest groups
+    if (settings3DS.RewindMaxWindow < 2) {
+        int seconds = settings3DS.RewindMaxWindow == 0 ? 30 : 60;
+        s_ring.trim_to(seconds * 60 / REWIND_CAPTURE_FRAMES);
+    }
+
+    const bool isDelta = s_ring.at(0).kind == RewindDeltaRing::KIND_DELTA;
+    if (s_pendingMeasure) {
+        REWIND_PERF_FREEZE.record(s_pendingFreezeTicks);
+        if (isDelta) REWIND_PERF_DELTA.record(s_workerTicks);
+        else         REWIND_PERF_KEYFRAME.record(s_workerTicks);
+        // total = what the EMULATION thread paid (freeze + begin + thumb);
+        // the encode ran on the worker
+        REWIND_PERF_TOTAL.record(s_pendingEmuTicks);
+        if (REWIND_PERF_TOTAL.sample_count() >= REWIND_PERF_REPORT_CAPTURES)
+            rewind_perf_report();
+    }
+
+    // A capture that outruns the frame budget on the emulation thread is
+    // a visible stutter - name it so field reports can tell capture
+    // spikes from SRAM/SD writes.
+    const uint32_t emu_ms = (uint32_t)(s_pendingEmuTicks / 268123);
+    if (emu_ms >= 8)
+        log3dsWrite("[rewind] capture slow: %ums on the emulation thread (%s, %uKB)", emu_ms,
+            isDelta ? "delta" : "keyframe", (unsigned)(s_ring.at(0).len / 1024));
+
+    // Calibration feed: real delta sizes and promotion rate decide
+    // pageSize/K for issue #37.
+    ++s_statCaptures;
+    if (isDelta) {
+        ++s_statDeltas;
+        s_statDeltaBytes += s_ring.at(0).len;
+    }
+    if ((s_statCaptures % 64) == 0) {
+        uint32_t first = 0;
+        uint32_t last = 0;
+        s_ring.tag_at(0, &first);
+        s_ring.tag_at(s_ring.count - 1, &last);
+        log3dsWrite("[rewind] calib: %u caps, %u%% delta, avg %uKB, window %us (%d entries)",
+            (unsigned)s_statCaptures,
+            (unsigned)(s_statDeltas * 100 / s_statCaptures),
+            (unsigned)(s_statDeltas ? s_statDeltaBytes / s_statDeltas / 1024 : 0),
+            (unsigned)((first - last) / (uint32_t)rewind3dsEmulatedFps()),
+            s_ring.count);
+    }
+}
+
 // --- timeline support (3dsrewindui.cpp drives these; emu thread only) ------
 
 bool rewind3dsTimelineActive() { return s_timelineActive; }
@@ -201,6 +323,7 @@ bool rewind3dsTakeHoldRequest()
 // mixer barrier and consume it; false when history is exhausted
 bool rewind3dsHoldStepBack()
 {
+    rewind3dsCommitDrain();
     if (!s_ring.valid() || s_ring.count == 0 || s_readBuf == nullptr) return false;
     uint32_t tag = 0;
     uint32_t len = s_ring.read_at(0, s_readBuf, REWIND_SLOT_SIZE);
@@ -223,7 +346,7 @@ void rewind3dsRequestTimelineFromMenu()
 
 bool rewind3dsTimelineFromMenu() { return s_timelineFromMenu; }
 
-int rewind3dsCount() { return s_ring.valid() ? s_ring.count : 0; }
+int rewind3dsCount() { rewind3dsCommitDrain(); return s_ring.valid() ? s_ring.count : 0; }
 uint32_t rewind3dsNowFrame() { return s_nowFrame; }
 
 bool rewind3dsPeekInfo(int back, uint32_t *frameTag)
@@ -262,6 +385,7 @@ bool rewind3dsRestorePresent()
 
 bool rewind3dsRestoreAt(int back)
 {
+    rewind3dsCommitDrain();
     if (!s_ring.valid() || s_readBuf == nullptr) return false;
     uint32_t len = s_ring.read_at(back, s_readBuf, REWIND_SLOT_SIZE);
     return len != 0 && rewind3dsRestoreState(s_readBuf, len);
@@ -269,6 +393,7 @@ bool rewind3dsRestoreAt(int back)
 
 void rewind3dsRollbackTo(int back)
 {
+    rewind3dsCommitDrain();
     if (s_ring.valid()) s_ring.rollback_to(back);
 }
 
@@ -312,6 +437,8 @@ void rewind3dsMsuDeferEnd()
 // too. The next enabled frame re-allocates from scratch.
 void rewind3dsFinalize()
 {
+    rewind3dsCommitDrain();
+    rewind3dsWorkerStop();
     if (s_ring.valid()) {
         free(s_ring.kfPool);
         free(s_ring.deltaPool);
@@ -328,6 +455,7 @@ void rewind3dsFinalize()
 
 void rewind3dsReset()
 {
+    rewind3dsCommitDrain();
     if (s_ring.valid())
         s_ring.clear();
     s_frameCounter = 0;
@@ -407,11 +535,11 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             const bool measure_perf = log3dsIsReady();
             u64 capStartTick = svcGetSystemTick();
             u64 freeze_ticks = 0;
-            u64 commit_ticks = 0;
-            u64 thumb_ticks = 0;
-            uint8_t *staging = s_ring.push_ptr();
+            // a commit still in flight (worker encoding): retry next frame
+            if (s_workerState.load() == 2) rewind3dsCommitFinish();
+            uint8_t *staging = s_ring.commit_pending() ? nullptr : s_ring.push_ptr();
             bool ok = false;
-            bool mixerBusy = false;
+            bool mixerBusy = s_ring.commit_pending();
             if (staging != nullptr) {
                 if (LightLock_TryLock(&snd3DS.snesAccessLock) == 0) {
                     const u64 freeze_start = measure_perf ? svcGetSystemTick() : 0;
@@ -432,66 +560,31 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
                 s_framesSinceCapture = 0;
             }
             if (ok) {
-                const u64 commit_start = measure_perf ? svcGetSystemTick() : 0;
-                s_ring.push_commit(length, s_nowFrame);
-                if (measure_perf) {
-                    commit_ticks = svcGetSystemTick() - commit_start;
-                }
-                const uint32_t cap_ms = (uint32_t)((svcGetSystemTick() - capStartTick) / 268123);
-                const u64 thumb_start = measure_perf ? svcGetSystemTick() : 0;
-                rewind3dsCaptureThumb(
-                    s_thumbPool + (size_t)s_ring.entry_pos(0) * REWIND_THUMB_BYTES);
-                if (measure_perf) {
-                    thumb_ticks = svcGetSystemTick() - thumb_start;
-                }
-
-                // Max History ceiling (menu): drop whole oldest groups
-                if (settings3DS.RewindMaxWindow < 2) {
-                    int seconds = settings3DS.RewindMaxWindow == 0 ? 30 : 60;
-                    s_ring.trim_to(seconds * 60 / REWIND_CAPTURE_FRAMES);
-                }
-
-                if (measure_perf) {
-                    REWIND_PERF_FREEZE.record(freeze_ticks);
-                    if (s_ring.at(0).kind == RewindDeltaRing::KIND_DELTA) {
-                        REWIND_PERF_DELTA.record(commit_ticks);
+                // the freeze is done; the encode goes to the worker and the
+                // entry lands on the next tick (rewind3dsCommitFinish)
+                if (s_ring.commit_begin(length, s_nowFrame, &s_pending)) {
+                    s_pendingMeasure = measure_perf;
+                    s_pendingFreezeTicks = freeze_ticks;
+                    s_pendingStartTick = capStartTick;
+                    s_pendingEncoded = 0;
+                    s_workerTicks = 0;
+                    // the thumbnail is of THIS frame: taken now, into the
+                    // slot the entry will occupy
+                    const u64 thumb_start = measure_perf ? svcGetSystemTick() : 0;
+                    rewind3dsCaptureThumb(
+                        s_thumbPool + (size_t)s_pending.pos * REWIND_THUMB_BYTES);
+                    if (measure_perf)
+                        REWIND_PERF_THUMB.record(svcGetSystemTick() - thumb_start);
+                    // what the EMULATION thread paid: freeze + begin + thumb
+                    s_pendingEmuTicks = svcGetSystemTick() - capStartTick;
+                    if (s_worker && s_pending.tryDelta) {
+                        s_workerState.store(1);
+                        LightEvent_Clear(&s_workerDone);
+                        LightEvent_Signal(&s_workerReq);
                     } else {
-                        REWIND_PERF_KEYFRAME.record(commit_ticks);
+                        s_pendingEncoded = RewindDeltaRing::commit_encode(s_pending, s_ring.pageSize);
+                        rewind3dsCommitFinish();
                     }
-                    REWIND_PERF_THUMB.record(thumb_ticks);
-                    REWIND_PERF_TOTAL.record(svcGetSystemTick() - capStartTick);
-                    if (REWIND_PERF_TOTAL.sample_count() >= REWIND_PERF_REPORT_CAPTURES) {
-                        rewind_perf_report();
-                    }
-                }
-
-                // A capture that outruns the frame budget is a visible
-                // stutter - name it in the log so field reports can tell
-                // capture spikes from SRAM/SD writes.
-                if (cap_ms >= 8) {
-                    log3dsWrite("[rewind] capture slow: %ums (%s, %uKB)", cap_ms,
-                        s_ring.at(0).kind == RewindDeltaRing::KIND_DELTA ? "delta" : "keyframe",
-                        (unsigned)(s_ring.at(0).len / 1024));
-                }
-
-                // Calibration feed: real delta sizes and promotion rate
-                // decide pageSize/K for issue #37.
-                ++s_statCaptures;
-                if (s_ring.at(0).kind == RewindDeltaRing::KIND_DELTA) {
-                    ++s_statDeltas;
-                    s_statDeltaBytes += s_ring.at(0).len;
-                }
-                if ((s_statCaptures % 64) == 0) {
-                    uint32_t first = 0;
-                    uint32_t last = 0;
-                    s_ring.tag_at(0, &first);
-                    s_ring.tag_at(s_ring.count - 1, &last);
-                    log3dsWrite("[rewind] calib: %u caps, %u%% delta, avg %uKB, window %us (%d entries)",
-                        (unsigned)s_statCaptures,
-                        (unsigned)(s_statDeltas * 100 / s_statCaptures),
-                        (unsigned)(s_statDeltas ? s_statDeltaBytes / s_statDeltas / 1024 : 0),
-                        (unsigned)((first - last) / (uint32_t)rewind3dsEmulatedFps()),
-                        s_ring.count);
                 }
             } else if (!mixerBusy && measure_perf && REWIND_PERF_FAILED != UINT32_MAX) {
                 ++REWIND_PERF_FAILED;
