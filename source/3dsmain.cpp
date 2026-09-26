@@ -1011,6 +1011,7 @@ static bool updWorkerProgress(void*, unsigned done, unsigned total)
 static void updWorkerThreadFn(void*)
 {
     u64 t0 = osGetTime();
+    log3dsFlush();
     if (!update3dsNetInit())
     {
         snprintf(s_updWorker.check.error, sizeof(s_updWorker.check.error),
@@ -3064,6 +3065,7 @@ static void emulatorUnloadRom()
 {
     if (!settings3DS.isRomLoaded)
         return;
+    log3dsFlush();
     impl3dsSaveCheats();
     settingsSave(true);
     snd3dsDrainMixing();
@@ -4164,6 +4166,7 @@ int main()
     }
 
     log3dsWrite("==== EXIT emulator ====");
+    log3dsFlush();   // the post-update exit crash (2026-09-06) was diagnosed from this tail
 
     menu3dsShowSplashMessage("Saving & Exiting");
 

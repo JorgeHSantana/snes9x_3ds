@@ -939,7 +939,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
 
     while (aptMainLoop())
     {
-        log3dsTick();
+        log3dsFlush();   // no game runs in the menu: the tail costs nothing here
         if (GPU3DS.emulatorState == EMUSTATE_END)
         {
             returnResult = -1;

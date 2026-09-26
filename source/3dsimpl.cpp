@@ -1260,6 +1260,7 @@ bool impl3dsSaveStateAutoFor(const char *reason)
 
     bool ok = impl3dsSaveState(path);
     log3dsWrite("[autosave] %s: %s", reason, ok ? "saved" : "FAILED");
+    log3dsFlush();   // HOME / lid / power-off follow this line
     return ok;
 }
 

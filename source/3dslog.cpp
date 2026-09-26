@@ -64,17 +64,32 @@ void log3dsWrite(const char* format, ...)
         ok = LOG.write_v(format, args);
     }
     va_end(args);
-    // Every line reaches the SD before the next frame runs: this project's
-    // crash work (Luma dumps + the session log's tail) depends on the tail,
-    // and the log is opt-in - it is on exactly when fidelity matters more
-    // than the write cost. The 32 KiB buffer still coalesces a burst of
-    // lines written in one frame into one SD write.
+    // Flush policy (issue #59 vs. the crash tail): in gameplay a line
+    // costs no SD access - the buffer drains once a second (a SMW mosaic
+    // fade logs 16+ lines per second; per-line fflush was a measured
+    // stutter on the Old 3DS). The tail that crash reports need is kept
+    // by log3dsFlush() at the risky moments (exit, ROM unload, updater,
+    // autosave) and by the menu loop, which flushes every iteration
+    // because no game runs there.
     if (ok) {
-        ok = LOG.write("\n") && LOG.flush(now_ms);
+        ok = LOG.write("\n") && LOG.tick(now_ms);
     }
     if (!ok) {
         READY.store(false);
         (void)LOG.close(); // Failed sink: stop; never recursively log I/O errors.
+    }
+    LightLock_Unlock(&LOG_LOCK);
+}
+
+void log3dsFlush()
+{
+    if (!READY.load()) {
+        return;
+    }
+    LightLock_Lock(&LOG_LOCK);
+    if (READY.load() && !LOG.flush(osGetTime())) {
+        READY.store(false);
+        (void)LOG.close();
     }
     LightLock_Unlock(&LOG_LOCK);
 }

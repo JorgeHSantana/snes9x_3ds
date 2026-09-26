@@ -13,7 +13,7 @@ are not completion of the broader investigations. Published nightlies:
 |---|---|---|
 | SRAM (#78) | Complete-write and close checks; sticky buffered errors; dirty retained on failure; silence restored | Still synchronous, no atomic file replacement; hardware I/O latency not measured |
 | Savestates/rewind (#78) | Propagate file close errors; reuse bounded core-owned serialization workspace, preserving zero padding | `fmemopen` still allocates on memory-load; no claim of removing all rewind allocations or latency |
-| Logging (#78) | Fixed 32 KiB buffer coalesces a frame's burst into one SD write; every line is flushed before the next frame (2026-09-25: the periodic-flush policy lost the crash tail this project's field reports depend on, and its gain was never measured) | Flush remains synchronous; adds 32 KiB resident |
+| Logging (#78) | Fixed 32 KiB buffer drained once a second in gameplay (issue #59's measured per-line stutter); flushed every menu iteration and explicitly at exit / ROM unload / updater / autosave (2026-09-25: the tail crash reports need) | Flush remains synchronous; adds 32 KiB resident; up to 1 s lost on a mid-gameplay crash |
 | Mode 7 (#78) | Select minimum squared span, then one reference square root per run | No claimed FPS percentage |
 | Mode 7 Layer mode (#78) | Removed 2026-09-25: identical to Perspective 0 in the shader; its only effect on cost was ~450 `sqrtf` per frame | - |
 | Build (#78) | Release requires custom citro3d dependency | Hardware performance still needs measurement |

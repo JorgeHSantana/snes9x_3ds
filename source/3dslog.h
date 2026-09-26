@@ -5,6 +5,7 @@ void log3dsInitialize();
 void log3dsWrite(const char *fmt, ...);
 void log3dsClose(void);
 void log3dsTick();
+void log3dsFlush();   // drain now: before an operation a crash report would need the tail of
 bool log3dsIsReady();
 const char* log3dsGetCurrentDate();
 

@@ -13,9 +13,11 @@ Notable changes to this project will be documented in this file.
   SRAM, palette redraw reduction and Circle Pad hotkeys. Status rows remain visible.
 
 ### Optimizations
-* Session log writes go through one 32 KiB buffer, so a burst of lines in
-  one frame is one SD write; every line is still flushed before the next
-  frame runs (the log is opt-in and its tail is what crash reports need).
+* Session log: one 32 KiB buffer drained once a second during gameplay
+  (issue #59: per-line flushes were a measured stutter on the Old 3DS),
+  flushed on every menu iteration and explicitly before exit, ROM unload,
+  the updater and after each autosave - the moments a crash report needs
+  the tail of.
 * Reuse a bounded serialization workspace instead of allocating temporary
   blocks for each savestate/rewind field group. Save format is unchanged.
 * Reuse sprite scanline lists for appearance-only OAM changes, preserving
