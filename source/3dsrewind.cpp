@@ -33,7 +33,7 @@
 #define REWIND_CAPTURE_FRAMES   (settings3DS.isNew3DS ? 30 : 120)
 #define REWIND_FORCE_GAP_FRAMES (REWIND_CAPTURE_FRAMES * 4)
 
-static constexpr uint32_t REWIND_PERF_REPORT_CAPTURES = 16;
+static constexpr uint32_t REWIND_PERF_REPORT_CAPTURES = 8;   // an Old 3DS under load captures every 8 s
 
 // all state below is emu-thread only
 static RewindDeltaRing s_ring;
@@ -60,7 +60,7 @@ static uint32_t s_nowFrame = 0;        // emulated frames since ROM load
 // reader of the ring drains first.
 static RewindDeltaRing::Pending s_pending;
 static uint32_t s_pendingEncoded = 0;
-static u64      s_pendingFreezeTicks = 0, s_pendingStartTick = 0, s_pendingEmuTicks = 0;
+static u64      s_pendingFreezeTicks = 0, s_pendingStartTick = 0, s_pendingEmuTicks = 0, s_pendingThumbTicks = 0;
 static bool     s_pendingMeasure = false;
 static std::atomic<int> s_workerState{0};   // 0 idle, 1 encoding, 2 done
 static std::atomic<bool> s_workerQuit{false};
@@ -266,8 +266,12 @@ static void rewind3dsCommitFinish()
     // spikes from SRAM/SD writes.
     const uint32_t emu_ms = (uint32_t)(s_pendingEmuTicks / 268123);
     if (emu_ms >= 8)
-        log3dsWrite("[rewind] capture slow: %ums on the emulation thread (%s, %uKB)", emu_ms,
-            isDelta ? "delta" : "keyframe", (unsigned)(s_ring.at(0).len / 1024));
+        log3dsWrite("[rewind] capture slow: %ums on the emulation thread (%s, %uKB; freeze %lluus, thumb %lluus, encode %s %lluus)",
+            emu_ms, isDelta ? "delta" : "keyframe", (unsigned)(s_ring.at(0).len / 1024),
+            (unsigned long long)ticks_to_microseconds(s_pendingFreezeTicks, SYSCLOCK_ARM11),
+            (unsigned long long)ticks_to_microseconds(s_pendingThumbTicks, SYSCLOCK_ARM11),
+            s_worker && s_pending.tryDelta ? "worker" : "inline",
+            (unsigned long long)ticks_to_microseconds(s_workerTicks, SYSCLOCK_ARM11));
 
     // Calibration feed: real delta sizes and promotion rate decide
     // pageSize/K for issue #37.
@@ -542,11 +546,9 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             bool mixerBusy = s_ring.commit_pending();
             if (staging != nullptr) {
                 if (LightLock_TryLock(&snd3DS.snesAccessLock) == 0) {
-                    const u64 freeze_start = measure_perf ? svcGetSystemTick() : 0;
+                    const u64 freeze_start = svcGetSystemTick();
                     ok = S9xFreezeGameMem(staging, REWIND_SLOT_SIZE, &length);
-                    if (measure_perf) {
-                        freeze_ticks = svcGetSystemTick() - freeze_start;
-                    }
+                    freeze_ticks = svcGetSystemTick() - freeze_start;
                     LightLock_Unlock(&snd3DS.snesAccessLock);
                 } else {
                     mixerBusy = true;
@@ -570,11 +572,12 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
                     s_workerTicks = 0;
                     // the thumbnail is of THIS frame: taken now, into the
                     // slot the entry will occupy
-                    const u64 thumb_start = measure_perf ? svcGetSystemTick() : 0;
+                    const u64 thumb_start = svcGetSystemTick();
                     rewind3dsCaptureThumb(
                         s_thumbPool + (size_t)s_pending.pos * REWIND_THUMB_BYTES);
+                    s_pendingThumbTicks = svcGetSystemTick() - thumb_start;
                     if (measure_perf)
-                        REWIND_PERF_THUMB.record(svcGetSystemTick() - thumb_start);
+                        REWIND_PERF_THUMB.record(s_pendingThumbTicks);
                     // what the EMULATION thread paid: freeze + begin + thumb
                     s_pendingEmuTicks = svcGetSystemTick() - capStartTick;
                     if (s_worker && s_pending.tryDelta) {
