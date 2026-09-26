@@ -258,6 +258,7 @@ void S9xStartScreenRefresh ();
 void S9xDrawScanLine (uint8 Line);
 void S9xEndScreenRefresh ();
 void S9xSetupOBJ ();
+void S9xSetupOBJRange (int y0, int y1);
 void S9xUpdateScreenSoftware ();
 void S9xUpdateScreenHardware ();
 void RenderLine (uint8 line);

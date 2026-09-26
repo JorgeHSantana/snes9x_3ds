@@ -4040,6 +4040,37 @@ void S9xUpdateScreenHardware ()
 	GFX.StartY = IPPU.PreviousLine;
 	GFX.EndY = IPPU.CurrentLine - 1;
 	IPPU.PreviousLine = IPPU.CurrentLine;
+#ifdef PROBE_SECTION_LOG
+	extern int g_probeFlushAddr; extern int g_probeFrames;
+	const int probeReason = CPU.InDMA ? (IPPU.InHDMA ? 0x3000 : (g_probeFlushAddr == 0x1000 || g_probeFlushAddr == 0x2104 || g_probeFlushAddr == 0x2122 ? g_probeFlushAddr : 0x2000)) : g_probeFlushAddr;
+	const int probeSubReason = g_probeFlushAddr;
+	const uint32 probeS = GFX.StartY, probeE = GFX.EndY;
+	u64 probeT0 = svcGetSystemTick();
+	struct ProbeEnd { int r, sr; uint32 s, e; u64 t0; ~ProbeEnd() {
+		u64 dt = svcGetSystemTick() - t0;
+		static uint32 cnt[64]; static u64 tk[64]; static int keys[64]; static int nk = 0; static int frames = 0; static int lastFrame = -1;
+		int key = (r << 16) | sr; int k = 0; for (; k < nk; k++) if (keys[k] == key) break;
+		if (k == nk && nk < 64) { keys[nk++] = key; }
+		if (k < 64) { cnt[k]++; tk[k] += dt; }
+		if (g_probeFrames >= 300 && g_probeFrames < 303)
+			log3dsWrite("[sect] frame=%d lines %u-%u reason=%04X reg=%04X us=%llu", g_probeFrames, (unsigned)s, (unsigned)e, r, sr, (unsigned long long)(dt * 1000000 / SYSCLOCK_ARM11));
+		if (g_probeFrames != lastFrame) { lastFrame = g_probeFrames; if (++frames >= 60) {
+			frames = 0; char line[400]; int n = snprintf(line, sizeof(line), "[sect] 60 frames:");
+			for (int i = 0; i < nk && n < 380; i++) n += snprintf(line + n, sizeof(line) - n, " %04X/%04X n=%u us=%llu", keys[i] >> 16, keys[i] & 0xFFFF, (unsigned)cnt[i], (unsigned long long)(tk[i] * 1000000 / SYSCLOCK_ARM11));
+			log3dsWrite("%s", line); for (int i = 0; i < nk; i++) { cnt[i] = 0; tk[i] = 0; } } }
+	} } probeEnd = { probeReason, probeSubReason, probeS, probeE, probeT0 };
+	static u64 s_phaseTk[2][8]; static uint32 s_phaseN = 0; static const char *s_phaseNames[8] = { "setupOBJ", "prepM7", "commitsA", "renderSub", "renderMain", "clipMath", "commitsB", "rest" };
+	u64 probePh = svcGetSystemTick();
+	const int probeSmall = (probeReason == 0x3000) ? 1 : 0;
+#define PROBE_PHASE(i) do { u64 _t = svcGetSystemTick(); s_phaseTk[0][i] += _t - probePh; if (probeSmall) s_phaseTk[1][i] += _t - probePh; probePh = _t; } while (0)
+	if (++s_phaseN == 470) {
+		char line[400]; int n = snprintf(line, sizeof(line), "[sect] phases per %u sections, all/hdma2105 us:", (unsigned)s_phaseN);
+		for (int i = 0; i < 8; i++) n += snprintf(line + n, sizeof(line) - n, " %s=%llu/%llu", s_phaseNames[i], (unsigned long long)(s_phaseTk[0][i] * 1000000 / SYSCLOCK_ARM11), (unsigned long long)(s_phaseTk[1][i] * 1000000 / SYSCLOCK_ARM11));
+		log3dsWrite("%s", line); s_phaseN = 0; for (int i = 0; i < 8; i++) { s_phaseTk[0][i] = 0; s_phaseTk[1][i] = 0; }
+	}
+#else
+#define PROBE_PHASE(i)
+#endif
 #ifdef PROBE_DMA_PERF
 	g_probeRenderCalls[0]++;
 	if ((int)GFX.EndY < (int)GFX.StartY) g_probeRenderCalls[1]++;
@@ -4093,8 +4124,26 @@ void S9xUpdateScreenHardware ()
 	}
 	LayerRender.changedPalette16Mask = 0;
 
-    if (IPPU.OBJChanged)
-		S9xSetupOBJ ();
+	// Sprite line lists on demand (obj_lines.h): a change rebuilds from
+	// this section's first line, later sections extend the valid range as
+	// they reach it. The FirstSprite+Y rotation keeps the full build.
+	if (IPPU.OBJChanged)
+	{
+		if (PPU.OAMPriorityRotation && (PPU.OAMFlip & PPU.OAMAddr & 1))
+			S9xSetupOBJ ();
+		else
+		{
+			S9xSetupOBJRange ((int) GFX.StartY, (int) GFX.EndY);
+			IPPU.OBJLinesValidUpTo = (int) GFX.EndY;
+			IPPU.OBJChanged = FALSE;
+		}
+	}
+	else if ((int) GFX.EndY > IPPU.OBJLinesValidUpTo && !(PPU.OAMPriorityRotation && (PPU.OAMFlip & PPU.OAMAddr & 1)))
+	{
+		S9xSetupOBJRange (IPPU.OBJLinesValidUpTo + 1, (int) GFX.EndY);
+		IPPU.OBJLinesValidUpTo = (int) GFX.EndY;
+	}
+	PROBE_PHASE(0);
 
 	S9xCommitVerticalSection(&IPPU.BrightnessSections);
 
@@ -4146,6 +4195,7 @@ void S9xUpdateScreenHardware ()
 	renderState.alphaBlending = ALPHA_BLENDING_DISABLED;
 	renderState.textureOffset = SGPU_STATE_DISABLED;
 	
+	PROBE_PHASE(7);
 	if (PPU.BGMode == 7 && !IPPU.Mode7Prepared)
 	{
 		S9xPrepareMode7();
@@ -4156,6 +4206,7 @@ void S9xUpdateScreenHardware ()
 	// We commit the current values to create a new section up
 	// till the current rendered line - 1.
 	//
+	PROBE_PHASE(1);
 	S9xCommitVerticalSection(&IPPU.BackdropColorSections);
 	S9xCommitVerticalSection(&IPPU.FixedColorSections);
 	S9xCommitVerticalSection(&IPPU.WindowLRSections);
@@ -4176,6 +4227,7 @@ void S9xUpdateScreenHardware ()
 		}
 	}
 
+	PROBE_PHASE(2);
 	if (RenderThisSection)
 	{
 		VerticalSections *windowLRSections = &IPPU.WindowLRSections;
@@ -4196,11 +4248,13 @@ void S9xUpdateScreenHardware ()
 		if (ANYTHING_ON_SUB || (GFX.r2130 & 2) || PPU.BGMode == 5 || PPU.BGMode == 6 || GFX.Pseudo)
 		{
 			S9xRenderScreenHardware (TRUE);	
+			PROBE_PHASE(3);
 		}
 		
 		// Render the main screen.
 		//
 		S9xRenderScreenHardware (FALSE);
+		PROBE_PHASE(4);
 
 		if (settings3DS.LayerEnabled[LAYER_COLOR_MATH]) {
 			S9xUpdateClipToBlackSections();
@@ -4208,6 +4262,7 @@ void S9xUpdateScreenHardware ()
 		}
 	}
 
+	PROBE_PHASE(5);
 	S9xResetVerticalSection(&IPPU.BackdropColorSections);
 	S9xResetVerticalSection(&IPPU.FixedColorSections);
 
@@ -4225,6 +4280,7 @@ void S9xUpdateScreenHardware ()
 		S9xCommitClipToBlackAndColorMathSections();
 	}
 
+	PROBE_PHASE(6);
 	for (int i = 0; i < 5; i++) {
 		if (LayerRender.shouldRenderThisSegment[i])
 			LayerRender.startY[i] = preTrimEndY + 1;

@@ -195,6 +195,9 @@ void S9xDoDMA (uint8 Channel)
     case 0x18:
     case 0x19:
 		vramSameBytes = S9xVramDmaRewritesSameBytes(d, inc, count);
+#ifdef PROBE_SECTION_LOG
+		{ extern int g_probeFlushAddr; g_probeFlushAddr = 0x1000; }
+#endif
 		if (IPPU.RenderThisFrame && !vramSameBytes)
 			FLUSH_REDRAW ();
 #ifdef PROBE_DMA_PERF
@@ -579,6 +582,9 @@ void S9xDoDMA (uint8 Channel)
 							const int addr = PPU.OAMAddr << 1;
 							if (lo != PPU.OAMData [addr] || hi != PPU.OAMData [addr + 1])
 							{
+#ifdef PROBE_SECTION_LOG
+								{ extern int g_probeFlushAddr; g_probeFlushAddr = 0x2104; }
+#endif
 								FLUSH_REDRAW ();
 								S9xOamWriteLowWord (addr, lo, hi);
 							}

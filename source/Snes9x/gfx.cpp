@@ -6,6 +6,7 @@
 #include "memmap.h"
 #include "ppu.h"
 #include "cpuexec.h"
+#include "../obj_lines.h"
 #include "gfx.h"
 #include "apu.h"
 #include "cheats.h"
@@ -1176,6 +1177,26 @@ inline void SelectTileBGRenderer (bool8 normal)
 uint8 LineOBJ[SNES_HEIGHT_EXTENDED];
 uint8 OBJOnLine[SNES_HEIGHT_EXTENDED][128];
 
+// The normal-priority line lists for scanlines y0..y1 only (obj_lines.h):
+// S9xSetupOBJ builds every line; the section renderer builds what it is
+// about to draw. Lines 0..IPPU.OBJLinesValidUpTo hold lists for the
+// current OBJ table.
+void S9xSetupOBJRange (int y0, int y1)
+{
+	PPU.PriorityDrawFromSprite = PPU.FirstSprite;
+	const bool objYWrap = obj_lines_build_range (PPU.OBJ, obj_sizes (PPU.OBJSizeSelect, IPPU.InterlaceSprites != 0),
+		PPU.FirstSprite, (unsigned) y0, (unsigned) y1, SNES_HEIGHT_EXTENDED,
+		GFX.OBJLines, LineOBJ, GFX.OBJWidths, GFX.OBJVisibleTiles);
+	// A sprite whose visible lower segment crosses the 8-bit Y wrap at 256
+	// appears in two scanline ranges. The gfxhw fast path treats that as one
+	// merged span and can draw the wrapped rows from the wrong tile line,
+	// so use the per-scanline path for this frame.
+	if (objYWrap)
+		PPU.PriorityDrawFromSprite = -1;
+	if (y1 > IPPU.OBJLinesValidUpTo || y0 == 0)
+		IPPU.OBJLinesValidUpTo = y1;
+}
+
 void S9xSetupOBJ ()
 {
     static const int sizes[8][4] = {
@@ -1208,8 +1229,6 @@ void S9xSetupOBJ ()
 	 * normal FirstSprite, or priority is FirstSprite+Y. The first two are
 	 * easy, the last is somewhat more ... interesting. So we split them up. */
 
-	uint8 S;
-
 	#ifdef MK_DEBUG_RTO
 		if(Settings.BGLayering) fprintf(stderr, "Priority rotation=%d, OAMAddr=%d -> ", PPU.OAMPriorityRotation, PPU.OAMAddr*2 | (PPU.OAMFlip&1));
 	#endif
@@ -1217,94 +1236,7 @@ void S9xSetupOBJ ()
 		#ifdef MK_DEBUG_RTO
 				if(Settings.BGLayering) fprintf(stderr, "normal FirstSprite = %02x\n", PPU.FirstSprite);
 		#endif
-		PPU.PriorityDrawFromSprite = PPU.FirstSprite;
-
-		/* normal case */
-		memset(LineOBJ, 0, sizeof(LineOBJ));
-		for(int i=0; i<SNES_HEIGHT_EXTENDED; i++){
-			GFX.OBJLines[i].RTOFlags=0;
-			GFX.OBJLines[i].Tiles=34;
-		}
-		uint8 FirstSprite=PPU.FirstSprite;
-		
-		// A sprite whose visible lower segment crosses the 8-bit Y wrap at 256
-		// appears in two scanline ranges. The gfxhw fast path treats that as one
-		// merged span and can draw the wrapped rows from the wrong tile line,
-		// so use the per-scanline path for this frame.
-		bool objYWrap = false;
-		S=FirstSprite;
-		do {
-			int Width = PPU.OBJ[S].Size ? LargeWidth : SmallWidth;
-			int Height = PPU.OBJ[S].Size ? LargeHeight : SmallHeight;
-			GFX.OBJWidths[S] = Width;
-
-			int HPos = PPU.OBJ[S].HPos;
-			HPos = (HPos == -256) ? 256 : HPos;
-
-			if (HPos > -Width && HPos <= 256)
-			{
-				// Unrolled calculation of GFX.OBJVisibleTiles[S]
-				int visibleTiles;
-				if (HPos < 0)
-					visibleTiles = (Width + HPos + 7) >> 3;
-				else if (HPos + Width >= 257)
-					visibleTiles = (257 - HPos + 7) >> 3;
-				else
-					visibleTiles = Width >> 3;
-				GFX.OBJVisibleTiles[S] = visibleTiles;
-
-				uint8 startY = PPU.OBJ[S].VPos & 0xff;
-				
-				// Visible lower segment wraps past scanline 255.
-				if (startY < SNES_HEIGHT_EXTENDED && startY + Height > 256)
-					objYWrap = true;
-
-				for (uint8 line = 0; line < Height; line++)
-				{
-					uint8 Y = startY + line;
-
-					if (Y >= SNES_HEIGHT_EXTENDED) continue;
-
-					if (LineOBJ[Y] < 32)
-					{
-						GFX.OBJLines[Y].Tiles -= visibleTiles;
-						GFX.OBJLines[Y].RTOFlags |= (GFX.OBJLines[Y].Tiles < 0) ? 0x80 : 0;
-
-						int lineObjY = LineOBJ[Y];
-						GFX.OBJLines[Y].OBJ[lineObjY].Sprite = S;
-						if (PPU.OBJ[S].VFlip) {
-							// Yes, Width not Height. It so happens that the
-							// sprites with H=2*W flip as two WxW sprites.
-							GFX.OBJLines[Y].OBJ[lineObjY].Line = line ^ (Width - 1);
-						} else {
-							GFX.OBJLines[Y].OBJ[lineObjY].Line = line;
-						}
-
-						LineOBJ[Y]++;
-					}
-					else
-					{
-						GFX.OBJLines[Y].RTOFlags |= 0x40;
-					}
-				}
-			}
-			S = (S + 1) & 0x7F;
-		} while (S != FirstSprite);
-
-		if (objYWrap)
-			PPU.PriorityDrawFromSprite = -1;
-
-		for (int Y = 0; Y < SNES_HEIGHT_EXTENDED; Y++) {
-			if (LineOBJ[Y] < 32)
-				GFX.OBJLines[Y].OBJ[LineOBJ[Y]].Sprite = -1;
-		}
-
-		GFX.OBJLines[0].OBJCount = LineOBJ[0];
-
-		for (int Y = 1; Y < SNES_HEIGHT_EXTENDED; Y++) {
-			GFX.OBJLines[Y].RTOFlags |= GFX.OBJLines[Y-1].RTOFlags;
-			GFX.OBJLines[Y].OBJCount = LineOBJ[Y];
-		}
+		S9xSetupOBJRange (0, SNES_HEIGHT_EXTENDED - 1);
 	} else {
 		/* evil FirstSprite+Y case */
 #ifdef MK_DEBUG_RTO
@@ -1392,7 +1324,7 @@ void S9xSetupOBJ ()
 #endif
 
 	IPPU.OBJChanged = FALSE;
-
+	IPPU.OBJLinesValidUpTo = SNES_HEIGHT_EXTENDED - 1;
 }
 
 void DrawOBJS (bool8 OnMain = FALSE, uint8 D = 0, int priority = 0)

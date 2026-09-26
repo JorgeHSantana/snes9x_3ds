@@ -155,8 +155,14 @@ void S9xFixColourBrightness ()
 /* S9xSetPPU()                                                                */
 /* This function sets a PPU Register to a specific byte                       */
 /******************************************************************************/
+#ifdef PROBE_SECTION_LOG
+int g_probeFlushAddr = 0;   // the register (or 0x1000 = DMA into VRAM) whose write is flushing
+#endif
 void S9xSetPPU (uint8 Byte, uint16 Address)
 {
+#ifdef PROBE_SECTION_LOG
+	g_probeFlushAddr = Address;
+#endif
 	if (Settings.MSU1 && msu1_is_port_address(Address))
 	{
 		S9xMSU1WritePort((uint8) (Address & 0x7), Byte);
