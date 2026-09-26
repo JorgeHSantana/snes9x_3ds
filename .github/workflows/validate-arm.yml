@@ -17,8 +17,17 @@ jobs:
         run: |
           git fetch --depth=1 origin stable
           git worktree add --detach /tmp/snes9x-baseline FETCH_HEAD
-          git -C /tmp/snes9x-baseline apply "$GITHUB_WORKSPACE/tools/azahar-validate/baseline-probe.patch" || \
-            git -C /tmp/snes9x-baseline apply --reverse --check "$GITHUB_WORKSPACE/tools/azahar-validate/baseline-probe.patch"
+          # The patch brings an older stable up to the nightly's capture
+          # instrumentation. Once stable carries it in-tree (v2.3 does) the
+          # patch no longer applies; what matters is that the markers exist.
+          P="$GITHUB_WORKSPACE/tools/azahar-validate/baseline-probe.patch"
+          if git -C /tmp/snes9x-baseline apply --check "$P" 2>/dev/null; then
+            git -C /tmp/snes9x-baseline apply "$P"
+          else
+            echo "baseline-probe.patch does not apply to stable $(git -C /tmp/snes9x-baseline rev-parse --short HEAD); checking the instrumentation is already there"
+          fi
+          grep -q "state roundtrip" /tmp/snes9x-baseline/source/3dsimpl.cpp
+          grep -q "MaxFrameSkips = 0; // Deterministic" /tmp/snes9x-baseline/source/3dsimpl.cpp
       - name: Build baseline probe
         run: |
           docker run --rm -v /tmp/snes9x-baseline:/snes9x_3ds -w /snes9x_3ds \
