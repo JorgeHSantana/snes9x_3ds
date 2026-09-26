@@ -5,6 +5,7 @@
 #include "memmap.h"
 #include "3dssettings.h"
 #include "3dslog.h"
+#include "sig_throttle.h"
 #include "3dsui_notif.h"
 #include "3dsstereosig.h"
 #include "3dsgpu.h"
@@ -521,13 +522,17 @@ void settings3dsStereoFrameTick()
         | ((u64)rr[0x2109] << 24) | ((u64)rr[0x210A] << 32)
         | ((u64)rr[0x210B] << 40) | ((u64)rr[0x210C] << 48);
 
+    static SigThrottle s_sigThrottle = [] { SigThrottle t; t.reset(); return t; }();
     if ((sig ^ s_lastSig) | (sig2 ^ s_lastSig2)) {
-        log3dsWrite("[sig] 2105=%02X TM=%02X TS=%02X 2130=%02X 2131=%02X 2106=%02X 420C=%02X | 2101=%02X 2107=%02X 2108=%02X 2109=%02X 210A=%02X 210B=%02X 210C=%02X",
-            rr[0x2105], rr[0x212C], rr[0x212D], rr[0x2130], rr[0x2131], rr[0x2106], rr[0x420C],
-            rr[0x2101], rr[0x2107], rr[0x2108], rr[0x2109], rr[0x210A], rr[0x210B], rr[0x210C]);
         s_lastSig = sig;
         s_lastSig2 = sig2;
+        if (s_sigThrottle.admit(sig, sig2))
+            log3dsWrite("[sig] 2105=%02X TM=%02X TS=%02X 2130=%02X 2131=%02X 2106=%02X 420C=%02X | 2101=%02X 2107=%02X 2108=%02X 2109=%02X 210A=%02X 210B=%02X 210C=%02X",
+                rr[0x2105], rr[0x212C], rr[0x212D], rr[0x2130], rr[0x2131], rr[0x2106], rr[0x420C],
+                rr[0x2101], rr[0x2107], rr[0x2108], rr[0x2109], rr[0x210A], rr[0x210B], rr[0x210C]);
     }
+    if (uint32_t dropped = s_sigThrottle.tick())
+        log3dsWrite("[sig] %u register flips not logged (a value toggling every frame)", (unsigned)dropped);
 
     // capture in progress: accumulate what stays stable on this scene
     if (s_capFrames > 0) {

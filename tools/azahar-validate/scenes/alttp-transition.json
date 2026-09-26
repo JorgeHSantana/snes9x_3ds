@@ -1,0 +1,16 @@
+{
+  "title": "ALTTP MSU: screen transition going down from Jorge's savestate (sprite garbage report 2026-09-26)",
+  "rom": "sdmc:/snes/zelda_msu/alttp_msu.sfc",
+  "state": "states/alttp-transition.frz",
+  "wait": 26,
+  "settings": {
+    "GameScreen": "0",
+    "LogFileEnabled": "1",
+    "UpdateAutoCheck": "0",
+    "AutoSaveLoad": "0",
+    "RewindEnabled": "1"
+  },
+  "log_expect": [
+    "ROM loaded: THE LEGEND OF ZELDA"
+  ]
+}

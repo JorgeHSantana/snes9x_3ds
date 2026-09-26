@@ -2,6 +2,10 @@
 
 
 #include "snes9x.h"
+#ifdef PROBE_INIDISP_LOG
+#include "../3dslog.h"
+extern int g_probeFrames;
+#endif
 #include "memmap.h"
 #include "ppu.h"
 #include "cpuexec.h"
@@ -197,6 +201,13 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 				// (the start-of-frame reset reads PPU.ForcedBlanking).
 				bool suppressBlankSection = Settings.MSU1 && PPU.ForcedBlanking
 					&& CPU.V_Counter >= 1 && CPU.V_Counter <= 224;
+#ifdef PROBE_NO_MSU_BLANK_HACK
+				suppressBlankSection = false;
+#endif
+#ifdef PROBE_INIDISP_LOG
+				log3dsWrite("[inidisp] frame=%u V=%d byte=%02X blank=%d suppress=%d",
+					(unsigned)g_probeFrames, (int)CPU.V_Counter, Byte, (int)PPU.ForcedBlanking, (int)suppressBlankSection);
+#endif
 				if (!suppressBlankSection)
 				{
 					int brightness = PPU.ForcedBlanking ? 0 : PPU.Brightness;

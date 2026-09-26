@@ -977,6 +977,10 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 
 static BlurAutoState s_blurAuto;   // zero-init == blurAutoReset
 
+#ifdef PROBE_FBDUMP
+int g_probeFrames = 0;   // frames since the ROM loaded (the probes above/below read it)
+#endif
+
 void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimmed)
 {
 	sram3dsPoll();   // a finished async SRAM write: failure re-marks dirty
@@ -1064,6 +1068,11 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			msuBranchShield--;
 			skipDrawingFrame = true;
 		}
+#ifdef PROBE_INIDISP_LOG
+		if (torn || msuBranchShield > 0)
+			log3dsWrite("[inidisp] frame=%u torn=%d holds=%d shield=%d -> %s", (unsigned)g_probeFrames,
+				(int)torn, msuTornHolds, msuBranchShield, (torn && !skipDrawingFrame && msuTornHolds < 2) ? "HOLD" : "present");
+#endif
 		if (torn && !skipDrawingFrame && msuTornHolds < 2) {
 			msuTornHolds++;
 			skipDrawingFrame = true;
@@ -1073,6 +1082,10 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 	}
 
 	// C3D_FRAME_SYNCDRAW only when needed for screenshots (drains previous display transfer).
+#ifdef PROBE_INIDISP_LOG
+	if (g_probeFrames >= 170 && g_probeFrames <= 245)
+		log3dsWrite("[inidisp] frame=%u present: skipDrawing=%d renderThisFrame=%d", (unsigned)g_probeFrames, (int)skipDrawingFrame, (int)IPPU.RenderThisFrame);
+#endif
 	gpu3dsFrameBegin(screenshot.dirty ? C3D_FRAME_SYNCDRAW : 0, !skipDrawingFrame);
 		if (!firstFrame && !skipDrawingFrame) {
 			t3dsStartTimer(TIMER_DRAW_SNES_SCREEN);
@@ -1128,12 +1141,18 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		settings3DS.MaxFrameSkips = 0; // Deterministic capture cadence, probe only.
 		if (firstFrame) s_probeFrames = 0;
 		s_probeFrames++;
+		g_probeFrames = s_probeFrames;
 #ifdef PROBE_IO_TIMING
 		if (!skipDrawingFrame && s_probeFrames == 900) {
 			S9xAutoSaveSRAM();
 		}
 #endif
-		if (!skipDrawingFrame && (s_probeFrames == 600 || s_probeFrames == 1200 || s_probeFrames == 3600)) {
+#ifdef PROBE_FBDUMP_EVERY
+		const bool dumpNow = s_probeFrames >= 120 && s_probeFrames <= 720 && (s_probeFrames % PROBE_FBDUMP_EVERY) == 0;
+#else
+		const bool dumpNow = s_probeFrames == 600 || s_probeFrames == 1200 || s_probeFrames == 3600;
+#endif
+		if (!skipDrawingFrame && dumpNow) {
 			gspWaitForEvent(GSPGPU_EVENT_PPF, GPU3DS.isReal3DS);
 			gfxScreenSwapBuffers(GFX_TOP, false);
 			impl3dsInvalidateScreen(GFX_TOP, false, gfxIsWide());
@@ -1798,6 +1817,12 @@ uint32 S9xReadJoypad (int which1_0_to_4)
     }
 
 	u32 keysHeld3ds = input3dsGetCurrentKeysHeld();
+#ifdef PROBE_HOLD_DOWN
+	// harness probe: DOWN held from frame 120 to 600 after the ROM loaded
+	// (a screen transition from a parked savestate, Jorge's Zelda report)
+	extern int g_probeFrames;
+	if (g_probeFrames >= 120 && g_probeFrames < 600) keysHeld3ds |= KEY_DDOWN;
+#endif
     u32 consoleJoyPad = 0;
 
     if (keysHeld3ds & (settings3DS.BindCirclePad == 1 ? KEY_UP : KEY_DUP)) consoleJoyPad |= SNES_UP_MASK;

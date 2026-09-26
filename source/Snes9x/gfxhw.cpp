@@ -2,6 +2,10 @@
 
 
 #include "snes9x.h"
+#ifdef PROBE_INIDISP_LOG
+#include "../3dslog.h"
+extern int g_probeFrames;
+#endif
 
 #include "memmap.h"
 #include "ppu.h"
@@ -4093,12 +4097,38 @@ void S9xUpdateScreenHardware ()
 	// anyLayerDeferred forces a render even if S9xTrimBlackScanlines would
 	// veto this segment, so trim-skipped ranges still flush deferred catch-up.
 	bool RenderThisSection = anyLayerDeferred ? true : S9xTrimBlackScanlines(&IPPU.BrightnessSections);
+#ifdef PROBE_INIDISP_LOG
+	if (g_probeFrames >= 170 && g_probeFrames <= 245) {
+		char bs[96]; int bl = 0;
+		for (int i = 0; i < IPPU.BrightnessSections.Count && bl < 80; i++)
+			bl += snprintf(bs + bl, sizeof(bs) - bl, " %d-%d=%X", (int)IPPU.BrightnessSections.Section[i].StartY, (int)IPPU.BrightnessSections.Section[i].EndY, (int)IPPU.BrightnessSections.Section[i].Value);
+		log3dsWrite("[inidisp] frame=%u seg %u-%u (pre %u-%u) render=%d deferred=%d last=%d bright:%s",
+			(unsigned)g_probeFrames, (unsigned)GFX.StartY, (unsigned)GFX.EndY, (unsigned)preTrimStartY, (unsigned)preTrimEndY,
+			(int)RenderThisSection, (int)anyLayerDeferred, (int)isLastSection, bs);
+		if (isLastSection) {
+			const uint8 *r = Memory.FillRAM;
+			log3dsWrite("[inidisp] frame=%u win: 2123=%02X 2124=%02X 2125=%02X WH0-3=%02X %02X %02X %02X 212A=%02X 212B=%02X TMW=%02X TSW=%02X 2130=%02X 2131=%02X TM=%02X TS=%02X W1=%d-%d W2=%d-%d lrSections=%d",
+				(unsigned)g_probeFrames, r[0x2123], r[0x2124], r[0x2125], r[0x2126], r[0x2127], r[0x2128], r[0x2129], r[0x212A], r[0x212B], r[0x212E], r[0x212F], r[0x2130], r[0x2131], r[0x212C], r[0x212D],
+				(int)PPU.Window1Left, (int)PPU.Window1Right, (int)PPU.Window2Left, (int)PPU.Window2Right, (int)IPPU.WindowLRSections.Count);
+			int nz = 0; for (int c = 0; c < 256; c++) if (PPU.CGDATA[c] & 0x7FFF) nz++;
+			log3dsWrite("[inidisp] frame=%u cgram: nonzero=%d c0=%04X c1=%04X c17=%04X c33=%04X | windowingEnabled=%d clipSections=%d colorMathSections=%d mosaic=%02X",
+				(unsigned)g_probeFrames, nz, PPU.CGDATA[0], PPU.CGDATA[1], PPU.CGDATA[17], PPU.CGDATA[33],
+				(int)IPPU.WindowingEnabled, (int)drawableSectionCount[VS_CLIP_TO_BLACK], (int)drawableSectionCount[VS_COLOR_MATH], r[0x2106]);
+		}
+	}
+#endif
 
 	// MSU-1 FMV: an all-black frame mid-video is almost always the upload
 	// blank crossing the whole frame — flag it so the platform holds the
 	// previous image (bounded to 2 holds, so real fades still land).
-	if (!RenderThisSection && Settings.MSU1)
+	if (!RenderThisSection && Settings.MSU1) {
+#ifdef PROBE_INIDISP_LOG
+		log3dsWrite("[inidisp] frame=%u black section %d-%d -> torn", (unsigned)g_probeFrames, (int)GFX.StartY, (int)GFX.EndY);
+#endif
+#ifndef PROBE_NO_MSU_BLANK_HACK
 		msu1_mark_frame_torn();
+#endif
+	}
 
 	// set render state to default
 	renderState = GPU3DS.currentRenderState;

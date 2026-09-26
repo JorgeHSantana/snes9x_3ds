@@ -10,6 +10,19 @@ Notable changes to this project will be documented in this file.
   of the track. The read-ahead now reports itself alive from the moment
   a playable track is posted. The adopt line logs the thread's latency
   (`wait`) and the decoder open time.
+* Logging: the `[sig]` register-signature line is throttled (at most 8
+  per 60 frames, a value flipping back and forth every frame is logged
+  once, and a summary counts what was dropped). Zelda MSU toggled $210B
+  every frame and produced 30 lines a second on the Old 3DS, with 7 audio
+  underruns during the spam.
+
+### Validation
+* Probe builds for the Azahar harness: `-DPROBE_HOLD_DOWN` holds D-pad
+  Down for frames 120-599, `-DPROBE_FBDUMP_EVERY=N` dumps every Nth frame
+  from 120 to 720, `-DPROBE_INIDISP_LOG` logs $2100 writes, black
+  sections, segments, window registers and CGRAM per frame,
+  `-DPROBE_NO_MSU_BLANK_HACK` turns the MSU-1 forced-blank suppression
+  off. Scene `alttp-transition` (Jorge's Zelda MSU savestate).
 
 ### Optimizations
 * Tile conversion (issue #79, item 6): the per-byte "is this bitplane
