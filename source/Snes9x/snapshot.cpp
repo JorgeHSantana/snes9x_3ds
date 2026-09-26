@@ -15,6 +15,7 @@
 #endif
 
 #include "snapshot.h"
+#include "../snap_reader.h"
 
 #include "memmap.h"
 #include "snes9x.h"
@@ -479,9 +480,9 @@ void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, Fre
 				   int num_fields);
 void FreezeBlock (BufferedFileWriter& stream, const char *name, uint8 *block, int size);
 
-int UnfreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fields,
+int UnfreezeStruct (SnapIn &stream, const char *name, void *base, FreezeData *fields,
 					int num_fields);
-int UnfreezeBlock (STREAM stream, const char *name, uint8 *block, int size);
+int UnfreezeBlock (SnapIn &stream, const char *name, uint8 *block, int size);
 
 bool8 Snapshot (const char *filename)
 {
@@ -541,18 +542,16 @@ bool8 S9xFreezeGameMem (uint8 *buffer, uint32 capacity, uint32 *lengthOut)
     return (TRUE);
 }
 
-// STREAM is FILE* in this build, and unfreeze needs tell/seek - newlib's
-// fmemopen provides both over the ring slot.
+// The ring slot is read in place (snap_reader.h): no fmemopen, no FILE
+// allocated per rewind step.
 bool8 S9xUnfreezeGameMem (const uint8 *buffer, uint32 length)
 {
-    STREAM snapshot = fmemopen ((void *) buffer, length, "rb");
-    if (!snapshot)
+    if (buffer == nullptr || length == 0)
         return (FALSE);
-
+    SnapIn snapshot = SnapIn::fromMemory (buffer, length);
     s_rawFields = true;
     int result = S9xUnfreezeFromStream (snapshot);
     s_rawFields = false;
-    fclose (snapshot);
     return (result == SUCCESS);
 }
 
@@ -568,7 +567,8 @@ bool8 S9xUnfreezeGame (const char *filename)
     if (S9xOpenSnapshotFile (filename, TRUE, &snapshot))
     {
 		int result;
-		if ((result = S9xUnfreezeFromStream (snapshot)) != SUCCESS)
+		SnapIn in = SnapIn::fromFile (snapshot);
+		if ((result = S9xUnfreezeFromStream (in)) != SUCCESS)
 		{
 			switch (result)
 			{
@@ -698,7 +698,7 @@ void S9xFreezeToStream (BufferedFileWriter& stream, bool compactSram)
 	S9xSetSoundMute (prevMute);
 }
 
-int S9xUnfreezeFromStream (STREAM stream)
+int S9xUnfreezeFromStream (SnapIn &stream)
 {
     char buffer [_MAX_PATH + 1];
     char rom_filename [_MAX_PATH + 1];
@@ -706,7 +706,7 @@ int S9xUnfreezeFromStream (STREAM stream)
 	
     int version;
     size_t len = strlen (SNAPSHOT_MAGIC) + 1 + 4 + 1;
-    if (READ_STREAM (buffer, len, stream) != len)
+    if (stream.read (buffer, len) != len)
 		return (WRONG_FORMAT);
     if (strncmp (buffer, SNAPSHOT_MAGIC, strlen (SNAPSHOT_MAGIC)) != 0)
 		return (WRONG_FORMAT);
@@ -727,11 +727,11 @@ int S9xUnfreezeFromStream (STREAM stream)
     // Full header shape: "CPU:" + 6 ASCII digits + ":"
     // This catches truncated or corrupt files without losing the current game state.
     {
-        long pos = FIND_STREAM(stream);
+        long pos = stream.tell ();
         char peek[11];
-        if (READ_STREAM(peek, 11, stream) != 11)
+        if (stream.read (peek, 11) != 11)
             return (WRONG_FORMAT);
-        REVERT_STREAM(stream, pos, 0);
+        stream.seek (pos, SEEK_SET);
 
         if (strncmp(peek, "CPU:", 4) != 0 || peek[10] != ':')
             return (WRONG_FORMAT);
@@ -1013,7 +1013,7 @@ void FreezeBlock (BufferedFileWriter& stream, const char *name, uint8 *block, in
     stream.write(block, size);
 }
 
-int UnfreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fields,
+int UnfreezeStruct (SnapIn &stream, const char *name, void *base, FreezeData *fields,
 					int num_fields)
 {
     // Work out the size of the required block
@@ -1115,17 +1115,17 @@ int UnfreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fie
     return (result);
 }
 
-int UnfreezeBlock (STREAM stream, const char *name, uint8 *block, int size)
+int UnfreezeBlock (SnapIn &stream, const char *name, uint8 *block, int size)
 {
     char buffer [20];
     int len = 0;
     int rem = 0;
     int rew_len;
-    if (READ_STREAM (buffer, 11, stream) != 11 ||
+    if (stream.read (buffer, 11) != 11 ||
 		strncmp (buffer, name, 3) != 0 || buffer [3] != ':' ||
 		(len = atoi (&buffer [4])) == 0)
     {
-		REVERT_STREAM(stream, FIND_STREAM(stream)-11, 0);
+		stream.seek (stream.tell ()-11, SEEK_SET);
 		return (WRONG_FORMAT);
     }
 
@@ -1135,15 +1135,15 @@ int UnfreezeBlock (STREAM stream, const char *name, uint8 *block, int size)
         len = size;
     }
     
-    if ((rew_len = READ_STREAM (block, len, stream)) != len)
+    if ((rew_len = stream.read (block, len)) != len)
     {
-        REVERT_STREAM(stream, FIND_STREAM(stream)-11-rew_len, 0);
+        stream.seek (stream.tell ()-11-rew_len, SEEK_SET);
         return (WRONG_FORMAT);
     }
     
     if (rem)
     {
-        fseek(stream, rem, SEEK_CUR);
+        stream.seek (rem, SEEK_CUR);
     }
     
     return (SUCCESS);

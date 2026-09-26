@@ -36,7 +36,8 @@ bool8 S9xSPCDump (const char *filename);
 // the format's fixed 128 KiB - for the in-memory rewind ring only (files
 // keep the format; UnfreezeBlock reads the header's length either way)
 void S9xFreezeToStream (BufferedFileWriter& stream, bool compactSram = false);
-int S9xUnfreezeFromStream (STREAM);
+struct SnapIn;
+int S9xUnfreezeFromStream (SnapIn &);
 END_EXTERN_C
 
 #endif
