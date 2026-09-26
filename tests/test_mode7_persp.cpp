@@ -2,13 +2,6 @@
 #include "../source/3dsmode7persp.h"
 #include <cmath>
 
-TEST_CASE("Mode 7 Layer never enables hidden distance effects") {
-    CHECK_FALSE(mode7DistanceEffectsEnabled(true, 0, 1.0f));
-    CHECK_FALSE(mode7DistanceEffectsEnabled(false, 1, 1.0f));
-    CHECK_FALSE(mode7DistanceEffectsEnabled(true, 1, 0.0f));
-    CHECK(mode7DistanceEffectsEnabled(true, 1, 1.0f));
-}
-
 TEST_CASE("Mode 7 squared reference preserves the original encoded depth") {
     uint32_t random = 0x7a319b05;
     for (uint32_t run = 0; run < 128; ++run) {

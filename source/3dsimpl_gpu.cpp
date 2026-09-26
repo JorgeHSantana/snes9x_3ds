@@ -626,7 +626,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // draws with 0, which the shader treats as an exact no-op
             bool isMode7Plane = list->sections[from].vboId == VBO_SCENE_MODE7_LINE;
             float m7k = 0.0f, m7gain = 1.0f;
-            if (isMode7Plane && GPU3DS.stereoMode7DepthMode != 0)
+            if (isMode7Plane)
                 mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
             gpu3dsSetMode7Persp(m7k, m7gain, 0.0f, 0.0f);
 
@@ -744,8 +744,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // row's fog into color.b (interpolated by the TexEnv variant)
             // and widens the ghost offset by (1 - w/256). Nothing at the
             // nearest row, the full gauge at the horizon.
-            if (mode7DistanceEffectsEnabled(isMode7Plane, GPU3DS.stereoMode7DepthMode,
-                    GPU3DS.stereoMode7Fx) && !spotlight &&
+            if (isMode7Plane && GPU3DS.stereoMode7Fx > 0.0f && !spotlight &&
                 s_previewHighlightLayer < 0 && GPU3DS.stereoEyeIOD != 0.0f &&
                 (GPU3DS.stereoFade > 0.0f || GPU3DS.stereoHaze > 0.0f || GPU3DS.stereoBlur > 0.0f)) {
                 float slider = GPU3DS.stereoEyeIOD < 0.0f ? -GPU3DS.stereoEyeIOD : GPU3DS.stereoEyeIOD;

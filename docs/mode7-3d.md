@@ -31,25 +31,27 @@ vertex colour; a TexEnv variant interpolates it) and the blur's ghost
 offset grows with the row's distance. Nothing at the nearest row, the
 full gauge at the horizon.
 
-### Stable sprite depth
+### Sprite depth
 
-Sprites use the same model as rcmz: perspective is applied only to the
-Mode 7 plane, while every sprite remains whole in one of the four fixed
-SNES OBJ-priority depths. The retired ground-following experiment tried
-both proximity grouping and independent OAM pieces; the former changed
-membership during animation and wobbled, while the latter visibly pulled
-composite sprites apart. OAM provides no reliable logical-character ID.
-
-Legacy `GSPR`, `GLIFT` and `GROUNDX` profile data is still accepted so old
-files remain readable, but it no longer affects rendering.
+Sprites use the same model as rcmz: perspective applies only to the
+Mode 7 plane; every sprite stays whole in one of the four fixed SNES
+OBJ-priority depths. The sprites-follow-the-ground model (issue #76, in
+the 2026-09-08 nightlies) was retired on 2026-09-12: on the console the
+kart's depth still snapped on drifts and wall hits after the fixes read
+off the probe log, proximity grouping changed membership during
+animations, tracking independent OAM pieces pulled composite sprites
+apart, and OAM gives no reliable character identity. The code was removed
+entirely on 2026-09-25 (a first pass had left 680 lines of it dead). Old
+`.3d` keys of that experiment are ignored by the parser as unknown lines.
 
 ### Editor (3D Stereo tab)
 No paragraphs in the tab; SELECT on any item opens its help. The Mode 7
 block exists only while the game uses Mode 7 and reads, in order:
-Effects by Distance, a note that sprites use stable OBJ priorities,
-Perspective, Plane Depth (the BG1 Prio 0 gauge,
-moved out of the Depth list), Priority Pixels (BG2 Prio 1, EXTBG games
-only). Tools are rows with help.
+Effects by Distance, Perspective (0 = the whole plane at one depth),
+Plane Depth (the BG1 Prio 0 gauge, moved out of the Depth list), Priority
+Pixels (BG2 Prio 1, EXTBG games only). Tools are rows with help. A
+"Depth Mode: Layer / Direct" picker existed in the 2026-09-12 nightlies;
+Layer was Perspective 0 under another name and was removed.
 
 ### Blur Quality Auto
 Starts in Light (one ghost per eye on opposite sides fuses into the same

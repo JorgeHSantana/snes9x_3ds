@@ -531,7 +531,6 @@ bool gpu3dsInitialize()
     // (0 is a real value - it alpha-hides a priority in the 3D editor)
     GPU3DS.stereoPrioDimP0 = 1.0f;
     GPU3DS.stereoMode7Persp = 0.0f;
-    GPU3DS.stereoMode7DepthMode = 0;
     GPU3DS.stereoMode7Fx = 0.0f;
     GPU3DS.mode7PerspApplied = -1.0f;
     GPU3DS.mode7PerspSet[0] = GPU3DS.mode7PerspSet[2] = GPU3DS.mode7PerspSet[3] = 0.0f;

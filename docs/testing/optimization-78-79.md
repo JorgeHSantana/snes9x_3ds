@@ -13,9 +13,9 @@ are not completion of the broader investigations. Published nightlies:
 |---|---|---|
 | SRAM (#78) | Complete-write and close checks; sticky buffered errors; dirty retained on failure; silence restored | Still synchronous, no atomic file replacement; hardware I/O latency not measured |
 | Savestates/rewind (#78) | Propagate file close errors; reuse bounded core-owned serialization workspace, preserving zero padding | `fmemopen` still allocates on memory-load; no claim of removing all rewind allocations or latency |
-| Logging (#78) | Fixed 32 KiB buffer; periodic gameplay/menu ticks and close drain it, replacing per-message flush | Flush remains synchronous; signature coalescing and hardware timing pending; recent tail may be lost on crash; adds resident memory |
-| Mode 7 Direct (#78) | Select minimum squared span, then one reference square root per run | No claimed FPS percentage |
-| Mode 7 Layer (#78) | Distance effects require Direct; stale hidden M7FX cannot select that branch | Ordinary layer effects remain available |
+| Logging (#78) | Fixed 32 KiB buffer coalesces a frame's burst into one SD write; every line is flushed before the next frame (2026-09-25: the periodic-flush policy lost the crash tail this project's field reports depend on, and its gain was never measured) | Flush remains synchronous; adds 32 KiB resident |
+| Mode 7 (#78) | Select minimum squared span, then one reference square root per run | No claimed FPS percentage |
+| Mode 7 Layer mode (#78) | Removed 2026-09-25: identical to Perspective 0 in the shader; its only effect on cost was ~450 `sqrtf` per frame | - |
 | Build (#78) | Release requires custom citro3d dependency | Hardware performance still needs measurement |
 | Sprite evaluation (#79) | Appearance-only OAM changes reuse geometry lists | Position, size, VFlip, interlace and priority-rotation invalidation retained |
 

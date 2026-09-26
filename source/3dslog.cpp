@@ -64,8 +64,13 @@ void log3dsWrite(const char* format, ...)
         ok = LOG.write_v(format, args);
     }
     va_end(args);
+    // Every line reaches the SD before the next frame runs: this project's
+    // crash work (Luma dumps + the session log's tail) depends on the tail,
+    // and the log is opt-in - it is on exactly when fidelity matters more
+    // than the write cost. The 32 KiB buffer still coalesces a burst of
+    // lines written in one frame into one SD write.
     if (ok) {
-        ok = LOG.write("\n") && LOG.tick(now_ms);
+        ok = LOG.write("\n") && LOG.flush(now_ms);
     }
     if (!ok) {
         READY.store(false);

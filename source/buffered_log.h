@@ -59,6 +59,25 @@ public:
         return result;
     }
 
+    // drains the buffer now (a line the field must see even if the next
+    // frame crashes): the same path tick() takes once a second
+    bool flush(uint64_t now_ms)
+    {
+        if (file_ == nullptr || failed_) {
+            return false;
+        }
+        if (!pending_) {
+            return true;
+        }
+        if (fflush(file_) != 0) {
+            failed_ = true;
+            return false;
+        }
+        pending_ = false;
+        last_flush_ms_ = now_ms;
+        return true;
+    }
+
     bool tick(uint64_t now_ms)
     {
         if (file_ == nullptr || failed_) {

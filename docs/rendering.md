@@ -130,41 +130,17 @@ and carries the row's depth nibble on top (`mode7RightVertexY`: `-16384 +
 positive and every row draws as a tile), so both ends decode the same
 plane and take the same stereo tier: the row moves, it never stretches.
 
-### Stable sprites over Mode 7
+### Sprites over Mode 7
 
-As in rcmz, Mode 7 scanline perspective applies only to the plane.
-Sprites retain the four fixed OBJ-priority depths, keeping every hardware
-tile of a composite sprite together. `GSPR`, `GLIFT` and `GROUNDX` remain
-parseable for profile compatibility but no longer affect rendering.
-
-The retired ground-following implementation is still present internally
-for now, but is disarmed. It encoded the following experimental data:
-
-A sprite standing on the plane takes the depth of the row its feet touch.
-`gfxhw` keeps two small tables (`3dsgroundsprites.h`): the plane rows'
-distance bytes, filled at the Mode 7 flush and read by the sprites of the
-NEXT frame (the plane may flush after them in draw order; one frame of
-latency is invisible), and the frame's sprite signature table (tile name +
-palette, up to 31 slots). Sprites draw from their own VBO
-(`VBO_SCENE_OBJ`, a 4-short position) so the extra short costs the BGs
-nothing; the vertex's `w = rowW + 256 * slot`, rowW 0 meaning "not on a
-plane row". The tile vertex shader, armed only for the sprite layer's draw
-(`ground.z = 256`, `-1` otherwise), reads `groundTab[slot]` (an indexed
-uniform: on-ground flag + editor spotlight alpha) and replaces the
-priority tier shift with `near + (far - near) * (1 - rowW/255)` for
-on-ground sprites, where near/far are the plane's own depths at its
-nearest row and at the horizon (BG1 gauge x the perspective gain, x
-(1 - k) at the horizon - the scanlines' ramp) plus the profile's Ground
-Lift toward the viewer (`groundLiftDepths`), so a sprite never sinks
-behind the ground under it. Profile: `GSPR` (switch), `GLIFT` (0..3);
-per game: `GROUNDX=` signatures marked "not on ground" in the editor
-(Lakitu, a HUD item), which the Mode 7 block lists for the paused screen
-with a live spotlight per sprite. A character is several hardware
-sprites with different bottom rows; `groundPrepareSprites` clusters the
-visible boxes that touch (union-find, 2 px tolerance) once per frame and
-every member takes the cluster's lowest row and one slot - the feet
-sprite's, or a marked member's, so a mark or a spotlight covers the whole
-character.
+As in rcmz, the scanline perspective applies only to the plane. Sprites
+keep the four fixed OBJ-priority depths, so every hardware tile of a
+composite sprite moves together. A sprites-follow-the-ground model
+(issue #76) shipped in the 2026-09-08 nightlies and was retired on
+2026-09-12: the depth of a kart snapped on drifts and wall hits, and OAM
+gives no reliable character identity to track it by. Its code is gone;
+its `.3d` keys (`GSPR`, `GLIFT`, `GROUNDX`) are unknown lines to the
+parser and are ignored. `M7MODE=0` from those nightlies reads as
+Perspective 0.
 
 ## Final composition
 
