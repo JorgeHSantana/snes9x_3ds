@@ -17,6 +17,11 @@ Notable changes to this project will be documented in this file.
   underruns during the spam.
 
 ### Validation
+* `[perf][frame]` every 5 s in the session log: the emulation thread's
+  share of the frame budget (average and worst), frames over budget,
+  draws the pacer skipped and the Blur Auto tier. The console number the
+  optimization work was missing. The rewind slow-capture line names
+  where the emulation thread's time went (pre, freeze, begin, thumb).
 * Probe builds for the Azahar harness: `-DPROBE_HOLD_DOWN` holds D-pad
   Down for frames 120-599, `-DPROBE_FBDUMP_EVERY=N` dumps every Nth frame
   from 120 to 720, `-DPROBE_INIDISP_LOG` logs $2100 writes, black

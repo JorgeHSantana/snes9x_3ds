@@ -116,6 +116,7 @@ void rewind3dsCommitDrain()
     rewind3dsCommitFinish();
 }
 
+static u64 s_pendingPreTicks = 0, s_pendingBeginTicks = 0;   // the slow line names where the emu thread's time went
 static TimingStats REWIND_PERF_FREEZE;
 static TimingStats REWIND_PERF_DELTA;
 static TimingStats REWIND_PERF_KEYFRAME;
@@ -271,9 +272,11 @@ static void rewind3dsCommitFinish()
     // spikes from SRAM/SD writes.
     const uint32_t emu_ms = (uint32_t)(s_pendingEmuTicks / 268123);
     if (emu_ms >= 8)
-        log3dsWrite("[rewind] capture slow: %ums on the emulation thread (%s, %uKB; freeze %lluus, thumb %lluus, encode %s %lluus)",
+        log3dsWrite("[rewind] capture slow: %ums on the emulation thread (%s, %uKB; pre %lluus, freeze %lluus, begin %lluus, thumb %lluus, encode %s %lluus)",
             emu_ms, isDelta ? "delta" : "keyframe", (unsigned)(s_ring.at(0).len / 1024),
+            (unsigned long long)ticks_to_microseconds(s_pendingPreTicks, SYSCLOCK_ARM11),
             (unsigned long long)ticks_to_microseconds(s_pendingFreezeTicks, SYSCLOCK_ARM11),
+            (unsigned long long)ticks_to_microseconds(s_pendingBeginTicks, SYSCLOCK_ARM11),
             (unsigned long long)ticks_to_microseconds(s_pendingThumbTicks, SYSCLOCK_ARM11),
             s_worker && s_pending.tryDelta ? "worker" : "inline",
             (unsigned long long)ticks_to_microseconds(s_workerTicks, SYSCLOCK_ARM11));
@@ -549,6 +552,7 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             // a commit still in flight (worker encoding): retry next frame
             if (s_workerState.load() == 2) rewind3dsCommitFinish();
             uint8_t *staging = s_ring.commit_pending() ? nullptr : s_ring.push_ptr();
+            const u64 preTicks = svcGetSystemTick() - capStartTick;   // finish + push_ptr
             bool ok = false;
             bool mixerBusy = s_ring.commit_pending();
             if (staging != nullptr) {
@@ -571,7 +575,10 @@ void rewind3dsFrameTick(bool rewindHeld, int frameLoadPercent)
             if (ok) {
                 // the freeze is done; the encode goes to the worker and the
                 // entry lands on the next tick (rewind3dsCommitFinish)
+                const u64 begin_start = svcGetSystemTick();
                 if (s_ring.commit_begin(length, s_nowFrame, &s_pending)) {
+                    s_pendingPreTicks = preTicks;
+                    s_pendingBeginTicks = svcGetSystemTick() - begin_start;
                     s_pendingMeasure = measure_perf;
                     s_pendingFreezeTicks = freeze_ticks;
                     s_pendingStartTick = capStartTick;
