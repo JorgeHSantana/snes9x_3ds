@@ -26,7 +26,7 @@ void handleAptHook(APT_HookType hook, void* param)
                 snd3dsStopPlaying(); // avoid hanging looped sample while HOME menu is open
                 lcd3dsRestoreDefaultRate();
                 if (settings3DS.ForceSRAMWriteOnPause || CPU.SRAMModified || CPU.AutoSaveTimer) {
-                    S9xAutoSaveSRAM();
+                    S9xSaveSRAMNow();
                 }
                 // Auto Save (issue #72): HOME and the lid are the last
                 // chance before a power-off. The hook runs on the main

@@ -113,7 +113,7 @@ u32 input3dsScanInputForEmulation()
         {
             if (settings3DS.ForceSRAMWriteOnPause || CPU.SRAMModified)
             {
-                S9xAutoSaveSRAM();
+                S9xSaveSRAMNow();
             }
             GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
             snd3dsDrainMixing();

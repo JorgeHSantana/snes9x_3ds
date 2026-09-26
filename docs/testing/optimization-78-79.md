@@ -11,7 +11,7 @@ are not completion of the broader investigations. Published nightlies:
 
 | Area | Change | Remaining limitation |
 |---|---|---|
-| SRAM (#78) | Complete-write and close checks; sticky buffered errors; dirty retained on failure; silence restored | Still synchronous, no atomic file replacement; hardware I/O latency not measured |
+| SRAM (#78, #59) | Complete-write and close checks; sticky buffered errors; dirty retained on failure; silence restored. 2026-09-26: the periodic autosave is asynchronous (copy on the emulation thread, write on a worker; `[perf][sram] queued` / `async write` in the log); pause/sleep/unload/exit stay synchronous | No atomic file replacement; the Old 3DS freeze (225-259 ms per periodic save in issue #59) should be gone - to be confirmed on the console |
 | Savestates/rewind (#78) | Propagate file close errors; reuse bounded core-owned serialization workspace, preserving zero padding | `fmemopen` still allocates on memory-load; no claim of removing all rewind allocations or latency |
 | Logging (#78) | Fixed 32 KiB buffer drained once a second in gameplay (issue #59's measured per-line stutter); flushed every menu iteration and explicitly at exit / ROM unload / updater / autosave (2026-09-25: the tail crash reports need) | Flush remains synchronous; adds 32 KiB resident; up to 1 s lost on a mid-gameplay crash |
 | Mode 7 (#78) | Select minimum squared span, then one reference square root per run | No claimed FPS percentage |

@@ -35,6 +35,7 @@
 #include "3dsimpl_gpu.h"
 #include "3dsblurauto.h"
 #include "sram_save.h"
+#include "3dssram.h"
 #include "perf_stats.h"
 
 // Compiled shaders
@@ -978,6 +979,7 @@ static BlurAutoState s_blurAuto;   // zero-init == blurAutoReset
 
 void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimmed)
 {
+	sram3dsPoll();   // a finished async SRAM write: failure re-marks dirty
 	// Blur Quality Auto (issue #71): the LOAD-driven frameskip decides -
 	// sampled here, before the MSU-1 FMV pacing below also flips
 	// skipDrawingFrame for reasons that are not load
@@ -1589,8 +1591,11 @@ bool8 S9xDeinitUpdate (int width, int height, bool8 sixteen_bit)
 
 
 
-void S9xAutoSaveSRAM (void)
+// Synchronous save: the game is about to pause, sleep, unload or exit,
+// so the freeze does not matter and the file must exist before we go on.
+void S9xSaveSRAMNow (void)
 {
+    sram3dsDrain();   // an async write of an older copy must land first
     const u64 start = svcGetSystemTick();
     char path[PATH_MAX] = {};
     file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".srm", "saves");
@@ -1602,11 +1607,38 @@ void S9xAutoSaveSRAM (void)
         return path[0] != '\0' && Memory.SaveSRAM(path);
     });
     const u64 finished = svcGetSystemTick();
-    log3dsWrite("[perf][sram] total=%lluus path=%lluus write=%lluus bytes=%u result=%s",
+    log3dsWrite("[perf][sram] sync total=%lluus path=%lluus write=%lluus bytes=%u result=%s",
         (unsigned long long)ticks_to_microseconds(finished - start, SYSCLOCK_ARM11),
         (unsigned long long)ticks_to_microseconds(path_done - start, SYSCLOCK_ARM11),
         (unsigned long long)ticks_to_microseconds(finished - write_start, SYSCLOCK_ARM11),
         (unsigned)save_size, saved ? "ok" : "FAILED; retry pending");
+}
+
+// The periodic autosave (core timer, mid-gameplay): copy the SRAM and let
+// the writer thread do the SD work (issue #59: the synchronous write
+// froze the Old 3DS for 225-259 ms). If a write is still in flight the
+// SRAM stays dirty and the core's timer simply fires again later.
+void S9xAutoSaveSRAM (void)
+{
+    const u64 start = svcGetSystemTick();
+    char path[PATH_MAX] = {};
+    file3dsGetRelatedPath(Memory.ROMFilename, path, sizeof(path), ".srm", "saves");
+    const size_t size = Memory.PrepareSRAMSave();
+    if (size == 0) {                 // nothing to save for this cart
+        CPU.SRAMModified = 0;
+        return;
+    }
+    if (path[0] == '\0' || !sram3dsRequestAsync(path, ::SRAM, size)) {
+        // no writer, or one still busy: keep dirty, the timer retries
+        if (!sram3dsBusy())
+            S9xSaveSRAMNow();         // no thread at all: the old synchronous path
+        return;
+    }
+    Memory.FinishSRAMSave();
+    CPU.SRAMModified = 0;
+    log3dsWrite("[perf][sram] queued copy=%lluus bytes=%u",
+        (unsigned long long)ticks_to_microseconds(svcGetSystemTick() - start, SYSCLOCK_ARM11),
+        (unsigned)size);
 }
 
 void S9xGenerateSound ()

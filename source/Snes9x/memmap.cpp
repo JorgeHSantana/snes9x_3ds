@@ -1434,12 +1434,12 @@ bool8 CMemory::LoadSRAM (const char *filename)
     return (TRUE);
 }
 
-bool8 CMemory::SaveSRAM (const char *filename)
+size_t CMemory::PrepareSRAMSave ()
 {
   if(Settings.SuperFX && Memory.ROMType < 0x15)
-    return TRUE;
+    return 0;
   if(Settings.SA1 && Memory.ROMType == 0x34)
-    return TRUE;
+    return 0;
 
   size_t rtc_pad = 0;
   if (Settings.SRTC)
@@ -1447,19 +1447,25 @@ bool8 CMemory::SaveSRAM (const char *filename)
     rtc_pad = SRTC_SRAM_PAD;
     S9xSRTCPreSaveState ();
   }
+  return sram_save_size_bytes(Memory.SRAMSize, rtc_pad);
+}
 
-  const size_t size = sram_save_size_bytes(Memory.SRAMSize, rtc_pad);
+void CMemory::FinishSRAMSave ()
+{
+  if(Settings.SPC7110RTC)
+    S9xSaveSPC7110RTC (&rtc_f9);
+}
 
+bool8 CMemory::SaveSRAM (const char *filename)
+{
+  const size_t size = PrepareSRAMSave();
   if (size)
   {
 	BufferedFileWriter stream;
     
         if (write_sram_file(stream, filename, ::SRAM, size))
     {
-      if(Settings.SPC7110RTC)
-      {
-        S9xSaveSPC7110RTC (&rtc_f9);
-      }
+      FinishSRAMSave();
       return (TRUE);
     }
   }

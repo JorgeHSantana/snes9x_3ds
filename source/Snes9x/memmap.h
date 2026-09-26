@@ -61,6 +61,10 @@ public:
     void  InitROM (bool8);
     bool8 LoadSRAM (const char *);
     bool8 SaveSRAM (const char *);
+    // bytes the save would write (0 = nothing to save); runs the SRTC
+    // pre-save. The async writer copies that many bytes of ::SRAM.
+    size_t PrepareSRAMSave ();
+    void FinishSRAMSave ();   // the SPC7110 RTC side file (tiny, synchronous)
     bool8 Init ();
     void  Deinit ();
     void  FreeSDD1Data ();
@@ -170,7 +174,8 @@ void S9xDeinterleaveMode2 ();
 
 END_EXTERN_C
 
-void S9xAutoSaveSRAM ();
+void S9xAutoSaveSRAM ();      // periodic, asynchronous (writer thread)
+void S9xSaveSRAMNow ();       // pause / sleep / unload / exit: synchronous
 
 #define INLINE inline
 #include "getset.h"

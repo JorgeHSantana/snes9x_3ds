@@ -21,6 +21,7 @@
 #include "3dslayeruse.h"
 #include "3dsstereokey.h"
 #include "3dslog.h"
+#include "3dssram.h"
 #include "3dstimer.h"
 #include "3dsexit.h"
 #include "3dsconfig.h"
@@ -1552,7 +1553,7 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
         []( int val ) { CheckAndUpdateToggle( settings3DS.AutoSavestate, val ); });
     items.back().PickerDescription = "Automatically saves and resumes this game's\nstate. This setting is for the current game;\nthe global switch is in the Emulator tab.";
 
-    AddMenuPicker(items, "  SRAM Auto-Save Delay"_s, "Periodically writes SRAM to the SD card.\nEach write can briefly freeze the game.\nDisabled still saves on exit/sleep."_s, makeOptionsForAutoSaveSRAMDelay(), settings3DS.SRAMSaveInterval, DIALOG_TYPE_INFO, true,
+    AddMenuPicker(items, "  SRAM Auto-Save Delay"_s, "Periodically writes SRAM to the SD card, on a\nbackground thread so the game does not freeze.\nDisabled still saves on pause, sleep and exit."_s, makeOptionsForAutoSaveSRAMDelay(), settings3DS.SRAMSaveInterval, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.SRAMSaveInterval, val ); });
     AddMenuCheckbox(items, "  Force SRAM Write on Pause"_s, settings3DS.ForceSRAMWriteOnPause,
                     []( int val ) { CheckAndUpdateToggle( settings3DS.ForceSRAMWriteOnPause, val ); });
@@ -3066,6 +3067,7 @@ static void emulatorUnloadRom()
     if (!settings3DS.isRomLoaded)
         return;
     log3dsFlush();
+    sram3dsDrain();
     impl3dsSaveCheats();
     settingsSave(true);
     snd3dsDrainMixing();
@@ -3767,6 +3769,7 @@ bool emulatorInitialize()
     if (!impl3dsInitialize()) return false;
     if (!img3dsInitialize()) return false;
     if (!snd3dsInitialize()) return false;
+    sram3dsInitialize();   // async SRAM writer (issue #59)
 
     // Fence MSU-1 register writes against the mixing thread. Unconditional:
     // snesAccessLock exists even when NDSP init failed (audioType != 2).
@@ -3807,6 +3810,7 @@ int emulatorFinalize()
     rewind3dsFinalize();
     msu3dsNdspUninstall();
 
+    sram3dsFinalize();   // lands any in-flight .srm before the SD goes away
     snd3dsFinalize();
     impl3dsFinalize();
     img3dsFinalize();

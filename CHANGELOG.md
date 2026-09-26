@@ -13,6 +13,12 @@ Notable changes to this project will be documented in this file.
   SRAM, palette redraw reduction and Circle Pad hotkeys. Status rows remain visible.
 
 ### Optimizations
+* **SRAM autosave no longer freezes the game** (issue #59: 225-259 ms per
+  periodic save on the Old 3DS): the emulation thread copies the SRAM
+  (at most 128 KiB) and a background thread writes the file. One write
+  in flight at a time; a refused or failed write keeps the SRAM dirty so
+  the timer retries. Pause, sleep, ROM unload and exit still save
+  synchronously, after the background write lands.
 * Session log: one 32 KiB buffer drained once a second during gameplay
   (issue #59: per-line flushes were a measured stutter on the Old 3DS),
   flushed on every menu iteration and explicitly before exit, ROM unload,
