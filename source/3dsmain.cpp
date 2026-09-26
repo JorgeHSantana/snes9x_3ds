@@ -3894,8 +3894,10 @@ bool paceFrame(long actualTicksThisFrame, int totalFrames, long &snesFrameTotalA
 void updateProfilingOutput(int totalFrames)
 {
     #ifndef PROFILING_DISABLED
+#ifndef PROFILE_LOG
         if (GPU3DS.profilingMode == PROFILING_OFF)
             return;
+#endif
 
         if (totalFrames % PROFILING_WINDOW_FRAMES == 0) {
             t3dsPrintTimers(PROFILING_WINDOW_FRAMES);

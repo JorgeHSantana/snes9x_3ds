@@ -7,7 +7,11 @@
 
 T3dsTimer t3dsTimers[TIMER_COUNT];
 #ifndef PROFILING_DISABLED
+#ifdef PROFILE_LOG
+static const bool writeToLogFile = true;
+#else
 static const bool writeToLogFile = false;
+#endif
 #endif
 
 TimerConfig TimerConfigs[TIMER_COUNT] = {
@@ -43,6 +47,11 @@ void t3dsResetTimers() {
             t3dsTimers[i].isEnabled = false;
         }
 
+#ifdef PROFILE_LOG
+        for (int i = 0; i < TIMER_COUNT; ++i)
+            t3dsTimers[i].isEnabled = true;
+        return;
+#endif
         switch (GPU3DS.profilingMode) {
             case PROFILING_ALL:
                 for (int i = 0; i < TIMER_COUNT; ++i)
@@ -102,6 +111,9 @@ void t3dsPrintTimer(TimerBucket bucket, int totalFrames) {
 
 void t3dsPrintTimers(int totalFrames) {
     #ifndef PROFILING_DISABLED
+#ifdef PROFILE_LOG
+        log3dsWrite("[profile] %d frames, ms per frame unless noted:", totalFrames);
+#endif
         for (int i = 0; i < TIMER_COUNT; ++i) {
             t3dsPrintTimer((TimerBucket)i, totalFrames);
         }

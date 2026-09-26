@@ -7,6 +7,14 @@
 // for disabling/enabling specific profiling adjust `TimerConfigs`
 #define PROFILING_DISABLED
 
+// Profile build (make ... EXTRA_DEFINES=-DPROFILE_LOG): every timer on,
+// the window's numbers written to the session log instead of the second
+// screen, no key combo needed. A field build for the console, never a
+// release: the timers cost a syscall per bucket per call.
+#ifdef PROFILE_LOG
+#undef PROFILING_DISABLED
+#endif
+
 // Number of frames per profiling window. Timers are reset and the window's
 // numbers logged every PROFILING_WINDOW_FRAMES frames.
 #define PROFILING_WINDOW_FRAMES 120
