@@ -222,14 +222,19 @@ static void rewind3dsCaptureThumb(uint8_t *dst)
     // proportional sampling: integer steps (fbWidth / W) truncate when the
     // thumb size does not divide the screen - 150 wide sampled only the
     // top-left 75% of a 400px frame (field report 16/08, cropped thumbs)
+    // The framebuffer is column-major (consecutive y are adjacent bytes),
+    // so walk it column by column: the row-major walk touched a new cache
+    // line per sample and cost 3 ms of the Old 3DS's capture (field log
+    // 2026-09-26); the samples of one column sit ~8 bytes apart.
     uint16_t *out = (uint16_t *)dst;
-    for (int ty = 0; ty < REWIND_THUMB_H; ty++) {
-        for (int tx = 0; tx < REWIND_THUMB_W; tx++) {
-            int x = tx * fbWidth / REWIND_THUMB_W;
+    for (int tx = 0; tx < REWIND_THUMB_W; tx++) {
+        int x = tx * fbWidth / REWIND_THUMB_W;
+        const u8 *col = fb + (size_t)x * 240 * 3;
+        uint16_t *o = out + tx;
+        for (int ty = 0; ty < REWIND_THUMB_H; ty++, o += REWIND_THUMB_W) {
             int y = ty * 240 / REWIND_THUMB_H;
-            u8 *px = fb + (x * 240 + (239 - y)) * 3;   // B,G,R
-            out[ty * REWIND_THUMB_W + tx] = (uint16_t)(
-                ((px[2] & 0xF8) << 8) | ((px[1] & 0xFC) << 3) | (px[0] >> 3));
+            const u8 *px = col + (239 - y) * 3;   // B,G,R
+            *o = (uint16_t)(((px[2] & 0xF8) << 8) | ((px[1] & 0xFC) << 3) | (px[0] >> 3));
         }
     }
 }
