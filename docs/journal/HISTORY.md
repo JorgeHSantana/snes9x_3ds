@@ -35,7 +35,7 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   effects + Blur Quality Auto/Full/Light with adaptive hysteresis (#71),
   dimmed/hidden unused rows, .3d keyed by ROM title with migration,
   update mid-game with in-session reload (#66, #73), dialog sizing.
-* **Stable v2.3 (2026-09-26)** — Mode 7 perspective closed (#62); sprites
+* **Stable v2.3 (2026-09-26, 3ae0954)** — Mode 7 perspective closed (#62); sprites
   on the ground retired (#76); 3D tab decluttered with SELECT help; Old
   3DS stutter work (#59): SRAM autosave on a worker thread, rewind delta
   encode on a worker, raw ring freeze, buffered log with a 1 s drain;

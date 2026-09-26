@@ -3,6 +3,10 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
+(nothing yet)
+
+## Stable v2.3 (2026-09-26, 3ae0954)
+
 ### Fixes
 * Crash entering a folder with more than 50 games while its list was
   still empty (first build or a stale-cache rescan at boot): the
