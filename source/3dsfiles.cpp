@@ -563,11 +563,21 @@ void file3dsDeleteCurrentDirCache() {
 }
 
 void file3dsShowCachingIndicator(std::vector<SMenuTab>& menuTabs) {
-    int currentTabIndex = menuTabs.size() - 1;
+    // The file tab's items are filled AFTER the scan that calls this, so
+    // on the first build (or a stale-cache rescan at boot) the list is
+    // empty: indexing it read through a null data pointer (Luma dump
+    // 2026-09-26, data abort at NULL+8 = SMenuItem::Text, Jorge's Old
+    // 3DS entering the Zelda MSU folder). Tag the item only when there
+    // is one; the redraw is still worth showing.
+    if (menuTabs.empty()) return;
+    int currentTabIndex = (int)menuTabs.size() - 1;
     SMenuTab& fileMenuTab = menuTabs[currentTabIndex];
 
-    SMenuItem& selectedItem = fileMenuTab.MenuItems[fileMenuTab.SelectedItemIndex];
-    selectedItem.Text = selectedItem.Text + " (caching...)";
+    if (fileMenuTab.SelectedItemIndex >= 0 &&
+        fileMenuTab.SelectedItemIndex < (int)fileMenuTab.MenuItems.size()) {
+        SMenuItem& selectedItem = fileMenuTab.MenuItems[fileMenuTab.SelectedItemIndex];
+        selectedItem.Text = selectedItem.Text + " (caching...)";
+    }
 
     menu3dsDrawEverything(currentTabIndex, menuTabs);
     menu3dsSwapBuffersAndWaitForVBlank();

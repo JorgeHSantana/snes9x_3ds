@@ -4,6 +4,10 @@ Notable changes to this project will be documented in this file.
 ## Unreleased (nightly)
 
 ### Fixes
+* Crash entering a folder with more than 50 games while its list was
+  still empty (first build or a stale-cache rescan at boot): the
+  "(caching...)" indicator indexed the empty item list. Data abort at
+  NULL+8, from Jorge's Luma dump (Old 3DS, the Zelda MSU folder).
 * Preserve pending SRAM changes on write/close failure and restore the previous
   audio-silence state. File savestates also report buffered write failures.
 * Ignore hidden Mode 7 distance-effect settings in Layer mode.
