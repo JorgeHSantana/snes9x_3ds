@@ -389,6 +389,8 @@ bool snd3dsInitialize()
     IAPU.DSPReplayIndex = 0;
     IAPU.DSPWriteIndex = 0;
 
+    // the log's SD writer shares the mixer's core at the lowest priority
+    log3dsStartWriter(coreId);
     snd3DS.mixingThread = threadCreate(snd3dsMixingThread, NULL, 0x4000, 0x18, coreId, false);
     if (snd3DS.mixingThread == NULL)
     {

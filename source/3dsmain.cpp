@@ -3781,6 +3781,7 @@ bool emulatorInitialize()
     if (!impl3dsInitialize()) return false;
     if (!img3dsInitialize()) return false;
     if (!snd3dsInitialize()) return false;
+    log3dsStartWriter(-2);   // no sound core chosen (no NDSP: Azahar): the SD writer still runs, on the caller's core
     sram3dsInitialize();   // async SRAM writer (issue #59)
 
     // Fence MSU-1 register writes against the mixing thread. Unconditional:
