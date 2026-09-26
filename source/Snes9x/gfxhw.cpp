@@ -1,3 +1,4 @@
+#include "../layer_defer.h"
 #include "copyright.h"
 
 
@@ -4009,13 +4010,16 @@ static uint16 S9xComputeBgPalette16UsedMask(int bg)
 // Updates the screen using the 3D hardware.
 //-----------------------------------------------------------
 
+#ifdef PROBE_DMA_PERF
+uint32 g_probeRenderCalls[3];   // 0 = all S9xUpdateScreenHardware, 1 = with an empty section, 2 = entered from the deferred drain
+#endif
 void S9xFlushDeferredLayers ()
 {
-    for (int i = 0; i < 5; i++) {
-        if (LayerRender.startY[i] < (uint32)IPPU.CurrentLine) {
-            S9xUpdateScreenHardware();
-            return;
-        }
+    if (layer_any_deferred(LayerRender.startY, (uint32)IPPU.CurrentLine)) {
+#ifdef PROBE_DMA_PERF
+        g_probeRenderCalls[2]++;
+#endif
+        S9xUpdateScreenHardware();
     }
 }
 
@@ -4036,6 +4040,10 @@ void S9xUpdateScreenHardware ()
 	GFX.StartY = IPPU.PreviousLine;
 	GFX.EndY = IPPU.CurrentLine - 1;
 	IPPU.PreviousLine = IPPU.CurrentLine;
+#ifdef PROBE_DMA_PERF
+	g_probeRenderCalls[0]++;
+	if ((int)GFX.EndY < (int)GFX.StartY) g_probeRenderCalls[1]++;
+#endif
 
 	layerVerticesCount[LAYER_BG0] = -1;
 	layerVerticesCount[LAYER_BG1] = -1;
@@ -4221,6 +4229,7 @@ void S9xUpdateScreenHardware ()
 		if (LayerRender.shouldRenderThisSegment[i])
 			LayerRender.startY[i] = preTrimEndY + 1;
 	}
+	LayerRender.anyDeferred = layer_any_deferred(LayerRender.startY, preTrimEndY + 1);
 
 	t3dsStopTimer(TIMER_S9X_UPDATE_SCREEN);
 }

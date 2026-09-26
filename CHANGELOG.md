@@ -25,6 +25,15 @@ Notable changes to this project will be documented in this file.
   off. Scene `alttp-transition` (Jorge's Zelda MSU savestate).
 
 ### Optimizations
+* DMA into VRAM (issue #79, item 3): a linear word upload whose bytes VRAM
+  already holds no longer forces a section render nor walks the per-byte
+  write path; only the addresses advance. Zelda's area loader re-sends
+  ~1400 such transfers a second (their cost fell by a third), Mario Kart
+  ~80. Frame dumps byte-identical on Mario Kart, MMX3 and the Zelda
+  transition.
+* Same-scanline flushes (every changed OAM word of a mid-frame OAM DMA,
+  ~270 per DMA in Mario Kart) check a cached "any layer deferred" flag
+  instead of calling the drain.
 * Tile conversion (issue #79, item 6): the per-byte "is this bitplane
   byte zero" branches are gone; the tables map zero to zero, so the
   output is identical (Azahar byte-exact) with 16 fewer branches per

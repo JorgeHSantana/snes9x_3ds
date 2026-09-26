@@ -18,6 +18,45 @@
 #include "spc7110.h"
 #include "sdd1emu.h"
 #include "msu1.h"
+#include "../vram_dma.h"
+
+#ifdef PROBE_DMA_PERF
+// measurement probe (issue #79 item 3): ticks and bytes of every DMA into
+// VRAM, split by whether the transfer fits the planned linear fast path
+// (mode 1 -> $2118, A-bus +1, word increment 1, increment on $2119, no
+// address remap). Reported per 60 frames from the platform's frame loop.
+#include <3ds.h>
+#include "../3dslog.h"
+u64 g_probeFlushTicks[2]; uint32 g_probeFlushCalls[2];
+int g_probeDmaClass = -1; u64 g_probeRenderTicksByClass[7]; uint32 s_dmaProbeNoop[7];
+static u64 s_dmaProbeTicks[7];   // 0 = fast-eligible, 1 = other VRAM, 2 = OAM vblank, 3 = CGRAM vblank, 4 = rest, 5 = OAM visible, 6 = CGRAM visible
+static uint32 s_dmaProbeBytes[7], s_dmaProbeCount[7];
+void dma3dsProbeFrame()
+{
+	static int frames = 0;
+	if (++frames < 60) return;
+	frames = 0;
+	static const char *names[7] = { "vram-linear", "vram-other", "oam-vbl", "cgram-vbl", "rest", "oam-vis", "cgram-vis" };
+	char line[320]; int n = snprintf(line, sizeof(line), "[perf][dma] 60 frames:");
+	for (int i = 0; i < 7; i++)
+		n += snprintf(line + n, sizeof(line) - n, " %s n=%u bytes=%u us=%llu |", names[i],
+			(unsigned)s_dmaProbeCount[i], (unsigned)s_dmaProbeBytes[i], (unsigned long long)(s_dmaProbeTicks[i] * 1000000 / SYSCLOCK_ARM11));
+	log3dsWrite("%s", line);
+	n = snprintf(line, sizeof(line), "[perf][dma] section-render us inside each class:");
+	for (int i = 0; i < 7; i++)
+		n += snprintf(line + n, sizeof(line) - n, " %s=%llu(noop-dma %u)", names[i], (unsigned long long)(g_probeRenderTicksByClass[i] * 1000000 / SYSCLOCK_ARM11), (unsigned)s_dmaProbeNoop[i]);
+	log3dsWrite("%s", line);
+	for (int i = 0; i < 7; i++) { g_probeRenderTicksByClass[i] = 0; s_dmaProbeNoop[i] = 0; }
+	log3dsWrite("[perf][dma] in-DMA flushes: section renders n=%u us=%llu | deferred drains n=%u us=%llu",
+		(unsigned)g_probeFlushCalls[0], (unsigned long long)(g_probeFlushTicks[0] * 1000000 / SYSCLOCK_ARM11),
+		(unsigned)g_probeFlushCalls[1], (unsigned long long)(g_probeFlushTicks[1] * 1000000 / SYSCLOCK_ARM11));
+	g_probeFlushTicks[0] = g_probeFlushTicks[1] = 0; g_probeFlushCalls[0] = g_probeFlushCalls[1] = 0;
+	{ extern uint32 g_probeRenderCalls[3];
+	  log3dsWrite("[perf][dma] section renders total n=%u empty=%u via-drain=%u", (unsigned)g_probeRenderCalls[0], (unsigned)g_probeRenderCalls[1], (unsigned)g_probeRenderCalls[2]);
+	  g_probeRenderCalls[0] = g_probeRenderCalls[1] = g_probeRenderCalls[2] = 0; }
+	for (int i = 0; i < 7; i++) { s_dmaProbeTicks[i] = 0; s_dmaProbeBytes[i] = 0; s_dmaProbeCount[i] = 0; }
+}
+#endif
 
 
 
@@ -68,6 +107,25 @@ uint32 S9xComputeDMABasePointer(uint8 bank, uint16 address, uint8 **base, uint16
 	return (uint32)GetAddress;
 }
 
+// See vram_dma.h: a plain linear VRAM upload whose bytes VRAM already
+// holds changes nothing the renderer can see, so the section flush before
+// it is skipped. Special-chip and MSU-1 sources take the generic path.
+static bool S9xVramDmaRewritesSameBytes (SDMA *d, int inc, int count)
+{
+	unsigned int off;
+	if (Settings.SA1 || Settings.SDD1 || Settings.SPC7110) return false;
+	if (!vram_dma_linear_span(!d->TransferDirection, d->BAddress, d->TransferMode, inc,
+		PPU.VMA.FullGraphicCount, PPU.VMA.Increment, PPU.VMA.High != 0, PPU.VMA.Address, (unsigned)count, &off))
+		return false;
+	if (Settings.MSU1 && msu1_is_dma_source ((uint8_t) d->ABank, (uint16_t) d->AAddress, (bool) d->AAddressFixed))
+		return false;
+	uint8 *base = 0; uint16 p = 0;
+	uint32 memmap = S9xComputeDMABasePointer (d->ABank, d->AAddress, &base, &p);
+	if (!base || memmap == CMemory::MAP_HIROM_SRAM || memmap == CMemory::MAP_LOROM_SRAM) return false;
+	if ((uint32) p + (uint32) count > 0x10000) return false;
+	return memcmp (base + p, Memory.VRAM + off, (size_t) count) == 0;
+}
+
 /**********************************************************************************************/
 /* S9xDoDMA()                                                                                   */
 /* This function preforms the general dma transfer                                            */
@@ -94,6 +152,25 @@ void S9xDoDMA (uint8 Channel)
 		count = 0x10000;
 	
     int inc = d->AAddressFixed ? 0 : (!d->AAddressDecrement ? 1 : -1);
+	bool vramSameBytes = false;   // set at the flush decision below
+#ifdef PROBE_DMA_PERF
+	int probeClass = 4;
+	bool probeVis = CPU.V_Counter >= 1 && CPU.V_Counter <= 224;
+	if (!d->TransferDirection && d->BAddress == 0x04) probeClass = probeVis ? 5 : 2;
+	if (!d->TransferDirection && d->BAddress == 0x22) probeClass = probeVis ? 6 : 3;
+	if (!d->TransferDirection && (d->BAddress == 0x18 || d->BAddress == 0x19))
+		probeClass = (d->BAddress == 0x18 && d->TransferMode == 1 && inc == 1 && !PPU.VMA.FullGraphicCount
+			&& PPU.VMA.Increment == 1 && PPU.VMA.High) ? 0 : 1;
+	u64 probeT0 = svcGetSystemTick();
+	uint32 probeBytes = (uint32)count;
+	g_probeDmaClass = probeClass;
+	if (probeClass == 0 && !in_sa1_dma && !in_sdd1_dma && !spc7110_dma) {
+		uint8 *pb = 0; uint16 pp; S9xComputeDMABasePointer(d->ABank, d->AAddress, &pb, &pp);
+		uint32 va = (PPU.VMA.Address << 1) & 0xFFFF;
+		if (pb && va + count <= 0x10000 && (uint32)pp + count <= 0x10000 && memcmp(pb + pp, Memory.VRAM + va, count) == 0)
+			s_dmaProbeNoop[0]++;
+	}
+#endif
 	
 	if((d->ABank==0x7E||d->ABank==0x7F)&&d->BAddress==0x80)
 	{
@@ -109,12 +186,19 @@ void S9xDoDMA (uint8 Channel)
 	// Can't disable FLUSH_REDRAW. Otherwise this causes Mickey & Donald 3 sprites
 	// to screw up!
 	//
+	// A linear VRAM upload whose bytes VRAM already holds (Zelda's area
+	// loader re-sends ~1400 of them per second, Mario Kart ~80): no flush
+	// and, below, no per-byte write loop - only the addresses advance.
 	switch (d->BAddress)
     {
     case 0x18:
     case 0x19:
-		if (IPPU.RenderThisFrame)
+		vramSameBytes = S9xVramDmaRewritesSameBytes(d, inc, count);
+		if (IPPU.RenderThisFrame && !vramSameBytes)
 			FLUSH_REDRAW ();
+#ifdef PROBE_DMA_PERF
+		else if (IPPU.RenderThisFrame && IPPU.PreviousLine != IPPU.CurrentLine) s_dmaProbeNoop[1]++;   // a flush that would have rendered, skipped
+#endif
 		break;
     }
 
@@ -582,7 +666,14 @@ void S9xDoDMA (uint8 Channel)
 	#ifndef CORRECT_VRAM_READS
 						IPPU.FirstVRAMRead = TRUE;
 	#endif
-						if (!PPU.VMA.FullGraphicCount)
+						if (vramSameBytes)
+						{
+							// vram_dma_linear_span guarantees word increment 1 on the
+							// high byte: a trailing odd byte ($2118) does not advance
+							// the address, exactly as the loop would.
+							PPU.VMA.Address += (uint32) count >> 1;
+						}
+						else if (!PPU.VMA.FullGraphicCount)
 						{
 							while (count > 1)
 							{
@@ -1159,6 +1250,12 @@ void S9xDoDMA (uint8 Channel)
 	}
 
 update_address:
+#ifdef PROBE_DMA_PERF
+	s_dmaProbeTicks[probeClass] += svcGetSystemTick() - probeT0;
+	s_dmaProbeBytes[probeClass] += probeBytes;
+	s_dmaProbeCount[probeClass]++;
+	g_probeDmaClass = -1;
+#endif
     // Super Punch-Out requires that the A-BUS address be updated after the
     // DMA transfer.
     Memory.FillRAM[0x4302 + (Channel << 4)] = (uint8) d->AAddress;

@@ -1131,6 +1131,9 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
         GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
     }
 #endif
+#ifdef PROBE_DMA_PERF
+	{ extern void dma3dsProbeFrame(); dma3dsProbeFrame(); }
+#endif
 #ifdef PROBE_FBDUMP
 	// harness probe (tools/azahar-validate --fbdump): the presented top
 	// screen saved to the SD at fixed frames after the ROM loaded, so a

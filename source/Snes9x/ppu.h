@@ -320,6 +320,7 @@ struct LayerRenderState {
     uint32 startY[5];                   // per-layer next-line-to-render cursor
     bool   shouldRenderThisSegment[5];  // gate decision this segment
     uint32 resetFrame;                  // last frame the cursors were reset
+    bool   anyDeferred;                 // cached layer_any_deferred() after the last render (see layer_defer.h)
 };
 extern struct LayerRenderState LayerRender;
 
@@ -337,16 +338,34 @@ STATIC inline uint8 REGISTER_4212()
     return (GetBank);
 }
 
+#ifdef PROBE_DMA_PERF
+#include <3ds.h>
+extern u64 g_probeFlushTicks[2]; extern uint32 g_probeFlushCalls[2];   // 0 = section render, 1 = deferred drain
+#endif
 STATIC inline void FLUSH_REDRAW ()
 {
     if (IPPU.RenderThisFrame)
     {
         if (IPPU.PreviousLine != IPPU.CurrentLine) {
+#ifdef PROBE_DMA_PERF
+            u64 t0 = svcGetSystemTick();
             S9xUpdateScreenHardware();
-        } else if (!LayerRender.allowDefer) {
+            if (CPU.InDMA) { extern int g_probeDmaClass; extern u64 g_probeRenderTicksByClass[7]; u64 dt = svcGetSystemTick() - t0; g_probeFlushTicks[0] += dt; g_probeFlushCalls[0]++; if (g_probeDmaClass >= 0) g_probeRenderTicksByClass[g_probeDmaClass] += dt; }
+#else
+            S9xUpdateScreenHardware();
+#endif
+        } else if (!LayerRender.allowDefer && LayerRender.anyDeferred) {
             // Same-scanline non-$2122 flush: drain any still-deferred layers
             // before a silent register update corrupts their catch-up state.
+            // anyDeferred is the cached predicate: false after every full
+            // render, so the per-word flushes of an OAM DMA cost one load.
+#ifdef PROBE_DMA_PERF
+            u64 t0 = svcGetSystemTick();
             S9xFlushDeferredLayers();
+            if (CPU.InDMA) { g_probeFlushTicks[1] += svcGetSystemTick() - t0; g_probeFlushCalls[1]++; }
+#else
+            S9xFlushDeferredLayers();
+#endif
         }
     }
 }
