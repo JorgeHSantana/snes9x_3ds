@@ -370,6 +370,39 @@ STATIC inline void FLUSH_REDRAW ()
     }
 }
 
+// One low-table OAM word (already known to differ), after the flush:
+// the same update REGISTER_2104 makes on its second byte. Shared with the
+// DMA word path (dma.cpp, oam_dma.h).
+STATIC inline void S9xOamWriteLowWord (int addr, uint8 lowbyte, uint8 highbyte)
+{
+    const bool geometryChanged = oam_word_changes_geometry(
+        static_cast<uint16_t>(addr), PPU.OAMData[addr], PPU.OAMData[addr+1], lowbyte, highbyte);
+    PPU.OAMData [addr] = lowbyte;
+    PPU.OAMData [addr+1] = highbyte;
+    if (geometryChanged) IPPU.OBJChanged = TRUE;
+    int obj = addr >> 2;
+    if (addr & 2)
+    {
+        // Tile
+        PPU.OBJ[obj].Name = lowbyte | ((highbyte & 1) << 8);
+
+        // priority, h and v flip.
+        PPU.OBJ[obj].Palette = (highbyte >> 1) & 7;
+        PPU.OBJ[obj].Priority = (highbyte >> 4) & 3;
+        PPU.OBJ[obj].HFlip = (highbyte >> 6) & 1;
+        PPU.OBJ[obj].VFlip = (highbyte >> 7) & 1;
+    }
+    else
+    {
+        // X position (low)
+        PPU.OBJ[obj].HPos &= 0xFF00;
+        PPU.OBJ[obj].HPos |= lowbyte;
+
+        // Sprite Y position
+        PPU.OBJ[obj].VPos = highbyte;
+    }
+}
+
 STATIC inline void REGISTER_2104 (uint8 byte)
 {
     if (PPU.OAMAddr & 0x100)
@@ -421,31 +454,7 @@ STATIC inline void REGISTER_2104 (uint8 byte)
             highbyte != PPU.OAMData [addr+1])
         {
             DEBUG_FLUSH_REDRAW(0x2104, byte); FLUSH_REDRAW ();
-            const bool geometryChanged = oam_word_changes_geometry(
-                static_cast<uint16_t>(addr), PPU.OAMData[addr], PPU.OAMData[addr+1], lowbyte, highbyte);
-            PPU.OAMData [addr] = lowbyte;
-            PPU.OAMData [addr+1] = highbyte;
-            if (geometryChanged) IPPU.OBJChanged = TRUE;
-            if (addr & 2)
-            {
-                // Tile
-                PPU.OBJ[addr = PPU.OAMAddr >> 1].Name = PPU.OAMWriteRegister & 0x1ff;
-
-                // priority, h and v flip.
-                PPU.OBJ[addr].Palette = (highbyte >> 1) & 7;
-                PPU.OBJ[addr].Priority = (highbyte >> 4) & 3;
-                PPU.OBJ[addr].HFlip = (highbyte >> 6) & 1;
-                PPU.OBJ[addr].VFlip = (highbyte >> 7) & 1;
-            }
-            else
-            {
-                // X position (low)
-                PPU.OBJ[addr = PPU.OAMAddr >> 1].HPos &= 0xFF00;
-                PPU.OBJ[addr].HPos |= lowbyte;
-
-                // Sprite Y position
-                PPU.OBJ[addr].VPos = highbyte;
-            }
+            S9xOamWriteLowWord (addr, lowbyte, highbyte);
         }
         PPU.OAMFlip &= ~1;
         ++PPU.OAMAddr;

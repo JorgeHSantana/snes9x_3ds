@@ -19,6 +19,7 @@
 #include "sdd1emu.h"
 #include "msu1.h"
 #include "../vram_dma.h"
+#include "../oam_dma.h"
 
 #ifdef PROBE_DMA_PERF
 // measurement probe (issue #79 item 3): ticks and bytes of every DMA into
@@ -44,7 +45,7 @@ void dma3dsProbeFrame()
 	log3dsWrite("%s", line);
 	n = snprintf(line, sizeof(line), "[perf][dma] section-render us inside each class:");
 	for (int i = 0; i < 7; i++)
-		n += snprintf(line + n, sizeof(line) - n, " %s=%llu(noop-dma %u)", names[i], (unsigned long long)(g_probeRenderTicksByClass[i] * 1000000 / SYSCLOCK_ARM11), (unsigned)s_dmaProbeNoop[i]);
+		n += snprintf(line + n, sizeof(line) - n, " %s=%llu(noop-dma/oam-word %u)", names[i], (unsigned long long)(g_probeRenderTicksByClass[i] * 1000000 / SYSCLOCK_ARM11), (unsigned)s_dmaProbeNoop[i]);
 	log3dsWrite("%s", line);
 	for (int i = 0; i < 7; i++) { g_probeRenderTicksByClass[i] = 0; s_dmaProbeNoop[i] = 0; }
 	log3dsWrite("[perf][dma] in-DMA flushes: section renders n=%u us=%llu | deferred drains n=%u us=%llu",
@@ -561,15 +562,44 @@ void S9xDoDMA (uint8 Channel)
 				switch (d->BAddress)
 				{
 				case 0x04:
-					do
+				{
+					// Word path over the low table (see oam_dma.h): compare
+					// each source word, flush and apply only what differs,
+					// leave the register state as the byte path would.
+					unsigned int wordBytes = (inc == 1) ? oam_dma_word_bytes(PPU.OAMAddr, PPU.OAMFlip, (unsigned) count, PPU.OAMPriorityRotation != 0) : 0;
+					if (wordBytes > 0 && (uint32) p + wordBytes <= 0x10000)
+					{
+#ifdef PROBE_DMA_PERF
+						s_dmaProbeNoop[2]++;
+#endif
+						const uint8 *src = base + p;
+						for (unsigned int i = 0; i < wordBytes; i += 2)
+						{
+							const uint8 lo = src[i], hi = src[i + 1];
+							const int addr = PPU.OAMAddr << 1;
+							if (lo != PPU.OAMData [addr] || hi != PPU.OAMData [addr + 1])
+							{
+								FLUSH_REDRAW ();
+								S9xOamWriteLowWord (addr, lo, hi);
+							}
+							++PPU.OAMAddr;
+						}
+						PPU.OAMWriteRegister = src[wordBytes - 2] | (src[wordBytes - 1] << 8);
+						Memory.FillRAM [0x2104] = src[wordBytes - 1];
+						p += wordBytes;
+						count -= (int) wordBytes;
+					}
+					while (count > 0)
 					{
 						Work = *(base + p);
 						REGISTER_2104(Work);
 						p += inc;
 						CHECK_SOUND();
 						UPDATEBASEPOINTER();
-					} while (--count > 0);
+						--count;
+					}
 					break;
+				}
 				case 0x18:
 	#ifndef CORRECT_VRAM_READS
 					IPPU.FirstVRAMRead = TRUE;

@@ -31,6 +31,12 @@ Notable changes to this project will be documented in this file.
   ~1400 such transfers a second (their cost fell by a third), Mario Kart
   ~80. Frame dumps byte-identical on Mario Kart, MMX3 and the Zelda
   transition.
+* OAM DMA (issue #79, item 3): the frame's OAM upload walks the low table
+  by words, comparing each source word against OAM and applying only the
+  changed ones with the register's own update (rotation, the high table
+  and odd tails keep the byte path). Per-byte cost -46% in Mario Kart
+  (two mid-frame uploads a frame), -61% in MMX3. Frame dumps
+  byte-identical on the three scenes.
 * Same-scanline flushes (every changed OAM word of a mid-frame OAM DMA,
   ~270 per DMA in Mario Kart) check a cached "any layer deferred" flag
   instead of calling the drain.
