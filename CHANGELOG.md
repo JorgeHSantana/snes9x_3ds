@@ -17,6 +17,10 @@ Notable changes to this project will be documented in this file.
   underruns during the spam.
 
 ### Validation
+* Profile build: `make ... EXTRA_DEFINES=-DPROFILE_LOG` turns every
+  t3ds timer on and writes the 120-frame breakdown (core, sections,
+  draw, GPU wait, flush) to the session log. A field build for the
+  console, never a release.
 * `[perf][frame]` every 5 s in the session log: the emulation thread's
   share of the frame budget (average and worst), frames over budget,
   draws the pacer skipped and the Blur Auto tier. The console number the
@@ -30,6 +34,17 @@ Notable changes to this project will be documented in this file.
   off. Scene `alttp-transition` (Jorge's Zelda MSU savestate).
 
 ### Optimizations
+* Session log off the emulation thread (issue #59, source 1): lines go
+  to a two-chunk spool and a lowest-priority writer thread on the
+  mixer's core puts them on the SD; the emulation thread never touches
+  the card (the previous buffer flushed synchronously when full: a 13 ms
+  stall inside a rewind capture on the Old 3DS). If the writer falls
+  behind, lines are dropped and counted, never waited for. The crash
+  tail is unchanged: menu, exit and unload still flush synchronously.
+* Rewind load reads the ring slot in place (`snap_reader.h`): the
+  unfreeze path takes a small reader over a file or a memory block
+  instead of `fmemopen`, which allocated a FILE and its buffer on every
+  rewind step (issue #78).
 * DMA into VRAM (issue #79, item 3): a linear word upload whose bytes VRAM
   already holds no longer forces a section render nor walks the per-byte
   write path; only the addresses advance. Zelda's area loader re-sends
