@@ -1139,6 +1139,16 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			bool ok = img3dsSaveScreenRegion(probePath, 400, 240, 0, 0, GFX_TOP, false);
 			log3dsWrite("[probe] top screen dump %s: %s", probePath, ok ? "v" : "x");
 			if (s_probeFrames == 600) {
+				// the rewind ring's raw-field freeze must round-trip exactly
+				static uint8_t probeA[512 * 1024], probeB[512 * 1024];
+				uint32 lenA = 0, lenB = 0;
+				LightLock_Lock(&snd3DS.snesAccessLock);
+				bool okA = S9xFreezeGameMem(probeA, sizeof(probeA), &lenA);
+				bool okU = okA && S9xUnfreezeGameMem(probeA, lenA);
+				bool okB = okU && S9xFreezeGameMem(probeB, sizeof(probeB), &lenB);
+				LightLock_Unlock(&snd3DS.snesAccessLock);
+				bool same = okB && lenA == lenB && memcmp(probeA, probeB, lenA) == 0;
+				log3dsWrite("[probe] ring roundtrip: %s (%u bytes)", same ? "ok" : "FAILED", (unsigned)lenA);
 				snprintf(probePath, sizeof(probePath), "sdmc:/3ds/snes9x_3ds/probe_state_600.frz");
 				LightLock_Lock(&snd3DS.snesAccessLock);
 				const bool saved = S9xFreezeGame(probePath);

@@ -17,6 +17,11 @@ Notable changes to this project will be documented in this file.
   SRAM, palette redraw reduction and Circle Pad hotkeys. Status rows remain visible.
 
 ### Optimizations
+* Rewind captures skip the savestate format's byte-by-byte packing: the
+  in-memory ring stores the core's struct fields as they are (same field
+  order, no big-endian conversion), which only exists so a .frz file is
+  portable. Savestate files are unchanged; a round-trip self-check runs
+  in the validation probe.
 * **Rewind capture costs the game less** (issue #59, source 2: 19-20 ms
   per capture on the Old 3DS, over a frame): the delta encode - a
   compare and copy over the whole state, ~40% of the capture - now runs

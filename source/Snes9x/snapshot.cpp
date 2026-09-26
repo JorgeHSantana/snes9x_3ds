@@ -466,6 +466,15 @@ static constexpr size_t snapshot_workspace_capacity()
 }
 static SnapshotWorkspace<snapshot_workspace_capacity()> snapshot_workspace;
 
+// Ring mode (S9xFreezeGameMem / S9xUnfreezeGameMem, issue #59): the
+// struct blocks carry the fields' bytes as they are in memory - the same
+// field order and sizes as the file format, without the per-byte
+// big-endian packing that exists so a .frz is portable. A rewind
+// snapshot never leaves this process, so the packing was pure cost (6-7
+// ms of an Old 3DS capture). Both sides are set by the same call, on the
+// emulation thread; savestate files are untouched.
+static bool s_rawFields = false;
+
 void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, FreezeData *fields,
 				   int num_fields);
 void FreezeBlock (BufferedFileWriter& stream, const char *name, uint8 *block, int size);
@@ -519,7 +528,9 @@ bool8 S9xFreezeGameMem (uint8 *buffer, uint32 capacity, uint32 *lengthOut)
     memcpy (savedChannels, SoundData.channels, sizeof (savedChannels));
 
     S9xPrepareSoundForSnapshotSave (FALSE);
+    s_rawFields = true;
     S9xFreezeToStream (stream, true);
+    s_rawFields = false;
 
     memcpy (SoundData.channels, savedChannels, sizeof (savedChannels));
 
@@ -538,7 +549,9 @@ bool8 S9xUnfreezeGameMem (const uint8 *buffer, uint32 length)
     if (!snapshot)
         return (FALSE);
 
+    s_rawFields = true;
     int result = S9xUnfreezeFromStream (snapshot);
+    s_rawFields = false;
     fclose (snapshot);
     return (result == SUCCESS);
 }
@@ -916,6 +929,18 @@ void FreezeStruct (BufferedFileWriter& stream, const char *name, void *base, Fre
     uint32 dword;
     int64  qword;
 
+    if (s_rawFields)
+    {
+        for (i = 0; i < num_fields; i++)
+        {
+            int n = FreezeSize (fields [i].size, fields [i].type);
+            memcpy (ptr, (uint8 *) base + fields [i].offset, n);
+            ptr += n;
+        }
+        FreezeBlock (stream, name, block, len);
+        return;
+    }
+
     // Build the block ready to be streamed out
     for (i = 0; i < num_fields; i++)
     {
@@ -1012,6 +1037,17 @@ int UnfreezeStruct (STREAM stream, const char *name, void *base, FreezeData *fie
 	
     if ((result = UnfreezeBlock (stream, name, block, len)) != SUCCESS)
     {
+        return (result);
+    }
+
+    if (s_rawFields)
+    {
+        for (i = 0; i < num_fields; i++)
+        {
+            int n = FreezeSize (fields [i].size, fields [i].type);
+            memcpy ((uint8 *) base + fields [i].offset, ptr, n);
+            ptr += n;
+        }
         return (result);
     }
 	
