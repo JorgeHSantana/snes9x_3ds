@@ -4132,21 +4132,18 @@ void S9xUpdateScreenHardware ()
 	// Sprite line lists on demand (obj_lines.h): a change rebuilds from
 	// this section's first line, later sections extend the valid range as
 	// they reach it. The FirstSprite+Y rotation keeps the full build.
-	if (IPPU.OBJChanged)
+	if (PPU.OAMPriorityRotation && (PPU.OAMFlip & PPU.OAMAddr & 1))
 	{
-		if (PPU.OAMPriorityRotation && (PPU.OAMFlip & PPU.OAMAddr & 1))
+		if (IPPU.OBJChanged)
 			S9xSetupOBJ ();
-		else
-		{
-			S9xSetupOBJRange ((int) GFX.StartY, (int) GFX.EndY);
-			IPPU.OBJLinesValidUpTo = (int) GFX.EndY;
-			IPPU.OBJChanged = FALSE;
-		}
 	}
-	else if ((int) GFX.EndY > IPPU.OBJLinesValidUpTo && !(PPU.OAMPriorityRotation && (PPU.OAMFlip & PPU.OAMAddr & 1)))
+	else
 	{
-		S9xSetupOBJRange (IPPU.OBJLinesValidUpTo + 1, (int) GFX.EndY);
-		IPPU.OBJLinesValidUpTo = (int) GFX.EndY;
+		int ranges[2][2];
+		const int n = IPPU.OBJLinesValid.plan ((int) GFX.StartY, (int) GFX.EndY, IPPU.OBJChanged != 0, ranges);
+		for (int i = 0; i < n; i++)
+			S9xSetupOBJRange (ranges[i][0], ranges[i][1]);
+		IPPU.OBJChanged = FALSE;
 	}
 	PROBE_PHASE(0);
 

@@ -39,6 +39,11 @@ Notable changes to this project will be documented in this file.
   the lines it draws (`obj_lines.h`, oracle-tested against the original
   algorithm). Mario Kart -46% on that phase; frame dumps byte-identical
   on the three scenes. The FirstSprite+Y rotation keeps the full build.
+  (Nightly a568eee drew the Nintendo logo at the top of Mario Kart's
+  boot screen: after a mid-frame OBJ change the lines above it kept the
+  old table into the next frame. The valid range is now one contiguous
+  run, rebuilt as the frame reaches it; the boot is a harness scene,
+  `smk-boot`, and pixel-identical to Stable.)
 * OAM DMA (issue #79, item 3): the frame's OAM upload walks the low table
   by words, comparing each source word against OAM and applying only the
   changed ones with the register's own update (rotation, the high table

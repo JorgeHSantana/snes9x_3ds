@@ -1179,7 +1179,7 @@ uint8 OBJOnLine[SNES_HEIGHT_EXTENDED][128];
 
 // The normal-priority line lists for scanlines y0..y1 only (obj_lines.h):
 // S9xSetupOBJ builds every line; the section renderer builds what it is
-// about to draw. Lines 0..IPPU.OBJLinesValidUpTo hold lists for the
+// about to draw. IPPU.OBJLinesValid says which lines hold lists for the
 // current OBJ table.
 void S9xSetupOBJRange (int y0, int y1)
 {
@@ -1193,8 +1193,6 @@ void S9xSetupOBJRange (int y0, int y1)
 	// so use the per-scanline path for this frame.
 	if (objYWrap)
 		PPU.PriorityDrawFromSprite = -1;
-	if (y1 > IPPU.OBJLinesValidUpTo || y0 == 0)
-		IPPU.OBJLinesValidUpTo = y1;
 }
 
 void S9xSetupOBJ ()
@@ -1324,7 +1322,7 @@ void S9xSetupOBJ ()
 #endif
 
 	IPPU.OBJChanged = FALSE;
-	IPPU.OBJLinesValidUpTo = SNES_HEIGHT_EXTENDED - 1;
+	IPPU.OBJLinesValid.all (SNES_HEIGHT_EXTENDED - 1);
 }
 
 void DrawOBJS (bool8 OnMain = FALSE, uint8 D = 0, int priority = 0)

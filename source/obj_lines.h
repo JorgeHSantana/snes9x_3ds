@@ -116,4 +116,27 @@ static inline bool obj_lines_build_range(const ObjT* obj, ObjSizes sz, unsigned 
     return yWrap;
 }
 
+// Which lines to (re)build before a section draws [s, e]. Lines
+// [from, to] hold lists for the current OBJ table; a change at line s
+// makes everything else stale (the lines above s were drawn with the old
+// table and stay as they are until the next frame reaches them). Sections
+// arrive in order and frames restart at 0, so at most two ranges are
+// missing: above `from` and below `to`.
+struct ObjLinesValidity {
+    int from, to;          // inclusive; from > to means nothing valid
+    void reset() { from = 1; to = 0; }
+    void all(int lastLine) { from = 0; to = lastLine; }
+    // Returns the number of ranges to build (0..2) in r[i][0..1]; updates the state.
+    // The valid range stays one contiguous run: a section that does not
+    // touch it replaces it (the run it leaves behind is rebuilt when the
+    // frame reaches it again - one redundant build, never a stale line).
+    int plan(int s, int e, bool objChanged, int r[2][2]) {
+        int n = 0;
+        if (objChanged || from > to || e < from - 1 || s > to + 1) { r[0][0] = s; r[0][1] = e; from = s; to = e; return 1; }
+        if (s < from) { r[n][0] = s; r[n][1] = from - 1; n++; from = s; }
+        if (e > to)   { r[n][0] = to + 1; r[n][1] = e; n++; to = e; }
+        return n;
+    }
+};
+
 #endif

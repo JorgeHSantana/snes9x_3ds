@@ -117,3 +117,30 @@ TEST_CASE("obj lines: a range leaves the lines outside it untouched and reports 
     CHECK(got[5].OBJ[0].Line == 31);                         // row 26 lands on line 0, row 31 on line 5
     CHECK(got[6].OBJCount == 0);
 }
+
+TEST_CASE("obj lines validity: a mid-frame change rebuilds from its line, and the next frame rebuilds the lines above it") {
+    ObjLinesValidity v; v.reset(); int r[2][2];
+    // frame 1: change in vblank -> first section builds from 0
+    CHECK(v.plan(0, 23, true, r) == 1);  CHECK(r[0][0] == 0);  CHECK(r[0][1] == 23);
+    CHECK(v.plan(24, 106, false, r) == 1); CHECK(r[0][0] == 24); CHECK(r[0][1] == 106);
+    // OBJ changes at line 107 (Mario Kart's OBSEL for the bottom half)
+    CHECK(v.plan(107, 223, true, r) == 1); CHECK(r[0][0] == 107); CHECK(r[0][1] == 223);
+    // frame 2, no change in vblank: lines 0..106 still hold the pre-change table -> rebuilt as reached
+    CHECK(v.plan(0, 23, false, r) == 1);  CHECK(r[0][0] == 0);  CHECK(r[0][1] == 23);
+    CHECK(v.plan(24, 106, false, r) == 1); CHECK(r[0][0] == 24); CHECK(r[0][1] == 106);
+    CHECK(v.plan(107, 223, false, r) == 1);   // built last frame, but the run was dropped when the top was rebuilt: once more
+    // frame 3, one section for the whole frame
+    CHECK(v.plan(0, 223, false, r) == 0);
+}
+
+TEST_CASE("obj lines validity: a section straddling the valid range builds both missing sides") {
+    ObjLinesValidity v; v.reset(); int r[2][2];
+    CHECK(v.plan(50, 100, true, r) == 1);
+    CHECK(v.plan(0, 150, false, r) == 2);
+    CHECK(r[0][0] == 0);   CHECK(r[0][1] == 49);
+    CHECK(r[1][0] == 101); CHECK(r[1][1] == 150);
+    CHECK(v.from == 0); CHECK(v.to == 150);
+    CHECK(v.plan(151, 223, false, r) == 1); CHECK(r[0][0] == 151);
+    v.all(239);
+    CHECK(v.plan(0, 223, false, r) == 0);
+}

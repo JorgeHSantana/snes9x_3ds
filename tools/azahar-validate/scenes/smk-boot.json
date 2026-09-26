@@ -1,0 +1,7 @@
+{
+  "title": "SMK power-on: Nintendo logo and title (regression report 2026-09-26)",
+  "rom": "sdmc:/snes/vanilla/Super Mario Kart (USA).sfc",
+  "wait": 26,
+  "settings": { "GameScreen": "0", "LogFileEnabled": "1", "UpdateAutoCheck": "0", "AutoSaveLoad": "0" },
+  "log_expect": [ "ROM loaded: SUPER MARIO KART" ]
+}

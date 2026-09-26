@@ -1,3 +1,4 @@
+#include "../obj_lines.h"
 #include "copyright.h"
 
 
@@ -48,7 +49,7 @@ struct InternalPPU {
     uint8  MaxBrightness;
     bool8  LatchedBlanking;
     bool8  OBJChanged;
-    int    OBJLinesValidUpTo;      // GFX.OBJLines[0..this] match the current OBJ table (obj_lines.h)
+    struct ObjLinesValidity OBJLinesValid;   // which GFX.OBJLines match the current OBJ table (obj_lines.h)
     bool8  RenderThisFrame;
     bool8  DirectColourMapsNeedRebuild;
     uint32 FrameCount;
