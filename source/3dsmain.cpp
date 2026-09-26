@@ -164,6 +164,17 @@ namespace {
     }
 }
 
+// the two Auto modes side by side; the stored values (0 Auto, 1 Full,
+// 2 Light, 3 Auto with Off) stay as they are in settings.cfg
+static std::vector<SMenuItem> makeBlurQualityOptions() {
+    std::vector<SMenuItem> items;
+    AddMenuDialogOption(items, 0, "Auto (Full, Light under load)"_s, ""_s);
+    AddMenuDialogOption(items, 3, "Auto (Full, Light, Off under load)"_s, ""_s);
+    AddMenuDialogOption(items, 1, "Full (two ghosts)"_s, ""_s);
+    AddMenuDialogOption(items, 2, "Light (one, faster)"_s, ""_s);
+    return items;
+}
+
 std::vector<SMenuItem> makePickerOptions(const std::vector<std::string>& options) {
     std::vector<SMenuItem> items;
     items.reserve(options.size());
@@ -1990,7 +2001,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             });
         AddMenuPicker(items, "  Blur Quality"_s,
             "Auto: Full while the game holds its frame rate, Light the moment a frame drops, back to Full after a run of clean seconds - a longer run each time it has to switch again soon. Auto with Off: the same, and if Light still drops frames for two seconds the blur switches off until a few clean seconds pass - for games that sit at the limit of an Old 3DS. Full: two ghost copies smear both sides - the softest look. Light: one ghost per eye, on opposite sides in the two eyes - half the blur's cost.",
-            makePickerOptions({"Auto (Full, Light under load)", "Full (two ghosts)", "Light (one, faster)", "Auto, Off under load"}),
+            makeBlurQualityOptions(),
             settings3DS.StereoBlurQuality, DIALOG_TYPE_INFO, true,
             []( int val ) {
                 if (CheckAndUpdate( settings3DS.StereoBlurQuality, val )) {
