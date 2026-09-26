@@ -3227,6 +3227,11 @@ void S9xPrepareMode7()
 	//
 	if (IPPU.Mode7CharDirtyFlagCount)
 	{
+#ifdef PROBE_SECTION_LOG
+		{ static int frames = 0, dirty = 0, used = 0, calls = 0; calls++;
+		  for (int c = 0; c < 256; c++) if (IPPU.Mode7CharDirtyFlag[c] == 2) { dirty++; if (IPPU.Mode7CharUsed[c]) used++; }
+		  if (++frames >= 60) { log3dsWrite("[sect] mode7 char updates per 60 frames: calls=%d dirty=%d used=%d usedValid=%d", calls, dirty, used, (int)IPPU.Mode7CharUsedValid); frames = 0; dirty = 0; used = 0; calls = 0; } }
+#endif
 		S9xPrepareMode7CheckAndUpdateCharTiles();
 
 		for (int i = 0; i < 256; )
