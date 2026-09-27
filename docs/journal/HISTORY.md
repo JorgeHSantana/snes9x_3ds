@@ -44,6 +44,17 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   appearance-only invalidation, snapshot workspace (#78, #79); crash
   fixes (post-update exit, caching indicator on an empty list); dead
   ground-sprite code and the redundant Mode 7 Depth Mode removed.
+* **Stable v2.4 (2026-09-27)** — Send Log / Send Crash Dump to GitHub from
+  the menu, driven by `github.env` on the SD (#80, closed; follow-ups
+  #81–#83); the session log leaves the emulation thread (spool + writer
+  thread, #59 source 1); DMA: same-bytes VRAM uploads skip the flush and
+  the loop, OAM upload by words (#79 item 3); sprite line lists built per
+  line range (and the boot-screen regression it caused, fixed the same
+  day); Mode 7 char → map-position index replaces the per-frame tilemap
+  walk (#79 item 1); rewind load without fmemopen; `[perf][frame]` and
+  the `-DPROFILE_LOG` profile build for console numbers (Old 3DS: Mario
+  Kart at 95–99 % load); Azahar probes for DMA and section timing; sig
+  log throttle; Zelda MSU transition garbage documented on #56.
 * **Stable v2.2 (2026-09-06, a26c295)** — Auto Save / Auto Load (#72); Blur Light
   steady per eye (blurred backgrounds no longer wobble); Blur Auto
   warm-up; post-update exit crash fixed from the Luma dump (background
@@ -120,7 +131,7 @@ and pending hardware evidence. These deliveries do not close #78/#79/#63.
 | 56 | Zelda ALTTP MSU: FMV corrompido | ABERTA | Diagnóstico completo: HDMA ch6/7 → $2126/$2128 (letterbox por window) não aplicado no path de FMV; NÃO é tearing de DMA. Correção pendente (meio período) |
 | 57 | DBZ Hyper Dimension lento (SA-1) | ABERTA | Speedhacks aplicam ("SKIPPED bytes differ" era alarme falso); falta idle-loop — probe caça-loops planejado |
 | 58 | Edge Cleanup por cena com "Global" | ABERTA | Parcialmente absorvida: edge virou game-global; revisar se o por-cena ainda é desejado |
-| 59 | Stuttering progressivo no Old | ABERTA (3 de 3 fontes atacadas, Stable v2.3) | Relatos históricos: capturas de 20ms e autosave de 225–259ms, além de logs por linha. Buffering de logs entregue em 1e72a38; storms de assinaturas, picos de rewind/SRAM e novas medições no console pendentes. Não são novos benchmarks |
+| 59 | Stuttering progressivo no Old | ABERTA (3 de 3 fontes atacadas; log fora da thread de emulação na v2.4) | Relatos históricos: capturas de 20ms e autosave de 225–259ms, além de logs por linha. Buffering de logs entregue em 1e72a38; storms de assinaturas, picos de rewind/SRAM e novas medições no console pendentes. Não são novos benchmarks |
 | 60 | Profundidade por PRIORIDADE (rcmz) | FECHADA | ENTREGUE nas nightlies: cascata de 4 tiers no shader, BGs P0/P1 + sprites Prio 0-3, zero draws extras; aguarda validação em hardware p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
 | 61 | Editor 3D ao vivo (rcmz, harmônico) | FECHADA | ENTREGUE: aba 3D Stereo, spotlight por prioridade, gauges em tempo real, Y peek, caption restaurada; aguarda validação p/ fechar; validado por Jorge no hardware, Stable v2.1 (2026-09-05) |
 | 62 | Perspectiva real no Mode 7 | FECHADA (Stable v2.3) | perspectiva por scanline (fator no w do vértice + mad no shader dos tiles, k só na camada de Mode 7), gauge Mode 7 > Perspective, M7PERSP no .3d; céu do 2P corrigido (flush antes do commit); validado pelo Jorge no hardware 2026-09-06 ('foi'); pendente: benchmark no Old e vértice direito transladar |
@@ -139,3 +150,7 @@ and pending hardware evidence. These deliveries do not close #78/#79/#63.
 | 75 | UI: passada de design (TTF, espaçamento, transições, ícones) | ABERTA | referência pocket-stack; sem runtime JS (decisão 2026-09-06); depois do Mode 7 |
 | 78 | Auditoria de otimização Old/New 3DS | ABERTA | Erros de SRAM/savestate, workspace de serialização, Mode 7, citro3d e segunda rodada com logs em buffer fixo; testes host/ARM e RGB/savestates exatos no Azahar. Demais investigações e medições no console pendentes |
 | 79 | Otimizações do core e render básico | ABERTA | Primeira rodada: invalidar listas OBJ somente por geometria, preservando flush; testes de atributos/posição e A/B visual. Índice Mode 7, DMA, mixer, dispatch e tiles ainda não implementados |
+| 80 | Enviar o log de sessão para o PC pela rede | FECHADA (Stable v2.4) | Send Log / Send Crash Dump to GitHub via github.env no SD (token fine-grained + URL de comentários da issue); validado pelo Jorge no Old 3DS (comentários na #80); restos em #81–#83 |
+| 81 | Envio GitHub: log inteiro e escolha do arquivo | ABERTA | continuação da #80: vários comentários ou Gist; logs de sessões anteriores; confirmação com tamanho |
+| 82 | Verificar o certificado TLS da api.github.com | ABERTA | updater e envio rodam com VERIFYPEER=0; embutir a cadeia raiz (CAINFO_BLOB) ou pinning; medir handshake no Old |
+| 83 | Envio de log para servidor próprio (LAN/nuvem) | ABERTA | proposta original da #80; POST cru para URL configurável, receptor em tools/ |
