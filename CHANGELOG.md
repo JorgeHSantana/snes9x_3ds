@@ -1,7 +1,9 @@
 # Changelog
 Notable changes to this project will be documented in this file.
 
-## Stable v2.4 (2026-09-27)
+## Unreleased (nightly)
+
+## Stable v2.4 (2026-09-27, 6b5abc4)
 
 ### Features
 * Send Log / Send Crash Dump to GitHub (issue #80): two items in the

@@ -44,7 +44,7 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   appearance-only invalidation, snapshot workspace (#78, #79); crash
   fixes (post-update exit, caching indicator on an empty list); dead
   ground-sprite code and the redundant Mode 7 Depth Mode removed.
-* **Stable v2.4 (2026-09-27)** — Send Log / Send Crash Dump to GitHub from
+* **Stable v2.4 (2026-09-27, 6b5abc4)** — Send Log / Send Crash Dump to GitHub from
   the menu, driven by `github.env` on the SD (#80, closed; follow-ups
   #81–#83); the session log leaves the emulation thread (spool + writer
   thread, #59 source 1); DMA: same-bytes VRAM uploads skip the flush and
