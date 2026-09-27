@@ -17,12 +17,14 @@ marks stay out of v1 (the per-sprite signature machinery of #76 is gone).
   (TexEnv stage 3: RGB = the chosen colour, alpha = texture alpha × 0.45),
   offset by ShadowX through the per-tier parallax and by ShadowY through
   the spare `w` of the `stereoIOD` uniform, at the "behind" parallax, with
-  the blur's ghost blending and no depth test; then the caster's base pass
-  once more on top, so its own body is never darkened. Unmarked tiers park
+  the blur's ghost blending, under the BG layers' depth rule (GEQUAL, so
+  a BG in front of the caster covers the shadow); then the caster's base
+  pass once more on top under the same rule, so its own body is never
+  darkened and the SNES priority order holds. Unmarked tiers park
   off-screen through the per-tier parallax (the ghost-pass trick).
-- The depth buffer carries no per-pixel priority here (measured: GEQUAL
-  and LEQUAL pass everywhere, GREATER and LESS nowhere), so a layer in
-  FRONT of the caster does not hide the shadow. Known v1 limit.
+- Depth compares other than GEQUAL do not behave (measured: GEQUAL and
+  LEQUAL pass everywhere, GREATER and LESS nowhere), so the shadow uses
+  exactly the rule the BG layers use.
 - A new vertex uniform was tried and dropped: registers past c9 of the
   tile shader did not reach the program (stereoIOD2 moved to c10 broke
   the picture), hence the spare component.
@@ -44,7 +46,7 @@ marks stay out of v1 (the per-sprite signature machinery of #76 is gone).
 
 ## Limits (v1)
 Silhouette, not projected; where the layer behind is transparent the
-shadow shows on whatever is further back; a layer in front of the caster
-does not hide the shadow; games that draw their own shadow get two. Cost:
+shadow shows on whatever is further back; games that draw their own
+shadow get two. Cost:
 two extra passes of each casting layer, only in 3D, off under Blur Auto's
 "Off under load".

@@ -625,9 +625,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     // the x offset rides the tier shift (same sign in both eyes)
                     shift[t] = roundf(GPU3DS.stereoEyeIOD * (float)behind * STEREO_PARALLAX_SCALE) + (float)GPU3DS.stereoShadowX;
                 }
-                // the silhouette: no depth test (the depth buffer holds no
-                // per-pixel priority in this renderer), so the caster's own
-                // base pass is drawn again on top to restore its body
+                // The silhouette and then the caster again, both under the
+                // depth rule the BG layers use (GEQUAL: draw where this plane
+                // is not below what is there). That keeps the SNES priority
+                // order - a BG in front of the caster covers both - and the
+                // redraw restores the caster's body over its own shadow.
                 auto drawLayer = [&]() {
                     if (list->useDrawArraysForTiledLayers) {
                         gpu3dsDrawTiledLayerSingleSection(layer, &list->sections[from]);
@@ -642,7 +644,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
                 gpu3dsApplyAtmosphereColor(0xFFFFFFFF);
                 gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
-                GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                GPU3DS.currentRenderState.depthTest = SGPU_STATE_ENABLED;
                 GPU3DS.stereoGhostPass = true;
                 gpu3dsSetShadowEnv(0.45f, rgb);
                 drawLayer();
@@ -660,7 +662,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 gpu3dsSetStereoParallax3(own[0], own[1], bnd01, 0.0f);
                 gpu3dsSetStereoParallaxHi(own[2], own[3], bnd12, bnd23);
                 gpu3dsSetStereoLayerAtmosphere((LAYER_ID)id);
-                GPU3DS.currentRenderState.depthTest = id < LAYER_OBJ ? SGPU_STATE_ENABLED : SGPU_STATE_DISABLED;
+                GPU3DS.currentRenderState.depthTest = SGPU_STATE_ENABLED;
                 drawLayer();
             }
             GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;

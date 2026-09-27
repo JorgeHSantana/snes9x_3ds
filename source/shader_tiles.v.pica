@@ -160,7 +160,8 @@ draw:
     mad     r11.z, r6.x, mode7Persp.z, r11.z    ; color.b += d * (-fog) = fog * (1 - w/256): fog by
                                                 ; distance (a line's b is 0; every other draw has z = 0)
     add     r0.x, r4.x, r0.x
-    add     r0.y, stereoIOD.w, r0.y     ; drop shadow y offset (issue #77; 0 outside the shadow pass)
+    mov     r7, stereoIOD               ; drop shadow y offset in w (issue #77; 0 outside the shadow pass)
+    add     r0.y, r7.w, r0.y
     mul     r11.w, r4.y, r11.w          ; editor spotlight: other priorities'
                                         ; alpha goes to 0 (alpha test discards
                                         ; them); 1.0 in gameplay = exact no-op
