@@ -101,38 +101,37 @@ void gpu3dsDisableStencilTest()
     C3D_StencilTest(false, GPU_ALWAYS, 0, 0, 0);
 }
 
-void gpu3dsShadowStencilMark(int ref)
+// Drop shadows (issue #77) through the game texture's alpha, used as a
+// mask after color math and brightness (nothing reads it later; the
+// screen blit uses vertex alpha). Set AFTER the packed state applied;
+// gpu3dsShadowPassEnd poisons the applied state so the next draw restores
+// its own blend and write mask.
+void gpu3dsShadowPassState(int mode)
 {
-    // stencil ops need the depth stage on (test ALWAYS, nothing written
-    // to colour or depth); bits 0-1 take `ref` where a texel passes the
-    // alpha test
-    C3D_StencilTest(true, GPU_ALWAYS, ref, 0x03, 0x03);
-    C3D_StencilOp(GPU_STENCIL_REPLACE, GPU_STENCIL_REPLACE, GPU_STENCIL_REPLACE);
-    C3D_DepthTest(true, GPU_ALWAYS, (GPU_WRITEMASK)0);
-    GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
-    GPU3DS.appliedRenderState.stencilTest = STENCIL_TEST_DISABLED;
+    switch (mode) {
+    case 0:   // alpha clear / behind-plane mark: alpha only, replace
+        C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ONE, GPU_ZERO, GPU_ONE, GPU_ZERO);
+        C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALPHA);
+        break;
+    case 1:   // caster erase: alpha only, 0 wherever the texel passed the alpha test
+        C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ONE, GPU_ZERO, GPU_ZERO, GPU_ZERO);
+        C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALPHA);
+        break;
+    default:  // silhouette: rgb = colour * dstA + rgb * (1 - dstA), alpha kept
+        C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_DST_ALPHA, GPU_ONE_MINUS_DST_ALPHA, GPU_ZERO, GPU_ONE);
+        C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
+        break;
+    }
     GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
     GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;
 }
 
-void gpu3dsShadowStencilTest(int ref)
+void gpu3dsShadowPassEnd()
 {
-    C3D_StencilTest(true, GPU_EQUAL, ref, 0x03, 0x00);
-    C3D_StencilOp(GPU_STENCIL_KEEP, GPU_STENCIL_KEEP, GPU_STENCIL_KEEP);
-    C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
-    GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
-    GPU3DS.appliedRenderState.stencilTest = STENCIL_TEST_DISABLED;
-    GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
-    GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;
-}
-
-void gpu3dsShadowStencilEnd()
-{
-    C3D_StencilOp(GPU_STENCIL_KEEP, GPU_STENCIL_KEEP, GPU_STENCIL_KEEP);
-    C3D_StencilTest(false, GPU_ALWAYS, 0, 0, 0);
     C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
-    GPU3DS.appliedRenderState.stencilTest = 0xFFFFFFFu;      // impossible: forces the next draw's own states
+    gpu3dsDisableAlphaBlending();
     GPU3DS.appliedRenderState.depthTest = SGPU_STATE_UNSET;
+    GPU3DS.appliedRenderState.alphaBlending = (SGPU_ALPHA_BLENDINGMODE)(ALPHA_BLENDING_GHOST + 1);
 }
 
 

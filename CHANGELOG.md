@@ -9,11 +9,13 @@ Notable changes to this project will be documented in this file.
   Shadow X / Y offsets and a Shadow Color picker (black, dark gray, navy,
   brown, purple, white) and "Small Sprites Only", saved per profile in
   the `.3d` (`SHADOW`, `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`).
-  Stencil-based: every row behind the caster marks where it has pixels,
-  the caster marks its own body, and the silhouette draws only on a
-  marked surface that is not the body, at the nearest behind row's
-  parallax, so it never covers a layer in front, never darkens the
-  caster, and the caster's own stereo position is untouched. Only in 3D.
+  Mask-based, through the game texture's alpha after color math: the
+  plane right behind the caster (the nearest smaller Depth gauge, with
+  every row sharing it; the Mode 7 plane included) marks where it has
+  pixels, the caster erases its own body, and the silhouette blends by
+  that mask at the plane's parallax, so it never covers a layer in front
+  of the plane, never darkens the caster, and the caster's own stereo
+  position is untouched. Only in 3D.
 
 
 ## Stable v2.4 (2026-09-27, 6b5abc4)

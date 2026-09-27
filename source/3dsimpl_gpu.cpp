@@ -589,20 +589,15 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
         bool sub = i == TARGET_SNES_SUB;
 
-        // Drop shadows (issue #77), one phase per target after the BG
-        // layers. Per casting layer, three passes over the stencil's free
-        // bits 0-1 (the window masks live in 5-7): (1) the row BEHIND the
-        // caster (the nearest smaller depth gauge) marks bit 0 where it
-        // has pixels; (2) the caster marks bit 1 over its own body; (3)
-        // the silhouette, offset by Shadow X/Y at the behind row's
-        // parallax, draws only where bit 0 is set and bit 1 is not: on
-        // that row, never on the caster, never over a layer in front of
-        // the behind row (its pixels were not marked). No depth tricks,
-        // no redraw of the caster: its own pass and parallax stay as they
-        // were. "Small sprites only" restricts (2) and (3) to the vertex
-        // spans of OBSEL-small sprites. The eye pass's depth floor rewrites
-        // the stencil next frame, so nothing is cleaned up here.
-        bool shadowPhaseDone = false;
+        // Drop shadows (issue #77), one phase per target after everything
+        // else drew, through the game texture's ALPHA (nothing reads it
+        // past color math; the screen blit uses vertex alpha): the plane
+        // behind the caster writes alpha = 0.45 where it has pixels, the
+        // caster erases it over its own body, and the silhouette blends
+        // its colour by that alpha. No stencil, no depth, no redraw of the
+        // caster: its own pass and parallax stay as they were. Pixels of a
+        // layer in front of the plane were never marked. "Small Sprites
+        // Only" restricts the caster passes to OBSEL-small sprite spans.
         auto drawShadowPhase = [&]() {
             if (GPU3DS.stereoShadowRows == 0 || GPU3DS.stereoEyeIOD == 0.0f) return;
             int depthRows[STEREO_SHADOW_ROWS]; unsigned usedRows = 0;
@@ -621,7 +616,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 SLayer *ly = &list->layers[lid];
                 from = ly->sectionsOffset + (sub ? 0 : ly->sectionsByTarget[TARGET_SNES_SUB]);
                 to = from + ly->sectionsByTarget[i];
-                return to > from && list->sections[from].vboId != VBO_SCENE_MODE7_LINE;
+                return to > from;
             };
             // One vertex range of a section, drawn with the section's own
             // packed state applied FIRST and the raw stencil armed after it
@@ -633,16 +628,24 @@ void gpu3dsDrawLayers(SLayerList *list) {
             static u16 *shadowIbo = nullptr; static int shadowIboUsed = 0;
             const int SHADOW_IBO_MAX = 32768;
             if (shadowIbo == nullptr) shadowIbo = (u16 *)linearAlloc(SHADOW_IBO_MAX * sizeof(u16));
-            auto drawRange = [&](SLayer *ly, SLayerSection *sec, int from, int count, int stencilRef, bool testNotMark) {
+            auto drawRange = [&](SLayer *ly, SLayerSection *sec, int from, int count, int mode) {
                 GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
-                GPU3DS.currentRenderState.alphaBlending = GPU3DS.stereoGhostPass ? ALPHA_BLENDING_GHOST : ALPHA_BLENDING_DISABLED;
+                GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
                 u64 mask = gpu3dsGetLayerPackedMask(ly->id, true);
                 GPU3DS.currentRenderState.packed = (GPU3DS.currentRenderState.packed & ~mask) | (sec->state.packed & mask);
-                if (GPU3DS.stereoGhostPass) GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
+                GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;   // transparent texels never mark, erase or shade
                 GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
                 GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                GPU3DS.currentRenderState.target = (SGPU_TARGET_ID)i;
+                // the section's own shader (tiles, or Mode 7 lines for the plane);
+                // a Mode 7 plane receives at the profile's perspective, no fog/ghost
+                const bool m7 = sec->vboId == VBO_SCENE_MODE7_LINE;
+                GPU3DS.currentRenderState.shader = m7 ? SPROGRAM_MODE7 : SPROGRAM_TILES;
+                float m7k = 0.0f, m7gain = 1.0f;
+                if (m7) mode7PerspGaugeSplit((int)GPU3DS.stereoMode7Persp, &m7k, &m7gain);
+                gpu3dsSetMode7Persp(m7k, m7gain, 0.0f, 0.0f);
                 gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
-                if (testNotMark) gpu3dsShadowStencilTest(stencilRef); else gpu3dsShadowStencilMark(stencilRef);
+                gpu3dsShadowPassState(mode);
                 SVertexList *vbo = &GPU3DS.vertices[sec->vboId];
                 if (list->useDrawArraysForTiledLayers) {
                     gpu3dsDraw(vbo, NULL, count, from);
@@ -654,12 +657,29 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     shadowIboUsed += count;
                 }
             };
-            auto drawSections = [&](int lid, int from, int to, int stencilRef, bool testNotMark) {
+            auto drawSections = [&](int lid, int from, int to, int mode) {
                 SLayer *ly = &list->layers[lid];
                 for (int k = from; k < to; k++) {
                     SLayerSection *sec = &list->sections[k];
-                    drawRange(ly, sec, sec->from, sec->count, stencilRef, testNotMark);
+                    drawRange(ly, sec, sec->from, sec->count, mode);
                 }
+            };
+            // the mask starts clean: alpha 0 over the whole target
+            auto clearAlpha = [&]() {
+                GPU3DS.currentRenderState.target = (SGPU_TARGET_ID)i;
+                GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_COLOR;
+                GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+                GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+                GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
+                GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
+                gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
+                gpu3dsShadowPassState(0);
+                SVertexList *rects = &GPU3DS.vertices[VBO_SCENE_RECT];
+                int rFrom = rects->from + rects->count;
+                gpu3dsAddRectangleVertexes(0, 0, 512, 256, 0x00000000);
+                gpu3dsDraw(rects, NULL, 2, rFrom);
+                rects->count -= 2;
             };
             // the tier parallax of one row of a layer, the other tiers parked off-screen
             auto setTierShifts = [&](int lid, const float sh[4], float shadowY) {
@@ -694,50 +714,72 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 ObjSpan small[64]; int nSmall = 0;
                 const bool smallOnly = id == LAYER_OBJ && GPU3DS.stereoShadowSmallOnly && spans->n > 0;
                 if (smallOnly) nSmall = spans->small_ranges(sub, small, 64);
-                auto drawCaster = [&](int stencilRef, bool testNotMark) {
-                    if (!smallOnly) { drawSections(id, cFrom, cTo, stencilRef, testNotMark); return; }
+                auto drawCaster = [&](int mode) {
+                    if (!smallOnly) { drawSections(id, cFrom, cTo, mode); return; }
                     SLayer *ly = &list->layers[id];
                     SLayerSection *sec = &list->sections[cFrom];
                     for (int k = 0; k < nSmall; k++)
-                        drawRange(ly, sec, small[k].from, small[k].count, stencilRef, testNotMark);
+                        drawRange(ly, sec, small[k].from, small[k].count, mode);
                 };
 
+                // which tiers cast, and the plane behind each
+                int behindOf[4] = { -1, -1, -1, -1 }; bool anyCast = false;
                 for (int t = 0; t < tiers; t++) {
                     if (!stereo_shadow_marked((unsigned)GPU3DS.stereoShadowRows, id, t)) continue;
-                    const int row = stereo_shadow_row(id, t);
-                    const int behindRow = stereo_shadow_behind_row(depthRows, usedRows, row);
-                    if (behindRow < 0) continue;
-                    const int bLayer = behindRow < 8 ? behindRow / 2 : 4, bTier = behindRow < 8 ? behindRow & 1 : behindRow - 8;
-                    const float behindShift = ownShift(bLayer, bTier);
+                    behindOf[t] = stereo_shadow_behind_row(depthRows, usedRows, stereo_shadow_row(id, t));
+                    if (behindOf[t] >= 0) anyCast = true;
+                }
+                if (!anyCast) continue;
 
-                    // (1) every used row BEHIND the caster marks bit 0, one pass
-                    // per layer with its rows at their own parallax: the shadow
-                    // lands on whichever of them is visible at each pixel
-                    const int ownDepth = depthRows[row];
+                // (1) the mask: alpha 0, then the plane behind each casting
+                // tier writes 0.45 where it has pixels - the nearest smaller
+                // Depth gauge plus every used row sharing it (one surface in
+                // 3D), one pass per layer at the rows' own parallax. Rows
+                // further back stay 0: a layer of the stereo profile, not of
+                // the SNES order, is the surface (Jorge).
+                clearAlpha();
+                bool planeDone[STEREO_SHADOW_ROWS] = { false };
+                for (int t = 0; t < tiers; t++) {
+                    if (behindOf[t] < 0 || planeDone[behindOf[t]]) continue;
+                    planeDone[behindOf[t]] = true;
+                    const int behindDepth = depthRows[behindOf[t]];
                     for (int bl = LAYER_BG0; bl < LAYER_OBJ; bl++) {
                         float sh[4] = { 4096.0f, 4096.0f, 4096.0f, 4096.0f }; bool any = false;
                         for (int bt = 0; bt < 2; bt++) {
                             const int br = stereo_shadow_row(bl, bt);
-                            if (((usedRows >> br) & 1u) == 0 || depthRows[br] >= ownDepth) continue;
+                            if (((usedRows >> br) & 1u) == 0 || depthRows[br] != behindDepth) continue;
                             sh[bt] = ownShift(bl, bt); any = true;
                         }
                         int bFrom, bTo;
                         if (!any || !sectionsOf(bl, bFrom, bTo)) continue;
                         setTierShifts(bl, sh, 0.0f);
-                        drawSections(bl, bFrom, bTo, 1, false);
+                        gpu3dsSetShadowEnv(0.45f, 0x000000);   // alpha = texture alpha x 0.45
+                        drawSections(bl, bFrom, bTo, 0);
                     }
-                    // (2) the caster marks bit 1 at its own parallax
-                    parkAllBut(id, t, ownShift(id, t), 0.0f);
-                    drawCaster(2, false);
-                    // (3) the silhouette where bit 0 is set and bit 1 is not
-                    parkAllBut(id, t, behindShift + (float)GPU3DS.stereoShadowX, (float)GPU3DS.stereoShadowY);
-                    GPU3DS.stereoGhostPass = true;
-                    gpu3dsSetShadowEnv(0.45f, rgb);
-                    drawCaster(1, true);
-                    gpu3dsSetShadowEnv(0.0f, 0);
-                    GPU3DS.stereoGhostPass = false;
-                    gpu3dsShadowStencilEnd();
                 }
+                gpu3dsSetShadowEnv(0.0f, 0);
+
+                // (2) the caster erases the mask over its whole body, every
+                // tier at its own parallax (a sprite spans priorities)
+                {
+                    float sh[4];
+                    for (int t = 0; t < 4; t++) sh[t] = t < tiers ? ownShift(id, t) : 4096.0f;
+                    setTierShifts(id, sh, 0.0f);
+                    drawCaster(1);
+                }
+
+                // (3) the silhouettes, per casting tier, offset by Shadow X/Y at
+                // the parallax of that tier's plane behind
+                for (int t = 0; t < tiers; t++) {
+                    if (behindOf[t] < 0) continue;
+                    const int br = behindOf[t];
+                    const float behindShift = ownShift(br < 8 ? br / 2 : 4, br < 8 ? br & 1 : br - 8);
+                    parkAllBut(id, t, behindShift + (float)GPU3DS.stereoShadowX, (float)GPU3DS.stereoShadowY);
+                    gpu3dsSetShadowEnv(1.0f, rgb);           // RGB = the shadow colour, alpha = texture alpha
+                    drawCaster(2);
+                    gpu3dsSetShadowEnv(0.0f, 0);
+                }
+                gpu3dsShadowPassEnd();
             }
             gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
         };
@@ -745,8 +787,6 @@ void gpu3dsDrawLayers(SLayerList *list) {
         for (int j = 0; j < list->layersTotalByTarget[i]; j++) {
             LAYER_ID id = list->layersByTarget[i][j];
             SLayer *layer = &list->layers[id];
-            // after every BG (the backdrop draws first, before the sprites)
-            if (!shadowPhaseDone && (id == LAYER_COLOR_MATH || id == LAYER_BRIGHTNESS)) { drawShadowPhase(); shadowPhaseDone = true; }
 
             // honor the diagnostic layer toggles at replay time too, so
             // the 3D editor's paused preview reflects them live. In
@@ -1063,7 +1103,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
             drawLayerContent();
             }   // spotlight passes
         }
-        if (!shadowPhaseDone) drawShadowPhase();
+        drawShadowPhase();   // after colour math and brightness: the alpha mask is free then
     }
 
     gpu3dsSetStereoParallax(0.0f);

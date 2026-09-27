@@ -523,13 +523,9 @@ static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float gho
     GPU3DS.mode7PerspApplied = key;
 }
 
-// Drop shadows (issue #77): raw stencil use of bits 0-1 (the window
-// masks live in bits 5-7). The packed render state keeps thinking the
-// stencil test is disabled while these run; gpu3dsShadowStencilEnd
-// poisons the applied state so the next draw re-applies its own.
-void gpu3dsShadowStencilMark(int ref);      // write `ref` into bits 0-1 where a texel passes, no colour
-void gpu3dsShadowStencilTest(int ref);      // draw only where (stencil & 3) == ref, colour on
-void gpu3dsShadowStencilEnd();
+// Drop shadows (issue #77): the passes' blend / write-mask states (3dsgpu.cpp)
+void gpu3dsShadowPassState(int mode);   // 0 alpha replace, 1 caster erase, 2 silhouette by dest alpha
+void gpu3dsShadowPassEnd();
 
 static inline void gpu3dsSetStereoParallax(float v)
 {

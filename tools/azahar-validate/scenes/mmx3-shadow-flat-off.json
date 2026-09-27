@@ -1,0 +1,15 @@
+{
+  "title": "MMX3 pillar, sprites at depth 1 like mmx3-shadow-flat but SHADOW=0 (control)",
+  "rom": "sdmc:/snes/vanilla/Mega Man X3.smc",
+  "state": "states/mmx3-pillar.frz",
+  "stereo3d": [
+    {
+      "file": "MEGAMAN X3",
+      "content": "BG1=0\nBG1P1=0\nBG2=0\nBG3=0\nBG4=0\nOBJ=1\nOBJP1=1\nOBJP2=1\nOBJP3=1\nFADE=0\nHAZE=0\nBLUR=0\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nSHADOW=0\nSHADOWX=3\nSHADOWY=3\nSHADOWCOLOR=0"
+    }
+  ],
+  "wait": 32,
+  "log_expect": [
+    "ROM loaded: MEGAMAN X3"
+  ]
+}
