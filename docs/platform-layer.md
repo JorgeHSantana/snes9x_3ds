@@ -37,20 +37,19 @@ Implements both the `impl3ds*` API consumed by `3dsmain` and the `S9x*` callback
 | `3dsconfig` | Versioned INI-ish `key=value` read/write (global file v1.6, game file v1.5); the file starts with `# v<x.y>` so newer keys are skipped when reading older files; primitives for int (with clamping), string, bitmask and enums |
 | `3dsexit` | APT hooks (`handleAptHook`): HOME/sleep → restore CPU limit, stop audio (prevents a hung looped sample), restore LCD rate, conditionally autosave SRAM, drop to pause menu; resume → reapply CPU limit, mark screens dirty |
 | `3dssram` | Asynchronous SRAM autosave (issue #59): the emulation thread copies the SRAM (<= 128 KiB) into `SramWriterQueue` and a lowest-priority worker writes the file with plain stdio; one job in flight, a refused request keeps the SRAM dirty for the core's timer, a failed write re-marks it dirty on `sram3dsPoll()`. Pause, sleep, unload and exit use the synchronous `S9xSaveSRAMNow()` after draining |
-| `3dslog` | Session log `debug_v<ver>_session.log` (truncated each run); logging choice latched at initialization (restart to change); `[SS.mmm]` prefixes; dedicated fixed 32 KiB stdio buffer drained once a second in gameplay, every menu iteration, and explicitly (`log3dsFlush()`) before exit / ROM unload / the updater / after autosave |
+| `3dslog` | Session log `debug_v<ver>_session.log` (truncated each run); logging choice latched at initialization (restart to change); `[SS.mmm]` prefixes; lines go to a two-chunk spool (`log_spool.h`) and a lowest-priority writer thread on the mixer's core puts them on the SD (see [field-diagnostics.md](field-diagnostics.md)); `log3dsFlush()` (menu, exit, unload, updater, autosave) waits for the writer and drains synchronously |
+| `3dsgithub` | Send Log / Send Crash Dump to GitHub (issue #80): `github.env` on the SD, the session log's tail or the newest Luma dump posted as an issue comment through `update3dsNetPostJson`; pure parts in `github_env.h` / `github_report.h` |
 
-Logging no longer forces `fflush` for every message. Writes and gameplay/menu
-ticks request a flush after one second; a full buffer can write earlier. Ticks
-use the existing log lock non-blockingly, but the flush itself is synchronous:
-this reduces write frequency, not all SD stalls. If the main thread is stalled,
-suspended or in a long operation, the time window can exceed one second. Normal
-shutdown drains the buffer; abrupt crashes/power loss may lose its recent tail.
-I/O errors disable that session's sink without recursive diagnostics. The atomic
-ready flag publishes lock initialization and gates producers; all FILE/timestamp
-access stays under the log lock, including close. Worker producers no longer
-read mutable menu settings to decide whether to log. Timing instrumentation
-uses `log3dsIsReady()` for the same reason: the open sink, not a setting that
-configuration loading may subsequently mutate, is the source of truth.
+The emulation thread never writes the SD for the log (issue #59, source 1):
+`BufferedLog::write` appends a formatted line to the spool; `tick()` hands
+the front chunk to the writer once a second (no I/O); the writer takes a
+chunk under the lock, writes it with no lock held, releases it under the
+lock. A writer that falls behind costs dropped, counted lines, never a
+wait. I/O errors disable that session's sink without recursive
+diagnostics. The atomic ready flag publishes lock initialization and
+gates producers. Timing instrumentation uses `log3dsIsReady()`: the open
+sink, not a setting that configuration loading may mutate, is the source
+of truth.
 | `3dstimer` | Profiling buckets (main loop, SuperFX, draws, GPU wait…), compiled out unless `PROFILING_DISABLED` is undefined; toggled in-game with SELECT+L+Right/Left; 120-frame window |
 | `perf_stats.h` | Fixed-storage timing aggregate and overflow-safe ARM tick conversion. Rewind uses it only when session logging is enabled; every 16 successful captures it reports serialize, delta/keyframe commit, thumbnail and total average/maximum, plus mixer-busy deferrals and failures |
 | `3dsutils` | DJB2 string hash (thumbnail cache keys), sanitized paths, trimmed basenames, RNG helpers |

@@ -21,6 +21,7 @@ Generated 2026-08-08 from source analysis of the codebase at version **v1.61** (
 | [Menu and UI](menu-ui.md) | Second-screen menu system, themes, thumbnails, notifications, splash |
 | [MSU-1 Support](msu1.md) | Usage, file naming, wave-1 limitations, hardware validation checklist |
 | [Project Meta](project-meta.md) | CI workflows, release process, contribution policy, known issues, licensing |
+| [Field Diagnostics](field-diagnostics.md) | Session log design, `[perf]` lines, profile build, sending logs and crash dumps to GitHub, Azahar probes |
 | [Developer Gotchas](developer-gotchas.md) | Cross-cutting invariants and traps to know before changing code |
 | [**Code Audit**](code-audit.md) | Verified source-level defects, duplicated code and dead code, with fixes |
 
@@ -28,9 +29,9 @@ Generated 2026-08-08 from source analysis of the codebase at version **v1.61** (
 
 * **What**: SNES emulator for Nintendo 3DS/2DS (all models); the SNES PPU runs on the 3DS GPU (PICA200).
 * **Lineage**: Snes9x 1.43 core → bubble2k16/snes9x_3ds → matbo87/snes9x_3ds (upstream) → this fork.
-* **Current version**: v1.61 (app metadata `1.61.0`, product code `CTR-P-SNSX`).
+* **Current version**: Stable v2.4 (2026-09-27; app metadata `2.4.0`, product code `CTR-P-SNSX`); see CHANGELOG.md and docs/journal/HISTORY.md.
 * **Language/toolchain**: C++17 (gnu++17), devkitARM, libctru, patched citro3d v1.7.1.
-* **ROM formats**: `.smc`, `.sfc`, `.fig`, `.bs`, `.bsx` — no ZIP support.
+* **ROM formats**: `.smc`, `.sfc`, `.fig`, `.bs`, `.bsx`, and `.zip` (one ROM inside; MSU-1 packs as virtual entries).
 * **Data root on console**: `sd:/3ds/snes9x_3ds/`.
 * **Assets** (thumbnails, cheats): separate repo [matbo87/snes9x_3ds-assets](https://github.com/matbo87/snes9x_3ds-assets), No-Intro naming, matched by ROM name.
 * **License**: Snes9x non-commercial license — not OSI open source.

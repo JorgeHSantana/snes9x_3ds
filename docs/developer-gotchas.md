@@ -28,6 +28,9 @@ Cross-cutting invariants and traps to know before changing code.
 * `g_fileBuffer` / `g_streamBuffer` / `g_texUploadBuffer` are shared, single-owner buffers — never use concurrently from two call sites.
 
 ## Build traps
+* **`EXTRA_DEFINES` is not tracked by the Makefile.** Objects built with one probe set stay "up to date" under another: remove `build/{3dsimpl,dma,gfxhw,ppu,gfx}.o` (or `make clean`) when the defines change, or the probe silently stays out (two measurement rounds lost on 2026-09-26).
+* **`LINE_MAX` is a devkitARM macro** (limits.h): a class constant with that name fails to compile with a confusing "expected unqualified-id".
+* **Never open a file for writing in the same expression that reads it** (`open(p,'w').write(open(p).read()...)` truncates first): the CHANGELOG went to a commit empty that way. Read into a variable, then write.
 
 * A bare `make` builds **only the citro3d dependency** (default goal); use `make release` or a named target.
 * New `.cpp` files must be added to the Makefile's explicit `CPPFILES` list — nothing is globbed.

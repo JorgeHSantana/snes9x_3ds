@@ -129,6 +129,17 @@ first install. In the pause menu, **Emulator tab -> UPDATES**:
   the SD card, the update runs with the memory to itself, and the next
   launch (the new build) resumes the game exactly where it was.
 
+## Sending a log or crash dump to GitHub
+
+With `Enable Logging` on, the emulator writes `sd:/3ds/snes9x_3ds/debug_v<ver>_session.log`.
+To post it without pulling the SD card, create `sd:/3ds/snes9x_3ds/github.env`
+(copy `github.env.example`) with a fine-grained personal access token that has
+Issues read/write on this repository, and the comments URL of the issue that
+should receive it. The Emulation tab then shows **Send Log to GitHub** and
+**Send Crash Dump to GitHub** (the newest Luma dump in `sd:/luma/dumps/arm11`).
+Each send is one comment with the emulator version, console model and clock
+mode. Details in [docs/field-diagnostics.md](docs/field-diagnostics.md).
+
 ## Auto Save / Auto Load
 
 **Emulator tab -> SAVESTATES -> Auto Save / Auto Load** (off by default; it

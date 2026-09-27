@@ -36,6 +36,8 @@ Directories are created on first run by `file3dsInitialize()`.
 | `thumbnails/{boxart,title,gameplay}.cache` | thumbnail packs |
 | `.dir_cache/<sanitized path>` | directory listing caches |
 | `debug_v<ver>_session.log` | session log when enabled |
+| `github.env` | token + issue comments URL for Send Log / Send Crash Dump (never in the repo; `github.env.example`) |
+| `sd:/luma/dumps/arm11/*.dmp` | Luma crash dumps (outside the emulator's folder; the newest is what Send Crash Dump posts) |
 
 Plus, embedded in the app's romfs: `romfs:/mappings.txt` (name aliases) and `romfs:/gfx/*` (default overlay, backgrounds, splash atlas).
 
