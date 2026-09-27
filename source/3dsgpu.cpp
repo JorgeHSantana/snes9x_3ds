@@ -101,6 +101,40 @@ void gpu3dsDisableStencilTest()
     C3D_StencilTest(false, GPU_ALWAYS, 0, 0, 0);
 }
 
+void gpu3dsShadowStencilMark(int ref)
+{
+    // stencil ops need the depth stage on (test ALWAYS, nothing written
+    // to colour or depth); bits 0-1 take `ref` where a texel passes the
+    // alpha test
+    C3D_StencilTest(true, GPU_ALWAYS, ref, 0x03, 0x03);
+    C3D_StencilOp(GPU_STENCIL_REPLACE, GPU_STENCIL_REPLACE, GPU_STENCIL_REPLACE);
+    C3D_DepthTest(true, GPU_ALWAYS, (GPU_WRITEMASK)0);
+    GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
+    GPU3DS.appliedRenderState.stencilTest = STENCIL_TEST_DISABLED;
+    GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+    GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;
+}
+
+void gpu3dsShadowStencilTest(int ref)
+{
+    C3D_StencilTest(true, GPU_EQUAL, ref, 0x03, 0x00);
+    C3D_StencilOp(GPU_STENCIL_KEEP, GPU_STENCIL_KEEP, GPU_STENCIL_KEEP);
+    C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
+    GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
+    GPU3DS.appliedRenderState.stencilTest = STENCIL_TEST_DISABLED;
+    GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+    GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;
+}
+
+void gpu3dsShadowStencilEnd()
+{
+    C3D_StencilOp(GPU_STENCIL_KEEP, GPU_STENCIL_KEEP, GPU_STENCIL_KEEP);
+    C3D_StencilTest(false, GPU_ALWAYS, 0, 0, 0);
+    C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
+    GPU3DS.appliedRenderState.stencilTest = 0xFFFFFFFu;      // impossible: forces the next draw's own states
+    GPU3DS.appliedRenderState.depthTest = SGPU_STATE_UNSET;
+}
+
 
 void gpu3dsClearTextureEnv(u8 num)
 {
@@ -533,7 +567,7 @@ bool gpu3dsInitialize()
     GPU3DS.stereoPrioDimP0 = 1.0f;
     GPU3DS.stereoMode7Persp = 0.0f;
     GPU3DS.stereoMode7Fx = 0.0f;
-    GPU3DS.stereoShadowRows = 0; GPU3DS.stereoShadowX = 2; GPU3DS.stereoShadowY = 2; GPU3DS.stereoShadowColor = 0;
+    GPU3DS.stereoShadowRows = 0; GPU3DS.stereoShadowX = 2; GPU3DS.stereoShadowY = 2; GPU3DS.stereoShadowColor = 0; GPU3DS.stereoShadowSmallOnly = 0;
     GPU3DS.stereoShadowOffY = 0.0f;
     GPU3DS.mode7PerspApplied = -1.0f;
     GPU3DS.mode7PerspSet[0] = GPU3DS.mode7PerspSet[2] = GPU3DS.mode7PerspSet[3] = 0.0f;

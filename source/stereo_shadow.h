@@ -58,6 +58,21 @@ static inline uint32_t stereo_shadow_color_rgb(int idx)
     return rgb[idx >= 0 && idx < STEREO_SHADOW_COLORS ? idx : 0];
 }
 
+// The row the shadow lands on: the used row with the largest depth
+// strictly smaller than the caster's, -1 when nothing is behind it.
+static inline int stereo_shadow_behind_row(const int depth[STEREO_SHADOW_ROWS], unsigned int usedMask, int row)
+{
+    if (row < 0 || row >= STEREO_SHADOW_ROWS) return -1;
+    const int own = depth[row];
+    int best = -1;
+    for (int r = 0; r < STEREO_SHADOW_ROWS; r++) {
+        if (r == row) continue;
+        if (usedMask != 0 && ((usedMask >> r) & 1u) == 0) continue;
+        if (depth[r] < own && (best < 0 || depth[r] > depth[best])) best = r;
+    }
+    return best;
+}
+
 static inline int stereo_shadow_clamp_offset(int v)
 {
     return v < -STEREO_SHADOW_OFFSET_MAX ? -STEREO_SHADOW_OFFSET_MAX : (v > STEREO_SHADOW_OFFSET_MAX ? STEREO_SHADOW_OFFSET_MAX : v);

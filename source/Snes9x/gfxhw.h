@@ -13,6 +13,8 @@ extern "C" void S9xRenderScreenHardware (bool8 sub, bool8 force_no_add, uint8 D)
 void S9xLayerUseFrameStart();
 void S9xLayerUseFrameEnd();
 bool S9xLayerUsedLastFrame(int layer, int prio);
+struct ObjSpanTable;
+const ObjSpanTable *S9xObjSpans();   // this frame's sprite vertex spans (fast path only)
 bool S9xLayerUsedLastFrameAny(int layer);
 // a Mode 7 plane drew in the last rendered frame (editor: the Mode 7 gauge dims otherwise)
 bool S9xMode7DrawnLastFrame();

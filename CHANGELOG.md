@@ -7,10 +7,13 @@ Notable changes to this project will be documented in this file.
   "Shadows" block lets any Depth row (BG priority or sprite priority)
   cast a silhouette of itself onto the layer behind it in depth, with
   Shadow X / Y offsets and a Shadow Color picker (black, dark gray, navy,
-  brown, purple, white), saved per profile in the `.3d` (`SHADOW`,
-  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`). The shadow takes the parallax of
-  the nearest row behind the caster, so the gap grows with the depth
-  difference. Two extra passes per casting layer, only in 3D.
+  brown, purple, white) and "Small Sprites Only", saved per profile in
+  the `.3d` (`SHADOW`, `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`).
+  Stencil-based: every row behind the caster marks where it has pixels,
+  the caster marks its own body, and the silhouette draws only on a
+  marked surface that is not the body, at the nearest behind row's
+  parallax, so it never covers a layer in front, never darkens the
+  caster, and the caster's own stereo position is untouched. Only in 3D.
 
 
 ## Stable v2.4 (2026-09-27, 6b5abc4)

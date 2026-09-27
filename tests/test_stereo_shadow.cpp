@@ -45,3 +45,11 @@ TEST_CASE("stereo shadow: the colour table is indexed safely and starts black") 
     CHECK(stereo_shadow_color_rgb(99) == 0x000000);
     CHECK(strcmp(stereo_shadow_color_name(1), "Dark gray") == 0);
 }
+
+TEST_CASE("stereo shadow: the behind row is the used row nearest below, -1 when none") {
+    int d[12] = { -6, -6, -3, -3, 0, 0, 2, 2, 4, 4, 4, 4 };
+    CHECK(stereo_shadow_behind_row(d, 0, 8) == 6);       // sprites at 4: BG4 P0 at 2 (first of the pair)
+    CHECK(stereo_shadow_behind_row(d, (1u << 0) | (1u << 8), 8) == 0);
+    CHECK(stereo_shadow_behind_row(d, 0, 0) == -1);
+    CHECK(stereo_shadow_behind_row(d, 0, 99) == -1);
+}

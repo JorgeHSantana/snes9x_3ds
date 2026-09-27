@@ -314,6 +314,7 @@ typedef struct
     int                         stereoShadowRows;   // drop shadow rows mask (issue #77)
     int                         stereoShadowX, stereoShadowY;
     int                         stereoShadowColor;  // palette index (stereo_shadow.h)
+    int                         stereoShadowSmallOnly;
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
@@ -521,6 +522,14 @@ static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float gho
     GPU3DS.mode7PerspSet[2] = fog; GPU3DS.mode7PerspSet[3] = ghost;
     GPU3DS.mode7PerspApplied = key;
 }
+
+// Drop shadows (issue #77): raw stencil use of bits 0-1 (the window
+// masks live in bits 5-7). The packed render state keeps thinking the
+// stencil test is disabled while these run; gpu3dsShadowStencilEnd
+// poisons the applied state so the next draw re-applies its own.
+void gpu3dsShadowStencilMark(int ref);      // write `ref` into bits 0-1 where a texel passes, no colour
+void gpu3dsShadowStencilTest(int ref);      // draw only where (stencil & 3) == ref, colour on
+void gpu3dsShadowStencilEnd();
 
 static inline void gpu3dsSetStereoParallax(float v)
 {

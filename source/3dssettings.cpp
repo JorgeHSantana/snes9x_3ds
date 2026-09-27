@@ -343,6 +343,7 @@ static void settings3dsStereoDefaultProfile(S9xSettings3DS::SStereoProfile *p)
     p->ShadowX = settings3DS.StereoShadowX;
     p->ShadowY = settings3DS.StereoShadowY;
     p->ShadowColor = settings3DS.StereoShadowColor;
+    p->ShadowSmallOnly = settings3DS.StereoShadowSmallOnly;
 }
 
 static int s_stereoActiveIdx = -1;   // -1 = default profile
@@ -468,7 +469,7 @@ void settings3dsStereoApplyProfile(int idx)
     for (int i = 0; i < 2; i++) objHi[i] = (float)p->DepthOBJHi[i];
     GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;   // read by ApplyValues (edge crop)
     GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
-    GPU3DS.stereoShadowRows = p->ShadowRows; GPU3DS.stereoShadowX = p->ShadowX; GPU3DS.stereoShadowY = p->ShadowY; GPU3DS.stereoShadowColor = p->ShadowColor;
+    GPU3DS.stereoShadowRows = p->ShadowRows; GPU3DS.stereoShadowX = p->ShadowX; GPU3DS.stereoShadowY = p->ShadowY; GPU3DS.stereoShadowColor = p->ShadowColor; GPU3DS.stereoShadowSmallOnly = p->ShadowSmallOnly;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);
@@ -488,7 +489,7 @@ void settings3dsStereoApplyDefault()
     for (int i = 0; i < 2; i++) objHi[i] = (float)p->DepthOBJHi[i];
     GPU3DS.stereoMode7Persp = (float)p->Mode7Persp;   // read by ApplyValues (edge crop)
     GPU3DS.stereoMode7Fx = (float)p->Mode7Fx;
-    GPU3DS.stereoShadowRows = p->ShadowRows; GPU3DS.stereoShadowX = p->ShadowX; GPU3DS.stereoShadowY = p->ShadowY; GPU3DS.stereoShadowColor = p->ShadowColor;
+    GPU3DS.stereoShadowRows = p->ShadowRows; GPU3DS.stereoShadowX = p->ShadowX; GPU3DS.stereoShadowY = p->ShadowY; GPU3DS.stereoShadowColor = p->ShadowColor; GPU3DS.stereoShadowSmallOnly = p->ShadowSmallOnly;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);   // edge is game-global (Jorge's UX)

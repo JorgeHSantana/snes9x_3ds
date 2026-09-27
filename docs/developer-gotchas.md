@@ -30,6 +30,7 @@ Cross-cutting invariants and traps to know before changing code.
 ## Build traps
 * **`EXTRA_DEFINES` is not tracked by the Makefile.** Objects built with one probe set stay "up to date" under another: remove `build/{3dsimpl,dma,gfxhw,ppu,gfx}.o` (or `make clean`) when the defines change, or the probe silently stays out (two measurement rounds lost on 2026-09-26).
 * **picasso: `add r0.y, uniform.w, r0.y` does not do what it says.** A swizzled uniform as src1 of `add` with a masked destination shifted the whole picture (4 px at the edges, measured); `mov r7, uniform` then `add r0.y, r7.w, r0.y` is exact. Prefer a register copy when reading one component of a uniform.
+* **Stencil bits 0-4 are free** (the window masks use 5-7); real stencil ops work only with the depth stage enabled (`C3D_DepthTest(true, GPU_ALWAYS, 0)`), and marks written through the depth texture as a colour target (the prepass's way) are not seen by a stencil test later in the same frame on Azahar.
 * **`LINE_MAX` is a devkitARM macro** (limits.h): a class constant with that name fails to compile with a confusing "expected unqualified-id".
 * **Never open a file for writing in the same expression that reads it** (`open(p,'w').write(open(p).read()...)` truncates first): the CHANGELOG went to a commit empty that way. Read into a variable, then write.
 

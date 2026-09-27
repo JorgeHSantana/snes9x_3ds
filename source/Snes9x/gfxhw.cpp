@@ -1,5 +1,6 @@
 #include "../layer_defer.h"
 #include "../m7map_index.h"
+#include "../obj_spans.h"
 #include "copyright.h"
 
 
@@ -728,10 +729,13 @@ static void m7FlushLines(void)
     s_m7QueueCount = 0;
 }
 
+static ObjSpanTable s_objSpans;   // this frame's sprite vertex spans (obj_spans.h)
 void S9xLayerUseFrameStart()
 {
     layerUseFrameStart(&s_layerUse); s_m7DrawnAcc = false;
+    s_objSpans.reset();
 }
+const ObjSpanTable *S9xObjSpans() { return &s_objSpans; }
 void S9xLayerUseFrameEnd()
 {
     layerUseFrameEnd(&s_layerUse); s_m7DrawnLast = s_m7DrawnAcc;
@@ -2883,6 +2887,7 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 				bool isVFlipped = PPU.OBJ[S].VFlip;
 				bool isHFlipped = PPU.OBJ[S].HFlip;
 				int objWidth = GFX.OBJWidths[S];
+				const unsigned spanFrom = GPU3DS.vertices[VBO_SCENE_OBJ].from + GPU3DS.vertices[VBO_SCENE_OBJ].count;
 
 				while (Height > 0)
 				{
@@ -2934,6 +2939,8 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 					else
 						StartLine += TileHeight;
 				}
+				s_objSpans.add(spanFrom, GPU3DS.vertices[VBO_SCENE_OBJ].from + GPU3DS.vertices[VBO_SCENE_OBJ].count - spanFrom,
+					PPU.OBJ[S].Size != 0, sub != 0);
 			}
 
 			S = (S-1) & 0x7F;
