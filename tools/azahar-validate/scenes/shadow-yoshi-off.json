@@ -1,0 +1,20 @@
+{
+  "title": "boot Super Mario World 2 Yoshi's Island.zip, shadows off (issue #77 batch)",
+  "rom": "sdmc:/snes/vanilla/Super Mario World 2 Yoshi's Island.zip",
+  "stereo3d": [
+    {
+      "file": "YOSHI'S ISLAND",
+      "content": "BG1=0\nBG1P1=0\nBG2=0\nBG2P1=0\nBG3=0\nBG3P1=0\nBG4=0\nBG4P1=0\nOBJ=1\nOBJP1=1\nOBJP2=1\nOBJP3=1\nFADE=0\nHAZE=0\nBLUR=0\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nSHADOW=0"
+    }
+  ],
+  "wait": 26,
+  "settings": {
+    "GameScreen": "0",
+    "LogFileEnabled": "1",
+    "UpdateAutoCheck": "0",
+    "AutoSaveLoad": "0"
+  },
+  "log_expect": [
+    "ROM loaded"
+  ]
+}
