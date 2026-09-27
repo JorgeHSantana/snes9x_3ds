@@ -179,6 +179,51 @@ int update3dsNetFetchApi(const char* path, char* buf, size_t bufSize)
     return (int)sink.len;
 }
 
+int update3dsNetPostJson(const char* url, const char* token, const char* json,
+                         char* reply, size_t replySize)
+{
+    if (!netReady || url == NULL || json == NULL || reply == NULL || replySize < 2)
+        return -1;
+    CURL* c = curl_easy_init();
+    if (c == NULL)
+        return -1;
+
+    MemSink sink = { reply, replySize, 0 };
+    netSetup(c, url);
+    curl_easy_setopt(c, CURLOPT_FAILONERROR, 0L);     // the status is the answer
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, netCancelXfer);
+    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
+    char auth[192];
+    snprintf(auth, sizeof(auth), "Authorization: Bearer %s", token ? token : "");
+    struct curl_slist* headers = NULL;
+    headers = curl_slist_append(headers, "Accept: application/vnd.github+json");
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, "X-GitHub-Api-Version: 2022-11-28");
+    headers = curl_slist_append(headers, auth);
+    curl_easy_setopt(c, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(c, CURLOPT_POSTFIELDS, json);
+    curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE, (long)strlen(json));
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, memWrite);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &sink);
+
+    CURLcode code = curl_easy_perform(c);
+    long status = 0;
+    curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(c);
+    memset(auth, 0, sizeof(auth));
+    reply[sink.len] = 0;
+    if (code != CURLE_OK)
+    {
+        if (code == CURLE_ABORTED_BY_CALLBACK)
+            snprintf(netLastError, sizeof(netLastError), "cancelled");
+        else
+            netFail("post", code);
+        return -2;
+    }
+    return (int)status;
+}
+
 struct FileSink
 {
     FILE*    f;

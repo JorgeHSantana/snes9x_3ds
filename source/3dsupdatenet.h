@@ -32,6 +32,13 @@ void update3dsNetSetCancelPoll(bool (*keepGoing)(void));
 // Returns payload length, or a negative value on any failure.
 int update3dsNetFetchApi(const char* path, char* buf, size_t bufSize);
 
+// POST 'json' to 'url' with a bearer token (GitHub issue comments,
+// issue #80). The reply (NUL-terminated, truncated to replySize) lands in
+// 'reply'. Returns the HTTP status, or a negative value when no request
+// completed (update3dsNetLastError says why).
+int update3dsNetPostJson(const char* url, const char* token, const char* json,
+                         char* reply, size_t replySize);
+
 // Stream 'url' into 'destPath'. 'progress' (optional) is called as bytes
 // arrive; returning false cancels. total==0 when the server sent no size.
 // Returns NULL on success or a short static error description.

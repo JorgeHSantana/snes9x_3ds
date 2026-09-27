@@ -19,6 +19,7 @@
 #include "srtc.h"
 
 #include "3dsutils.h"
+#include "3dsgithub.h"
 #include "3dslog.h"
 #include "3dsfiles.h"
 #include "3dsgpu.h"
@@ -1133,6 +1134,23 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 #endif
 #ifdef PROBE_DMA_PERF
 	{ extern void dma3dsProbeFrame(); dma3dsProbeFrame(); }
+#endif
+#ifdef PROBE_GITHUB_SEND
+	// harness probe (issue #80): post the log at frame 300 without the
+	// menu; github.env on the SD points at a local HTTP server
+	{
+		static int frames = 0;
+		if (++frames == 300) {
+			char detail[256];
+			const char* err = github3dsSend(false, detail, sizeof(detail));
+			log3dsWrite("[probe] github send: %s (%s)", err ? err : "ok", detail);
+		}
+		if (frames == 360) {
+			char detail[256];
+			const char* err = github3dsSend(true, detail, sizeof(detail));
+			log3dsWrite("[probe] github send dump: %s (%s)", err ? err : "ok", detail);
+		}
+	}
 #endif
 #ifdef PROBE_FBDUMP
 	// harness probe (tools/azahar-validate --fbdump): the presented top

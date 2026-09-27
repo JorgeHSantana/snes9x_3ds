@@ -9,4 +9,4 @@ releases/*
 .vscode/*
 
 _notes/*
-libs
+libsgithub.env

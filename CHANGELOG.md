@@ -3,6 +3,17 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
+### Features
+* Send Log / Send Crash Dump to GitHub (issue #80): two items in the
+  Emulation tab under Enable Logging, shown only when
+  `sd:/3ds/snes9x_3ds/github.env` holds a token and an issue's comments
+  URL (see `github.env.example`; a fine-grained token limited to Issues
+  on the repository). The current session log (its last 60 KB, cut at a
+  line) or the newest Luma crash dump (`sd:/luma/dumps/arm11`, base64)
+  is posted as a comment with the emulator version, console model and
+  clock mode. Runs from the menu on a worker thread; the result dialog
+  shows the comment's URL or the HTTP status.
+
 ### Fixes
 * MSU-1: a track loaded right after a missing one (Zelda MSU's absent
   track 0) counted every fill as a stall while the read-ahead thread was
