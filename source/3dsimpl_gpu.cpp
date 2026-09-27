@@ -1,4 +1,6 @@
 
+#include "stereo_shadow.h"
+bool S9xLayerUsedLastFrame(int layer, int prio);   // gfxhw.cpp: the rows the last frame drew
 #include "snes9x.h"
 #include "ppu.h"
 
@@ -374,6 +376,23 @@ static void gpu3dsSetGhostAlpha(float a)
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
 }
 
+// Stage 3 for the drop shadow pass (issue #77): RGB = the constant colour,
+// alpha = texture alpha x constant. a <= 0 restores passthrough.
+static void gpu3dsSetShadowEnv(float a, uint32_t rgb)
+{
+    C3D_TexEnv *env = C3D_GetTexEnv(3);
+    C3D_TexEnvInit(env);
+    if (a <= 0.0f)
+        return;
+    // C3D_TexEnvColor takes ABGR: swap the table's RGB
+    const u32 abgr = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
+    C3D_TexEnvColor(env, ((u32)(a * 255.0f) << 24) | abgr);
+    C3D_TexEnvSrc(env, C3D_RGB, GPU_CONSTANT, GPU_CONSTANT, GPU_CONSTANT);
+    C3D_TexEnvFunc(env, C3D_RGB, GPU_REPLACE);
+    C3D_TexEnvSrc(env, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT);
+    C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
+}
+
 // 3D-tab editor preview (issue #61): while >= 0, every layer except
 // this one is dimmed hard so the edited layer reads instantly.
 static int s_previewHighlightLayer = -1;
@@ -568,9 +587,91 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
         bool sub = i == TARGET_SNES_SUB;
 
+        // Drop shadows (issue #77), one phase per target after the BG
+        // layers: each marked row's tiles as a silhouette, offset by
+        // (ShadowX, ShadowY), at the parallax of the row behind it. Depth
+        // test GREATER without write: the silhouette lands only where the
+        // buffer holds something BEHIND the caster - never on its own body
+        // (equal depth) nor over a layer in front. Sprites draw first in
+        // this renderer, so the phase cannot ride the caster's own pass.
+        bool shadowPhaseDone = false;
+        auto drawShadowPhase = [&]() {
+            if (GPU3DS.stereoShadowRows == 0 || GPU3DS.stereoEyeIOD == 0.0f || GPU3DSExt.blurAutoOff) return;
+            int depthRows[STEREO_SHADOW_ROWS]; unsigned usedRows = 0;
+            for (int l = 0; l < 5; l++) {
+                depthRows[stereo_shadow_row(l, 0)] = (int)GPU3DS.stereoLayerDepth[l];
+                depthRows[stereo_shadow_row(l, 1)] = (int)GPU3DS.stereoLayerDepthP1[l];
+            }
+            depthRows[10] = (int)GPU3DS.stereoLayerDepthOBJHi[0];
+            depthRows[11] = (int)GPU3DS.stereoLayerDepthOBJHi[1];
+            for (int r = 0; r < STEREO_SHADOW_ROWS; r++)
+                if (S9xLayerUsedLastFrame(r < 8 ? r / 2 : 4, r < 8 ? r & 1 : r - 8)) usedRows |= 1u << r;
+            const uint32_t rgb = stereo_shadow_color_rgb(GPU3DS.stereoShadowColor);
+            for (int id = LAYER_BG0; id <= LAYER_OBJ; id++) {
+                SLayer *layer = &list->layers[id];
+                if (!settings3DS.LayerEnabled[id]) continue;
+                const int tiers = id == LAYER_OBJ ? 4 : 2;
+                bool any = false;
+                for (int t = 0; t < tiers; t++) if (stereo_shadow_marked((unsigned)GPU3DS.stereoShadowRows, id, t)) any = true;
+                if (!any) continue;
+                int from = layer->sectionsOffset + (sub ? 0 : layer->sectionsByTarget[TARGET_SNES_SUB]);
+                int to = from + layer->sectionsByTarget[i];
+                if (to <= from) continue;
+                if (list->sections[from].vboId == VBO_SCENE_MODE7_LINE) continue;   // the plane casts nothing
+                float shift[4], bnd01 = 0.0f, bnd12 = STEREO_TIER_PARKED, bnd23 = STEREO_TIER_PARKED;
+                if (id == LAYER_OBJ) { bnd01 = 4.5f / 32.0f; bnd12 = 7.5f / 32.0f; bnd23 = 10.5f / 32.0f; }
+                for (int t = 0; t < 4; t++) {
+                    if (t >= tiers || !stereo_shadow_marked((unsigned)GPU3DS.stereoShadowRows, id, t)) { shift[t] = 4096.0f; continue; }
+                    const int behind = stereo_shadow_behind_depth(depthRows, usedRows, stereo_shadow_row(id, t));
+                    // the x offset rides the tier shift (same sign in both eyes)
+                    shift[t] = roundf(GPU3DS.stereoEyeIOD * (float)behind * STEREO_PARALLAX_SCALE) + (float)GPU3DS.stereoShadowX;
+                }
+                // the silhouette: no depth test (the depth buffer holds no
+                // per-pixel priority in this renderer), so the caster's own
+                // base pass is drawn again on top to restore its body
+                auto drawLayer = [&]() {
+                    if (list->useDrawArraysForTiledLayers) {
+                        gpu3dsDrawTiledLayerSingleSection(layer, &list->sections[from]);
+                    } else {
+                        u32 bufferOffset = layer->bufferOffset + (sub ? 0 : layer->verticesByTarget[TARGET_SNES_SUB]);
+                        u16 *indices = (u16 *)list->ibo + bufferOffset;
+                        gpu3dsDrawTiledLayer(layer, indices, from, to);
+                    }
+                };
+                gpu3dsSetStereoParallax3(shift[0], shift[1], bnd01, (float)GPU3DS.stereoShadowY);
+                gpu3dsSetStereoParallaxHi(shift[2], shift[3], bnd12, bnd23);
+                gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
+                gpu3dsApplyAtmosphereColor(0xFFFFFFFF);
+                gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
+                GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                GPU3DS.stereoGhostPass = true;
+                gpu3dsSetShadowEnv(0.45f, rgb);
+                drawLayer();
+                gpu3dsSetShadowEnv(0.0f, 0);
+                GPU3DS.stereoGhostPass = false;
+
+                // the caster again, exactly as its base pass drew it
+                float own[4];
+                own[0] = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[id] * STEREO_PARALLAX_SCALE;
+                own[1] = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[id] * STEREO_PARALLAX_SCALE;
+                own[2] = id == LAYER_OBJ ? GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthOBJHi[0] * STEREO_PARALLAX_SCALE : own[1];
+                own[3] = id == LAYER_OBJ ? GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthOBJHi[1] * STEREO_PARALLAX_SCALE : own[1];
+                if (settings3DS.StereoShiftMode == 0)
+                    for (int t = 0; t < 4; t++) own[t] = roundf(own[t]);
+                gpu3dsSetStereoParallax3(own[0], own[1], bnd01, 0.0f);
+                gpu3dsSetStereoParallaxHi(own[2], own[3], bnd12, bnd23);
+                gpu3dsSetStereoLayerAtmosphere((LAYER_ID)id);
+                GPU3DS.currentRenderState.depthTest = id < LAYER_OBJ ? SGPU_STATE_ENABLED : SGPU_STATE_DISABLED;
+                drawLayer();
+            }
+            GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+        };
+
         for (int j = 0; j < list->layersTotalByTarget[i]; j++) {
             LAYER_ID id = list->layersByTarget[i][j];
             SLayer *layer = &list->layers[id];
+            // after every BG (the backdrop draws first, before the sprites)
+            if (!shadowPhaseDone && (id == LAYER_COLOR_MATH || id == LAYER_BRIGHTNESS)) { drawShadowPhase(); shadowPhaseDone = true; }
 
             // honor the diagnostic layer toggles at replay time too, so
             // the 3D editor's paused preview reflects them live. In
@@ -709,6 +810,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 gpu3dsSetStereoParallax3(tierShift[0], tierShift[1], tierBnd01);
                 gpu3dsSetStereoParallaxHi(tierShift[2], tierShift[3], tierBnd12, tierBnd23);
             };
+
 
             auto drawLayerContent = [&]() {
             drawPass();
@@ -886,6 +988,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
             drawLayerContent();
             }   // spotlight passes
         }
+        if (!shadowPhaseDone) drawShadowPhase();
     }
 
     gpu3dsSetStereoParallax(0.0f);

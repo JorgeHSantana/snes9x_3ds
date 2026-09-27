@@ -2,6 +2,19 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+### Features
+* Drop shadows per depth row (issue #77, v1): in the 3D Stereo tab, a
+  "Shadows" block lets any Depth row (BG priority or sprite priority)
+  cast a silhouette of itself onto the layer behind it in depth, with
+  Shadow X / Y offsets and a Shadow Color picker (black, dark gray, navy,
+  brown, purple, white), saved per profile in the `.3d` (`SHADOW`,
+  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`). The shadow takes the parallax of
+  the nearest row behind the caster, so the gap grows with the depth
+  difference. Two extra passes per casting layer, only in 3D, off under
+  Blur Auto's "Off under load". Known v1 limit: a layer in front of the
+  caster does not hide its shadow (the renderer's depth buffer carries no
+  per-pixel priority).
+
 
 ## Stable v2.4 (2026-09-27, 6b5abc4)
 

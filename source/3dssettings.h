@@ -310,6 +310,10 @@ typedef struct {
     int                 StereoFocusFront;      // 0..+8: front edge of the focus zone (default +1)
     int                 StereoMode7Persp;      // Mode 7 perspective strength 0..8 (issue #62)
     int                 StereoMode7Fx;         // Mode 7 effects by distance 0/1
+    int                 StereoShadowRows;      // drop shadow per depth row, 12-bit mask (issue #77, stereo_shadow.h)
+    int                 StereoShadowX;         // shadow offset in px, -4..4
+    int                 StereoShadowY;
+    int                 StereoShadowColor;     // index into stereo_shadow.h's table
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
                                                // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)
@@ -330,6 +334,9 @@ typedef struct {
         int  EdgeMode;
         int  Mode7Persp;   // 0 = flat plane .. 8 = full per-scanline perspective (issue #62)
         int  Mode7Fx;      // 1 = fade/haze/blur grow with each row's distance on the plane
+        int  ShadowRows;   // drop shadow per depth row, 12-bit mask (issue #77)
+        int  ShadowX, ShadowY;   // shadow offset in px, -4..4
+        int  ShadowColor;        // index into stereo_shadow.h's table
     };
     struct SStereoBind {
         u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C

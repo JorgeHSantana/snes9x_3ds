@@ -311,6 +311,10 @@ typedef struct
     // value the shader currently holds - set per layer draw, 0 off Mode 7
     float                       stereoMode7Persp;   // the profile's gauge 0..8
     float                       stereoMode7Fx;      // 1 = fade/haze/blur by distance on the plane
+    int                         stereoShadowRows;   // drop shadow rows mask (issue #77)
+    int                         stereoShadowX, stereoShadowY;
+    int                         stereoShadowColor;  // palette index (stereo_shadow.h)
+    float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
@@ -470,15 +474,17 @@ void gpu3dsSetStereoPreviewHighlight(int layerId, int prio);
 // Per-priority parallax (issue #60): x = priority-0 shift, y =
 // priority-1 shift, z = the layer's plane boundary. The tile shader
 // picks x or y by comparing its decoded depth plane against z.
-static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary)
+// w = the drop shadow's y offset (issue #77), 0 outside the shadow phase
+static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary, float shadowY = 0.0f)
 {
     GPU3DS.stereoParallax = p0;
     GPU3DS.stereoParallaxP1 = p1;
     GPU3DS.stereoParallaxBnd = boundary;
-    float key = p0 + p1 * 1024.0f + boundary * 1048576.0f;
+    GPU3DS.stereoShadowOffY = shadowY;
+    float key = p0 + p1 * 1024.0f + boundary * 1048576.0f + shadowY * 16777216.0f;
     if (GPU3DS.stereoParallaxApplied == key)
         return;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD], p0, p1, boundary, 0.0f);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD], p0, p1, boundary, shadowY);
     GPU3DS.stereoParallaxApplied = key;
 }
 

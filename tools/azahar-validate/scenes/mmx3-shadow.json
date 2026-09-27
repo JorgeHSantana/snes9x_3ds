@@ -1,0 +1,11 @@
+{
+  "title": "MMX3 stage-1 pillar, sprites cast a drop shadow (issue #77): OBJ rows marked, offset 3/3, sprites +4 over BGs at 0",
+  "rom": "sdmc:/snes/vanilla/Mega Man X3.smc",
+  "state": "states/mmx3-pillar.frz",
+  "stereo3d": [
+    { "file": "MEGAMAN X3",
+      "content": "BG1=0\nBG1P1=0\nBG2=0\nBG3=0\nBG4=0\nOBJ=4\nOBJP1=4\nOBJP2=4\nOBJP3=4\nFADE=0\nHAZE=0\nBLUR=0\nFOCUSBACK=-8\nFOCUSFRONT=8\nEDGEMODE=0\nSHADOW=3840\nSHADOWX=3\nSHADOWY=3\nSHADOWCOLOR=0" }
+  ],
+  "wait": 32,
+  "log_expect": ["ROM loaded: MEGAMAN X3"]
+}
