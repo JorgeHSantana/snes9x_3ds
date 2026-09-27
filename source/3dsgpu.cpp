@@ -378,7 +378,7 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
         GPU3DS.stereoParallaxApplied = GPU3DS.stereoParallax +
             GPU3DS.stereoParallaxP1 * 1024.0f +
             GPU3DS.stereoParallaxBnd * 1048576.0f +
-            GPU3DS.stereoShadowOffY * 16777216.0f;
+            GPU3DS.stereoShadowOffY * 0.0625f;
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD2],
             GPU3DS.stereoParallaxT2, GPU3DS.stereoParallaxT3,
             GPU3DS.stereoParallaxBnd12, GPU3DS.stereoParallaxBnd23);

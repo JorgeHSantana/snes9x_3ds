@@ -481,7 +481,8 @@ static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary, 
     GPU3DS.stereoParallaxP1 = p1;
     GPU3DS.stereoParallaxBnd = boundary;
     GPU3DS.stereoShadowOffY = shadowY;
-    float key = p0 + p1 * 1024.0f + boundary * 1048576.0f + shadowY * 16777216.0f;
+    // shadowY is -4..4: a small multiplier keeps every term inside float precision
+    float key = p0 + p1 * 1024.0f + boundary * 1048576.0f + shadowY * 0.0625f;
     if (GPU3DS.stereoParallaxApplied == key)
         return;
     C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD], p0, p1, boundary, shadowY);

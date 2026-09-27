@@ -10,8 +10,7 @@ Notable changes to this project will be documented in this file.
   brown, purple, white), saved per profile in the `.3d` (`SHADOW`,
   `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`). The shadow takes the parallax of
   the nearest row behind the caster, so the gap grows with the depth
-  difference. Two extra passes per casting layer, only in 3D, off under
-  Blur Auto's "Off under load". Known v1 limit: a layer in front of the
+  difference. Two extra passes per casting layer, only in 3D. Known v1 limit: a layer in front of the
   caster does not hide its shadow (the renderer's depth buffer carries no
   per-pixel priority).
 

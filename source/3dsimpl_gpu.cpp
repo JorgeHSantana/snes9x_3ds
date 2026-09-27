@@ -591,12 +591,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
         // layers: each marked row's tiles as a silhouette, offset by
         // (ShadowX, ShadowY), at the parallax of the row behind it. Depth
         // test GREATER without write: the silhouette lands only where the
-        // buffer holds something BEHIND the caster - never on its own body
-        // (equal depth) nor over a layer in front. Sprites draw first in
-        // this renderer, so the phase cannot ride the caster's own pass.
+        // Sprites draw first in this renderer, so the phase cannot ride
+        // the caster's own pass; the caster is redrawn on top instead.
         bool shadowPhaseDone = false;
         auto drawShadowPhase = [&]() {
-            if (GPU3DS.stereoShadowRows == 0 || GPU3DS.stereoEyeIOD == 0.0f || GPU3DSExt.blurAutoOff) return;
+            if (GPU3DS.stereoShadowRows == 0 || GPU3DS.stereoEyeIOD == 0.0f) return;
             int depthRows[STEREO_SHADOW_ROWS]; unsigned usedRows = 0;
             for (int l = 0; l < 5; l++) {
                 depthRows[stereo_shadow_row(l, 0)] = (int)GPU3DS.stereoLayerDepth[l];

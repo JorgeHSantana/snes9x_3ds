@@ -1997,14 +1997,14 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             int layer = rows[r].layer, prio = rows[r].prio;
             if (!stereo3dRowUsed(layer, prio) && settings3DS.StereoHideUnused) continue;
             const int bit = stereo_shadow_row(layer, prio);
-            char label[40]; snprintf(label, sizeof(label), "%s casts a shadow", rows[r].name);
+            char label[40]; snprintf(label, sizeof(label), "%s", rows[r].name);
             AddMenuCheckbox(items, std::string(label), ((*stereoEditField(8)) >> bit) & 1,
                 [bit]( int val ) {
                     int *mask = stereoEditField(8);
                     int next = val ? (*mask | (1 << bit)) : (*mask & ~(1 << bit));
                     if (CheckAndUpdate(*mask, next)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; }
                 });
-            stereoHelp(items, "This row draws a black silhouette of itself, offset by\nShadow X/Y, on the layer behind it in depth (the nearest\nsmaller Depth gauge). One extra pass per marked row,\nonly in 3D; off while Blur Auto is 'Off under load'.");
+            stereoHelp(items, "This row draws a silhouette of itself, offset by\nShadow X/Y, at the depth of the row behind it (the nearest\nsmaller Depth gauge), in Shadow Color. Two extra passes\nper marked layer, only in 3D.");
             if (!stereo3dRowUsed(layer, prio)) items.back().TextColor = stereo3dDimColor();
         }
         AddMenuGauge(items, "  Shadow X"_s, -4, 4, *stereoEditField(9),
