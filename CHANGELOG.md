@@ -3,6 +3,12 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+* Output colour: Saturation, Contrast and Brightness gauges (-4..4) in
+  the Display block of the options menu, applied in the TexEnv stages of
+  the screen blit itself - no extra pass, so free on an Old 3DS. Saved
+  per game in the `.3d` globals (`COLORSAT`, `COLORCON`, `COLORBRI`),
+  `default.3d` for games without one. Neutral gauges leave the frame
+  byte-identical.
 * Glow per depth row (issue #77, the bloom-like half): in the 3D Stereo
   tab, a "Glow" block lets any Depth row's bright texels glow - drawn
   again, added to the frame in their own colours (or a tint) with a

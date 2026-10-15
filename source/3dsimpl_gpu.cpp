@@ -1,6 +1,7 @@
 
 #include "stereo_shadow.h"
 #include "stereo_glow.h"
+#include "screen_grade.h"
 bool S9xLayerUsedLastFrame(int layer, int prio);   // gfxhw.cpp: the rows the last frame drew
 #include "snes9x.h"
 #include "ppu.h"
@@ -406,7 +407,7 @@ static void gpu3dsSetGlowEnv(bool on, float gain, uint32_t rgb)
     const u32 abgr = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
     const u32 g = (u32)stereo_glow_env_const(gain);
     // stage 3: rgb = tex x (tint x gain); alpha = tex.r x 76/255
-    C3D_TexEnvColor(e3, (76u << 24) | (((abgr >> 16) & 0xFF) * g / 255u << 16) | (((abgr >> 8) & 0xFF) * g / 255u << 8) | ((abgr & 0xFF) * g / 255u));
+    C3D_TexEnvColor(e3, ((u32)SCREEN_GRADE_LUMA_R_OP_WEIGHT << 24) | (((abgr >> 16) & 0xFF) * g / 255u << 16) | (((abgr >> 8) & 0xFF) * g / 255u << 8) | ((abgr & 0xFF) * g / 255u));
     C3D_TexEnvSrc(e3, C3D_RGB, GPU_TEXTURE0, GPU_CONSTANT);
     C3D_TexEnvFunc(e3, C3D_RGB, GPU_MODULATE);
     if (stereo_glow_env_x2(gain)) C3D_TexEnvScale(e3, C3D_RGB, GPU_TEVSCALE_2);
@@ -414,14 +415,14 @@ static void gpu3dsSetGlowEnv(bool on, float gain, uint32_t rgb)
     C3D_TexEnvOpAlpha(e3, GPU_TEVOP_A_SRC_R, GPU_TEVOP_A_SRC_ALPHA);
     C3D_TexEnvFunc(e3, C3D_Alpha, GPU_MODULATE);
     // stage 4: alpha += tex.g x 150/255
-    C3D_TexEnvColor(e4, 150u << 24);
+    C3D_TexEnvColor(e4, (u32)SCREEN_GRADE_LUMA_G_OP_WEIGHT << 24);
     C3D_TexEnvSrc(e4, C3D_RGB, GPU_PREVIOUS);
     C3D_TexEnvFunc(e4, C3D_RGB, GPU_REPLACE);
     C3D_TexEnvSrc(e4, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
     C3D_TexEnvOpAlpha(e4, GPU_TEVOP_A_SRC_G, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_ALPHA);
     C3D_TexEnvFunc(e4, C3D_Alpha, GPU_MULTIPLY_ADD);
     // stage 5: alpha += tex.b x 29/255
-    C3D_TexEnvColor(e5, 29u << 24);
+    C3D_TexEnvColor(e5, (u32)SCREEN_GRADE_LUMA_B_OP_WEIGHT << 24);
     C3D_TexEnvSrc(e5, C3D_RGB, GPU_PREVIOUS);
     C3D_TexEnvFunc(e5, C3D_RGB, GPU_REPLACE);
     C3D_TexEnvSrc(e5, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);

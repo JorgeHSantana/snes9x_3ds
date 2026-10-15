@@ -33,6 +33,7 @@
 #include "3dsrewind.h"
 #include "stereo_shadow.h"
 #include "stereo_glow.h"
+#include "screen_grade.h"
 #include "3dsgithub.h"
 #include "3dsupdater.h"
 #include "3dsupdatenet.h"
@@ -1481,6 +1482,14 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
         
     AddMenuDisabledOption(items, ""_s);
+    AddMenuHeader2(items, "Color"_s);
+    AddMenuGauge(items, "  Saturation"_s, SCREEN_GRADE_MIN, SCREEN_GRADE_MAX, settings3DS.ColorSat,
+        []( int val ) { CheckAndUpdate(settings3DS.ColorSat, val); }, true, true);
+    AddMenuGauge(items, "  Contrast"_s, SCREEN_GRADE_MIN, SCREEN_GRADE_MAX, settings3DS.ColorCon,
+        []( int val ) { CheckAndUpdate(settings3DS.ColorCon, val); }, true, true);
+    AddMenuGauge(items, "  Brightness"_s, SCREEN_GRADE_MIN, SCREEN_GRADE_MAX, settings3DS.ColorBri,
+        []( int val ) { CheckAndUpdate(settings3DS.ColorBri, val); }, true, true);
+    AddMenuDisabledOption(items, ""_s);
     AddMenuHeader2(items, "On-Screen Display"_s);
 
     AddMenuGauge(items, "  Scanlines"_s, 0, SCANLINE_INTENSITY_MAX, settings3DS.ScanlineIntensity,
@@ -2922,6 +2931,7 @@ void settingsResetStereo3D()
     settings3DS.StereoFocusBack = -1;
     settings3DS.StereoFocusFront = 1;
     settings3DS.StereoEdgeMode = 1;   // Trim
+    settings3DS.ColorSat = settings3DS.ColorCon = settings3DS.ColorBri = 0;
     settings3DS.StereoMode7Persp = 8;   // full perspective on Mode 7 planes
     settings3DS.StereoMode7Fx = 1;      // effects by distance on the plane
     settings3DS.StereoProfilesCount = 0;
@@ -3047,6 +3057,9 @@ void settingsLoadStereo3D()
             *tFB = v < -8 ? -8 : (v > 0 ? 0 : v);
         if (sscanf(line, "FOCUSFRONT=%d", &v) == 1)
             *tFF = v < 0 ? 0 : (v > 8 ? 8 : v);
+        if (sscanf(line, "COLORSAT=%d", &v) == 1) settings3DS.ColorSat = screen_grade_clamp(v);
+        if (sscanf(line, "COLORCON=%d", &v) == 1) settings3DS.ColorCon = screen_grade_clamp(v);
+        if (sscanf(line, "COLORBRI=%d", &v) == 1) settings3DS.ColorBri = screen_grade_clamp(v);
         if (sscanf(line, "EDGEMODE=%d", &v) == 1)
             *tEdge = v < 0 ? 0 : (v > 2 ? 2 : v);
         if (sscanf(line, "M7PERSP=%d", &v) == 1)
@@ -3109,6 +3122,8 @@ static void settingsWriteStereo3DGlobals(FILE *f)
     fprintf(f, "FOCUSFRONT=%d\n", settings3DS.StereoFocusFront);
     fprintf(f, "# edge cleanup for parallax side columns: 0 off, 1 trim, 2 zoom\n");
     fprintf(f, "EDGEMODE=%d\n", settings3DS.StereoEdgeMode);
+    fprintf(f, "# output colour: saturation / contrast / brightness, -4..4 (0 = untouched), applied in the screen blit\n");
+    fprintf(f, "COLORSAT=%d\nCOLORCON=%d\nCOLORBRI=%d\n", settings3DS.ColorSat, settings3DS.ColorCon, settings3DS.ColorBri);
     fprintf(f, "# Mode 7 perspective: each scanline shifts by its own distance (0 flat .. 8 full)\n");
     fprintf(f, "M7PERSP=%d\n", settings3DS.StereoMode7Persp);
     fprintf(f, "# Mode 7 effects by distance: fade/haze/blur grow towards the horizon (0/1)\n");

@@ -11,6 +11,7 @@
 #include "snes9x.h"
 #include "memmap.h"
 #include "3dsgpu.h"
+#include "screen_grade.h"
 #include "3dsfiles.h"
 #include "3dsimpl.h"
 #include "3dssettings.h"
@@ -138,6 +139,66 @@ void gpu3dsGlowPassEnd()
     GPU3DS.appliedRenderState.depthTest = SGPU_STATE_UNSET;
     GPU3DS.appliedRenderState.alphaTest = (SGPU_ALPHA_TEST)(ALPHA_TEST_NE_ZERO + 1);
     GPU3DS.appliedRenderState.alphaBlending = (SGPU_ALPHA_BLENDINGMODE)(ALPHA_BLENDING_GHOST + 1);
+}
+void gpu3dsSetScreenGrade(const ScreenGrade &g, bool vertexAlpha)
+{
+    C3D_TexEnv *e1 = C3D_GetTexEnv(1), *e2 = C3D_GetTexEnv(2), *e3 = C3D_GetTexEnv(3), *e4 = C3D_GetTexEnv(4), *e5 = C3D_GetTexEnv(5);
+    C3D_TexEnvInit(e1); C3D_TexEnvInit(e2); C3D_TexEnvInit(e3); C3D_TexEnvInit(e4); C3D_TexEnvInit(e5);
+    if (!g.active) return;
+    const u32 grey1 = ((u32)g.c1 << 16) | ((u32)g.c1 << 8) | (u32)g.c1;
+    const u32 grey2 = ((u32)g.c2 << 16) | ((u32)g.c2 << 8) | (u32)g.c2;
+    // stage 1: contrast step 1; alpha = tex.r x 76/255
+    C3D_TexEnvColor(e1, ((u32)SCREEN_GRADE_LUMA_R_OP_WEIGHT << 24) | grey1);
+    C3D_TexEnvSrc(e1, C3D_RGB, GPU_PREVIOUS, GPU_CONSTANT);
+    C3D_TexEnvFunc(e1, C3D_RGB, g.c2x2 ? GPU_ADD_SIGNED : GPU_MODULATE);
+    C3D_TexEnvSrc(e1, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT);
+    C3D_TexEnvOpAlpha(e1, GPU_TEVOP_A_SRC_R, GPU_TEVOP_A_SRC_ALPHA);
+    C3D_TexEnvFunc(e1, C3D_Alpha, GPU_MODULATE);
+    // stage 2: contrast step 2 (+ brightness); alpha += tex.g x 150/255
+    C3D_TexEnvColor(e2, ((u32)SCREEN_GRADE_LUMA_G_OP_WEIGHT << 24) | grey2);
+    C3D_TexEnvSrc(e2, C3D_RGB, GPU_PREVIOUS, GPU_CONSTANT);
+    C3D_TexEnvFunc(e2, C3D_RGB, g.c2x2 ? GPU_MODULATE : GPU_ADD_SIGNED);
+    if (g.c2x2) C3D_TexEnvScale(e2, C3D_RGB, GPU_TEVSCALE_2);
+    C3D_TexEnvSrc(e2, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
+    C3D_TexEnvOpAlpha(e2, GPU_TEVOP_A_SRC_G, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_ALPHA);
+    C3D_TexEnvFunc(e2, C3D_Alpha, GPU_MULTIPLY_ADD);
+    // stage 3: rgb through (and into the combiner buffer for stage 5); alpha += tex.b x 29/255 = luma
+    C3D_TexEnvColor(e3, (u32)SCREEN_GRADE_LUMA_B_OP_WEIGHT << 24);
+    C3D_TexEnvSrc(e3, C3D_RGB, GPU_PREVIOUS);
+    C3D_TexEnvFunc(e3, C3D_RGB, GPU_REPLACE);
+    C3D_TexEnvSrc(e3, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
+    C3D_TexEnvOpAlpha(e3, GPU_TEVOP_A_SRC_B, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_ALPHA);
+    C3D_TexEnvFunc(e3, C3D_Alpha, GPU_MULTIPLY_ADD);
+    C3D_TexEnvBufUpdate(C3D_RGB, 1 << 3);
+    if (g.sat <= 1.0f) {
+        // stage 4: rgb = rgb x s + luma x (1 - s); stage 5: through
+        C3D_TexEnvColor(e4, ((u32)g.c4 << 24) | ((u32)g.c4 << 16) | ((u32)g.c4 << 8) | (u32)g.c4);
+        C3D_TexEnvSrc(e4, C3D_RGB, GPU_PREVIOUS, GPU_PREVIOUS, GPU_CONSTANT);
+        C3D_TexEnvOpRgb(e4, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_ALPHA, GPU_TEVOP_RGB_SRC_COLOR);
+        C3D_TexEnvFunc(e4, C3D_RGB, GPU_INTERPOLATE);
+        // stage 5: + brightness (ADD_SIGNED adds c - 0.5)
+        C3D_TexEnvColor(e5, ((u32)g.c5 << 16) | ((u32)g.c5 << 8) | (u32)g.c5);
+        C3D_TexEnvSrc(e5, C3D_RGB, GPU_PREVIOUS, GPU_CONSTANT);
+        C3D_TexEnvFunc(e5, C3D_RGB, GPU_ADD_SIGNED);
+    } else {
+        // stage 4: max(rgb - luma, 0); stage 5: rgb(buffer) + (s - 1) x that
+        C3D_TexEnvSrc(e4, C3D_RGB, GPU_PREVIOUS, GPU_PREVIOUS);
+        C3D_TexEnvOpRgb(e4, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_ALPHA);
+        C3D_TexEnvFunc(e4, C3D_RGB, GPU_SUBTRACT);
+        C3D_TexEnvColor(e5, ((u32)g.c5 << 16) | ((u32)g.c5 << 8) | (u32)g.c5);
+        C3D_TexEnvSrc(e5, C3D_RGB, GPU_PREVIOUS, GPU_CONSTANT, GPU_PREVIOUS_BUFFER);
+        C3D_TexEnvFunc(e5, C3D_RGB, GPU_MULTIPLY_ADD);
+    }
+    // alpha chain carried luma through stages 1-4: stage 4 passes it, stage 5 restores the blit's own alpha
+    C3D_TexEnvSrc(e4, C3D_Alpha, GPU_PREVIOUS);
+    C3D_TexEnvFunc(e4, C3D_Alpha, GPU_REPLACE);
+    C3D_TexEnvSrc(e5, C3D_Alpha, vertexAlpha ? GPU_PRIMARY_COLOR : GPU_TEXTURE0);
+    C3D_TexEnvFunc(e5, C3D_Alpha, GPU_REPLACE);
+}
+void gpu3dsScreenGradeEnd()
+{
+    for (int i = 1; i <= 5; i++) C3D_TexEnvInit(C3D_GetTexEnv(i));
+    C3D_TexEnvBufUpdate(C3D_RGB, 0);
 }
 void gpu3dsShadowPassEnd()
 {

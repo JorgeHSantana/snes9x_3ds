@@ -324,6 +324,7 @@ typedef struct {
     int                 StereoGlowSoft;        // halo 0..2
     int                 StereoGlowColor;       // tint index
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
+    int                 ColorSat, ColorCon, ColorBri;   // output colour grade -4..4 each (screen_grade.h), game-global
                                                // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)
 

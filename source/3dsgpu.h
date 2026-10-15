@@ -539,6 +539,10 @@ void gpu3dsShadowPassEnd();
 // Glow (issue #77): additive pass of the bright texels - alpha test by luminance
 void gpu3dsGlowPassState(int alphaRef);
 void gpu3dsGlowPassEnd();
+// Output colour grade (screen_grade.h) in the blit's TexEnv stages 1-5; no extra pass
+struct ScreenGrade;
+void gpu3dsSetScreenGrade(const ScreenGrade &g, bool vertexAlpha);
+void gpu3dsScreenGradeEnd();
 
 static inline void gpu3dsSetStereoParallax(float v)
 {

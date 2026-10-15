@@ -131,3 +131,30 @@ Mode 7 casts nothing.
   `mmx3-glow-thresh` (14: 357), against `mmx3-shadow-off`.
 - The hardware check is Jorge's console: nothing in the repo used
   MULTIPLY_ADD, the R/G/B alpha operands or the x2 scale before.
+
+## Output colour grade (2026-10-15)
+- `screen_grade.h` (pure, tested): gauges -4..4 -> s = 1 + sat/4,
+  g = 1 + con/8, b = bri/16, and the stage constants. Program in
+  `gpu3dsSetScreenGrade`, set on the eye blit right after the render
+  state applied (stage 0 is the blit's own replace) and cleared after
+  the draw: stages 1-2 contrast (two paths: MODULATE then ADD_SIGNED for
+  g <= 1; ADD_SIGNED then MODULATE with x2 scale for g > 1, brightness
+  folded into the constant) while the alpha accumulates the luminance of
+  the texture (76/150/29 with the R/G/B alpha operands and MULTIPLY_ADD);
+  stage 3 passes RGB and writes it to the combiner buffer; stage 4
+  INTERPOLATE(rgb, luma, s) for s <= 1 or max(rgb - luma, 0) for s > 1;
+  stage 5 passthrough or MULTIPLY_ADD(that, s - 1, buffer); the final
+  alpha is the blit's own (texture, or vertex alpha on the balanced
+  filter's second pass). Game-global (a profile switch with hysteresis
+  would make the colour jump), Display block of the options menu (the
+  3D tab does not exist on a 2DS).
+- The texture reaches the TexEnv with red and blue swapped relative to
+  the screen (a dark red texel's luma came out with the 29/76 weights
+  exchanged): the operand that reads "R" carries blue's weight
+  (`SCREEN_GRADE_LUMA_*_OP_WEIGHT`, shared with the glow). Brightness is
+  its own ADD_SIGNED in stage 5 when saturation is at most 1 (the
+  interpolation towards the texture's luma would dilute it) and folded
+  into the contrast constants above 1 (stage 5 is the saturation's).
+- Azahar: neutral gauges byte-identical; sat +4 / con +2 raises the game
+  area's mean chroma 49 -> 70; sat -4 / bri +2 turns it grey (chroma 0)
+  at luma + 32, texel by texel.

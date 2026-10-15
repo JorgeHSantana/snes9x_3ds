@@ -36,6 +36,7 @@
 #include "3dsimpl_gpu.h"
 #include "3dsblurauto.h"
 #include "shadow_auto.h"
+#include "screen_grade.h"
 #include "sram_save.h"
 #include "3dssram.h"
 #include "perf_stats.h"
@@ -740,7 +741,14 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 	GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0;
 	GPU3DS.currentRenderState.textureBind = mainTex;
 
+	// output colour grade (issue #77): stages 1-5 of this very blit, set
+	// after the state applied (the apply only touches stage 0) and
+	// cleared right after the draw so nothing else inherits them
+	const ScreenGrade grade = screen_grade_compute(settings3DS.ColorSat, settings3DS.ColorCon, settings3DS.ColorBri);
+	gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
+	if (grade.active) gpu3dsSetScreenGrade(grade, false);
 	gpu3dsDraw(list, NULL, list->count);
+	if (grade.active) gpu3dsScreenGradeEnd();
 
 	if (balancedFilterEnabled) {
 		gpu3dsAddSimpleQuadVertexes(
@@ -755,7 +763,10 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 		GPU3DS.currentRenderState.textureBind = mainTex;
 		GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_ENABLED;
 
+		gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
+		if (grade.active) gpu3dsSetScreenGrade(grade, true);
 		gpu3dsDraw(list, NULL, list->count);
+		if (grade.active) gpu3dsScreenGradeEnd();
 
 		// Restore nearest sampling for subsequent draws in balanced mode.
 		C3D_TexSetFilter(&GPU3DS.textures[mainTex].tex, GPU_NEAREST, GPU_NEAREST);
