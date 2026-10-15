@@ -339,6 +339,9 @@ typedef struct
     // depth tables, in the shader's d/32 space - c_depth.x is 0.03125);
     // 0 = no split
     float                       stereoPrioZBoundary[8];
+    // the depth plane each BG priority writes this mode (d0/d1 of the
+    // same tables, row order bg*2+prio): the drop shadow's receiver test
+    int                         stereoBgPlane[8];
     // atmospheric depth cues (0..8 each), anchored on the focus zone
     // [stereoFocusBack..stereoFocusFront]: layers inside are untouched.
     // Blur grows linearly with the distance to the NEAREST zone edge
@@ -523,8 +526,10 @@ static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float gho
     GPU3DS.mode7PerspApplied = key;
 }
 
-// Drop shadows (issue #77): the passes' blend / write-mask states (3dsgpu.cpp)
-void gpu3dsShadowPassState(int mode);   // 0 alpha replace, 1 caster erase, 2 silhouette by dest alpha
+// Drop shadows (issue #77): the silhouette pass lands only where the depth
+// buffer holds the receiver's plane - depth func EQUAL at a constant z set
+// through the depth map, colour blended, nothing written to depth (3dsgpu.cpp)
+void gpu3dsShadowPassState(int receiverPlane);
 void gpu3dsShadowPassEnd();
 
 static inline void gpu3dsSetStereoParallax(float v)

@@ -3389,41 +3389,49 @@ void S9xRenderScreenHardware (bool8 sub)
 	#define DRAW_4COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
+		  GPU3DS.stereoBgPlane[(bg) * 2] = (d0); GPU3DS.stereoBgPlane[(bg) * 2 + 1] = (d1); \
 			S9xDrawBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_16COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
+		  GPU3DS.stereoBgPlane[(bg) * 2] = (d0); GPU3DS.stereoBgPlane[(bg) * 2 + 1] = (d1); \
 			S9xDrawBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_256COLOR_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
+		  GPU3DS.stereoBgPlane[(bg) * 2] = (d0); GPU3DS.stereoBgPlane[(bg) * 2 + 1] = (d1); \
 			S9xDrawBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_4COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
+		  GPU3DS.stereoBgPlane[(bg) * 2] = (d0); GPU3DS.stereoBgPlane[(bg) * 2 + 1] = (d1); \
 			S9xDrawOffsetBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_16COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
+		  GPU3DS.stereoBgPlane[(bg) * 2] = (d0); GPU3DS.stereoBgPlane[(bg) * 2 + 1] = (d1); \
 			S9xDrawOffsetBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_256COLOR_OFFSET_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
+		  GPU3DS.stereoBgPlane[(bg) * 2] = (d0); GPU3DS.stereoBgPlane[(bg) * 2 + 1] = (d1); \
 			S9xDrawOffsetBackgroundHardwarePriority0Inline_256Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_4COLOR_HIRES_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
+		  GPU3DS.stereoBgPlane[(bg) * 2] = (d0); GPU3DS.stereoBgPlane[(bg) * 2 + 1] = (d1); \
 			S9xDrawHiresBackgroundHardwarePriority0Inline_4Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	#define DRAW_16COLOR_HIRES_BG_INLINE(bg, p, d0, d1) \
 		if (bgEnabled[bg] && LayerRender.shouldRenderThisSegment[bg]) \
 		{ GPU3DS.stereoPrioZBoundary[bg] = ((d0) + (d1)) * 0.5f / 32.0f; s_layerUseBg = bg; \
+		  GPU3DS.stereoBgPlane[(bg) * 2] = (d0); GPU3DS.stereoBgPlane[(bg) * 2 + 1] = (d1); \
 			S9xDrawHiresBackgroundHardwarePriority0Inline_16Color (PPU.BGMode, bg, sub, d0 * 256 + bgAlpha[bg], d1 * 256 + bgAlpha[bg]); } \
 
 	if (settings3DS.LayerEnabled[LAYER_BACKDROP])
@@ -3490,6 +3498,7 @@ void S9xRenderScreenHardware (bool8 sub)
 					/* landed in tier 0 and answered to the BG2 Prio 0 gauge (Jorge). */ \
 					/* BG2: boundary between its two passes (2 and 8); BG1: parked.  */ \
 					GPU3DS.stereoPrioZBoundary[bg] = (bg == 1) ? ((2 + 8) * 0.5f / 32.0f) : STEREO_TIER_PARKED; \
+					GPU3DS.stereoBgPlane[(bg) * 2 + ((d) >= 8 ? 1 : 0)] = (d); \
 					if (tile0) \
 						S9xDrawBackgroundMode7HardwareRepeatTile0(bg, sub, depth); \
 					S9xDrawBackgroundMode7Hardware(bg, sub, depth, alphaTestActive); \

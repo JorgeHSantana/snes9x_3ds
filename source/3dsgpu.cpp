@@ -101,33 +101,25 @@ void gpu3dsDisableStencilTest()
     C3D_StencilTest(false, GPU_ALWAYS, 0, 0, 0);
 }
 
-// Drop shadows (issue #77) through the game texture's alpha, used as a
-// mask after color math and brightness (nothing reads it later; the
-// screen blit uses vertex alpha). Set AFTER the packed state applied;
-// gpu3dsShadowPassEnd poisons the applied state so the next draw restores
-// its own blend and write mask.
-void gpu3dsShadowPassState(int mode)
+// Drop shadows (issue #77): the silhouette pass sits at the receiver's
+// depth plane and draws only where the depth buffer holds exactly that
+// plane (the receiver is the visible surface there). Set AFTER the packed
+// state applied; gpu3dsShadowPassEnd restores the depth map and poisons
+// the applied state so the next draw restores its own blend and mask.
+void gpu3dsShadowPassState(int receiverPlane)
 {
-    switch (mode) {
-    case 0:   // alpha clear / behind-plane mark: alpha only, replace
-        C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ONE, GPU_ZERO, GPU_ONE, GPU_ZERO);
-        C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALPHA);
-        break;
-    case 1:   // caster erase: alpha only, 0 wherever the texel passed the alpha test
-        C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ONE, GPU_ZERO, GPU_ZERO, GPU_ZERO);
-        C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALPHA);
-        break;
-    default:  // silhouette: rgb = colour * dstA + rgb * (1 - dstA), alpha kept
-        C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_DST_ALPHA, GPU_ONE_MINUS_DST_ALPHA, GPU_ZERO, GPU_ONE);
-        C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
-        break;
-    }
+    // z = 0 * vertex z + plane/32: the depth map's scale/offset make the
+    // whole silhouette sit at the receiver's exact plane (the BG and OBJ
+    // passes write plane/32 the same way, scale -1 on clip z = -plane/32)
+    C3D_DepthMap(true, 0.0f, (float)receiverPlane / 32.0f);
+    C3D_DepthTest(true, GPU_EQUAL, GPU_WRITE_COLOR);
+    C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ZERO, GPU_ONE);
     GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
     GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;
 }
-
 void gpu3dsShadowPassEnd()
 {
+    C3D_DepthMap(true, -1.0f, 0.0f);
     C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
     gpu3dsDisableAlphaBlending();
     GPU3DS.appliedRenderState.depthTest = SGPU_STATE_UNSET;

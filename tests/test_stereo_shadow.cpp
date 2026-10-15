@@ -53,3 +53,38 @@ TEST_CASE("stereo shadow: the behind row is the used row nearest below, -1 when 
     CHECK(stereo_shadow_behind_row(d, 0, 0) == -1);
     CHECK(stereo_shadow_behind_row(d, 0, 99) == -1);
 }
+
+TEST_CASE("stereo shadow: a row's depth plane comes from the BG table, sprites from the fixed (prio+1)*3") {
+    int bg[8] = { 8, 11, 7, 10, 2, 5, 1, 4 };            // Mode 0's table
+    CHECK(stereo_shadow_row_plane(bg, 0) == 8);
+    CHECK(stereo_shadow_row_plane(bg, 1) == 11);
+    CHECK(stereo_shadow_row_plane(bg, 7) == 4);
+    CHECK(stereo_shadow_row_plane(bg, 8) == 3);
+    CHECK(stereo_shadow_row_plane(bg, 11) == 12);
+    CHECK(stereo_shadow_row_plane(bg, 12) == -1);
+    CHECK(stereo_shadow_row_plane(bg, -1) == -1);
+}
+
+TEST_CASE("stereo shadow: every used row at the depth behind is a receiver plane - the gauges decide, not the SNES order") {
+    int d[12] = { 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4 };  // all BGs at 0, sprites at 4
+    int bg[8] = { 8, 11, 7, 10, 2, 5, 1, 4 };            // Mode 0
+    const unsigned used = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 4) | (1u << 11);
+    int out[8];
+    int n = stereo_shadow_receiver_planes(d, used, bg, 11, out);
+    CHECK(n == 4);
+    CHECK(out[0] == 8); CHECK(out[1] == 11); CHECK(out[2] == 7); CHECK(out[3] == 2);
+    // sprite P0 (plane 3) under BG1/BG2 in the SNES order still casts on them: the gauges put them behind
+    const unsigned used0 = used | (1u << 8);
+    n = stereo_shadow_receiver_planes(d, used0, bg, 8, out);
+    CHECK(n == 4);
+    // nothing behind in the gauges: no planes
+    n = stereo_shadow_receiver_planes(d, used0, bg, 0, out);
+    CHECK(n == 0);
+    // a BG caster: BG1 P1 (plane 11) at 2 over BG2 P0 at 0 - BG2 P0's plane; a row sharing the caster's plane is skipped
+    int d2[12] = { 0, 2, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4 };
+    int bgSame[8] = { 8, 11, 11, 10, 2, 5, 1, 4 };
+    n = stereo_shadow_receiver_planes(d2, (1u << 1) | (1u << 2), bgSame, 1, out);
+    CHECK(n == 0);
+    n = stereo_shadow_receiver_planes(d2, (1u << 1) | (1u << 2), bg, 1, out);
+    CHECK(n == 1); CHECK(out[0] == 7);
+}

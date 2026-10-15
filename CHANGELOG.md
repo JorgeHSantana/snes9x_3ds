@@ -3,19 +3,19 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
-* Drop shadows per depth row (issue #77, v1): in the 3D Stereo tab, a
+* Drop shadows per depth row (issue #77): in the 3D Stereo tab, a
   "Shadows" block lets any Depth row (BG priority or sprite priority)
   cast a silhouette of itself onto the layer behind it in depth, with
   Shadow X / Y offsets and a Shadow Color picker (black, dark gray, navy,
   brown, purple, white) and "Small Sprites Only", saved per profile in
   the `.3d` (`SHADOW`, `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`).
-  Mask-based, through the game texture's alpha after color math: the
-  plane right behind the caster (the nearest smaller Depth gauge, with
-  every row sharing it; the Mode 7 plane included) marks where it has
-  pixels, the caster erases its own body, and the silhouette blends by
-  that mask at the plane's parallax, so it never covers a layer in front
-  of the plane, never darkens the caster, and the caster's own stereo
-  position is untouched. Only in 3D.
+  The silhouette is the caster drawn once more at the receiver's depth
+  plane with an EQUAL depth test, before colour math: it lands only where
+  the layer behind (the nearest smaller Depth gauge, with every row
+  sharing it; the Mode 7 plane included) is the visible surface, never
+  on the caster's body, never over a layer in front, and the caster's own
+  stereo position is untouched. One extra pass of the caster per receiver
+  plane and eye. Only in 3D.
 
 
 ## Stable v2.4 (2026-09-27, 6b5abc4)

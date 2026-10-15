@@ -73,6 +73,40 @@ static inline int stereo_shadow_behind_row(const int depth[STEREO_SHADOW_ROWS], 
     return best;
 }
 
+// The renderer's depth plane of a row (the z every pixel of that row
+// writes, d in the shader's d/32 space): BG rows read the per-mode table
+// gfxhw fills next to the priority boundary (row order, bg*2+prio), OBJ
+// rows are fixed at (priority+1)*3 like S9xDrawOBJSHardware. -1 = no row.
+static inline int stereo_shadow_row_plane(const int bgPlane[8], int row)
+{
+    if (row < 0 || row >= STEREO_SHADOW_ROWS) return -1;
+    return row < 8 ? bgPlane[row] : (row - 8 + 1) * 3;
+}
+
+// The planes a row's shadow is tested against: every used row at the
+// depth behind the caster - one surface in 3D; the gauges, not the SNES
+// order, say what is "behind" (Jorge) - except a row sharing the caster's
+// own plane, which the depth buffer cannot tell apart from its body.
+// Returns the count written to out[] (distinct, at most 8).
+static inline int stereo_shadow_receiver_planes(const int depth[STEREO_SHADOW_ROWS], unsigned int usedMask,
+                                                const int bgPlane[8], int row, int out[8])
+{
+    const int br = stereo_shadow_behind_row(depth, usedMask, row);
+    if (br < 0) return 0;
+    const int casterPlane = stereo_shadow_row_plane(bgPlane, row);
+    int n = 0;
+    for (int r = 0; r < STEREO_SHADOW_ROWS; r++) {
+        if (r == row || depth[r] != depth[br]) continue;
+        if (usedMask != 0 && ((usedMask >> r) & 1u) == 0) continue;
+        const int pl = stereo_shadow_row_plane(bgPlane, r);
+        if (pl < 0 || pl == casterPlane) continue;
+        bool dup = false;
+        for (int k = 0; k < n; k++) if (out[k] == pl) dup = true;
+        if (!dup && n < 8) out[n++] = pl;
+    }
+    return n;
+}
+
 static inline int stereo_shadow_clamp_offset(int v)
 {
     return v < -STEREO_SHADOW_OFFSET_MAX ? -STEREO_SHADOW_OFFSET_MAX : (v > STEREO_SHADOW_OFFSET_MAX ? STEREO_SHADOW_OFFSET_MAX : v);

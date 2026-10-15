@@ -86,6 +86,7 @@ log. Probe builds (`EXTRA_DEFINES`, all `#ifdef`, never in a release):
 | `PROBE_DMA_PERF` | DMA cost per class per 60 frames, section renders inside DMA |
 | `PROBE_SECTION_LOG` | what triggers each section render and its phases; Mode 7 dirty chars |
 | `PROBE_GITHUB_SEND` | posts the log at frame 300 and the dump at 360 (point `github.env` at a local HTTP server) |
+| `PROBE_SHADOW_LOG` | drop shadows: used rows, depth gauges, BG planes and sections per target at frames 598-600 (needs `PROBE_FBDUMP`) |
 
 Azahar's `svcGetSystemTick` derives from emulated cycles: `[perf]` numbers
 are deterministic per scene, an exact A/B without noise (one svc costs
