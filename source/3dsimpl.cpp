@@ -1874,6 +1874,12 @@ uint32 S9xReadJoypad (int which1_0_to_4)
 	extern int g_probeFrames;
 	if (g_probeFrames >= 120 && g_probeFrames < 600) keysHeld3ds |= KEY_DDOWN;
 #endif
+#ifdef PROBE_HOLD_KEY
+	// harness probe: any key mask held from frame 120 to 600 (e.g. KEY_DRIGHT
+	// to walk a character and look for trails in the glow spread)
+	extern int g_probeFrames;
+	if (g_probeFrames >= 120 && g_probeFrames < 600) keysHeld3ds |= (PROBE_HOLD_KEY);
+#endif
     u32 consoleJoyPad = 0;
 
     if (keysHeld3ds & (settings3DS.BindCirclePad == 1 ? KEY_UP : KEY_DUP)) consoleJoyPad |= SNES_UP_MASK;

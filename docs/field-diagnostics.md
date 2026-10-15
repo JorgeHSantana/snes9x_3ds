@@ -81,6 +81,7 @@ log. Probe builds (`EXTRA_DEFINES`, all `#ifdef`, never in a release):
 | `PROBE_FBDUMP` | the emulator saves its own top screen at frame 600 (and does a savestate round trip) |
 | `PROBE_FBDUMP_EVERY=N` | dumps frames 120..720 every N (needs `PROBE_FBDUMP`) |
 | `PROBE_HOLD_DOWN` | holds D-pad Down for frames 120–599 (needs `PROBE_FBDUMP`) |
+| `PROBE_HOLD_KEY=KEY_X` | holds any libctru key mask for frames 120–599 (needs `PROBE_FBDUMP`); `KEY_DRIGHT` walks a character to look for trails (scenes `mmx3-walk-*`) |
 | `PROBE_INIDISP_LOG` | $2100 writes, black sections, segments, window registers, CGRAM per frame |
 | `PROBE_NO_MSU_BLANK_HACK` | MSU-1 forced-blank suppression off |
 | `PROBE_DMA_PERF` | DMA cost per class per 60 frames, section renders inside DMA |
