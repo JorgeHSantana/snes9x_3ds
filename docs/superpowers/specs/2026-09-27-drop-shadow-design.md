@@ -169,3 +169,23 @@ Mode 7 casts nothing.
 - Azahar: neutral gauges byte-identical; sat +4 / con +2 raises the game
   area's mean chroma 49 -> 70; sat -4 / bri +2 turns it grey (chroma 0)
   at luma + 32, texel by texel.
+- Occlusion (Jorge: "sees through walls"): every glow draw is per tier,
+  depth-tested GEQUAL at the tier's own plane through the depth map
+  (like the shadow's EQUAL): a layer in front holds a larger plane and
+  covers the glow; the light leaks only onto what is behind the sprite.
+- Spread (`GlowSpread` 0..3): the tier's glow pass is drawn once into
+  `SNES_GLOW` (128x64 RGB565, its projection mapping the 512x256 SNES
+  space onto it, cleared by a black rect in replace mode) and composited
+  onto the main target as a tile-0 quad (raw texcoords) sampling it with
+  bilinear magnification - the 4x upscale is the blur - once per tap
+  (1 / 3 / 5: centre and diagonals one texel = 4 px away), each at
+  1/taps, additive, depth-tested at the tier's plane. The halo copies
+  are off while Spread is on. The target is allocated LAST and optional
+  (`impl3dsAllocGlowTexture`): VRAM is 32 KB from full after the UI
+  textures, and a mandatory 32 KB RGBA8 target made the boot fail on
+  the second screen's background texture. The packed render state's
+  target field grew to 4 bits for the new target (TARGET_UNSET = 8),
+  which forced a re-layout: with devkitARM's byte-sized enums a bit
+  field must not straddle a byte, or the union grows past 64 bits.
+- Azahar: Spread 2 on MMX3: 1774 brighter px (halo path: 852), bbox
+  7 px wider, none darker; neutral byte-identical.

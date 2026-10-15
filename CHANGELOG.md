@@ -17,8 +17,13 @@ Notable changes to this project will be documented in this file.
   the halo under load. Works in 2D too. "Palette N" checkboxes pick
   which sprite palettes glow (the charged shot's, not the hero's), with
   the top screen showing only that palette's sprites while the cursor
-  is on the row. Saved per profile (`GLOW`, `GLOWTHRESH`, `GLOWSTRENGTH`,
-  `GLOWSOFT`, `GLOWCOLOR`, `GLOWPAL`).
+  is on the row. A Glow Spread gauge lets the light leak: the glow is
+  drawn at a quarter of the resolution into a small VRAM target and
+  blurred back over the frame with bilinear taps (~4-8 px). The glow is
+  depth-tested at the sprite's own plane, so nothing glows through a wall
+  in front; the light leaks only onto what is behind. Saved per profile
+  (`GLOW`, `GLOWTHRESH`, `GLOWSTRENGTH`, `GLOWSOFT`, `GLOWCOLOR`,
+  `GLOWPAL`, `GLOWSPREAD`).
 
 
 ## Stable v2.5 (2026-10-15)

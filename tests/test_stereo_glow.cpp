@@ -28,3 +28,12 @@ TEST_CASE("stereo glow: the per-copy gain sums to the strength at the centre, x2
     CHECK(g > 0.11f); CHECK(g < 0.12f);                   // 1.0 / 9 copies
     CHECK(stereo_glow_copy_gain(0, 0) == 0.25f);          // strength clamps to 1
 }
+
+TEST_CASE("stereo glow: spread levels map to 0/1/3/5 taps on the centre and diagonals") {
+    CHECK(stereo_glow_spread_taps(0) == 0); CHECK(stereo_glow_spread_taps(1) == 1);
+    CHECK(stereo_glow_spread_taps(2) == 3); CHECK(stereo_glow_spread_taps(3) == 5); CHECK(stereo_glow_spread_taps(9) == 5);
+    CHECK(stereo_glow_tap_dx(0) == 0); CHECK(stereo_glow_tap_dy(0) == 0);
+    int seen = 0;
+    for (int t = 1; t < 5; t++) seen |= 1 << ((stereo_glow_tap_dx(t) + 1) + (stereo_glow_tap_dy(t) + 1) * 3);
+    CHECK(seen == 0x145);   // the four corners of the 3x3 grid
+}

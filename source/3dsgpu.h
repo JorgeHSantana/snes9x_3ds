@@ -10,7 +10,7 @@
 
 #define BW_STENCIL      32
 #define BW_TEX_BIND     5
-#define BW_TARGET       3
+#define BW_TARGET       4   // TARGET_COUNT is 8 (the glow target), TARGET_UNSET = 8
 #define BW_ALPHA_BLEND  4
 #define BW_TEX_ENV      4
 #define BW_ALPHA_TEST   4
@@ -20,15 +20,22 @@
 
 #define PACKED_MASK(width, offset) (((1ULL << (width)) - 1ULL) << (offset))
 
+// The enum bit-fields below are byte-sized types (devkitARM's short
+// enums), so a field must not straddle a byte: the layout keeps every
+// byte's fields adding up to at most 8, with explicit padding.
+//   byte 4: textureBind 5 + depthTest 2 + pad 1
+//   byte 5: target 4 + alphaBlending 4
+//   byte 6: textureEnv 4 + alphaTest 4
+//   byte 7: textureOffset 2 + shader 2 + pad 4
 #define OFF_STENCIL      0
 #define OFF_TEX_BIND     (OFF_STENCIL + BW_STENCIL)
-#define OFF_TARGET       (OFF_TEX_BIND + BW_TEX_BIND)
+#define OFF_DEPTH_TEST   (OFF_TEX_BIND + BW_TEX_BIND)
+#define OFF_TARGET       (OFF_DEPTH_TEST + BW_DEPTH_TEST + 1)
 #define OFF_ALPHA_BLEND  (OFF_TARGET + BW_TARGET)
 #define OFF_TEX_ENV      (OFF_ALPHA_BLEND + BW_ALPHA_BLEND)
 #define OFF_ALPHA_TEST   (OFF_TEX_ENV + BW_TEX_ENV)
 #define OFF_TEX_OFFSET   (OFF_ALPHA_TEST + BW_ALPHA_TEST)
-#define OFF_DEPTH_TEST   (OFF_TEX_OFFSET + BW_TEX_OFFSET)
-#define OFF_SHADER       (OFF_DEPTH_TEST + BW_DEPTH_TEST)
+#define OFF_SHADER       (OFF_TEX_OFFSET + BW_TEX_OFFSET)
 
 #define PACKED_MASK_STENCIL      PACKED_MASK(BW_STENCIL,     OFF_STENCIL)
 #define PACKED_MASK_TEX_BIND     PACKED_MASK(BW_TEX_BIND,    OFF_TEX_BIND)
@@ -97,6 +104,7 @@ typedef enum
 	TARGET_SNES_DEPTH,
 	TARGET_SNES_MODE7_FULL,
     TARGET_SNES_MODE7_TILE_0,
+    TARGET_SNES_GLOW,           // quarter-res glow spread (issue #77), same index as SNES_GLOW
 	TARGET_SCREEN_GAME,
     TARGET_SCREEN_SECOND,
     TARGET_COUNT,
@@ -110,6 +118,7 @@ typedef enum
 	SNES_DEPTH,
 	SNES_MODE7_FULL,
 	SNES_MODE7_TILE_0,
+	SNES_GLOW,                  // 128x64 RGBA8: the glow pass at quarter res, bilinear-magnified back (spread)
 	SNES_MAIN_RIGHT,            // retained right-eye main screen (stereo)
 	SNES_TILE_CACHE,
     SNES_MODE7_TILE_CACHE,
@@ -252,18 +261,20 @@ typedef struct
 typedef union {
     struct {
         u32 stencilTest;
-        SGPU_TEXTURE_ID textureBind : BW_TEX_BIND; // max enum value = 127
-        SGPU_TARGET_ID target : BW_TARGET;
-
-        SGPU_ALPHA_BLENDINGMODE alphaBlending : BW_ALPHA_BLEND;
-        SGPU_TEX_ENV textureEnv : BW_TEX_ENV; // max enum value = 7
-
-        SGPU_ALPHA_TEST alphaTest : BW_ALPHA_TEST;
-        SGPU_STATE textureOffset : BW_TEX_OFFSET;
+        // byte 4
+        SGPU_TEXTURE_ID textureBind : BW_TEX_BIND; // max enum value = 31
         SGPU_STATE depthTest : BW_DEPTH_TEST;
-
+        u8 _pad0 : 1;
+        // byte 5
+        SGPU_TARGET_ID target : BW_TARGET;         // TARGET_UNSET = 8 needs the 4th bit
+        SGPU_ALPHA_BLENDINGMODE alphaBlending : BW_ALPHA_BLEND;
+        // byte 6
+        SGPU_TEX_ENV textureEnv : BW_TEX_ENV; // max enum value = 7
+        SGPU_ALPHA_TEST alphaTest : BW_ALPHA_TEST;
+        // byte 7
+        SGPU_STATE textureOffset : BW_TEX_OFFSET;
         SGPU_SHADER_PROGRAM shader : BW_SHADER;
-        u32 _padding : 6;
+        u8 _pad1 : 4;
     };
     u64 packed;
 } SGPURenderState;
@@ -321,6 +332,7 @@ typedef struct
     int                         stereoShadowQuality; // 0 Full, 1 Auto, 2 Auto Off under load
     int                         stereoGlowRows, stereoGlowThresh, stereoGlowStrength, stereoGlowSoft, stereoGlowColor;   // glow per row (stereo_glow.h)
     int                         stereoGlowPal;      // sprite palettes that glow, 8-bit mask
+    int                         stereoGlowSpread;   // 0..3 (stereo_glow.h)
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
     float                       glowPalSet[2];      // (mask, enable) the tile shader holds; (255, 0) = no-op
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
@@ -330,6 +342,7 @@ typedef struct
     // false when the optional right-eye VRAM texture failed to allocate;
     // gates the whole stereo path off (gpu3dsGetIOD returns 0)
     bool                        stereoTexAvailable;
+    bool                        glowTexAvailable;   // SNES_GLOW allocated (Glow Spread); allocated last, optional
     // signed slider factor for the CURRENT eye's layer pass: +slider for
     // the left eye, -slider for the right (positive layer depth then pops
     // out of the screen), 0 with 3D off. Per-layer parallax =
@@ -540,7 +553,7 @@ static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float gho
 void gpu3dsShadowPassState(int receiverPlane);
 void gpu3dsShadowPassEnd();
 // Glow (issue #77): additive pass of the bright texels - alpha test by luminance
-void gpu3dsGlowPassState(int alphaRef);
+void gpu3dsGlowPassState(int alphaRef, int plane);   // plane >= 0: depth GEQUAL at that plane (covered by layers in front), -1: no depth test
 void gpu3dsGlowPassEnd();
 void gpu3dsSetGlowPalette(int mask, bool enable);   // sprite palettes that draw in the tile shader; (255, false) = no-op
 // Output colour grade (screen_grade.h) in the blit's TexEnv stages 1-5; no extra pass

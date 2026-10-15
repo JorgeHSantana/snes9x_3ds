@@ -16,6 +16,17 @@
 #define STEREO_GLOW_STRENGTH_MAX  8   // strength gauge in quarters: 1 = x0.25 .. 8 = x2
 #define STEREO_GLOW_SOFT_MAX      2   // 0 = in place, 1 = plus the 4 neighbours, 2 = 3x3 box
 #define STEREO_GLOW_COLORS        5
+#define STEREO_GLOW_SPREAD_MAX    3   // 0 = halo copies; 1 = one bilinear tap (~4 px), 2 = 3 taps, 3 = 5 taps (~8 px)
+
+static inline int stereo_glow_clamp_spread(int v) { return v < 0 ? 0 : (v > STEREO_GLOW_SPREAD_MAX ? STEREO_GLOW_SPREAD_MAX : v); }
+static inline int stereo_glow_spread_taps(int spread)
+{
+    spread = stereo_glow_clamp_spread(spread);
+    return spread == 0 ? 0 : (spread == 1 ? 1 : (spread == 2 ? 3 : 5));
+}
+// tap offsets in glow-texture texels (one texel = 4 screen px): centre, then the diagonals
+static inline int stereo_glow_tap_dx(int tap) { static const int d[5] = { 0, 1, -1, 1, -1 }; return d[tap >= 0 && tap < 5 ? tap : 0]; }
+static inline int stereo_glow_tap_dy(int tap) { static const int d[5] = { 0, 1, -1, -1, 1 }; return d[tap >= 0 && tap < 5 ? tap : 0]; }
 
 static inline int stereo_glow_clamp_thresh(int v) { return v < 0 ? 0 : (v > STEREO_GLOW_THRESH_MAX ? STEREO_GLOW_THRESH_MAX : v); }
 static inline int stereo_glow_clamp_strength(int v) { return v < 1 ? 1 : (v > STEREO_GLOW_STRENGTH_MAX ? STEREO_GLOW_STRENGTH_MAX : v); }

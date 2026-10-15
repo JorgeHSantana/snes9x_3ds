@@ -430,6 +430,19 @@ static void gpu3dsSetGlowEnv(bool on, float gain, uint32_t rgb)
     C3D_TexEnvFunc(e5, C3D_Alpha, GPU_MULTIPLY_ADD);
 }
 
+// Stage 3 for the glow spread's composite taps: RGB = texel x gain,
+// alpha untouched. gain <= 0 restores passthrough.
+static void gpu3dsSetGlowTapEnv(float gain)
+{
+    C3D_TexEnv *env = C3D_GetTexEnv(3);
+    C3D_TexEnvInit(env);
+    if (gain <= 0.0f) return;
+    const u32 g = (u32)(gain * 255.0f + 0.5f);
+    C3D_TexEnvColor(env, 0xFF000000u | (g << 16) | (g << 8) | g);
+    C3D_TexEnvSrc(env, C3D_RGB, GPU_PREVIOUS, GPU_CONSTANT);
+    C3D_TexEnvFunc(env, C3D_RGB, GPU_MODULATE);
+}
+
 // 3D-tab editor preview (issue #61): while >= 0, every layer except
 // this one is dimmed hard so the edited layer reads instantly.
 static int s_previewHighlightLayer = -1;
@@ -814,56 +827,136 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // Works in 2D too (shifts are 0). The load controller's tier
             // lowers the halo and its fade multiplier scales the gain.
             if (glowOn && GPU3DSExt.shadowAlphaMul > 0.01f) {
-                const int soft = stereo_glow_clamp_soft(GPU3DS.stereoGlowSoft - (GPU3DS.stereoShadowQuality >= 1 ? GPU3DSExt.shadowLoadTier : 0));
+                const int tierDrop = GPU3DS.stereoShadowQuality >= 1 ? GPU3DSExt.shadowLoadTier : 0;
+                // Glow Spread: the glow drawn once at quarter resolution into
+                // SNES_GLOW and magnified back with bilinear taps (the light
+                // leaks ~4-8 px); replaces the halo copies while on
+                const int spread = GPU3DS.glowTexAvailable ? stereo_glow_clamp_spread(GPU3DS.stereoGlowSpread - tierDrop) : 0;
+                const int taps = stereo_glow_spread_taps(spread);
+                const int soft = taps > 0 ? 0 : stereo_glow_clamp_soft(GPU3DS.stereoGlowSoft - tierDrop);
                 const int copies = stereo_glow_copies(soft);
                 const float gain = stereo_glow_copy_gain(GPU3DS.stereoGlowStrength, soft) * GPU3DSExt.shadowAlphaMul;
                 const uint32_t tint = stereo_glow_color_rgb(GPU3DS.stereoGlowColor);
                 const int ref = stereo_glow_alpha_ref(GPU3DS.stereoGlowThresh);
                 bool anyGlow = false;
+                // one tier at a time: the glow is depth-tested GEQUAL at the
+                // tier's own plane (a layer in front - larger plane - covers it,
+                // so nothing glows through a wall; the light leaks only onto
+                // what is behind the sprite), and the plane is a constant per
+                // draw through the depth map, like the shadow's
+                SVertexList *tiles = &GPU3DS.vertices[VBO_SCENE_TILE];
+                SVertexList *rects = &GPU3DS.vertices[VBO_SCENE_RECT];
+                auto drawGlowGeometry = [&](int id, int plane, SGPU_TARGET_ID target, bool depthTested) {
+                    int cFrom, cTo;
+                    if (!sectionsOf(id, cFrom, cTo)) return;
+                    SLayer *ly = &list->layers[id];
+                    for (int k = cFrom; k < cTo; k++) {
+                        SLayerSection *sec = &list->sections[k];
+                        if (sec->vboId == VBO_SCENE_MODE7_LINE) continue;
+                        GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
+                        GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+                        u64 mask = gpu3dsGetLayerPackedMask(ly->id, true);
+                        GPU3DS.currentRenderState.packed = (GPU3DS.currentRenderState.packed & ~mask) | (sec->state.packed & mask);
+                        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
+                        GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                        GPU3DS.currentRenderState.target = target;
+                        GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
+                        gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
+                        gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
+                        gpu3dsGlowPassState(ref, depthTested ? plane : -1);
+                        GPU3DSExt.glowDraws++;
+                        SVertexList *vbo = &GPU3DS.vertices[sec->vboId];
+                        if (list->useDrawArraysForTiledLayers) {
+                            gpu3dsDraw(vbo, NULL, sec->count, sec->from);
+                        } else if (shadowIbo != nullptr && shadowIboUsed + sec->count <= SHADOW_IBO_MAX) {
+                            u16 *dst = shadowIbo + shadowIboUsed;
+                            for (int k2 = 0; k2 < sec->count; k2++) dst[k2] = (u16)(sec->from + k2);
+                            gpu3dsDraw(vbo, (void *)dst, sec->count);
+                            shadowIboUsed += sec->count;
+                        }
+                        anyGlow = true;
+                    }
+                };
+                auto clearGlowTarget = [&]() {
+                    GPU3DS.currentRenderState.target = TARGET_SNES_GLOW;
+                    GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_COLOR;
+                    GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                    GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+                    GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+                    GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
+                    GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
+                    gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
+                    gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
+                    gpu3dsGlowPassEnd();   // plain state for the clear
+                    int rFrom = rects->from + rects->count;
+                    gpu3dsAddRectangleVertexes(0, 0, 512, 256, 0x000000FF);
+                    gpu3dsDraw(rects, NULL, 2, rFrom);
+                    rects->count -= 2;
+                };
+                // composite: the glow texture over the SNES area, bilinear (4x
+                // magnified = blurred), added once per tap at 1/taps, the
+                // diagonal taps one texel (4 px) away; depth-tested at the tier's plane
+                auto compositeGlow = [&](int plane) {
+                    GPU3DS.currentRenderState.target = (SGPU_TARGET_ID)i;
+                    GPU3DS.currentRenderState.textureBind = SNES_GLOW;
+                    GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0;
+                    GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                    GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+                    GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+                    GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
+                    GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
+                    gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
+                    gpu3dsSetStereoParallaxHi(0.0f, 0.0f, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
+                    gpu3dsSetGlowPalette(255, false);
+                    gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
+                    gpu3dsSetGlowEnv(false, 0.0f, 0);
+                    gpu3dsSetGlowTapEnv(1.0f / (float)taps);
+                    C3D_DepthMap(true, 0.0f, (float)plane / 32.0f);
+                    C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_COLOR);
+                    C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ONE, GPU_ONE, GPU_ZERO, GPU_ONE);
+                    for (int tp = 0; tp < taps; tp++) {
+                        const int tFrom = tiles->from + tiles->count;
+                        const s16 dx = (s16)stereo_glow_tap_dx(tp), dy = (s16)stereo_glow_tap_dy(tp);
+                        // tile index 0 = raw texcoords: the quad covers the SNES area, sampling the 128x64 texture
+                        gpu3dsAddTileVertexes(0, 0, 512, 240, dx, dy, (s16)(128 + dx), (s16)(60 + dy), 0);
+                        if (list->useDrawArraysForTiledLayers) {
+                            gpu3dsDraw(tiles, NULL, 2, tFrom);
+                        } else if (shadowIbo != nullptr && shadowIboUsed + 2 <= SHADOW_IBO_MAX) {
+                            u16 *dst = shadowIbo + shadowIboUsed; dst[0] = (u16)tFrom; dst[1] = (u16)(tFrom + 1);
+                            gpu3dsDraw(tiles, (void *)dst, 2); shadowIboUsed += 2;
+                        }
+                        tiles->count -= 2;
+                        GPU3DSExt.glowDraws++;
+                    }
+                    gpu3dsSetGlowTapEnv(0.0f);
+                    gpu3dsGlowPassEnd();
+                    GPU3DS.appliedRenderState.target = TARGET_UNSET;
+                };
                 for (int id = LAYER_BG0; id <= LAYER_OBJ; id++) {
                     if (!settings3DS.LayerEnabled[id]) continue;
                     const int tiers = id == LAYER_OBJ ? 4 : 2;
-                    float sh[4] = { 4096.0f, 4096.0f, 4096.0f, 4096.0f }; bool any = false;
                     for (int t = 0; t < tiers; t++) {
                         const int row = stereo_shadow_row(id, t);
                         if (!stereo_shadow_marked((unsigned)GPU3DS.stereoGlowRows, id, t)) continue;
                         if (((usedRows >> row) & 1u) == 0) continue;
-                        sh[t] = ownShift(id, t); any = true;
-                    }
-                    int cFrom, cTo;
-                    if (!any || !sectionsOf(id, cFrom, cTo)) continue;
-                    SLayer *ly = &list->layers[id];
-                    gpu3dsSetGlowEnv(true, gain, tint);
-                    gpu3dsSetGlowPalette(GPU3DS.stereoGlowPal, id == LAYER_OBJ && (GPU3DS.stereoGlowPal & 0xFF) != 0xFF);
-                    for (int c = 0; c < copies; c++) {
-                        float shc[4];
-                        for (int t = 0; t < 4; t++) shc[t] = sh[t] >= 4096.0f ? sh[t] : sh[t] + (float)stereo_glow_dx(soft, c);
-                        setTierShifts(id, shc, (float)stereo_glow_dy(soft, c));
-                        for (int k = cFrom; k < cTo; k++) {
-                            SLayerSection *sec = &list->sections[k];
-                            if (sec->vboId == VBO_SCENE_MODE7_LINE) continue;
-                            GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
-                            GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
-                            u64 mask = gpu3dsGetLayerPackedMask(ly->id, true);
-                            GPU3DS.currentRenderState.packed = (GPU3DS.currentRenderState.packed & ~mask) | (sec->state.packed & mask);
-                            GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
-                            GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
-                            GPU3DS.currentRenderState.target = (SGPU_TARGET_ID)i;
-                            GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
-                            gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
-                            gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
-                            gpu3dsGlowPassState(ref);
-                            GPU3DSExt.glowDraws++;
-                            SVertexList *vbo = &GPU3DS.vertices[sec->vboId];
-                            if (list->useDrawArraysForTiledLayers) {
-                                gpu3dsDraw(vbo, NULL, sec->count, sec->from);
-                            } else if (shadowIbo != nullptr && shadowIboUsed + sec->count <= SHADOW_IBO_MAX) {
-                                u16 *dst = shadowIbo + shadowIboUsed;
-                                for (int k2 = 0; k2 < sec->count; k2++) dst[k2] = (u16)(sec->from + k2);
-                                gpu3dsDraw(vbo, (void *)dst, sec->count);
-                                shadowIboUsed += sec->count;
+                        const int plane = stereo_shadow_row_plane(GPU3DS.stereoBgPlane, row);
+                        const float shift = ownShift(id, t);
+                        gpu3dsSetGlowEnv(true, gain, tint);
+                        gpu3dsSetGlowPalette(GPU3DS.stereoGlowPal, id == LAYER_OBJ && (GPU3DS.stereoGlowPal & 0xFF) != 0xFF);
+                        if (taps > 0) {
+                            clearGlowTarget();
+                            gpu3dsSetGlowEnv(true, gain, tint);
+                            gpu3dsSetGlowPalette(GPU3DS.stereoGlowPal, id == LAYER_OBJ && (GPU3DS.stereoGlowPal & 0xFF) != 0xFF);
+                            float sh[4]; for (int u = 0; u < 4; u++) sh[u] = u == t ? shift : 4096.0f;
+                            setTierShifts(id, sh, 0.0f);
+                            drawGlowGeometry(id, plane, TARGET_SNES_GLOW, false);
+                            if (anyGlow) compositeGlow(plane);
+                        } else {
+                            for (int c = 0; c < copies; c++) {
+                                float sh[4]; for (int u = 0; u < 4; u++) sh[u] = u == t ? shift + (float)stereo_glow_dx(soft, c) : 4096.0f;
+                                setTierShifts(id, sh, (float)stereo_glow_dy(soft, c));
+                                drawGlowGeometry(id, plane, (SGPU_TARGET_ID)i, true);
                             }
-                            anyGlow = true;
                         }
                     }
                 }

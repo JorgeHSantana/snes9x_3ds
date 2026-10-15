@@ -1970,3 +1970,29 @@ uint32 S9xReadJoypad (int which1_0_to_4)
 
     return consoleJoyPad;
 }
+
+
+// Glow Spread (issue #77): the glow pass drawn at a quarter of the
+// resolution into this 128x64 target and magnified back with bilinear
+// filtering - the 4x magnification is the blur. Allocated LAST and
+// optional: VRAM is nearly full once the UI textures are in (the 2D
+// render path keeps every other texture), so a short VRAM only costs the
+// Spread gauge, not the boot. Its projection maps the full 512x256 SNES
+// space onto the small target (bubble2k's m[8]/m[9] form kept).
+void impl3dsAllocGlowTexture()
+{
+	GPU3DS.glowTexAvailable = false;
+	const SGPUTextureConfig cfg = {
+		GPU_TEXTURE_MAG_FILTER(GPU_LINEAR) | GPU_TEXTURE_MIN_FILTER(GPU_LINEAR) | GPU_TEXTURE_WRAP_S(GPU_CLAMP_TO_BORDER) | GPU_TEXTURE_WRAP_T(GPU_CLAMP_TO_BORDER),
+		SNES_GLOW, GPU_RGB565, 128, 64 };
+	SGPUTexture *glow = &GPU3DS.textures[SNES_GLOW];
+	if (!gpu3dsAllocVramTextureAndTarget(glow, &cfg)) {
+		log3dsWrite("glow spread vram texture (16.00kb) not allocated: Glow Spread unavailable");
+		return;
+	}
+	Mtx_Ortho(&glow->projection, 0.0f, 512.0f, 0.0f, 256.0f, 0.0f, 1.0f, true);
+	glow->projection.m[8] = 0.0f;
+	glow->projection.m[9] = -1.0f;
+	GPU3DS.glowTexAvailable = true;
+	log3dsWrite("glow spread vram texture allocated (16.00kb, 128x64 RGB565)");
+}
