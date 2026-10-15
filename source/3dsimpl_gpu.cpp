@@ -982,6 +982,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
                     gpu3dsSetGlowEnv(false, 0.0f, 0);
                     gpu3dsSetGlowTapEnv(1.0f / (float)taps);
+                    // the glow target was rendered moments ago in this same command
+                    // list: split it so the GPU finishes (and flushes) that render
+                    // before the texture unit reads it - on the console the right
+                    // eye's composite read the left eye's glow (Jorge's screenshots)
+                    C3D_FrameSplit(0);
                     if (plane >= 0) {
                         C3D_DepthMap(true, 0.0f, (float)plane / 32.0f);
                         C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_COLOR);
@@ -1021,6 +1026,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
                     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
                     gpu3dsGlowPassState(ref, -1);
+                    C3D_FrameSplit(0);   // this eye's texture was just rendered: let it land before sampling it
                     // only the visible area: the texture beyond it (the right
                     // half in 256 px modes, rows past the screen height) keeps
                     // leftovers that the blur would pull into the frame's edge

@@ -2001,7 +2001,10 @@ void impl3dsAllocGlowTexture()
 		log3dsWrite("glow spread vram texture (16.00kb) not allocated: Glow Spread unavailable");
 		return;
 	}
-	Mtx_Ortho(&glow->projection, 0.0f, 512.0f, 0.0f, 256.0f, 0.0f, 1.0f, true);
+	// 2 px to the left: the composite's integer texcoords sample texel
+	// centres half a texel (2 screen px) late, which read as a glow leaning
+	// right on the console (Jorge's screenshots: +5 px vs the life bar)
+	Mtx_Ortho(&glow->projection, 2.0f, 514.0f, 0.0f, 256.0f, 0.0f, 1.0f, true);
 	glow->projection.m[8] = 0.0f;
 	glow->projection.m[9] = -1.0f;
 	GPU3DS.glowTexAvailable = true;

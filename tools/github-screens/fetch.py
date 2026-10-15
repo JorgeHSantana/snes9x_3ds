@@ -5,8 +5,12 @@ comment carries `screen_<eye>.png[ (part i/n)]` and a ```base64 block."""
 import argparse, base64, json, os, re, subprocess, sys
 
 def bodies_from_issue(repo, issue, limit):
-    out = subprocess.run(["gh", "api", f"repos/{repo}/issues/{issue}/comments?per_page=100&sort=created&direction=desc", "--jq", "[.[] | {body: .body, created_at: .created_at}]"], capture_output=True, text=True, check=True)
-    return list(reversed(json.loads(out.stdout)))[-limit:]
+    # the issue comments endpoint lists oldest first; take the newest `limit`
+    out = subprocess.run(["gh", "api", "--paginate", f"repos/{repo}/issues/{issue}/comments?per_page=100", "--jq", "[.[] | {body: .body, created_at: .created_at}]"], capture_output=True, text=True, check=True)
+    items = []
+    for chunk in out.stdout.strip().splitlines():
+        items += json.loads(chunk)
+    return items[-limit:]
 
 def bodies_from_dir(d):
     return [json.load(open(os.path.join(d, f))) for f in sorted(os.listdir(d)) if f.endswith(".json")]
@@ -23,12 +27,17 @@ def main():
         if not m: continue
         fence = re.search(r"```base64\n(.*?)\n```", body, re.S)
         if not fence: continue
+        # the parts of one eye are posted seconds apart (the header's date
+        # moves): group by eye + byte count, stamped by the first part seen
+        size = re.search(r"`screen_(?:left|right)\.png[^`]*`, (\d+) bytes", body)
         stamp = re.search(r"\*\*snes9x_3ds [^*]*\*\* · [^·]* · [^·]* · ([^\n]*)", body)
-        key = ((stamp.group(1).strip() if stamp else it.get("created_at", "")), m.group(1))
+        key = (m.group(1), size.group(1) if size else "0")
         part, total = int(m.group(2) or 1), int(m.group(3) or 1)
-        shots.setdefault(key, {"total": total, "parts": {}})["parts"][part] = fence.group(1).replace("\n", "")
+        entry = shots.setdefault(key, {"total": total, "parts": {}, "stamp": (stamp.group(1).strip() if stamp else it.get("created_at", ""))})
+        entry["parts"][part] = fence.group(1).replace("\n", "")
     n = 0
-    for (stamp, eye), s in shots.items():
+    for (eye, _size), s in shots.items():
+        stamp = s["stamp"]
         if len(s["parts"]) != s["total"]: print(f"[fetch] {stamp} {eye}: {len(s['parts'])}/{s['total']} parts, skipped"); continue
         data = base64.b64decode("".join(s["parts"][i] for i in range(1, s["total"] + 1)))
         name = os.path.join(a.out, f"{stamp.replace('/', '-').replace(':', '-').replace(' ', '_')}_{eye}.png")
