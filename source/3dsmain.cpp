@@ -1675,6 +1675,8 @@ static int  s_stereoGaugeCount = 0;     // gauges actually listed (Hide Unused f
 static int  s_stereoShadowFirst = -1;   // item index of the first Shadows checkbox
 static int  s_stereoShadowCount = 0;
 static int  s_stereoShadowLayer[12], s_stereoShadowPrio[12];
+static int  s_stereoShadowFxFirst = -1;  // the Shadows block's gauges: full-scene preview like Focus/Effects
+static int  s_stereoShadowFxLast = -1;
 static int  s_stereoGaugeLayer[12];     // per listed gauge: layer (0..3 BG, 4 sprites)
 static int  s_stereoGaugePrio[12];      // per listed gauge: priority
 
@@ -1769,6 +1771,10 @@ static void stereo3dIdleTick()
     // Focus/Effects gauges: full-scene preview, effects applied live
     bool inFx = !inGauges && s_stereoFxFirst >= 0 &&
         sel >= s_stereoFxFirst && sel < s_stereoFxLast;
+    // the Shadows block's gauges preview the whole scene too (Jorge: see
+    // the change on the top screen while moving Shadow X/Y, Opacity...)
+    if (!inGauges && s_stereoShadowFxFirst >= 0 && sel >= s_stereoShadowFxFirst && sel < s_stereoShadowFxLast)
+        inFx = true;
 
     bool peek = (hidKeysHeld() & KEY_X) != 0;   // menu loop already scanned
                                                 // (Y belongs to Y+Up/Down paging)
@@ -2019,6 +2025,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             stereoHelp(items, "This row draws a silhouette of itself, offset by\nShadow X/Y, at the depth of the row behind it (the nearest\nsmaller Depth gauge), in Shadow Color, only where that row is the\nvisible surface. One extra pass of this row per\nreceiving plane, only in 3D.");
             if (!stereo3dRowUsed(layer, prio)) items.back().TextColor = stereo3dDimColor();
         }
+        s_stereoShadowFxFirst = (int)items.size();
         AddMenuGauge(items, "  Shadow X"_s, -4, 4, *stereoEditField(9),
             []( int val ) { if (CheckAndUpdate(*stereoEditField(9), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
         stereoHelp(items, "Horizontal offset of every shadow, in pixels (+ = right).\nOne light per scene.");
@@ -2042,6 +2049,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                 colorOptions, *stereoEditField(11), DIALOG_TYPE_INFO, true,
                 []( int val ) { if (CheckAndUpdate(*stereoEditField(11), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
         }
+        s_stereoShadowFxLast = (int)items.size();
 
         // the Focus/Effects zone previews live too: full scene, effects
         // applied as the gauges move (issue #61 follow-up, Jorge's ask)
