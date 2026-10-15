@@ -318,6 +318,7 @@ typedef struct
     int                         stereoShadowFade;   // 1 = lighter with the depth gap to the receiver
     int                         stereoShadowSoft;   // soft edge level 0..2
     int                         stereoShadowQuality; // 0 Full, 1 Auto, 2 Auto Off under load
+    int                         stereoGlowRows, stereoGlowThresh, stereoGlowStrength, stereoGlowSoft, stereoGlowColor;   // glow per row (stereo_glow.h)
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
@@ -535,6 +536,9 @@ static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float gho
 // through the depth map, colour blended, nothing written to depth (3dsgpu.cpp)
 void gpu3dsShadowPassState(int receiverPlane);
 void gpu3dsShadowPassEnd();
+// Glow (issue #77): additive pass of the bright texels - alpha test by luminance
+void gpu3dsGlowPassState(int alphaRef);
+void gpu3dsGlowPassEnd();
 
 static inline void gpu3dsSetStereoParallax(float v)
 {

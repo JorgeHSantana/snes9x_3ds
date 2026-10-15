@@ -1,4 +1,4 @@
-# Drop shadow per depth row (issue #77, v4: depth EQUAL)
+# Drop shadow and glow per depth row (issue #77, v4: depth EQUAL)
 
 A marked layer/priority row casts a silhouette onto the layer behind it
 in the profile's depth gauges (Mega Man X3: X's outline on the wall).
@@ -103,3 +103,31 @@ Silhouette, not projected; games that draw their own shadow get two; a
 sprite hidden behind a BG tile the gauges put behind it still shows its
 shadow on that tile; shadows between rows of one plane are impossible;
 Mode 7 casts nothing.
+
+## Glow (the bloom-like half, 2026-10-15)
+- Per depth row (`GlowRows` mask), the marked rows' bright texels are
+  drawn again, added to the frame, at the row's own parallax, after the
+  shadow passes of the same phase (main target only: subtractive colour
+  math on the sub screen would darken it). Works in 2D.
+- Selection by brightness in the TexEnv: stage 3 alpha = tex.r x 76/255,
+  stage 4 alpha = tex.g x 150/255 + previous (MULTIPLY_ADD), stage 5
+  alpha = tex.b x 29/255 + previous = luminance; the alpha test keeps
+  texels at or above `GlowThresh` x 16 (never 0: transparent texels have
+  alpha 0 but luminance 0 too), and SRC_ALPHA / ONE blending adds colour
+  x tint x gain x luminance. Stage 3 RGB = texel x (tint x gain), scale
+  x2 for gains above 1. Destination alpha untouched.
+- Halo (`GlowSoft`): 1, 5 (cross) or 9 (3x3) copies, the gain divided
+  by the copies so the centre adds `GlowStrength`/4 of the colour and the
+  rim less. Shadow Quality's load tier lowers the halo level and its fade
+  multiplier scales the gain. Tint table (own colours, warm, cool, gold,
+  white). Keys `GLOW`, `GLOWTHRESH`, `GLOWSTRENGTH`, `GLOWSOFT`,
+  `GLOWCOLOR` per profile; editor block "Glow" after Shadows, rows
+  spotlight their layer, gauges preview live.
+- Gotcha: `gpu3dsDraw` applies the render state again, so a pass that
+  overrides the alpha test must leave the applied alpha-test field as the
+  draw expects it (a poison there put NE_ZERO back over the luminance
+  test: both thresholds gave the same frame).
+- Validation: `mmx3-glow` (threshold 8: 736 brighter px, 0 darker) and
+  `mmx3-glow-thresh` (14: 357), against `mmx3-shadow-off`.
+- The hardware check is Jorge's console: nothing in the repo used
+  MULTIPLY_ADD, the R/G/B alpha operands or the x2 scale before.

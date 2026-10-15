@@ -169,7 +169,7 @@ and pending hardware evidence. These deliveries do not close #78/#79/#63.
 | 81 | Envio GitHub: log inteiro e escolha do arquivo | ABERTA | continuação da #80: vários comentários ou Gist; logs de sessões anteriores; confirmação com tamanho |
 | 82 | Verificar o certificado TLS da api.github.com | ABERTA | updater e envio rodam com VERIFYPEER=0; embutir a cadeia raiz (CAINFO_BLOB) ou pinning; medir handshake no Old |
 | 83 | Envio de log para servidor próprio (LAN/nuvem) | ABERTA | proposta original da #80; POST cru para URL configurável, receptor em tools/ |
-| 77 | 3D: sombra por linha de profundidade (e glow) | ABERTA (sombra na Stable v2.5) | v4 por depth EQUAL no plano do receptor; Opacity, Fade, Soft Edge, Shadow Quality; Stretch e Small Sprites Only removidos; falta o glow / bloom seletivo |
+| 77 | 3D: sombra por linha de profundidade (e glow) | ABERTA (sombra na Stable v2.5) | v4 por depth EQUAL no plano do receptor; Opacity, Fade, Soft Edge, Shadow Quality; Stretch e Small Sprites Only removidos; glow por luminância na nightly 2026-10-15; falta a cor na saída e o experimento de bloom no New |
 | 84 | Mostrar o changelog no emulador (opção após atualizar) | ABERTA | pedido 2026-09-27 |
 | 85 | Editor 3D: prévia do blur em Full, não no tier do Auto | ABERTA | pedido 2026-09-27 |
 | 86 | Sincronizar com o upstream matbo87 | ABERTA | vblank pacer, tile cache 2 bancos, rcheevos, SuperFX ASM; plano de merge na issue; próximo depois do bloom |

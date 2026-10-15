@@ -318,6 +318,11 @@ typedef struct {
     int                 StereoShadowFade;      // 1 = lighter with the depth gap to the receiver
     int                 StereoShadowSoft;      // soft edge level 0..2 (stereo_shadow.h)
     int                 StereoShadowQuality;   // 0 Full, 1 Auto, 2 Auto Off under load (shadow_auto.h)
+    int                 StereoGlowRows;        // glow per depth row, 12-bit mask (issue #77, stereo_glow.h)
+    int                 StereoGlowThresh;      // brightness threshold gauge 0..15
+    int                 StereoGlowStrength;    // 1..8 quarters
+    int                 StereoGlowSoft;        // halo 0..2
+    int                 StereoGlowColor;       // tint index
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
                                                // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)
@@ -345,6 +350,7 @@ typedef struct {
         int  ShadowFade;         // 1 = fade with the depth gap
         int  ShadowSoft;         // soft edge level 0..2
         int  ShadowQuality;      // 0 Full, 1 Auto, 2 Auto Off under load
+        int  GlowRows, GlowThresh, GlowStrength, GlowSoft, GlowColor;   // glow per row (stereo_glow.h)
     };
     struct SStereoBind {
         u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C

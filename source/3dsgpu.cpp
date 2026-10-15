@@ -117,6 +117,28 @@ void gpu3dsShadowPassState(int receiverPlane)
     GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
     GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;
 }
+void gpu3dsGlowPassState(int alphaRef)
+{
+    // colour = texel x tint x gain (x luminance through SRC_ALPHA) added to
+    // the frame; destination alpha untouched (colour math reads it)
+    C3D_DepthMap(true, -1.0f, 0.0f);
+    C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
+    C3D_AlphaTest(true, GPU_GEQUAL, alphaRef);
+    C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_SRC_ALPHA, GPU_ONE, GPU_ZERO, GPU_ONE);
+    GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+    GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;
+    // the applied alpha test stays "NE_ZERO" on purpose: a poison here would
+    // make the draw's own apply put NE_ZERO back over the luminance test
+}
+void gpu3dsGlowPassEnd()
+{
+    C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
+    C3D_AlphaTest(false, GPU_ALWAYS, 0);
+    gpu3dsDisableAlphaBlending();
+    GPU3DS.appliedRenderState.depthTest = SGPU_STATE_UNSET;
+    GPU3DS.appliedRenderState.alphaTest = (SGPU_ALPHA_TEST)(ALPHA_TEST_NE_ZERO + 1);
+    GPU3DS.appliedRenderState.alphaBlending = (SGPU_ALPHA_BLENDINGMODE)(ALPHA_BLENDING_GHOST + 1);
+}
 void gpu3dsShadowPassEnd()
 {
     C3D_DepthMap(true, -1.0f, 0.0f);
@@ -559,6 +581,7 @@ bool gpu3dsInitialize()
     GPU3DS.stereoMode7Persp = 0.0f;
     GPU3DS.stereoMode7Fx = 0.0f;
     GPU3DS.stereoShadowRows = 0; GPU3DS.stereoShadowX = 2; GPU3DS.stereoShadowY = 2; GPU3DS.stereoShadowColor = 0; GPU3DS.stereoShadowAlpha = 4; GPU3DS.stereoShadowFade = 0; GPU3DS.stereoShadowSoft = 0; GPU3DS.stereoShadowQuality = 1;
+    GPU3DS.stereoGlowRows = 0; GPU3DS.stereoGlowThresh = 8; GPU3DS.stereoGlowStrength = 4; GPU3DS.stereoGlowSoft = 1; GPU3DS.stereoGlowColor = 0;
     GPU3DSExt.shadowSoftLevel = 0; GPU3DSExt.shadowAlphaMul = 1.0f;   // until the frame loop steps the controller
     GPU3DS.stereoShadowOffY = 0.0f;
     GPU3DS.mode7PerspApplied = -1.0f;

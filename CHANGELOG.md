@@ -2,6 +2,14 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+### Features
+* Glow per depth row (issue #77, the bloom-like half): in the 3D Stereo
+  tab, a "Glow" block lets any Depth row's bright texels glow - drawn
+  again, added to the frame in their own colours (or a tint) with a
+  small halo, selected by luminance in the TexEnv (Glow Threshold), with
+  Glow Strength and Glow Halo (Off / Cross / Box); Shadow Quality lowers
+  the halo under load. Works in 2D too. Saved per profile (`GLOW`,
+  `GLOWTHRESH`, `GLOWSTRENGTH`, `GLOWSOFT`, `GLOWCOLOR`).
 
 
 ## Stable v2.5 (2026-10-15)

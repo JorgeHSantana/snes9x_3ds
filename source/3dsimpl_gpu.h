@@ -199,6 +199,8 @@ typedef struct
     bool            mode7TilesModified;
 
     unsigned        shadowDraws;     // drop shadow draw calls since the last [perf][frame] line (both eyes)
+    int             shadowLoadTier;  // the Blur Auto load tier the shadow/glow controller saw (0 Full, 1 Light, 2 Off)
+    unsigned        glowDraws;       // glow draw calls since the last [perf][frame] line
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
     float           shadowAlphaMul;  // ...and the fade multiplier on the shadow's alpha (1 = as set)
     bool            blurAutoOff;    // Blur Quality "Auto, Off under load": the ghost passes are skipped

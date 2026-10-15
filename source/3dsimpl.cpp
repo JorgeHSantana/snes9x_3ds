@@ -1005,7 +1005,8 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		if (firstFrame)
 			shadowAutoReset(&s_shadowAuto, GPU3DS.stereoShadowSoft);
 		const int wasLevel = s_shadowAuto.level;
-		shadowAutoStep(&s_shadowAuto, GPU3DS.stereoShadowQuality, blurAutoTier(&s_blurAuto, true), GPU3DS.stereoShadowSoft);
+		GPU3DSExt.shadowLoadTier = blurAutoTier(&s_blurAuto, true);
+		shadowAutoStep(&s_shadowAuto, GPU3DS.stereoShadowQuality, GPU3DSExt.shadowLoadTier, GPU3DS.stereoShadowSoft);
 		GPU3DSExt.shadowSoftLevel = s_shadowAuto.level;
 		GPU3DSExt.shadowAlphaMul = s_shadowAuto.alphaMul;
 		if (s_shadowAuto.level != wasLevel && GPU3DS.stereoShadowRows != 0)
@@ -1250,7 +1251,8 @@ void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
     // the editor previews the shadow as set, not as the load controller left it
     GPU3DSExt.shadowSoftLevel = GPU3DS.stereoShadowSoft;
     GPU3DSExt.shadowAlphaMul = 1.0f;
-    const unsigned drawsBefore = GPU3DSExt.shadowDraws;   // the preview's draws are not the game's
+    GPU3DSExt.shadowLoadTier = 0;
+    const unsigned drawsBefore = GPU3DSExt.shadowDraws, glowBefore = GPU3DSExt.glowDraws;   // the preview's draws are not the game's
     // two passes fill BOTH framebuffers of the double-buffered game
     // screen - a single one shows only on the right swap parity, which
     // read as "sometimes it works" in the field
@@ -1275,7 +1277,7 @@ void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
         gpu3dsFrameEnd();
     }
     gpu3dsSetStereoPreviewHighlight(-1, -1);
-    GPU3DSExt.shadowDraws = drawsBefore;
+    GPU3DSExt.shadowDraws = drawsBefore; GPU3DSExt.glowDraws = glowBefore;
     if (pausedLook)
         notif3dsHide();
     // both buffers now hold this frame: the menu's own redraw is one pass,

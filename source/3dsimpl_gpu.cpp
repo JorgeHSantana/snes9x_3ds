@@ -1,5 +1,6 @@
 
 #include "stereo_shadow.h"
+#include "stereo_glow.h"
 bool S9xLayerUsedLastFrame(int layer, int prio);   // gfxhw.cpp: the rows the last frame drew
 #include "snes9x.h"
 #include "ppu.h"
@@ -393,6 +394,41 @@ static void gpu3dsSetShadowEnv(float a, uint32_t rgb)
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
 }
 
+// Stages 3-5 for the glow pass (issue #77): alpha = the texel's luminance
+// (76 R + 150 G + 29 B) / 255, so the alpha test keeps bright texels and
+// SRC_ALPHA blending adds more for brighter ones; RGB = texel x tint x
+// gain (x2 scale for gains above 1). on = false restores passthrough.
+static void gpu3dsSetGlowEnv(bool on, float gain, uint32_t rgb)
+{
+    C3D_TexEnv *e3 = C3D_GetTexEnv(3), *e4 = C3D_GetTexEnv(4), *e5 = C3D_GetTexEnv(5);
+    C3D_TexEnvInit(e3); C3D_TexEnvInit(e4); C3D_TexEnvInit(e5);
+    if (!on) return;
+    const u32 abgr = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
+    const u32 g = (u32)stereo_glow_env_const(gain);
+    // stage 3: rgb = tex x (tint x gain); alpha = tex.r x 76/255
+    C3D_TexEnvColor(e3, (76u << 24) | (((abgr >> 16) & 0xFF) * g / 255u << 16) | (((abgr >> 8) & 0xFF) * g / 255u << 8) | ((abgr & 0xFF) * g / 255u));
+    C3D_TexEnvSrc(e3, C3D_RGB, GPU_TEXTURE0, GPU_CONSTANT);
+    C3D_TexEnvFunc(e3, C3D_RGB, GPU_MODULATE);
+    if (stereo_glow_env_x2(gain)) C3D_TexEnvScale(e3, C3D_RGB, GPU_TEVSCALE_2);
+    C3D_TexEnvSrc(e3, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT);
+    C3D_TexEnvOpAlpha(e3, GPU_TEVOP_A_SRC_R, GPU_TEVOP_A_SRC_ALPHA);
+    C3D_TexEnvFunc(e3, C3D_Alpha, GPU_MODULATE);
+    // stage 4: alpha += tex.g x 150/255
+    C3D_TexEnvColor(e4, 150u << 24);
+    C3D_TexEnvSrc(e4, C3D_RGB, GPU_PREVIOUS);
+    C3D_TexEnvFunc(e4, C3D_RGB, GPU_REPLACE);
+    C3D_TexEnvSrc(e4, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
+    C3D_TexEnvOpAlpha(e4, GPU_TEVOP_A_SRC_G, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_ALPHA);
+    C3D_TexEnvFunc(e4, C3D_Alpha, GPU_MULTIPLY_ADD);
+    // stage 5: alpha += tex.b x 29/255
+    C3D_TexEnvColor(e5, 29u << 24);
+    C3D_TexEnvSrc(e5, C3D_RGB, GPU_PREVIOUS);
+    C3D_TexEnvFunc(e5, C3D_RGB, GPU_REPLACE);
+    C3D_TexEnvSrc(e5, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
+    C3D_TexEnvOpAlpha(e5, GPU_TEVOP_A_SRC_B, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_ALPHA);
+    C3D_TexEnvFunc(e5, C3D_Alpha, GPU_MULTIPLY_ADD);
+}
+
 // 3D-tab editor preview (issue #61): while >= 0, every layer except
 // this one is dimmed hard so the edited layer reads instantly.
 static int s_previewHighlightLayer = -1;
@@ -604,7 +640,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
         auto drawShadowPhase = [&]() {
             if (shadowPhaseDone) return;
             shadowPhaseDone = true;
-            if (GPU3DS.stereoShadowRows == 0 || GPU3DS.stereoEyeIOD == 0.0f) return;
+            const bool shadowsOn = GPU3DS.stereoShadowRows != 0 && GPU3DS.stereoEyeIOD != 0.0f;
+            const bool glowOn = GPU3DS.stereoGlowRows != 0 && !sub;   // never into the sub screen: subtractive colour math would darken it
+            if (!shadowsOn && !glowOn) return;
             int depthRows[STEREO_SHADOW_ROWS]; unsigned usedRows = 0;
             for (int l = 0; l < 5; l++) {
                 depthRows[stereo_shadow_row(l, 0)] = (int)GPU3DS.stereoLayerDepth[l];
@@ -694,7 +732,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
             }
 #endif
 
-            for (int id = LAYER_BG0; id <= LAYER_OBJ; id++) {
+            for (int id = LAYER_BG0; id <= LAYER_OBJ && shadowsOn; id++) {
                 if (!settings3DS.LayerEnabled[id]) continue;
                 const int tiers = id == LAYER_OBJ ? 4 : 2;
                 int cFrom, cTo;
@@ -766,6 +804,69 @@ void gpu3dsDrawLayers(SLayerList *list) {
             if (anyPass) {
                 gpu3dsSetShadowEnv(0.0f, 0);
                 gpu3dsShadowPassEnd();
+            }
+
+            // Glow (issue #77): the marked rows' bright texels drawn again at
+            // their own parallax, added to the frame, with a halo of copies.
+            // Works in 2D too (shifts are 0). The load controller's tier
+            // lowers the halo and its fade multiplier scales the gain.
+            if (glowOn && GPU3DSExt.shadowAlphaMul > 0.01f) {
+                const int soft = stereo_glow_clamp_soft(GPU3DS.stereoGlowSoft - (GPU3DS.stereoShadowQuality >= 1 ? GPU3DSExt.shadowLoadTier : 0));
+                const int copies = stereo_glow_copies(soft);
+                const float gain = stereo_glow_copy_gain(GPU3DS.stereoGlowStrength, soft) * GPU3DSExt.shadowAlphaMul;
+                const uint32_t tint = stereo_glow_color_rgb(GPU3DS.stereoGlowColor);
+                const int ref = stereo_glow_alpha_ref(GPU3DS.stereoGlowThresh);
+                bool anyGlow = false;
+                for (int id = LAYER_BG0; id <= LAYER_OBJ; id++) {
+                    if (!settings3DS.LayerEnabled[id]) continue;
+                    const int tiers = id == LAYER_OBJ ? 4 : 2;
+                    float sh[4] = { 4096.0f, 4096.0f, 4096.0f, 4096.0f }; bool any = false;
+                    for (int t = 0; t < tiers; t++) {
+                        const int row = stereo_shadow_row(id, t);
+                        if (!stereo_shadow_marked((unsigned)GPU3DS.stereoGlowRows, id, t)) continue;
+                        if (((usedRows >> row) & 1u) == 0) continue;
+                        sh[t] = ownShift(id, t); any = true;
+                    }
+                    int cFrom, cTo;
+                    if (!any || !sectionsOf(id, cFrom, cTo)) continue;
+                    SLayer *ly = &list->layers[id];
+                    gpu3dsSetGlowEnv(true, gain, tint);
+                    for (int c = 0; c < copies; c++) {
+                        float shc[4];
+                        for (int t = 0; t < 4; t++) shc[t] = sh[t] >= 4096.0f ? sh[t] : sh[t] + (float)stereo_glow_dx(soft, c);
+                        setTierShifts(id, shc, (float)stereo_glow_dy(soft, c));
+                        for (int k = cFrom; k < cTo; k++) {
+                            SLayerSection *sec = &list->sections[k];
+                            if (sec->vboId == VBO_SCENE_MODE7_LINE) continue;
+                            GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
+                            GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+                            u64 mask = gpu3dsGetLayerPackedMask(ly->id, true);
+                            GPU3DS.currentRenderState.packed = (GPU3DS.currentRenderState.packed & ~mask) | (sec->state.packed & mask);
+                            GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
+                            GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                            GPU3DS.currentRenderState.target = (SGPU_TARGET_ID)i;
+                            GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
+                            gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
+                            gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
+                            gpu3dsGlowPassState(ref);
+                            GPU3DSExt.glowDraws++;
+                            SVertexList *vbo = &GPU3DS.vertices[sec->vboId];
+                            if (list->useDrawArraysForTiledLayers) {
+                                gpu3dsDraw(vbo, NULL, sec->count, sec->from);
+                            } else if (shadowIbo != nullptr && shadowIboUsed + sec->count <= SHADOW_IBO_MAX) {
+                                u16 *dst = shadowIbo + shadowIboUsed;
+                                for (int k2 = 0; k2 < sec->count; k2++) dst[k2] = (u16)(sec->from + k2);
+                                gpu3dsDraw(vbo, (void *)dst, sec->count);
+                                shadowIboUsed += sec->count;
+                            }
+                            anyGlow = true;
+                        }
+                    }
+                }
+                if (anyGlow) {
+                    gpu3dsSetGlowEnv(false, 0.0f, 0);
+                    gpu3dsGlowPassEnd();
+                }
             }
             gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
             gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
