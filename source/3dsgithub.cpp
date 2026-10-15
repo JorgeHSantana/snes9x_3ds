@@ -270,13 +270,13 @@ const char* github3dsSendScreens(char* out, size_t outSize)
             // the Effects settings in force ride along: what a screenshot is
             // usually about (issue #77)
             char name[200];
-            char fx[128];
+            char fx[160];
             snprintf(fx, sizeof(fx), " | shadow rows=%03x q=%d soft=%d | glow src=%d rows=%03x pal=%02x th=%d st=%d sp=%d halo=%d pers=%d | color %d/%d/%d",
                 GPU3DS.stereoShadowRows, GPU3DS.stereoShadowQuality, GPU3DS.stereoShadowSoft,
                 GPU3DS.stereoGlowSource, GPU3DS.stereoGlowRows, GPU3DS.stereoGlowPal & 0xFF, GPU3DS.stereoGlowThresh, GPU3DS.stereoGlowStrength,
                 GPU3DS.stereoGlowSpread, GPU3DS.stereoGlowSoft, GPU3DS.stereoGlowPersist,
                 settings3DS.ColorSat, settings3DS.ColorCon, settings3DS.ColorBri);
-            { size_t n0 = strlen(fx); snprintf(fx + n0, sizeof(fx) - n0, " | edge=%d", settings3DS.StereoEdgeMode); }
+            { size_t n0 = strlen(fx); snprintf(fx + n0, sizeof(fx) - n0, " | edge=%d depth=%d", settings3DS.StereoEdgeMode, GPU3DS.stereoGlowDepth); }
             if (parts > 1) snprintf(name, sizeof(name), "screen_%s.png (part %d/%d)%s", i == 0 ? "left" : "right", p + 1, parts, fx);
             else           snprintf(name, sizeof(name), "screen_%s.png%s", i == 0 ? "left" : "right", fx);
             GithubHeader h = {};

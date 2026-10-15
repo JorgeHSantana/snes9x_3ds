@@ -327,6 +327,7 @@ typedef struct {
     int                 StereoGlowSpread;      // 0 = halo copies; 1..3 = quarter-res spread with 1/3/5 taps
     int                 StereoGlowSource;      // 0 = marked rows; 1 = whole screen (everything above the threshold)
     int                 StereoGlowPersist;     // 0..3: quarters of the last frame's glow kept (needs Spread)
+    int                 StereoGlowDepth;       // whole-screen glow in 3D sits at: 0 the sprite plane, 1 the screen (backgrounds), 2 halfway
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
     int                 ColorSat, ColorCon, ColorBri;   // output colour grade -4..4 each (screen_grade.h), game-global
                                                // (game window narrows, scale kept), 2 = Zoom
@@ -360,6 +361,7 @@ typedef struct {
         int  GlowSpread;                                                 // 0..3
         int  GlowSource;                                                 // 0 rows, 1 whole screen
         int  GlowPersist;                                                // 0..3
+        int  GlowDepth;                                                  // 0 sprites, 1 backgrounds, 2 centre
     };
     struct SStereoBind {
         u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C

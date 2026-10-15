@@ -672,9 +672,14 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
         SVertexList *rects = &GPU3DS.vertices[VBO_SCENE_RECT];
         int floorFrom = rects->from + rects->count;
-        // y 255, not 256: 256 decodes as y = 0 on plane 1 in the tile
-        // shader and the rect collapses (this floor never ran until 2026-10-15)
-        gpu3dsAddRectangleVertexes(0, 0, 512, 255, 0x00000000);
+        // DELIBERATELY inert: y = 256 decodes as y = 0 on plane 1 in the tile
+        // shader and the rect collapses. It was made to run (y 255) on
+        // 2026-10-15 and the drop shadows stopped on the console: a colour
+        // write into the depth texture while it is also the layers' depth
+        // buffer races the depth cache on the PICA (the zeros land after
+        // the BGs' planes and EQUAL finds nothing). Azahar shows neither.
+        // The shadows never needed it: every drawn pixel writes its plane.
+        gpu3dsAddRectangleVertexes(0, 0, 512, 256, 0x00000000);
         gpu3dsDraw(rects, NULL, 2, floorFrom);
         rects->count -= 2;   // paused previews replay this path with no
                              // per-frame VBO flip - don't let it creep
@@ -1044,14 +1049,34 @@ void gpu3dsDrawLayers(SLayerList *list) {
                             margin = (int)(GPU3DS.stereoMaxAbs * (iod / gpu3dsGetIODBase()) * STEREO_PARALLAX_SCALE * (float)glowW / 256.0f + 0.999f);
                             if (margin > glowW / 4) margin = glowW / 4;
                         }
-                        const int qFrom = s_glowScratch.addQuad((s16)margin, 1, (s16)(glowW - margin), (s16)glowH, (s16)margin, 1, (s16)(glowW - margin), (s16)glowH);
-                        gpu3dsDraw(&s_glowScratch.quad, NULL, 2, qFrom);
-                        GPU3DSExt.glowDraws++;
+                        // a 4x4 box average, not one texel per glow texel: four
+                        // bilinear taps (2x2 each) at +-1 px, a quarter of the gain
+                        // each - a nearest pick flickered as the screen scrolled
+                        // (isolated bright pixels crossing the threshold, Jorge)
+                        SGPUTexture *src = &GPU3DS.textures[SNES_MAIN];
+                        C3D_TexSetFilter(&src->tex, GPU_LINEAR, GPU_LINEAR);
+                        C3D_TexBind(0, &src->tex);
+                        gpu3dsSetGlowEnv(true, gain * 0.25f, tint);
+                        for (int tp = 0; tp < 4; tp++) {
+                            const float tx = (tp & 1) ? 1.0f : -1.0f, ty = (tp & 2) ? 1.0f : -1.0f;
+                            gpu3dsSetStereoParallax3(tx, tx, 0.0f, ty);
+                            gpu3dsSetStereoParallaxHi(tx, tx, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
+                            const int qFrom = s_glowScratch.addQuad((s16)margin, 1, (s16)(glowW - margin), (s16)glowH, (s16)margin, 1, (s16)(glowW - margin), (s16)glowH);
+                            gpu3dsDraw(&s_glowScratch.quad, NULL, 2, qFrom);
+                            GPU3DSExt.glowDraws++;
+                        }
+                        gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
+                        C3D_TexSetFilter(&src->tex, GPU_NEAREST, GPU_NEAREST);   // gpu3dsBindTexture re-decides on the next bind
+                        C3D_TexBind(0, &src->tex);
                     }
                     anyGlow = true;
                     // the right eye: the sprite plane sits at ownShift here and at
                     // -ownShift in the left eye the glow came from
-                    const float shift = rightEye ? 2.0f * ownShift(LAYER_OBJ, 2) : 0.0f;
+                    // Depth: where the single glow sits - the sprite plane (2x its
+                    // parallax: +p in the left eye the glow came from, -p here),
+                    // the screen (backgrounds at 0: no shift), or halfway
+                    const float spriteShift = 2.0f * ownShift(LAYER_OBJ, 2);
+                    const float shift = !rightEye ? 0.0f : (GPU3DS.stereoGlowDepth == 1 ? 0.0f : (GPU3DS.stereoGlowDepth == 2 ? 0.5f * spriteShift : spriteShift));
                     compositeGlow(-1, shift);
                 }
                 // with persistence every tier shares the one decaying target:

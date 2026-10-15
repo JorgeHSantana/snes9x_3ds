@@ -344,7 +344,7 @@ static void settings3dsStereoDefaultProfile(S9xSettings3DS::SStereoProfile *p)
     p->ShadowY = settings3DS.StereoShadowY;
     p->ShadowColor = settings3DS.StereoShadowColor;
     p->ShadowAlpha = settings3DS.StereoShadowAlpha; p->ShadowFade = settings3DS.StereoShadowFade; p->ShadowSoft = settings3DS.StereoShadowSoft; p->ShadowQuality = settings3DS.StereoShadowQuality;
-    p->GlowRows = settings3DS.StereoGlowRows; p->GlowThresh = settings3DS.StereoGlowThresh; p->GlowStrength = settings3DS.StereoGlowStrength; p->GlowSoft = settings3DS.StereoGlowSoft; p->GlowColor = settings3DS.StereoGlowColor; p->GlowPal = settings3DS.StereoGlowPal; p->GlowSpread = settings3DS.StereoGlowSpread; p->GlowSource = settings3DS.StereoGlowSource; p->GlowPersist = settings3DS.StereoGlowPersist;
+    p->GlowRows = settings3DS.StereoGlowRows; p->GlowThresh = settings3DS.StereoGlowThresh; p->GlowStrength = settings3DS.StereoGlowStrength; p->GlowSoft = settings3DS.StereoGlowSoft; p->GlowColor = settings3DS.StereoGlowColor; p->GlowPal = settings3DS.StereoGlowPal; p->GlowSpread = settings3DS.StereoGlowSpread; p->GlowSource = settings3DS.StereoGlowSource; p->GlowPersist = settings3DS.StereoGlowPersist; p->GlowDepth = settings3DS.StereoGlowDepth;
 }
 
 static int s_stereoActiveIdx = -1;   // -1 = default profile
@@ -473,7 +473,7 @@ void settings3dsStereoApplyProfile(int idx)
     if (GPU3DS.stereoShadowRows != p->ShadowRows || GPU3DS.stereoShadowSoft != p->ShadowSoft || GPU3DS.stereoShadowQuality != p->ShadowQuality)
         log3dsWrite("[shadow] applied rows=%03x soft=%d quality=%d (%s)", p->ShadowRows, p->ShadowSoft, p->ShadowQuality, p->Name[0] ? p->Name : "Default");
     GPU3DS.stereoShadowRows = p->ShadowRows; GPU3DS.stereoShadowX = p->ShadowX; GPU3DS.stereoShadowY = p->ShadowY; GPU3DS.stereoShadowColor = p->ShadowColor; GPU3DS.stereoShadowAlpha = p->ShadowAlpha; GPU3DS.stereoShadowFade = p->ShadowFade; GPU3DS.stereoShadowSoft = p->ShadowSoft; GPU3DS.stereoShadowQuality = p->ShadowQuality;
-    GPU3DS.stereoGlowRows = p->GlowRows; GPU3DS.stereoGlowThresh = p->GlowThresh; GPU3DS.stereoGlowStrength = p->GlowStrength; GPU3DS.stereoGlowSoft = p->GlowSoft; GPU3DS.stereoGlowColor = p->GlowColor; GPU3DS.stereoGlowPal = p->GlowPal; GPU3DS.stereoGlowSpread = p->GlowSpread; GPU3DS.stereoGlowSource = p->GlowSource; GPU3DS.stereoGlowPersist = p->GlowPersist;
+    GPU3DS.stereoGlowRows = p->GlowRows; GPU3DS.stereoGlowThresh = p->GlowThresh; GPU3DS.stereoGlowStrength = p->GlowStrength; GPU3DS.stereoGlowSoft = p->GlowSoft; GPU3DS.stereoGlowColor = p->GlowColor; GPU3DS.stereoGlowPal = p->GlowPal; GPU3DS.stereoGlowSpread = p->GlowSpread; GPU3DS.stereoGlowSource = p->GlowSource; GPU3DS.stereoGlowPersist = p->GlowPersist; GPU3DS.stereoGlowDepth = p->GlowDepth;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);
@@ -496,7 +496,7 @@ void settings3dsStereoApplyDefault()
     if (GPU3DS.stereoShadowRows != p->ShadowRows || GPU3DS.stereoShadowSoft != p->ShadowSoft || GPU3DS.stereoShadowQuality != p->ShadowQuality)
         log3dsWrite("[shadow] applied rows=%03x soft=%d quality=%d (%s)", p->ShadowRows, p->ShadowSoft, p->ShadowQuality, p->Name[0] ? p->Name : "Default");
     GPU3DS.stereoShadowRows = p->ShadowRows; GPU3DS.stereoShadowX = p->ShadowX; GPU3DS.stereoShadowY = p->ShadowY; GPU3DS.stereoShadowColor = p->ShadowColor; GPU3DS.stereoShadowAlpha = p->ShadowAlpha; GPU3DS.stereoShadowFade = p->ShadowFade; GPU3DS.stereoShadowSoft = p->ShadowSoft; GPU3DS.stereoShadowQuality = p->ShadowQuality;
-    GPU3DS.stereoGlowRows = p->GlowRows; GPU3DS.stereoGlowThresh = p->GlowThresh; GPU3DS.stereoGlowStrength = p->GlowStrength; GPU3DS.stereoGlowSoft = p->GlowSoft; GPU3DS.stereoGlowColor = p->GlowColor; GPU3DS.stereoGlowPal = p->GlowPal; GPU3DS.stereoGlowSpread = p->GlowSpread; GPU3DS.stereoGlowSource = p->GlowSource; GPU3DS.stereoGlowPersist = p->GlowPersist;
+    GPU3DS.stereoGlowRows = p->GlowRows; GPU3DS.stereoGlowThresh = p->GlowThresh; GPU3DS.stereoGlowStrength = p->GlowStrength; GPU3DS.stereoGlowSoft = p->GlowSoft; GPU3DS.stereoGlowColor = p->GlowColor; GPU3DS.stereoGlowPal = p->GlowPal; GPU3DS.stereoGlowSpread = p->GlowSpread; GPU3DS.stereoGlowSource = p->GlowSource; GPU3DS.stereoGlowPersist = p->GlowPersist; GPU3DS.stereoGlowDepth = p->GlowDepth;
     settings3dsStereoApplyValues(depths, depthsP1, objHi, (float)p->Fade, (float)p->Haze,
         (float)p->Blur, (float)p->FocusBack, (float)p->FocusFront,
         settings3DS.StereoEdgeMode);   // edge is game-global (Jorge's UX)
