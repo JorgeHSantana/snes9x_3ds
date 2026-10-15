@@ -14,8 +14,11 @@ Notable changes to this project will be documented in this file.
   again, added to the frame in their own colours (or a tint) with a
   small halo, selected by luminance in the TexEnv (Glow Threshold), with
   Glow Strength and Glow Halo (Off / Cross / Box); Shadow Quality lowers
-  the halo under load. Works in 2D too. Saved per profile (`GLOW`,
-  `GLOWTHRESH`, `GLOWSTRENGTH`, `GLOWSOFT`, `GLOWCOLOR`).
+  the halo under load. Works in 2D too. "Palette N" checkboxes pick
+  which sprite palettes glow (the charged shot's, not the hero's), with
+  the top screen showing only that palette's sprites while the cursor
+  is on the row. Saved per profile (`GLOW`, `GLOWTHRESH`, `GLOWSTRENGTH`,
+  `GLOWSOFT`, `GLOWCOLOR`, `GLOWPAL`).
 
 
 ## Stable v2.5 (2026-10-15)

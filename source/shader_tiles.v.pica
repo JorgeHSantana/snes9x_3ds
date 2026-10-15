@@ -13,6 +13,8 @@
                                  ;      x = ramp strength k (0..1), y = near-row gain (1..2),
                                  ;      z = -fog amount (rows fog by distance into color.b),
                                  ;      w = -ghost offset (blur grows with distance)
+.fvec       glowPal              ; #10 - glow by sprite palette (issue #77): x = 8-bit mask of
+                                 ;       palettes that draw, y = 1 to enforce it (0 = no-op)
 .fvec       stereoIOD2           ; #8 - (tier2 shift, tier3 shift, boundary 1/2,
                                  ;      boundary 2/3). BG layers park both boundaries
                                  ;      far above any plane so only tiers 0/1 exist;
@@ -25,6 +27,7 @@
 .constf c_alpha         (24576, 8192, 255, 0)
 .constf c_depth         (0.03125, -256, 0.00390625, 0)
 .constf c_m7            (-1, 0.00390625, 1, 0)   ; Mode 7 perspective helpers: -1, 1/256, 1
+.constf c_pal           (0.0009765625, 0.5, 2, 4096)   ; 1/1024 (tile -> palette), 1/2, 2, park
 
 ; Outputs
 .out        outpos      position
@@ -51,6 +54,8 @@
 .proc vmain
     mov     r0, inpos
     mov     r10, intex
+    mov     r12, c_pal
+    mov     r12.y, c_base.x             ; palette 0 unless the tile decode below sets it
 
     mov     r1, c_base
     mov     r2, c_tex
@@ -73,6 +78,8 @@ computing_hflip:
     add     r0.z, r0.z, -r2.y           ; r0.z = r0.z - 16384 (removes the 0x4000 bit)
 
 computing_tex_pos:
+    mul     r12.y, r0.z, r12.x          ; palette = floor(tile / 1024): sprites index 1024 tiles per palette
+    flr     r12.y, r12.y
     mul     r9.y, r0.z, r2.z            ; r9.y = r0.z * (1/128)
     flr     r9.y, r9.y                  ; r9.y = floor(r9.y)
     mad     r9.x, r9.y, -r2.w, r0.z     ; r9.x = r0.z - r9.y * 128
@@ -160,6 +167,21 @@ draw:
     mad     r11.z, r6.x, mode7Persp.z, r11.z    ; color.b += d * (-fog) = fog * (1 - w/256): fog by
                                                 ; distance (a line's b is 0; every other draw has z = 0)
     add     r0.x, r4.x, r0.x
+    ; glow by palette (issue #77): bit = floor(mask / 2^pal) mod 2; a tile
+    ; whose palette is not in the mask parks off-screen (+4096) while the
+    ; enable flag is 1. (255, 0) outside the glow pass = exact no-op.
+    mov     r13, glowPal                ; x = mask, y = enable (copied: a swizzled uniform operand mis-encodes)
+    mov     r14.x, -r12.y
+    ex2     r14.x, r14.x                ; 2^-pal
+    mul     r14.y, r13.x, r14.x         ; mask / 2^pal
+    flr     r14.y, r14.y
+    mov     r15, c_pal                  ; (1/1024, 1/2, 2, 4096)
+    mul     r14.z, r14.y, r15.y         ; / 2
+    flr     r14.z, r14.z
+    mad     r14.y, r14.z, -r15.z, r14.y ; bit = v - 2 floor(v/2)
+    mul     r14.y, r14.y, r13.y         ; bit and enable
+    add     r14.y, r14.y, -r13.y        ; 0 when it draws, -1 when enabled and not in the mask
+    mad     r0.x, r14.y, -r15.w, r0.x   ; park: x += 4096
     mov     r7, stereoIOD               ; drop shadow y offset in w (issue #77; 0 outside the shadow pass)
     add     r0.y, r7.w, r0.y
     mul     r11.w, r4.y, r11.w          ; editor spotlight: other priorities'

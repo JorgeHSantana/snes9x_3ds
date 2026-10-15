@@ -434,11 +434,13 @@ static void gpu3dsSetGlowEnv(bool on, float gain, uint32_t rgb)
 // this one is dimmed hard so the edited layer reads instantly.
 static int s_previewHighlightLayer = -1;
 static int s_previewHighlightPrio = -1;   // -1 = whole layer
+static int s_previewHighlightPal = -1;    // >= 0: only this sprite palette draws (glow by palette)
 
 void gpu3dsSetStereoPreviewHighlight(int layerId, int prio)
 {
     s_previewHighlightLayer = layerId;
-    s_previewHighlightPrio = prio;
+    s_previewHighlightPal = prio >= 8 ? prio - 8 : -1;
+    s_previewHighlightPrio = prio >= 8 ? -1 : prio;
     s_atmosLastColor = 1;               // poison the dedup so envs re-apply
 }
 
@@ -832,6 +834,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     if (!any || !sectionsOf(id, cFrom, cTo)) continue;
                     SLayer *ly = &list->layers[id];
                     gpu3dsSetGlowEnv(true, gain, tint);
+                    gpu3dsSetGlowPalette(GPU3DS.stereoGlowPal, id == LAYER_OBJ && (GPU3DS.stereoGlowPal & 0xFF) != 0xFF);
                     for (int c = 0; c < copies; c++) {
                         float shc[4];
                         for (int t = 0; t < 4; t++) shc[t] = sh[t] >= 4096.0f ? sh[t] : sh[t] + (float)stereo_glow_dx(soft, c);
@@ -1192,7 +1195,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 gpu3dsSetStereoLayerAtmosphere(id);
             }
 
+            if (id == LAYER_OBJ && s_previewHighlightPal >= 0) gpu3dsSetGlowPalette(1 << s_previewHighlightPal, true);
             drawLayerContent();
+            if (id == LAYER_OBJ && s_previewHighlightPal >= 0) gpu3dsSetGlowPalette(255, false);
             }   // spotlight passes
         }
         drawShadowPhase();   // a frame without colour math or brightness sections

@@ -131,6 +131,17 @@ Mode 7 casts nothing.
   `mmx3-glow-thresh` (14: 357), against `mmx3-shadow-off`.
 - The hardware check is Jorge's console: nothing in the repo used
   MULTIPLY_ADD, the R/G/B alpha operands or the x2 scale before.
+- Per sprite (Jorge): by OBJ palette. A sprite tile's index carries its
+  palette (`Palette << 10`, 1024 tiles per palette), so the tile vertex
+  shader derives the palette from the tile (`floor(tile / 1024)`) and,
+  while the `glowPal` uniform's enable flag is set, parks off-screen
+  every tile whose palette is not in the 8-bit mask (bit = floor(mask /
+  2^pal) mod 2, via ex2). No new vertex data; (255, 0) outside the glow
+  pass is an exact no-op. `GLOWPAL` per profile (default all); the
+  editor lists the palettes drawn last frame (`S9xObjPalettesUsedLastFrame`)
+  and spotlights one by drawing the OBJ layer with its mask (prio 8 +
+  palette in the highlight call). Sprite signatures (#76's machinery)
+  stay out: a palette separates effects from heroes in practice.
 
 ## Output colour grade (2026-10-15)
 - `screen_grade.h` (pure, tested): gauges -4..4 -> s = 1 + sat/4,

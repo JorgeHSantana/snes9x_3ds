@@ -131,8 +131,16 @@ void gpu3dsGlowPassState(int alphaRef)
     // the applied alpha test stays "NE_ZERO" on purpose: a poison here would
     // make the draw's own apply put NE_ZERO back over the luminance test
 }
+void gpu3dsSetGlowPalette(int mask, bool enable)
+{
+    const float m = (float)(mask & 0xFF), e = enable ? 1.0f : 0.0f;
+    if (GPU3DS.glowPalSet[0] == m && GPU3DS.glowPalSet[1] == e) return;
+    GPU3DS.glowPalSet[0] = m; GPU3DS.glowPalSet[1] = e;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL], m, e, 0.0f, 0.0f);
+}
 void gpu3dsGlowPassEnd()
 {
+    gpu3dsSetGlowPalette(255, false);
     C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
     C3D_AlphaTest(false, GPU_ALWAYS, 0);
     gpu3dsDisableAlphaBlending();
@@ -507,6 +515,8 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP],
             GPU3DS.mode7PerspSet[0], GPU3DS.mode7PerspSet[1],
             -GPU3DS.mode7PerspSet[2], -GPU3DS.mode7PerspSet[3]);
+        C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL],
+            GPU3DS.glowPalSet[0], GPU3DS.glowPalSet[1], 0.0f, 0.0f);
     }
 
     if (shaderUpdated && state->shader == SPROGRAM_MODE7) {
@@ -642,9 +652,10 @@ bool gpu3dsInitialize()
     GPU3DS.stereoMode7Persp = 0.0f;
     GPU3DS.stereoMode7Fx = 0.0f;
     GPU3DS.stereoShadowRows = 0; GPU3DS.stereoShadowX = 2; GPU3DS.stereoShadowY = 2; GPU3DS.stereoShadowColor = 0; GPU3DS.stereoShadowAlpha = 4; GPU3DS.stereoShadowFade = 0; GPU3DS.stereoShadowSoft = 0; GPU3DS.stereoShadowQuality = 1;
-    GPU3DS.stereoGlowRows = 0; GPU3DS.stereoGlowThresh = 8; GPU3DS.stereoGlowStrength = 4; GPU3DS.stereoGlowSoft = 1; GPU3DS.stereoGlowColor = 0;
+    GPU3DS.stereoGlowRows = 0; GPU3DS.stereoGlowThresh = 8; GPU3DS.stereoGlowStrength = 4; GPU3DS.stereoGlowSoft = 1; GPU3DS.stereoGlowColor = 0; GPU3DS.stereoGlowPal = 255;
     GPU3DSExt.shadowSoftLevel = 0; GPU3DSExt.shadowAlphaMul = 1.0f;   // until the frame loop steps the controller
     GPU3DS.stereoShadowOffY = 0.0f;
+    GPU3DS.glowPalSet[0] = 255.0f; GPU3DS.glowPalSet[1] = 0.0f;
     GPU3DS.mode7PerspApplied = -1.0f;
     GPU3DS.mode7PerspSet[0] = GPU3DS.mode7PerspSet[2] = GPU3DS.mode7PerspSet[3] = 0.0f;
     GPU3DS.mode7PerspSet[1] = 1.0f;
@@ -1024,6 +1035,7 @@ bool gpu3dsInitializeShaderUniformLocations()
     GPU3DS.shaderULocs[ULOC_STEREO_DIM] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoDim");
     GPU3DS.shaderULocs[ULOC_STEREO_IOD2] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoIOD2");
     GPU3DS.shaderULocs[ULOC_MODE7_PERSP] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "mode7Persp");
+    GPU3DS.shaderULocs[ULOC_GLOW_PAL] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "glowPal");
 
 	bool uLocsInvalid = false;
 

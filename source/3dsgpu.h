@@ -86,6 +86,7 @@ typedef enum {
     ULOC_STEREO_DIM,
     ULOC_STEREO_IOD2,
     ULOC_MODE7_PERSP,
+    ULOC_GLOW_PAL,
     ULOC_COUNT
 } SGPU_SHADER_ULOC;
 
@@ -319,7 +320,9 @@ typedef struct
     int                         stereoShadowSoft;   // soft edge level 0..2
     int                         stereoShadowQuality; // 0 Full, 1 Auto, 2 Auto Off under load
     int                         stereoGlowRows, stereoGlowThresh, stereoGlowStrength, stereoGlowSoft, stereoGlowColor;   // glow per row (stereo_glow.h)
+    int                         stereoGlowPal;      // sprite palettes that glow, 8-bit mask
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
+    float                       glowPalSet[2];      // (mask, enable) the tile shader holds; (255, 0) = no-op
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
@@ -539,6 +542,7 @@ void gpu3dsShadowPassEnd();
 // Glow (issue #77): additive pass of the bright texels - alpha test by luminance
 void gpu3dsGlowPassState(int alphaRef);
 void gpu3dsGlowPassEnd();
+void gpu3dsSetGlowPalette(int mask, bool enable);   // sprite palettes that draw in the tile shader; (255, false) = no-op
 // Output colour grade (screen_grade.h) in the blit's TexEnv stages 1-5; no extra pass
 struct ScreenGrade;
 void gpu3dsSetScreenGrade(const ScreenGrade &g, bool vertexAlpha);

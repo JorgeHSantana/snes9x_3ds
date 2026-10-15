@@ -13,6 +13,7 @@ extern "C" void S9xRenderScreenHardware (bool8 sub, bool8 force_no_add, uint8 D)
 void S9xLayerUseFrameStart();
 void S9xLayerUseFrameEnd();
 bool S9xLayerUsedLastFrame(int layer, int prio);
+unsigned S9xObjPalettesUsedLastFrame();   // bit per OBJ palette drawn last frame (glow by palette)
 bool S9xLayerUsedLastFrameAny(int layer);
 // a Mode 7 plane drew in the last rendered frame (editor: the Mode 7 gauge dims otherwise)
 bool S9xMode7DrawnLastFrame();

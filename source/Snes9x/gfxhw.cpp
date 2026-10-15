@@ -732,10 +732,13 @@ void S9xLayerUseFrameStart()
 {
     layerUseFrameStart(&s_layerUse); s_m7DrawnAcc = false;
 }
+static unsigned s_objPalAcc = 0, s_objPalLast = 0;   // sprite palettes drawn this / last frame (glow by palette)
 void S9xLayerUseFrameEnd()
 {
     layerUseFrameEnd(&s_layerUse); s_m7DrawnLast = s_m7DrawnAcc;
+    s_objPalLast = s_objPalAcc; s_objPalAcc = 0;
 }
+unsigned S9xObjPalettesUsedLastFrame() { return s_objPalLast; }
 bool S9xMode7DrawnLastFrame() { return s_m7DrawnLast; }
 bool S9xLayerUsedLastFrame(int layer, int prio) { return layerUseUsed(&s_layerUse, layer, prio); }
 bool S9xLayerUsedLastFrameAny(int layer)        { return layerUseLayerUsed(&s_layerUse, layer); }
@@ -2880,6 +2883,7 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 				
 				int priorityOffset = (PPU.OBJ[S].Priority + 1) * 3 * 256 + depth;
 				layerUseMark(&s_layerUse, 4, PPU.OBJ[S].Priority & 3);
+				s_objPalAcc |= 1u << (PPU.OBJ[S].Palette & 7);
 				bool isVFlipped = PPU.OBJ[S].VFlip;
 				bool isHFlipped = PPU.OBJ[S].HFlip;
 				int objWidth = GFX.OBJWidths[S];
