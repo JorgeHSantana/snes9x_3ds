@@ -215,3 +215,13 @@ Mode 7 casts nothing.
   Azahar's SBS probe draws both eyes every frame and cannot reproduce
   the mismatch; it did confirm the glow's parallax equals the sprite's
   in both eyes (-4 px at depth 4), still and walking.
+- Whole screen in 3D (Jorge): ONE glow per frame, rendered from the LEFT
+  eye's texture (minus the parallax margin at each side), composited into
+  the left eye as is and into the right eye shifted by twice the sprite
+  plane's parallax (`2 x ownShift(OBJ P2)` in the right pass), so the
+  glow is identical in both eyes and sits at the sprites' depth. Two
+  per-eye glows differed in what each eye's source edges held (a lit
+  top line in one eye, a vertical strip in the other, both only on the
+  console) and cost twice. Known limit: Mode 7 rows keep their own
+  parallax, the glow does not follow them. `C3D_FrameSplit(0)` before
+  sampling a texture rendered this frame; the glow target clamps to edge.

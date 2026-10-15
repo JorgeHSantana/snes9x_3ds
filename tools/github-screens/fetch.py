@@ -15,7 +15,7 @@ def bodies_from_issue(repo, issue, limit):
 def bodies_from_dir(d):
     return [json.load(open(os.path.join(d, f))) for f in sorted(os.listdir(d)) if f.endswith(".json")]
 
-HEAD = re.compile(r"`screen_(left|right)\.png(?: \(part (\d+)/(\d+)\))?`")
+HEAD = re.compile(r"`screen_(left|right)\.png(?: \(part (\d+)/(\d+)\))?[^`]*`")   # the name may carry the Effects settings
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--repo", default="JorgeHSantana/snes9x_3ds"); ap.add_argument("--issue", type=int, default=80)
     ap.add_argument("--dir", help="recv.py output folder instead of GitHub"); ap.add_argument("--out", default="shots"); ap.add_argument("--limit", type=int, default=30)
@@ -35,6 +35,8 @@ def main():
         part, total = int(m.group(2) or 1), int(m.group(3) or 1)
         entry = shots.setdefault(key, {"total": total, "parts": {}, "stamp": (stamp.group(1).strip() if stamp else it.get("created_at", ""))})
         entry["parts"][part] = fence.group(1).replace("\n", "")
+        fx = re.search(r"`screen_(?:left|right)\.png(?: \(part \d+/\d+\))? \| ([^`]*)`", body)
+        if fx: entry["settings"] = fx.group(1)
     n = 0
     for (eye, _size), s in shots.items():
         stamp = s["stamp"]
@@ -42,5 +44,6 @@ def main():
         data = base64.b64decode("".join(s["parts"][i] for i in range(1, s["total"] + 1)))
         name = os.path.join(a.out, f"{stamp.replace('/', '-').replace(':', '-').replace(' ', '_')}_{eye}.png")
         open(name, "wb").write(data); print(f"[fetch] {name}: {len(data)} bytes"); n += 1
+        if s.get("settings"): print(f"[fetch]   settings: {s['settings']}")
     if n == 0: print("[fetch] no screenshot comments found"); sys.exit(1)
 main()

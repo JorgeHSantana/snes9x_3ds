@@ -42,7 +42,9 @@ Notable changes to this project will be documented in this file.
   in front; the light leaks only onto what is behind. A Glow Source
   picker switches to "Whole screen": everything in the frame above the
   threshold glows (HUD included), a post-process bloom through the same
-  quarter-res target. Palette rows show how many sprites use each.
+  quarter-res target; in 3D it is computed once from the left eye and
+  composited into both eyes at the sprites' depth, so both eyes see the
+  same glow (and it costs one pass, not two). Palette rows show how many sprites use each.
   Saved per profile (`GLOW`, `GLOWTHRESH`, `GLOWSTRENGTH`, `GLOWSOFT`,
   `GLOWCOLOR`, `GLOWPAL`, `GLOWSPREAD`, `GLOWSRC`).
 
