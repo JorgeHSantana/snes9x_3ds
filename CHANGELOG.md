@@ -3,6 +3,11 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+* Send Screenshot to GitHub (Emulation tab, with the log and crash dump
+  items): the paused top screen, left and right eye, redrawn undimmed
+  and posted as PNG (base64) comments on the issue named in
+  `github.env`, split into parts when a PNG passes GitHub's comment
+  limit. `tools/github-screens/fetch.py` reassembles them into files.
 * Effects tab (Jorge): Shadows, Glow and Color move out of the 3D Stereo
   tab and the Display block into their own tab, beside 3D Stereo, with
   the same scene profile in edit (picker at the top) and the live top-

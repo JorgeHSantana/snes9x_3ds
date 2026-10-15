@@ -13,6 +13,8 @@
 #include "3dsupdater.h"
 #include "github_env.h"
 #include "github_report.h"
+#include "3dsimpl.h"
+#include "png_utils.h"
 
 #define GITHUB_ENV_FILE  "github.env"
 #define LUMA_DUMP_DIR    "sdmc:/luma/dumps/arm11"
@@ -166,5 +168,126 @@ const char* github3dsSend(bool crashDump, char* out, size_t outSize)
 done:
     memset(&env, 0, sizeof(env));
     linearFree(arena);
+    return err;
+}
+
+
+// ---------------------------------------------------------------------
+// Screenshot send (issue #77)
+
+struct ScreenPng { uint8_t* data; size_t len; };
+static ScreenPng s_shot[2];   // left, right
+static int s_shotCount = 0;
+
+struct PngMem { uint8_t* buf; size_t len, cap; bool overflow; };
+static void pngMemWrite(png_structp png, png_bytep data, png_size_t n)
+{
+    PngMem* m = (PngMem*)png_get_io_ptr(png);
+    if (m->len + n > m->cap) { m->overflow = true; return; }
+    memcpy(m->buf + m->len, data, n); m->len += n;
+}
+static void pngMemFlush(png_structp) {}
+
+// one top-screen framebuffer (400x240, column-major, rotated) to a PNG in `out`
+static bool encodeEye(gfx3dSide_t side, PngMem* out, char* err, size_t errSize)
+{
+    u16 fbW = 0, fbH = 0;
+    const u8* fb = gfxGetFramebuffer(GFX_TOP, side, &fbW, &fbH);
+    if (fb == NULL) { snprintf(err, errSize, "no framebuffer"); return false; }
+    int bpp = 2; bool bgr8 = false;
+    switch (gfxGetScreenFormat(GFX_TOP)) {
+        case GSP_RGBA8_OES: bpp = 4; break;
+        case GSP_BGR8_OES:  bpp = 3; bgr8 = true; break;
+        default:            bpp = 2; break;
+    }
+    const int W = 400, H = 240;
+    uint8_t* row = (uint8_t*)malloc(W * 3);
+    if (row == NULL) { snprintf(err, errSize, "out of memory"); return false; }
+    PngWriteHandle png;
+    if (!png.isValid() || !png.createInfo()) { free(row); snprintf(err, errSize, "libpng init failed"); return false; }
+    if (setjmp(png_jmpbuf(png.getPng()))) { free(row); snprintf(err, errSize, "libpng error"); return false; }
+    png_set_write_fn(png.getPng(), out, pngMemWrite, pngMemFlush);
+    png_set_compression_level(png.getPng(), 4);
+    png_set_IHDR(png.getPng(), png.getInfo(), W, H, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    png_write_info(png.getPng(), png.getInfo());
+    for (int y = 0; y < H; y++) {
+        for (int x = 0; x < W; x++) {
+            const u8* p = fb + ((size_t)x * 240 + (239 - y)) * bpp;
+            uint8_t r, g, b;
+            if (bpp == 4)      { r = p[3]; g = p[2]; b = p[1]; }
+            else if (bgr8)     { b = p[0]; g = p[1]; r = p[2]; }
+            else { const u16 v = (u16)(p[0] | (p[1] << 8)); r = (uint8_t)(((v >> 11) & 31) * 255 / 31); g = (uint8_t)(((v >> 5) & 63) * 255 / 63); b = (uint8_t)((v & 31) * 255 / 31); }
+            row[x * 3] = r; row[x * 3 + 1] = g; row[x * 3 + 2] = b;
+        }
+        png_write_row(png.getPng(), row);
+    }
+    png_write_end(png.getPng(), NULL);
+    free(row);
+    if (out->overflow) { snprintf(err, errSize, "png too large"); return false; }
+    return true;
+}
+
+bool github3dsCaptureScreens(char* err, size_t errSize)
+{
+    err[0] = '\0';
+    for (int i = 0; i < 2; i++) { if (s_shot[i].data) { linearFree(s_shot[i].data); s_shot[i].data = NULL; } s_shot[i].len = 0; }
+    s_shotCount = 0;
+    if (!settings3DS.isRomLoaded) { snprintf(err, errSize, "no game loaded"); return false; }
+    // the paused frame, undimmed, into both framebuffers of both eyes (the
+    // 3D editor's preview path); then the CPU reads what the GPU wrote
+    impl3dsStereoPreviewFrame(-1, -1, false);
+    const bool stereo = gpu3dsIs3DAvailable() && osGet3DSliderState() != 0.0f && gpu3dsGetIOD() != 0.0f;
+    impl3dsInvalidateScreen(GFX_TOP, stereo, false);
+    const int eyes = stereo ? 2 : 1;
+    for (int i = 0; i < eyes; i++) {
+        PngMem m = { (uint8_t*)linearAlloc(400 * 240 * 3), 0, 400 * 240 * 3, false };
+        if (m.buf == NULL) { snprintf(err, errSize, "out of memory"); return false; }
+        if (!encodeEye(i == 0 ? GFX_LEFT : GFX_RIGHT, &m, err, errSize)) { linearFree(m.buf); return false; }
+        s_shot[i].data = m.buf; s_shot[i].len = m.len; s_shotCount = i + 1;
+        log3dsWrite("[github] screenshot %s eye: %u bytes png", i == 0 ? "left" : "right", (unsigned)m.len);
+    }
+    return true;
+}
+
+const char* github3dsSendScreens(char* out, size_t outSize)
+{
+    out[0] = '\0';
+    if (s_shotCount == 0) return "nothing captured";
+    GithubEnv env;
+    if (!readEnv(env)) return "github.env missing or incomplete";
+    const size_t partChars = 57000;   // base64 per comment, under GitHub's 65536 with the header
+    const size_t b64Cap = 400 * 240 * 3 * 4 / 3 + 64, bodyCap = GITHUB_COMMENT_MAX + 2048;
+    char* arena = (char*)linearAlloc(b64Cap + bodyCap + 4096);
+    if (arena == NULL) { memset(&env, 0, sizeof(env)); return "out of memory"; }
+    char* b64 = arena; char* body = arena + b64Cap; char* reply = body + bodyCap;
+    const char* err = NULL;
+    if (!update3dsNetInit()) { snprintf(out, outSize, "%s", update3dsNetLastError()); err = "network unavailable"; goto done; }
+    for (int i = 0; i < s_shotCount && err == NULL; i++) {
+        const size_t b64Len = github_base64(s_shot[i].data, s_shot[i].len, b64, b64Cap);
+        if (b64Len == 0) { err = "png too large"; break; }
+        const int parts = (int)((b64Len + partChars - 1) / partChars);
+        for (int p = 0; p < parts && err == NULL; p++) {
+            char name[64];
+            if (parts > 1) snprintf(name, sizeof(name), "screen_%s.png (part %d/%d)", i == 0 ? "left" : "right", p + 1, parts);
+            else           snprintf(name, sizeof(name), "screen_%s.png", i == 0 ? "left" : "right");
+            GithubHeader h = {};
+            h.version = settings3dsGetAppVersion("v"); h.sha = updater3dsRunningSha();
+            h.model = modelName(); h.mode = clockMode(); h.date = log3dsGetCurrentDate();
+            h.fileName = name; h.fileSize = s_shot[i].len; h.sentBytes = s_shot[i].len; h.fence = "base64";
+            const size_t off = (size_t)p * partChars, take = b64Len - off > partChars ? partChars : b64Len - off;
+            const size_t bodyLen = github_comment_json(h, b64 + off, take, body, bodyCap);
+            if (bodyLen == 0) { err = "comment would exceed GitHub's limit"; break; }
+            const int status = update3dsNetPostJson(env.url, env.token, body, reply, 4096);
+            log3dsWrite("[github] screenshot %s part %d/%d: %u bytes posted, http %d", i == 0 ? "left" : "right", p + 1, parts, (unsigned)bodyLen, status);
+            if (status == 201) replyUrl(reply, out, outSize);
+            else if (status < 0) { snprintf(out, outSize, "%s", update3dsNetLastError()); err = "request failed"; }
+            else { snprintf(out, outSize, "http %d", status); err = status == 401 || status == 403 ? "token refused (check github.env)" : status == 404 ? "issue not found (check the URL)" : "GitHub refused the comment"; }
+        }
+    }
+done:
+    memset(&env, 0, sizeof(env));
+    linearFree(arena);
+    for (int i = 0; i < 2; i++) { if (s_shot[i].data) { linearFree(s_shot[i].data); s_shot[i].data = NULL; } s_shot[i].len = 0; }
+    s_shotCount = 0;
     return err;
 }

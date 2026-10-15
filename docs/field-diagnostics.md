@@ -86,7 +86,7 @@ log. Probe builds (`EXTRA_DEFINES`, all `#ifdef`, never in a release):
 | `PROBE_NO_MSU_BLANK_HACK` | MSU-1 forced-blank suppression off |
 | `PROBE_DMA_PERF` | DMA cost per class per 60 frames, section renders inside DMA |
 | `PROBE_SECTION_LOG` | what triggers each section render and its phases; Mode 7 dirty chars |
-| `PROBE_GITHUB_SEND` | posts the log at frame 300 and the dump at 360 (point `github.env` at a local HTTP server) |
+| `PROBE_GITHUB_SEND` | posts the log at frame 300, the dump at 360 and the screenshot (both eyes) at 420 (point `github.env` at `tools/github-screens/recv.py`) |
 | `PROBE_SHADOW_LOG` | drop shadows: used rows, depth gauges, BG planes and sections per target at frames 598-600 (needs `PROBE_FBDUMP`) |
 
 Azahar's `svcGetSystemTick` derives from emulated cycles: `[perf]` numbers
@@ -100,3 +100,21 @@ last release) on a fixed scene set: Mario Kart race and boot, MMX3 pillar,
 Zelda MSU transition. A savestate scene does not cover boot-time state
 transitions (the Nintendo-logo regression of 2026-09-26 only showed on
 `smk-boot`).
+
+## Screenshots from the console
+
+"Send Screenshot to GitHub" (Emulation tab, needs `github.env`) redraws the
+paused frame undimmed into both top-screen framebuffers (the 3D editor's
+preview path), encodes each eye to PNG in memory (libpng, 400x240 RGB,
+~70 KB) and posts one comment per eye, as base64 in a ```base64 block,
+split into `(part i/n)` comments when the base64 passes ~57000 chars.
+With 3D off only the left eye goes. Reassemble on the Mac with:
+
+```bash
+python3 tools/github-screens/fetch.py --issue 80 --out shots      # from the issue
+python3 tools/github-screens/fetch.py --dir recv --out shots      # from recv.py's folder
+```
+
+`tools/github-screens/recv.py --port 8765` stands in for GitHub's endpoint
+for the `PROBE_GITHUB_SEND` build (set `GITHUB_COMMENTS_URL` in the
+Azahar SD's `github.env` to `http://<mac-ip>:8765/...`).

@@ -1174,6 +1174,11 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			const char* err = github3dsSend(true, detail, sizeof(detail));
 			log3dsWrite("[probe] github send dump: %s (%s)", err ? err : "ok", detail);
 		}
+		if (frames == 420) {
+			char detail[256];
+			const char* err = github3dsCaptureScreens(detail, sizeof(detail)) ? github3dsSendScreens(detail, sizeof(detail)) : "capture failed";
+			log3dsWrite("[probe] github send screens: %s (%s)", err ? err : "ok", detail);
+		}
 	}
 #endif
 #ifdef PROBE_FBDUMP

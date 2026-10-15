@@ -344,7 +344,7 @@ static void apply3dsMode(int mode)
 }
 
 static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMenuTab);
-static void menuSendToGithub(std::vector<SMenuTab>& menuTabs, int& currentMenuTab, bool crashDump);
+static void menuSendToGithub(std::vector<SMenuTab>& menuTabs, int& currentMenuTab, int kind);
 
 void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
     items.clear();
@@ -668,13 +668,19 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
     // issue #80: only with sd:/3ds/snes9x_3ds/github.env (token + issue URL)
     if (github3dsAvailable()) {
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
-            menuSendToGithub(menuTabs, currentMenuTab, false);
+            menuSendToGithub(menuTabs, currentMenuTab, 0);
         }, MenuItemType::Action, "  Send Log to GitHub"_s, ""_s);
         items.back().PickerDescription = "Posts the end of the current session log\nas a comment on the issue named in\ngithub.env.";
         items.emplace_back([&menuTabs, &currentMenuTab](int val) {
-            menuSendToGithub(menuTabs, currentMenuTab, true);
+            menuSendToGithub(menuTabs, currentMenuTab, 1);
         }, MenuItemType::Action, "  Send Crash Dump to GitHub"_s, ""_s);
         items.back().PickerDescription = "Posts the newest Luma crash dump\n(sd:/luma/dumps/arm11) as a comment on\nthe issue named in github.env.";
+        if (settings3DS.isRomLoaded) {
+            items.emplace_back([&menuTabs, &currentMenuTab](int val) {
+                menuSendToGithub(menuTabs, currentMenuTab, 2);
+            }, MenuItemType::Action, "  Send Screenshot to GitHub"_s, ""_s);
+            items.back().PickerDescription = "Posts the paused top screen, left and\nright eye, as PNG (base64) comments on\nthe issue named in github.env.";
+        }
     }
     AddMenuDisabledOption(items, ""_s);
 
@@ -1356,23 +1362,35 @@ static void menuCheckForUpdates(std::vector<SMenuTab>& menuTabs, int& currentMen
 
 // Send log / crash dump (issue #80): the post runs on a worker thread
 // like the updater's transfers; the main thread keeps the dialog alive.
-struct GithubWorker { bool crashDump; char detail[256]; const char* error; volatile bool finished; };
+struct GithubWorker { int kind; char detail[256]; const char* error; volatile bool finished; };   // kind: 0 log, 1 crash dump, 2 screenshot
 static GithubWorker s_ghWorker;
 static void ghWorkerThreadFn(void*)
 {
-    s_ghWorker.error = github3dsSend(s_ghWorker.crashDump, s_ghWorker.detail, sizeof(s_ghWorker.detail));
+    if (s_ghWorker.kind == 2) s_ghWorker.error = github3dsSendScreens(s_ghWorker.detail, sizeof(s_ghWorker.detail));
+    else s_ghWorker.error = github3dsSend(s_ghWorker.kind == 1, s_ghWorker.detail, sizeof(s_ghWorker.detail));
     s_ghWorker.finished = true;
 }
 
-static void menuSendToGithub(std::vector<SMenuTab>& menuTabs, int& currentMenuTab, bool crashDump)
+static void menuSendToGithub(std::vector<SMenuTab>& menuTabs, int& currentMenuTab, int kind)
 {
     SMenuTab dialogTab;
     bool isDialog = false;
     int infoColor = Themes[static_cast<int>(settings3DS.Theme)].dialogColorInfo;
-    const char* title = crashDump ? "Send Crash Dump" : "Send Log";
-    const char* working = crashDump ? "Posting the newest crash dump to GitHub..." : "Posting the session log to GitHub...";
+    const char* title = kind == 2 ? "Send Screenshot" : kind == 1 ? "Send Crash Dump" : "Send Log";
+    const char* working = kind == 2 ? "Posting the top screen (both eyes) to GitHub..." : kind == 1 ? "Posting the newest crash dump to GitHub..." : "Posting the session log to GitHub...";
 
-    s_ghWorker.crashDump = crashDump;
+    if (kind == 2) {
+        // the capture needs the GPU: main thread, before the worker
+        char cerr[256];
+        if (!github3dsCaptureScreens(cerr, sizeof(cerr))) {
+            char msg[400]; snprintf(msg, sizeof(msg), "Not sent: %s", cerr);
+            menu3dsShowDialog(dialogTab, isDialog, currentMenuTab, menuTabs, title, msg,
+                Themes[static_cast<int>(settings3DS.Theme)].dialogColorWarn, makeOptionsForOk(), -1, true, 2);
+            menu3dsHideDialog(dialogTab, isDialog, currentMenuTab, menuTabs);
+            return;
+        }
+    }
+    s_ghWorker.kind = kind;
     s_ghWorker.detail[0] = '\0';
     s_ghWorker.error = NULL;
     s_ghWorker.finished = false;

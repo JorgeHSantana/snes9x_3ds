@@ -15,4 +15,12 @@ bool github3dsAvailable();
 // error (out = detail, may be empty).
 const char* github3dsSend(bool crashDump, char* out, size_t outSize);
 
+// Screenshot of the top screen, both eyes (issue #77, Jorge): the menu's
+// main thread captures first (it redraws the retained frame undimmed
+// and encodes each eye to PNG in memory), the worker then posts one
+// comment per eye, split into parts when the base64 passes GitHub's
+// limit. Returns NULL on success or a short error.
+bool github3dsCaptureScreens(char* err, size_t errSize);   // main thread
+const char* github3dsSendScreens(char* out, size_t outSize);   // worker
+
 #endif
