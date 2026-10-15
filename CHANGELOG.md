@@ -3,6 +3,14 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+* Effects tab (Jorge): Shadows, Glow and Color move out of the 3D Stereo
+  tab and the Display block into their own tab, beside 3D Stereo, with
+  the same scene profile in edit (picker at the top) and the live top-
+  screen preview. On a 2DS the tab exists with Glow and Color. With Glow
+  Source on "Whole screen" the row and palette checkboxes are hidden.
+  The cursor comes back to the row it was on after a rebuild (rows with
+  the same name in several blocks no longer send it to the first one).
+  The file tab is "Games".
 * Output colour: Saturation, Contrast and Brightness gauges (-4..4) in
   the Display block of the options menu, applied in the TexEnv stages of
   the screen blit itself - no extra pass, so free on an Old 3DS. Saved

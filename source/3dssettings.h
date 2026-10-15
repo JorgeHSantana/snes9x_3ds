@@ -379,7 +379,7 @@ typedef struct {
     bool                isRomLoaded;
     bool                isDirty;               // needs saving to disk
     bool                cheatsDirty;
-    bool                menuTabDirty[5];    // one per TAB_* id (see 3dsmenu.h)
+    bool                menuTabDirty[6];    // one per TAB_* id (see 3dsmenu.h)
 } S9xSettings3DS;
 
 extern S9xSettings3DS settings3DS;
