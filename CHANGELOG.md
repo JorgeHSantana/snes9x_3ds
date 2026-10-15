@@ -2,6 +2,9 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+
+
+## Stable v2.5 (2026-10-15)
 ### Features
 * Drop shadows per depth row (issue #77): in the 3D Stereo tab, a
   "Shadows" block lets any Depth row (BG priority or sprite priority)

@@ -44,6 +44,21 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   appearance-only invalidation, snapshot workspace (#78, #79); crash
   fixes (post-update exit, caching indicator on an empty list); dead
   ground-sprite code and the redundant Mode 7 Depth Mode removed.
+* **Stable v2.5 (2026-10-15)** — Drop shadows per depth row in 3D (#77, the
+  shadow part): the caster drawn once more at the receiver's depth plane
+  with an EQUAL depth test before colour math (the depth buffer already
+  holds the visible surface's plane; v1-v3 by redraw, stencil and alpha
+  mask fell on the console); the receiver is the gauge behind, every row
+  sharing it; Shadow X/Y, Opacity, Fade by Distance, Soft Edge (Light /
+  Full), Shadow Quality (Full / Auto / Auto, Off under load, driven by
+  the Blur Auto verdict with a 30-frame fade), Shadow Color, per profile;
+  a Shadows row spotlights its layer and the block's gauges preview live;
+  Stretch and Small Sprites Only built and removed (anchor jitter; spans
+  missing on the main screen); a marked row the scene does not draw costs
+  nothing; `[perf][frame]` reports shadow draws, Soft Edge level and the
+  rows mask; Send Log header carries the clock mode. Jorge's console:
+  Mario World 72–76 %, MMX3 water stage 93–105 % (the stage, not the
+  shadow). Issues #84–#88 opened; #86 (upstream sync) next.
 * **Stable v2.4 (2026-09-27, 6b5abc4)** — Send Log / Send Crash Dump to GitHub from
   the menu, driven by `github.env` on the SD (#80, closed; follow-ups
   #81–#83); the session log leaves the emulation thread (spool + writer
@@ -154,3 +169,9 @@ and pending hardware evidence. These deliveries do not close #78/#79/#63.
 | 81 | Envio GitHub: log inteiro e escolha do arquivo | ABERTA | continuação da #80: vários comentários ou Gist; logs de sessões anteriores; confirmação com tamanho |
 | 82 | Verificar o certificado TLS da api.github.com | ABERTA | updater e envio rodam com VERIFYPEER=0; embutir a cadeia raiz (CAINFO_BLOB) ou pinning; medir handshake no Old |
 | 83 | Envio de log para servidor próprio (LAN/nuvem) | ABERTA | proposta original da #80; POST cru para URL configurável, receptor em tools/ |
+| 77 | 3D: sombra por linha de profundidade (e glow) | ABERTA (sombra na Stable v2.5) | v4 por depth EQUAL no plano do receptor; Opacity, Fade, Soft Edge, Shadow Quality; Stretch e Small Sprites Only removidos; falta o glow / bloom seletivo |
+| 84 | Mostrar o changelog no emulador (opção após atualizar) | ABERTA | pedido 2026-09-27 |
+| 85 | Editor 3D: prévia do blur em Full, não no tier do Auto | ABERTA | pedido 2026-09-27 |
+| 86 | Sincronizar com o upstream matbo87 | ABERTA | vblank pacer, tile cache 2 bancos, rcheevos, SuperFX ASM; plano de merge na issue; próximo depois do bloom |
+| 87 | 3D: sombra achatada ao horizonte no plano de Mode 7 | ABERTA | quarta melhoria da lista do #77; uniform (h, k) no shader, só receptor Mode 7 |
+| 88 | 3D: perfil de cena por modelo (New / Old) | ABERTA | fallback para perfil sem modelo; critério pelo clock efetivo, não pelo modelo; depois do bloom e do #86 |
