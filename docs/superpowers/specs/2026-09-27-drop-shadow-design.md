@@ -10,13 +10,16 @@ of #76 is gone).
   holds a 12-bit `ShadowRows` mask plus `ShadowX`, `ShadowY` (-4..4 px,
   default 2, 2; one light per scene), `ShadowColor`, `ShadowSmallOnly`,
   `ShadowSX`, `ShadowSY` (-3..8, quarters: x0.25 .. x3).
-- Stretch X / Y scale every sprite's silhouette about its own feet (the
-  bottom centre of its OAM rectangle, recorded with the sprite's vertex
-  span in `obj_spans.h`): the tile shader's `shadowStretch` uniform
+- Stretch X / Y scale every character's silhouette about its feet. A
+  character is the cluster of OAM sprites that touch (their rectangles
+  are recorded with the vertex spans in `obj_spans.h`); the anchor is
+  the bottom centre of the cluster's union. One anchor per sprite was
+  tried first: neighbours overlapped (a darker band) and parted (a gap)
+  as each scaled about its own feet. The tile shader's `shadowStretch` uniform
   (anchor x, anchor y, scale x, scale y) is applied before the parallax
   and the shadow offset, (0, 0, 1, 1) everywhere else = exact no-op.
   While a stretch is on, the OBJ caster draws one span per sprite with
-  its anchor in the uniform (the span table has no anchor for the
+  its cluster's anchor in the uniform (the span table has no anchor for the
   per-scanline sprite path: no stretch there). BG casters never stretch.
   A smear (the silhouette repeated along the light, fading) was tried
   first and dropped: it multiplied the shadow instead of stretching it.

@@ -706,17 +706,31 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // Stretch scales every sprite about its own feet, so each
                 // sprite then draws on its own with its anchor in the uniform
                 const ObjSpanTable *spans = S9xObjSpans();
-                ObjSpan sp[ObjSpanTable::MAX]; int nSp = 0;
+                ObjSpan sp[64]; int nSp = 0;
+                uint8_t clusterOf[ObjSpanTable::MAX]; ObjCluster clusters[ObjSpanTable::MAX]; int nCl = 0;
                 const float sx = stereo_shadow_stretch_factor(GPU3DS.stereoShadowSX);
                 const float sy = stereo_shadow_stretch_factor(GPU3DS.stereoShadowSY);
                 const bool stretched = id == LAYER_OBJ && spans->n > 0 && (sx != 1.0f || sy != 1.0f);
                 const bool smallOnly = id == LAYER_OBJ && GPU3DS.stereoShadowSmallOnly && spans->n > 0;
-                const bool perSprite = stretched || smallOnly;
-                if (perSprite) nSp = stretched ? spans->ranges(sub, smallOnly, sp, ObjSpanTable::MAX)
-                                               : spans->small_ranges(sub, sp, ObjSpanTable::MAX);
+                if (stretched) nCl = spans->clusters(sub, smallOnly, clusterOf, clusters, ObjSpanTable::MAX);
+                else if (smallOnly) nSp = spans->small_ranges(sub, sp, 64);
                 SLayer *ly = &list->layers[id];
                 auto drawCaster = [&](int plane) {
-                    if (!perSprite) {
+                    if (stretched) {
+                        // one anchor per character (cluster of touching sprites):
+                        // its members draw with that anchor in the uniform
+                        SLayerSection *sec = &list->sections[cFrom];
+                        for (int c = 0; c < nCl; c++) {
+                            bool set = false;
+                            for (int k = 0; k < spans->n; k++) {
+                                if (clusterOf[k] != c) continue;
+                                if (!set) { gpu3dsSetShadowStretch((float)clusters[c].ax, (float)clusters[c].ay, sx, sy); set = true; }
+                                drawRange(ly, sec, spans->spans[k].from, spans->spans[k].count, plane);
+                            }
+                        }
+                        return;
+                    }
+                    if (!smallOnly) {
                         for (int k = cFrom; k < cTo; k++) {
                             SLayerSection *sec = &list->sections[k];
                             drawRange(ly, sec, sec->from, sec->count, plane);
@@ -724,10 +738,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
                         return;
                     }
                     SLayerSection *sec = &list->sections[cFrom];
-                    for (int k = 0; k < nSp; k++) {
-                        if (stretched) gpu3dsSetShadowStretch((float)sp[k].ax, (float)sp[k].ay, sx, sy);
+                    for (int k = 0; k < nSp; k++)
                         drawRange(ly, sec, sp[k].from, sp[k].count, plane);
-                    }
                 };
 
                 // one silhouette per casting tier, at the parallax and planes
