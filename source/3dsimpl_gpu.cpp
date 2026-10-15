@@ -464,7 +464,11 @@ struct GlowScratch
     int addRect(u32 color)
     {
         SRectVertex *v = &((SRectVertex *)rect.data)[rectIdx * 2];
-        v[0].Position = (SVector2i){ 0, 0 }; v[1].Position = (SVector2i){ 512, 256 };
+        // y stops at 255: the tile shader keeps the depth plane in the bits
+        // above the low byte of y, so 256 decodes as y = 0 on plane 1 and
+        // the rect collapses to nothing (the glow target was never cleared:
+        // trails on the console, overexposure in Azahar's still scenes)
+        v[0].Position = (SVector2i){ 0, 0 }; v[1].Position = (SVector2i){ 512, 255 };
         v[0].Color = v[1].Color = __builtin_bswap32(color);
         const int from = rectIdx * 2; rectIdx = (rectIdx + 1) % RING; return from;
     }
@@ -668,7 +672,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
         SVertexList *rects = &GPU3DS.vertices[VBO_SCENE_RECT];
         int floorFrom = rects->from + rects->count;
-        gpu3dsAddRectangleVertexes(0, 0, 512, 256, 0x00000000);
+        // y 255, not 256: 256 decodes as y = 0 on plane 1 in the tile
+        // shader and the rect collapses (this floor never ran until 2026-10-15)
+        gpu3dsAddRectangleVertexes(0, 0, 512, 255, 0x00000000);
         gpu3dsDraw(rects, NULL, 2, floorFrom);
         rects->count -= 2;   // paused previews replay this path with no
                              // per-frame VBO flip - don't let it creep
