@@ -9,27 +9,17 @@ of #76 is gone).
 - 12 rows: BG1..BG4 x priority 0/1, Sprites priority 0..3. A profile
   holds a 12-bit `ShadowRows` mask plus `ShadowX`, `ShadowY` (-4..4 px,
   default 2, 2; one light per scene), `ShadowColor`, `ShadowSmallOnly`,
-  `ShadowSX`, `ShadowSY` (-3..8, quarters: x0.25 .. x3).
-- Stretch X / Y scale every character's silhouette about its feet. A
-  character is the cluster of OAM sprites that touch (their rectangles
-  are recorded with the vertex spans in `obj_spans.h`); the anchor is
-  the bottom centre of the cluster's union. One anchor per sprite was
-  tried first: neighbours overlapped (a darker band) and parted (a gap)
-  as each scaled about its own feet. The tile shader's `shadowStretch` uniform
-  (anchor x, anchor y, scale x, scale y) is applied before the parallax
-  and the shadow offset, (0, 0, 1, 1) everywhere else = exact no-op.
-  While a stretch is on, the OBJ caster draws one span per sprite with
-  its cluster's anchor in the uniform (the span table has no anchor for the
-  per-scanline sprite path: no stretch there). BG casters never stretch.
-  A smear (the silhouette repeated along the light, fading) was tried
-  first and dropped: it multiplied the shadow instead of stretching it.
-- The receiver of a row is the nearest row BEHIND it in the gauges
-  (largest depth smaller than its own, among rows the scene uses) plus
-  every used row sharing that depth: one surface in 3D. The gauges, not
-  the SNES order, say what is behind (Jorge): a sprite the SNES draws
-  under BG1 still casts on BG1 when BG1's gauge is behind it. Only a row
-  sharing the caster's own depth plane is skipped (indistinguishable
-  from its body).
+  `ShadowAlpha` (1..7 eighths, default 4), `ShadowFade` (0/1).
+- Shadow Opacity sets the silhouette's alpha; Fade by Distance lightens
+  it with the depth gap between caster and receiver in gauge units
+  (full at 1, a quarter at 13 or more): a shadow dilutes as the surface
+  moves away. Both are TexEnv constants, no extra pass.
+- Stretch (scaling the silhouette) was built and removed: a scale needs
+  an anchor, and the only one a frame offers is the OAM rectangle, which
+  changes with every animation frame (per sprite: neighbours overlapped
+  and parted; per cluster of touching sprites: the anchor jumped and
+  characters whose sprites do not touch split into cuts). A smear along
+  the light was rejected too (it multiplied the shadow).
 - The depth buffer already holds, per pixel, the plane of the visible
   surface by the end of the BG passes: sprites write `(prio+1)*3`, BG
   tiles their mode's d0/d1 (`gfxhw.cpp` depth tables, now mirrored in
@@ -78,7 +68,7 @@ of #76 is gone).
   brightness layer of each target (fallback after the loop);
   `-DPROBE_SHADOW_LOG` logs its inputs at frames 598-600.
 - `3dssettings.h/.cpp`, `3dsmain.cpp`: settings, `.3d` keys (`SHADOW`,
-  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`, `SHADOWSX`, `SHADOWSY`), editor block; a Shadows
+  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`, `SHADOWALPHA`, `SHADOWFADE`), editor block; a Shadows
   checkbox spotlights its row on the top screen like a depth gauge.
 
 ## Limits

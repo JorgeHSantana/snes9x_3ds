@@ -702,34 +702,13 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 int cFrom, cTo;
                 if (!sectionsOf(id, cFrom, cTo)) continue;
                 // sprite spans of this target (OBJ only; none recorded = whole
-                // section): "Small Sprites Only" filters by OBSEL size, and a
-                // Stretch scales every sprite about its own feet, so each
-                // sprite then draws on its own with its anchor in the uniform
+                // section): "Small Sprites Only" filters by OBSEL size
                 const ObjSpanTable *spans = S9xObjSpans();
                 ObjSpan sp[64]; int nSp = 0;
-                uint8_t clusterOf[ObjSpanTable::MAX]; ObjCluster clusters[ObjSpanTable::MAX]; int nCl = 0;
-                const float sx = stereo_shadow_stretch_factor(GPU3DS.stereoShadowSX);
-                const float sy = stereo_shadow_stretch_factor(GPU3DS.stereoShadowSY);
-                const bool stretched = id == LAYER_OBJ && spans->n > 0 && (sx != 1.0f || sy != 1.0f);
                 const bool smallOnly = id == LAYER_OBJ && GPU3DS.stereoShadowSmallOnly && spans->n > 0;
-                if (stretched) nCl = spans->clusters(sub, smallOnly, clusterOf, clusters, ObjSpanTable::MAX);
-                else if (smallOnly) nSp = spans->small_ranges(sub, sp, 64);
+                if (smallOnly) nSp = spans->small_ranges(sub, sp, 64);
                 SLayer *ly = &list->layers[id];
                 auto drawCaster = [&](int plane) {
-                    if (stretched) {
-                        // one anchor per character (cluster of touching sprites):
-                        // its members draw with that anchor in the uniform
-                        SLayerSection *sec = &list->sections[cFrom];
-                        for (int c = 0; c < nCl; c++) {
-                            bool set = false;
-                            for (int k = 0; k < spans->n; k++) {
-                                if (clusterOf[k] != c) continue;
-                                if (!set) { gpu3dsSetShadowStretch((float)clusters[c].ax, (float)clusters[c].ay, sx, sy); set = true; }
-                                drawRange(ly, sec, spans->spans[k].from, spans->spans[k].count, plane);
-                            }
-                        }
-                        return;
-                    }
                     if (!smallOnly) {
                         for (int k = cFrom; k < cTo; k++) {
                             SLayerSection *sec = &list->sections[k];
@@ -755,7 +734,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     if (br < 0 || n == 0) continue;
                     const float behindShift = ownShift(br < 8 ? br / 2 : 4, br < 8 ? br & 1 : br - 8);
                     parkAllBut(id, t, behindShift + (float)GPU3DS.stereoShadowX, (float)GPU3DS.stereoShadowY);
-                    gpu3dsSetShadowEnv(0.5f, rgb);           // RGB = the shadow colour, alpha = texture alpha x 0.5
+                    // RGB = the shadow colour, alpha = texture alpha x opacity (lighter with the depth gap when Fade is on)
+                    gpu3dsSetShadowEnv(stereo_shadow_alpha(GPU3DS.stereoShadowAlpha, GPU3DS.stereoShadowFade != 0, depthRows[row] - depthRows[br]), rgb);
                     for (int k = 0; k < n; k++) drawCaster(planes[k]);
                     anyPass = true;
                 }

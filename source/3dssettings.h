@@ -315,7 +315,8 @@ typedef struct {
     int                 StereoShadowY;
     int                 StereoShadowColor;     // index into stereo_shadow.h's table
     int                 StereoShadowSmallOnly; // 1 = only OBSEL-small sprites cast (scenery sprites are large)
-    int                 StereoShadowSX, StereoShadowSY;   // stretch gauges -3..8 (stereo_shadow.h)
+    int                 StereoShadowAlpha;     // opacity gauge 1..7 (eighths), default 4
+    int                 StereoShadowFade;      // 1 = lighter with the depth gap to the receiver
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
                                                // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)
@@ -340,7 +341,8 @@ typedef struct {
         int  ShadowX, ShadowY;   // shadow offset in px, -4..4
         int  ShadowColor;        // index into stereo_shadow.h's table
         int  ShadowSmallOnly;    // 1 = only small sprites cast
-        int  ShadowSX, ShadowSY; // stretch gauges -3..8
+        int  ShadowAlpha;        // opacity 1..7 (eighths)
+        int  ShadowFade;         // 1 = fade with the depth gap
     };
     struct SStereoBind {
         u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C

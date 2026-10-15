@@ -117,16 +117,8 @@ void gpu3dsShadowPassState(int receiverPlane)
     GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
     GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;
 }
-void gpu3dsSetShadowStretch(float ax, float ay, float sx, float sy)
-{
-    float *s = GPU3DS.shadowStretchSet;
-    if (s[0] == ax && s[1] == ay && s[2] == sx && s[3] == sy) return;
-    s[0] = ax; s[1] = ay; s[2] = sx; s[3] = sy;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_SHADOW_STRETCH], ax, ay, sx, sy);
-}
 void gpu3dsShadowPassEnd()
 {
-    gpu3dsSetShadowStretch(0.0f, 0.0f, 1.0f, 1.0f);
     C3D_DepthMap(true, -1.0f, 0.0f);
     C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
     gpu3dsDisableAlphaBlending();
@@ -432,9 +424,6 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP],
             GPU3DS.mode7PerspSet[0], GPU3DS.mode7PerspSet[1],
             -GPU3DS.mode7PerspSet[2], -GPU3DS.mode7PerspSet[3]);
-        C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_SHADOW_STRETCH],
-            GPU3DS.shadowStretchSet[0], GPU3DS.shadowStretchSet[1],
-            GPU3DS.shadowStretchSet[2], GPU3DS.shadowStretchSet[3]);
     }
 
     if (shaderUpdated && state->shader == SPROGRAM_MODE7) {
@@ -569,10 +558,8 @@ bool gpu3dsInitialize()
     GPU3DS.stereoPrioDimP0 = 1.0f;
     GPU3DS.stereoMode7Persp = 0.0f;
     GPU3DS.stereoMode7Fx = 0.0f;
-    GPU3DS.stereoShadowRows = 0; GPU3DS.stereoShadowX = 2; GPU3DS.stereoShadowY = 2; GPU3DS.stereoShadowColor = 0; GPU3DS.stereoShadowSmallOnly = 0;
+    GPU3DS.stereoShadowRows = 0; GPU3DS.stereoShadowX = 2; GPU3DS.stereoShadowY = 2; GPU3DS.stereoShadowColor = 0; GPU3DS.stereoShadowSmallOnly = 0; GPU3DS.stereoShadowAlpha = 4; GPU3DS.stereoShadowFade = 0;
     GPU3DS.stereoShadowOffY = 0.0f;
-    GPU3DS.shadowStretchSet[0] = GPU3DS.shadowStretchSet[1] = 0.0f;
-    GPU3DS.shadowStretchSet[2] = GPU3DS.shadowStretchSet[3] = 1.0f;
     GPU3DS.mode7PerspApplied = -1.0f;
     GPU3DS.mode7PerspSet[0] = GPU3DS.mode7PerspSet[2] = GPU3DS.mode7PerspSet[3] = 0.0f;
     GPU3DS.mode7PerspSet[1] = 1.0f;
@@ -952,7 +939,6 @@ bool gpu3dsInitializeShaderUniformLocations()
     GPU3DS.shaderULocs[ULOC_STEREO_DIM] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoDim");
     GPU3DS.shaderULocs[ULOC_STEREO_IOD2] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoIOD2");
     GPU3DS.shaderULocs[ULOC_MODE7_PERSP] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "mode7Persp");
-    GPU3DS.shaderULocs[ULOC_SHADOW_STRETCH] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "shadowStretch");
 
 	bool uLocsInvalid = false;
 

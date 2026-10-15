@@ -13,7 +13,6 @@
 
 #define STEREO_SHADOW_ROWS 12
 #define STEREO_SHADOW_OFFSET_MAX 4
-#define STEREO_SHADOW_STRETCH_MAX 8
 
 static inline int stereo_shadow_row(int layer, int prio)
 {
@@ -108,16 +107,24 @@ static inline int stereo_shadow_receiver_planes(const int depth[STEREO_SHADOW_RO
     return n;
 }
 
-// Stretch X / Y: the silhouette scaled about each sprite's feet (bottom
-// centre of its OAM rectangle), gauge -3..8 = x0.25 .. x3 in quarters.
-#define STEREO_SHADOW_STRETCH_MIN (-3)
-static inline int stereo_shadow_clamp_stretch(int v)
+// Opacity gauge 1..7 in eighths (4 = the plain 50 %). With Fade on, the
+// shadow lightens with the depth gap between caster and receiver (gauge
+// units): full at a gap of 1, down to a quarter at 13 or more - a shadow
+// dilutes as the surface moves away.
+#define STEREO_SHADOW_ALPHA_MIN 1
+#define STEREO_SHADOW_ALPHA_MAX 7
+static inline int stereo_shadow_clamp_alpha(int v)
 {
-    return v < STEREO_SHADOW_STRETCH_MIN ? STEREO_SHADOW_STRETCH_MIN : (v > STEREO_SHADOW_STRETCH_MAX ? STEREO_SHADOW_STRETCH_MAX : v);
+    return v < STEREO_SHADOW_ALPHA_MIN ? STEREO_SHADOW_ALPHA_MIN : (v > STEREO_SHADOW_ALPHA_MAX ? STEREO_SHADOW_ALPHA_MAX : v);
 }
-static inline float stereo_shadow_stretch_factor(int v)
+static inline float stereo_shadow_alpha(int opacity, bool fade, int gap)
 {
-    return 1.0f + 0.25f * (float)stereo_shadow_clamp_stretch(v);
+    float a = (float)stereo_shadow_clamp_alpha(opacity) / 8.0f;
+    if (!fade) return a;
+    float k = 1.0f - (float)(gap - 1) / 16.0f;
+    if (k < 0.25f) k = 0.25f;
+    if (k > 1.0f) k = 1.0f;
+    return a * k;
 }
 
 static inline int stereo_shadow_clamp_offset(int v)

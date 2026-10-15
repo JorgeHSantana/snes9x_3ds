@@ -2939,16 +2939,8 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 					else
 						StartLine += TileHeight;
 				}
-				{
-					// the sprite's OAM rectangle, for the drop shadow's stretch
-					// (issue #77): touching sprites scale as one character
-					const int w = GFX.OBJWidths[S];
-					const int h = PPU.OBJSizeSelect == 6 ? w * 2 : (PPU.OBJSizeSelect == 7 ? 32 : w);
-					int hp = PPU.OBJ[S].HPos; if (hp == -256) hp = 256;
-					int vp = PPU.OBJ[S].VPos & 0xff; if (vp > 239) vp -= 256;
-					s_objSpans.add(spanFrom, GPU3DS.vertices[VBO_SCENE_OBJ].from + GPU3DS.vertices[VBO_SCENE_OBJ].count - spanFrom,
-						PPU.OBJ[S].Size != 0, sub != 0, hp, vp, hp + w - 1, vp + h - 1);
-				}
+				s_objSpans.add(spanFrom, GPU3DS.vertices[VBO_SCENE_OBJ].from + GPU3DS.vertices[VBO_SCENE_OBJ].count - spanFrom,
+					PPU.OBJ[S].Size != 0, sub != 0);
 			}
 
 			S = (S-1) & 0x7F;

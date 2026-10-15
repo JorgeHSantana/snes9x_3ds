@@ -86,7 +86,6 @@ typedef enum {
     ULOC_STEREO_DIM,
     ULOC_STEREO_IOD2,
     ULOC_MODE7_PERSP,
-    ULOC_SHADOW_STRETCH,
     ULOC_COUNT
 } SGPU_SHADER_ULOC;
 
@@ -316,9 +315,9 @@ typedef struct
     int                         stereoShadowX, stereoShadowY;
     int                         stereoShadowColor;  // palette index (stereo_shadow.h)
     int                         stereoShadowSmallOnly;
-    int                         stereoShadowSX, stereoShadowSY;   // stretch gauges -3..8 (stereo_shadow.h)
+    int                         stereoShadowAlpha;  // opacity gauge 1..7 (eighths)
+    int                         stereoShadowFade;   // 1 = lighter with the depth gap to the receiver
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
-    float                       shadowStretchSet[4]; // (ax, ay, sx, sy) the tile shader holds; (0,0,1,1) outside the shadow phase
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
@@ -535,7 +534,6 @@ static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float gho
 // through the depth map, colour blended, nothing written to depth (3dsgpu.cpp)
 void gpu3dsShadowPassState(int receiverPlane);
 void gpu3dsShadowPassEnd();
-void gpu3dsSetShadowStretch(float ax, float ay, float sx, float sy);   // (0,0,1,1) = no-op
 
 static inline void gpu3dsSetStereoParallax(float v)
 {

@@ -89,11 +89,13 @@ TEST_CASE("stereo shadow: every used row at the depth behind is a receiver plane
     CHECK(n == 1); CHECK(out[0] == 7);
 }
 
-TEST_CASE("stereo shadow: stretch gauges scale about the feet in quarters, 1.0 at 0") {
-    CHECK(stereo_shadow_stretch_factor(0) == 1.0f);
-    CHECK(stereo_shadow_stretch_factor(4) == 2.0f);
-    CHECK(stereo_shadow_stretch_factor(8) == 3.0f);
-    CHECK(stereo_shadow_stretch_factor(-3) == 0.25f);
-    CHECK(stereo_shadow_stretch_factor(-9) == 0.25f);
-    CHECK(stereo_shadow_stretch_factor(99) == 3.0f);
+TEST_CASE("stereo shadow: opacity in eighths, fade lightens with the depth gap down to a quarter") {
+    CHECK(stereo_shadow_alpha(4, false, 9) == 0.5f);
+    CHECK(stereo_shadow_alpha(0, false, 1) == 0.125f);
+    CHECK(stereo_shadow_alpha(9, false, 1) == 0.875f);
+    CHECK(stereo_shadow_alpha(4, true, 1) == 0.5f);
+    CHECK(stereo_shadow_alpha(4, true, 5) == 0.375f);
+    CHECK(stereo_shadow_alpha(4, true, 13) == 0.125f);
+    CHECK(stereo_shadow_alpha(4, true, 40) == 0.125f);
+    CHECK(stereo_shadow_alpha(4, true, 0) == 0.5f);
 }
