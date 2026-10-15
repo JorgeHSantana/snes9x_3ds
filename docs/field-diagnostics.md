@@ -26,7 +26,7 @@ flipping every frame logged once, a summary of what was dropped).
 
 | line | cadence | meaning |
 |---|---|---|
-| `[perf][frame] 300 frames: load avg=N% max=N% over-budget=N skipped-draws=N blur=…` | 5 s | the emulation thread's share of the frame budget (input + core + render submission, not the vsync wait); frames over 100 %; draws the pacer skipped; Blur Auto tier. Old 3DS, Mario Kart race: 95–99 % |
+| `[perf][frame] 300 frames: load avg=N% max=N% over-budget=N skipped-draws=N blur=… shadow-draws/frame=N soft=N` | 5 s | the emulation thread's share of the frame budget (input + core + render submission, not the vsync wait); frames over 100 %; draws the pacer skipped; Blur Auto tier; drop-shadow draw calls per frame (both eyes) and the Soft Edge level the load controller left. Old 3DS, Mario Kart race: 95–99 % |
 | `[perf][rewind] n=8 busy= failed= freeze= delta(worker)= key= thumb= emu=` | 8 captures | capture cost; `emu` is what the emulation thread paid, the encode runs on the worker |
 | `[rewind] capture slow: Nms (…; pre, freeze, begin, thumb, encode …)` | when ≥ 8 ms | where a slow capture's time went |
 | `[perf][sram] …` | per autosave | SRAM write cost (async: `queued copy`) |

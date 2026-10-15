@@ -645,6 +645,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
                 gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
                 gpu3dsShadowPassState(plane);
+                GPU3DSExt.shadowDraws++;
                 SVertexList *vbo = &GPU3DS.vertices[sec->vboId];
                 if (list->useDrawArraysForTiledLayers) {
                     gpu3dsDraw(vbo, NULL, count, from);
@@ -657,9 +658,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 }
             };
             // the tier parallax of one row of a layer, the other tiers parked off-screen
-            auto parkAllBut = [&](int lid, int tier, float shiftValue, float shadowY) {
-                float sh[4];
-                for (int t = 0; t < 4; t++) sh[t] = t == tier ? shiftValue : 4096.0f;
+            // the tier shifts of a layer (4096 parks a tier off-screen), the
+            // tier boundaries as the layer's own pass sets them
+            auto setTierShifts = [&](int lid, const float sh[4], float shadowY) {
                 float b01 = 0.0f, b12 = STEREO_TIER_PARKED, b23 = STEREO_TIER_PARKED;
                 if (lid == LAYER_OBJ) { b01 = 4.5f / 32.0f; b12 = 7.5f / 32.0f; b23 = 10.5f / 32.0f; }
                 else b01 = GPU3DS.stereoPrioZBoundary[lid];
@@ -709,17 +710,35 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // one silhouette per casting tier, at the parallax and planes
                 // of the row behind it in the profile's gauges (the nearest
                 // smaller Depth); every used row at that depth is the same
-                // surface in 3D, so one pass per distinct plane of theirs
+                // surface in 3D, so one pass per distinct plane of theirs.
+                // Tiers that share the receiver, the depth gap and the planes
+                // (sprites P2 and P3 over the same BGs: the common case) draw
+                // in ONE pass, every such tier's shift set together.
+                bool tierDone[4] = { false, false, false, false };
                 for (int t = 0; t < tiers; t++) {
-                    if (!stereo_shadow_marked((unsigned)GPU3DS.stereoShadowRows, id, t)) continue;
+                    if (tierDone[t] || !stereo_shadow_marked((unsigned)GPU3DS.stereoShadowRows, id, t)) continue;
                     const int row = stereo_shadow_row(id, t);
                     const int br = stereo_shadow_behind_row(depthRows, usedRows, row);
                     int planes[8];
                     const int n = stereo_shadow_receiver_planes(depthRows, usedRows, GPU3DS.stereoBgPlane, row, planes);
+                    tierDone[t] = true;
                     if (br < 0 || n == 0) continue;
+                    const int gap = depthRows[row] - depthRows[br];
+                    bool group[4] = { false, false, false, false }; group[t] = true;
+                    for (int u = t + 1; u < tiers; u++) {
+                        if (tierDone[u] || !stereo_shadow_marked((unsigned)GPU3DS.stereoShadowRows, id, u)) continue;
+                        const int rowU = stereo_shadow_row(id, u);
+                        if (stereo_shadow_behind_row(depthRows, usedRows, rowU) != br || depthRows[rowU] - depthRows[br] != gap) continue;
+                        int planesU[8];
+                        const int nU = stereo_shadow_receiver_planes(depthRows, usedRows, GPU3DS.stereoBgPlane, rowU, planesU);
+                        bool same = nU == n;
+                        for (int k = 0; same && k < n; k++) same = planesU[k] == planes[k];
+                        if (!same) continue;
+                        group[u] = true; tierDone[u] = true;
+                    }
                     const float behindShift = ownShift(br < 8 ? br / 2 : 4, br < 8 ? br & 1 : br - 8);
                     // RGB = the shadow colour, alpha = texture alpha x opacity (lighter with the depth gap when Fade is on)
-                    float alpha = stereo_shadow_alpha(GPU3DS.stereoShadowAlpha, GPU3DS.stereoShadowFade != 0, depthRows[row] - depthRows[br]);
+                    float alpha = stereo_shadow_alpha(GPU3DS.stereoShadowAlpha, GPU3DS.stereoShadowFade != 0, gap);
                     // Shadow Quality (shadow_auto.h): the load controller's Soft Edge
                     // level and fade multiplier for this frame
                     alpha *= GPU3DSExt.shadowAlphaMul;
@@ -730,8 +749,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     alpha = stereo_shadow_soft_alpha(alpha, copies);
                     gpu3dsSetShadowEnv(alpha, rgb);
                     for (int c = 0; c < copies; c++) {
-                        parkAllBut(id, t, behindShift + (float)(GPU3DS.stereoShadowX + stereo_shadow_soft_dx(level, c)),
-                                   (float)(GPU3DS.stereoShadowY + stereo_shadow_soft_dy(level, c)));
+                        const float shiftValue = behindShift + (float)(GPU3DS.stereoShadowX + stereo_shadow_soft_dx(level, c));
+                        float sh[4];
+                        for (int u = 0; u < 4; u++) sh[u] = group[u] ? shiftValue : 4096.0f;
+                        setTierShifts(id, sh, (float)(GPU3DS.stereoShadowY + stereo_shadow_soft_dy(level, c)));
                         for (int k = 0; k < n; k++) drawCaster(planes[k]);
                     }
                     anyPass = true;

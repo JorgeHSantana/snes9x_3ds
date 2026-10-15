@@ -4179,12 +4179,13 @@ void emulatorLoop()
             if (skipDrawing) s_frameSkips++;
             if (++s_frameLoadN >= 300 && log3dsIsReady()) {
                 const int tier = GPU3DSExt.blurAutoOff ? 2 : (GPU3DSExt.blurAutoLight ? 1 : 0);
-                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s",
+                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d",
                     s_frameLoadN,
                     (int)(s_frameLoad.average_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
                     (int)(s_frameLoad.maximum_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
-                    s_frameOver, s_frameSkips, tier == 2 ? "off" : (tier == 1 ? "light" : "full"));
-                s_frameLoad.reset(); s_frameLoadN = 0; s_frameOver = 0; s_frameSkips = 0;
+                    s_frameOver, s_frameSkips, tier == 2 ? "off" : (tier == 1 ? "light" : "full"),
+                    GPU3DSExt.shadowDraws / (unsigned)s_frameLoadN, GPU3DSExt.shadowSoftLevel);
+                s_frameLoad.reset(); s_frameLoadN = 0; s_frameOver = 0; s_frameSkips = 0; GPU3DSExt.shadowDraws = 0;
             }
         }
 
