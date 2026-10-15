@@ -10,6 +10,12 @@ of #76 is gone).
   holds a 12-bit `ShadowRows` mask plus `ShadowX`, `ShadowY` (-4..4 px,
   default 2, 2; one light per scene), `ShadowColor`, `ShadowSmallOnly`,
   `ShadowAlpha` (1..7 eighths, default 4), `ShadowFade` (0/1).
+- "Small Sprites Only" (a per-sprite vertex span table filtering by OBSEL
+  size) was removed: the main screen reuses the sub screen's sprite
+  vertices without recording spans (no shadow at all on games with a sub
+  screen), the per-scanline sprite path records nothing while spans from
+  another segment survive (partial shadows), and every span drew with the
+  first OBJ section's state. The caster is always the whole OBJ layer.
 - Shadow Opacity sets the silhouette's alpha; Fade by Distance lightens
   it with the depth gap between caster and receiver in gauge units
   (full at 1, a quarter at 13 or more): a shadow dilutes as the surface
@@ -29,7 +35,7 @@ of #76 is gone).
   ("GEQUAL and LEQUAL pass everywhere") saw nothing: it ran after them.
 - One phase per target, after the last BG and before colour math. Per
   casting tier, per receiver plane: the caster's own geometry (its
-  sections, or OBSEL-small sprite spans) drawn once more with the depth
+  sections) drawn once more with the depth
   map at scale 0 / offset plane/32 (`C3D_DepthMap`, so the shader is
   untouched and every vertex lands at exactly the receiver's plane),
   depth func EQUAL without depth write, alpha test NE_ZERO, TexEnv
@@ -68,7 +74,7 @@ of #76 is gone).
   brightness layer of each target (fallback after the loop);
   `-DPROBE_SHADOW_LOG` logs its inputs at frames 598-600.
 - `3dssettings.h/.cpp`, `3dsmain.cpp`: settings, `.3d` keys (`SHADOW`,
-  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`, `SHADOWALPHA`, `SHADOWFADE`), editor block; a Shadows
+  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWALPHA`, `SHADOWFADE`), editor block; a Shadows
   checkbox spotlights its row on the top screen like a depth gauge.
 
 ## Limits

@@ -1,7 +1,5 @@
 
 #include "stereo_shadow.h"
-#include "obj_spans.h"
-const ObjSpanTable *S9xObjSpans();   // gfxhw.cpp
 bool S9xLayerUsedLastFrame(int layer, int prio);   // gfxhw.cpp: the rows the last frame drew
 #include "snes9x.h"
 #include "ppu.h"
@@ -601,8 +599,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
         // receiver's parallax plus Shadow X/Y. A layer in front holds a
         // larger plane, the caster's body its own plane, a hole in the
         // receiver a smaller one: none of them passes. No mask, no erase,
-        // no redraw of the caster. "Small Sprites Only" restricts the pass
-        // to OBSEL-small sprite spans.
+        // no redraw of the caster.
         bool shadowPhaseDone = false;
         auto drawShadowPhase = [&]() {
             if (shadowPhaseDone) return;
@@ -701,24 +698,12 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 const int tiers = id == LAYER_OBJ ? 4 : 2;
                 int cFrom, cTo;
                 if (!sectionsOf(id, cFrom, cTo)) continue;
-                // sprite spans of this target (OBJ only; none recorded = whole
-                // section): "Small Sprites Only" filters by OBSEL size
-                const ObjSpanTable *spans = S9xObjSpans();
-                ObjSpan sp[64]; int nSp = 0;
-                const bool smallOnly = id == LAYER_OBJ && GPU3DS.stereoShadowSmallOnly && spans->n > 0;
-                if (smallOnly) nSp = spans->small_ranges(sub, sp, 64);
                 SLayer *ly = &list->layers[id];
                 auto drawCaster = [&](int plane) {
-                    if (!smallOnly) {
-                        for (int k = cFrom; k < cTo; k++) {
-                            SLayerSection *sec = &list->sections[k];
-                            drawRange(ly, sec, sec->from, sec->count, plane);
-                        }
-                        return;
+                    for (int k = cFrom; k < cTo; k++) {
+                        SLayerSection *sec = &list->sections[k];
+                        drawRange(ly, sec, sec->from, sec->count, plane);
                     }
-                    SLayerSection *sec = &list->sections[cFrom];
-                    for (int k = 0; k < nSp; k++)
-                        drawRange(ly, sec, sp[k].from, sp[k].count, plane);
                 };
 
                 // one silhouette per casting tier, at the parallax and planes

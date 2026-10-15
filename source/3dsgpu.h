@@ -314,7 +314,6 @@ typedef struct
     int                         stereoShadowRows;   // drop shadow rows mask (issue #77)
     int                         stereoShadowX, stereoShadowY;
     int                         stereoShadowColor;  // palette index (stereo_shadow.h)
-    int                         stereoShadowSmallOnly;
     int                         stereoShadowAlpha;  // opacity gauge 1..7 (eighths)
     int                         stereoShadowFade;   // 1 = lighter with the depth gap to the receiver
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)

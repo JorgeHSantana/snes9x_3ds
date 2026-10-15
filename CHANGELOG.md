@@ -8,9 +8,9 @@ Notable changes to this project will be documented in this file.
   cast a silhouette of itself onto the layer behind it in depth, with
   Shadow X / Y offsets, a Shadow Opacity gauge, "Fade by Distance" (the
   shadow lightens with the depth gap to the row behind), a Shadow Color
-  picker (black, dark gray, navy, brown, purple, white) and "Small
-  Sprites Only", saved per profile in the `.3d` (`SHADOW`, `SHADOWX`,
-  `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`, `SHADOWALPHA`, `SHADOWFADE`).
+  picker (black, dark gray, navy, brown, purple, white), saved per
+  profile in the `.3d` (`SHADOW`, `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`,
+  `SHADOWALPHA`, `SHADOWFADE`).
   Moving the cursor onto a Shadows
   row spotlights that row on the top screen, like a depth gauge.
   The silhouette is the caster drawn once more at the receiver's depth
