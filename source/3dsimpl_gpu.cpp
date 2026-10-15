@@ -395,39 +395,52 @@ static void gpu3dsSetShadowEnv(float a, uint32_t rgb)
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
 }
 
-// Stages 3-5 for the glow pass (issue #77): alpha = the texel's luminance
-// (76 R + 150 G + 29 B) / 255, so the alpha test keeps bright texels and
-// SRC_ALPHA blending adds more for brighter ones; RGB = texel x tint x
-// gain (x2 scale for gains above 1). on = false restores passthrough.
-static void gpu3dsSetGlowEnv(bool on, float gain, uint32_t rgb)
+// Stages 1-5 for the glow pass (issue #77): stages 1-3 accumulate the
+// texel's luminance (76 R + 150 G + 29 B, per operand: the texture reaches
+// the TexEnv with R and B swapped) into alpha; stage 4 turns it into a
+// SOFT threshold, alpha = min(1, 4 x (luma - t)): a pixel near the
+// threshold fades in instead of popping (Jorge: things blinked while
+// scrolling); stage 5 sets RGB = texel x tint x gain (x2 scale for gains
+// above 1) and keeps the alpha. SRC_ALPHA blending then adds more for
+// brighter texels. on = false restores passthrough (stage 2 is the
+// atmosphere's: its dedup is poisoned so it re-applies).
+static void gpu3dsSetGlowEnv(bool on, float gain, uint32_t rgb, int thresh)
 {
-    C3D_TexEnv *e3 = C3D_GetTexEnv(3), *e4 = C3D_GetTexEnv(4), *e5 = C3D_GetTexEnv(5);
-    C3D_TexEnvInit(e3); C3D_TexEnvInit(e4); C3D_TexEnvInit(e5);
+    C3D_TexEnv *e[6]; for (int i = 1; i <= 5; i++) { e[i] = C3D_GetTexEnv(i); C3D_TexEnvInit(e[i]); }
+    s_atmosLastColor = 1;   // stage 2 was ours: the atmosphere re-applies next time
     if (!on) return;
     const u32 abgr = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
     const u32 g = (u32)stereo_glow_env_const(gain);
-    // stage 3: rgb = tex x (tint x gain); alpha = tex.r x 76/255
-    C3D_TexEnvColor(e3, ((u32)SCREEN_GRADE_LUMA_R_OP_WEIGHT << 24) | (((abgr >> 16) & 0xFF) * g / 255u << 16) | (((abgr >> 8) & 0xFF) * g / 255u << 8) | ((abgr & 0xFF) * g / 255u));
-    C3D_TexEnvSrc(e3, C3D_RGB, GPU_TEXTURE0, GPU_CONSTANT);
-    C3D_TexEnvFunc(e3, C3D_RGB, GPU_MODULATE);
-    if (stereo_glow_env_x2(gain)) C3D_TexEnvScale(e3, C3D_RGB, GPU_TEVSCALE_2);
-    C3D_TexEnvSrc(e3, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT);
-    C3D_TexEnvOpAlpha(e3, GPU_TEVOP_A_SRC_R, GPU_TEVOP_A_SRC_ALPHA);
-    C3D_TexEnvFunc(e3, C3D_Alpha, GPU_MODULATE);
-    // stage 4: alpha += tex.g x 150/255
-    C3D_TexEnvColor(e4, (u32)SCREEN_GRADE_LUMA_G_OP_WEIGHT << 24);
-    C3D_TexEnvSrc(e4, C3D_RGB, GPU_PREVIOUS);
-    C3D_TexEnvFunc(e4, C3D_RGB, GPU_REPLACE);
-    C3D_TexEnvSrc(e4, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
-    C3D_TexEnvOpAlpha(e4, GPU_TEVOP_A_SRC_G, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_ALPHA);
-    C3D_TexEnvFunc(e4, C3D_Alpha, GPU_MULTIPLY_ADD);
-    // stage 5: alpha += tex.b x 29/255
-    C3D_TexEnvColor(e5, (u32)SCREEN_GRADE_LUMA_B_OP_WEIGHT << 24);
-    C3D_TexEnvSrc(e5, C3D_RGB, GPU_PREVIOUS);
-    C3D_TexEnvFunc(e5, C3D_RGB, GPU_REPLACE);
-    C3D_TexEnvSrc(e5, C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
-    C3D_TexEnvOpAlpha(e5, GPU_TEVOP_A_SRC_B, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_ALPHA);
-    C3D_TexEnvFunc(e5, C3D_Alpha, GPU_MULTIPLY_ADD);
+    // 1: alpha = tex.r x w_r ; rgb through
+    C3D_TexEnvColor(e[1], (u32)SCREEN_GRADE_LUMA_R_OP_WEIGHT << 24);
+    C3D_TexEnvSrc(e[1], C3D_RGB, GPU_PREVIOUS); C3D_TexEnvFunc(e[1], C3D_RGB, GPU_REPLACE);
+    C3D_TexEnvSrc(e[1], C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT);
+    C3D_TexEnvOpAlpha(e[1], GPU_TEVOP_A_SRC_R, GPU_TEVOP_A_SRC_ALPHA);
+    C3D_TexEnvFunc(e[1], C3D_Alpha, GPU_MODULATE);
+    // 2: alpha += tex.g x w_g
+    C3D_TexEnvColor(e[2], (u32)SCREEN_GRADE_LUMA_G_OP_WEIGHT << 24);
+    C3D_TexEnvSrc(e[2], C3D_RGB, GPU_PREVIOUS); C3D_TexEnvFunc(e[2], C3D_RGB, GPU_REPLACE);
+    C3D_TexEnvSrc(e[2], C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
+    C3D_TexEnvOpAlpha(e[2], GPU_TEVOP_A_SRC_G, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_ALPHA);
+    C3D_TexEnvFunc(e[2], C3D_Alpha, GPU_MULTIPLY_ADD);
+    // 3: alpha += tex.b x w_b = luma
+    C3D_TexEnvColor(e[3], (u32)SCREEN_GRADE_LUMA_B_OP_WEIGHT << 24);
+    C3D_TexEnvSrc(e[3], C3D_RGB, GPU_PREVIOUS); C3D_TexEnvFunc(e[3], C3D_RGB, GPU_REPLACE);
+    C3D_TexEnvSrc(e[3], C3D_Alpha, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
+    C3D_TexEnvOpAlpha(e[3], GPU_TEVOP_A_SRC_B, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_ALPHA);
+    C3D_TexEnvFunc(e[3], C3D_Alpha, GPU_MULTIPLY_ADD);
+    // 4: alpha = (luma - t) x 4, clamped: the soft threshold
+    C3D_TexEnvColor(e[4], (u32)stereo_glow_alpha_ref(thresh) << 24);
+    C3D_TexEnvSrc(e[4], C3D_RGB, GPU_PREVIOUS); C3D_TexEnvFunc(e[4], C3D_RGB, GPU_REPLACE);
+    C3D_TexEnvSrc(e[4], C3D_Alpha, GPU_PREVIOUS, GPU_CONSTANT);
+    C3D_TexEnvFunc(e[4], C3D_Alpha, GPU_SUBTRACT);
+    C3D_TexEnvScale(e[4], C3D_Alpha, GPU_TEVSCALE_4);
+    // 5: rgb = tex x (tint x gain); alpha through
+    C3D_TexEnvColor(e[5], (((abgr >> 16) & 0xFF) * g / 255u << 16) | (((abgr >> 8) & 0xFF) * g / 255u << 8) | ((abgr & 0xFF) * g / 255u));
+    C3D_TexEnvSrc(e[5], C3D_RGB, GPU_TEXTURE0, GPU_CONSTANT);
+    C3D_TexEnvFunc(e[5], C3D_RGB, GPU_MODULATE);
+    if (stereo_glow_env_x2(gain)) C3D_TexEnvScale(e[5], C3D_RGB, GPU_TEVSCALE_2);
+    C3D_TexEnvSrc(e[5], C3D_Alpha, GPU_PREVIOUS); C3D_TexEnvFunc(e[5], C3D_Alpha, GPU_REPLACE);
 }
 
 // Vertex scratch for the glow spread's clear rect and composite quads
@@ -930,7 +943,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                         GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
                         gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
                         gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
-                        gpu3dsGlowPassState(ref, depthTested ? plane : -1);
+                        gpu3dsGlowPassState(depthTested ? plane : -1);
                         GPU3DSExt.glowDraws++;
                         SVertexList *vbo = &GPU3DS.vertices[sec->vboId];
                         if (list->useDrawArraysForTiledLayers) {
@@ -985,7 +998,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     gpu3dsSetStereoParallaxHi(shift, shift, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
                     gpu3dsSetGlowPalette(255, false);
                     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
-                    gpu3dsSetGlowEnv(false, 0.0f, 0);
+                    gpu3dsSetGlowEnv(false, 0.0f, 0, 0);
                     gpu3dsSetGlowTapEnv(1.0f / (float)taps);
                     // the glow target was rendered moments ago in this same command
                     // list: split it so the GPU finishes (and flushes) that render
@@ -1015,69 +1028,59 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     // through the same luminance cut into the spread target,
                     // then composited back - a post-process bloom at quarter
                     // res; no depth test (screen space), the HUD glows too.
-                    // ONE glow per frame, from the LEFT eye's texture, composited
-                    // into both eyes (Jorge): two per-eye glows differed in what
-                    // their source edges held and cost twice; the right eye gets
-                    // the same glow shifted by twice the sprite plane's parallax,
-                    // so it sits at the sprites' depth (Mode 7 rows keep their
-                    // own parallax and will not match: known limit)
-                    const bool rightEye = GPU3DS.stereoRightPass && GPU3DS.stereoEyeIOD != 0.0f;
-                    if (!rightEye) {
-                        clearGlowTarget();
-                        gpu3dsSetGlowEnv(true, gain, tint);
-                        gpu3dsSetGlowPalette(255, false);
-                        GPU3DS.currentRenderState.target = TARGET_SNES_GLOW;
-                        GPU3DS.currentRenderState.textureBind = SNES_MAIN;
-                        GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
-                        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
-                        GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
-                        GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
-                        GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
-                        GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
-                        gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
-                        gpu3dsSetStereoParallaxHi(0.0f, 0.0f, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
-                        gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
-                        gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
-                        gpu3dsGlowPassState(ref, -1);
-                        C3D_FrameSplit(0);   // the eye's texture was just rendered: let it land before sampling it
-                        // only the visible area, minus the parallax margin at each
-                        // side (the eye texture's corrupted edge columns): what lies
-                        // outside would be blurred into the frame's edge
-                        int margin = 0;
-                        if (GPU3DS.stereoEyeIOD != 0.0f && GPU3DS.stereoMaxAbs > 0.0f) {
-                            const float iod = GPU3DS.stereoEyeIOD < 0.0f ? -GPU3DS.stereoEyeIOD : GPU3DS.stereoEyeIOD;
-                            margin = (int)(GPU3DS.stereoMaxAbs * (iod / gpu3dsGetIODBase()) * STEREO_PARALLAX_SCALE * (float)glowW / 256.0f + 0.999f);
-                            if (margin > glowW / 4) margin = glowW / 4;
-                        }
-                        // a 4x4 box average, not one texel per glow texel: four
-                        // bilinear taps (2x2 each) at +-1 px, a quarter of the gain
-                        // each - a nearest pick flickered as the screen scrolled
-                        // (isolated bright pixels crossing the threshold, Jorge)
-                        SGPUTexture *src = &GPU3DS.textures[SNES_MAIN];
-                        C3D_TexSetFilter(&src->tex, GPU_LINEAR, GPU_LINEAR);
-                        C3D_TexBind(0, &src->tex);
-                        gpu3dsSetGlowEnv(true, gain * 0.25f, tint);
-                        for (int tp = 0; tp < 4; tp++) {
-                            const float tx = (tp & 1) ? 1.0f : -1.0f, ty = (tp & 2) ? 1.0f : -1.0f;
-                            gpu3dsSetStereoParallax3(tx, tx, 0.0f, ty);
-                            gpu3dsSetStereoParallaxHi(tx, tx, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
-                            const int qFrom = s_glowScratch.addQuad((s16)margin, 1, (s16)(glowW - margin), (s16)glowH, (s16)margin, 1, (s16)(glowW - margin), (s16)glowH);
-                            gpu3dsDraw(&s_glowScratch.quad, NULL, 2, qFrom);
-                            GPU3DSExt.glowDraws++;
-                        }
-                        gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
-                        C3D_TexSetFilter(&src->tex, GPU_NEAREST, GPU_NEAREST);   // gpu3dsBindTexture re-decides on the next bind
-                        C3D_TexBind(0, &src->tex);
+                    // PER EYE, from that eye's own texture: a single glow made
+                    // from the left eye and shifted into the right can be right
+                    // for one depth only (tried 2026-10-15: backgrounds sat 2p
+                    // to the left in the right eye). Per eye every object's
+                    // glow carries its own parallax, exactly as 2D does; what
+                    // made the two eyes differ before were the source edges
+                    // (cropped below) and sampling before the render landed
+                    // (the frame split).
+                    clearGlowTarget();
+                    gpu3dsSetGlowEnv(true, gain * 0.25f, tint, ref);
+                    gpu3dsSetGlowPalette(255, false);
+                    GPU3DS.currentRenderState.target = TARGET_SNES_GLOW;
+                    GPU3DS.currentRenderState.textureBind = GPU3DS.stereoRightPass ? SNES_MAIN_RIGHT : SNES_MAIN;
+                    GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
+                    GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
+                    GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+                    GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                    GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
+                    GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
+                    gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
+                    gpu3dsSetStereoParallaxHi(0.0f, 0.0f, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
+                    gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
+                    gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
+                    gpu3dsGlowPassState(-1);
+                    C3D_FrameSplit(0);   // the eye's texture was just rendered: let it land before sampling it
+                    // only the visible area, minus the parallax margin at each
+                    // side (the eye texture's corrupted edge columns): what lies
+                    // outside would be blurred into the frame's edge
+                    int margin = 0;
+                    if (GPU3DS.stereoEyeIOD != 0.0f && GPU3DS.stereoMaxAbs > 0.0f) {
+                        const float iod = GPU3DS.stereoEyeIOD < 0.0f ? -GPU3DS.stereoEyeIOD : GPU3DS.stereoEyeIOD;
+                        margin = (int)(GPU3DS.stereoMaxAbs * (iod / gpu3dsGetIODBase()) * STEREO_PARALLAX_SCALE * (float)glowW / 256.0f + 0.999f);
+                        if (margin > glowW / 4) margin = glowW / 4;
                     }
+                    // a 4x4 box average, not one texel per glow texel: four
+                    // bilinear taps (2x2 each) at +-1 px, a quarter of the gain
+                    // each - a nearest pick flickered as the screen scrolled
+                    SGPUTexture *src = &GPU3DS.textures[GPU3DS.stereoRightPass ? SNES_MAIN_RIGHT : SNES_MAIN];
+                    C3D_TexSetFilter(&src->tex, GPU_LINEAR, GPU_LINEAR);
+                    C3D_TexBind(0, &src->tex);
+                    for (int tp = 0; tp < 4; tp++) {
+                        const float tx = (tp & 1) ? 1.0f : -1.0f, ty = (tp & 2) ? 1.0f : -1.0f;
+                        gpu3dsSetStereoParallax3(tx, tx, 0.0f, ty);
+                        gpu3dsSetStereoParallaxHi(tx, tx, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
+                        const int qFrom = s_glowScratch.addQuad((s16)margin, 1, (s16)(glowW - margin), (s16)glowH, (s16)margin, 1, (s16)(glowW - margin), (s16)glowH);
+                        gpu3dsDraw(&s_glowScratch.quad, NULL, 2, qFrom);
+                        GPU3DSExt.glowDraws++;
+                    }
+                    gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
+                    C3D_TexSetFilter(&src->tex, GPU_NEAREST, GPU_NEAREST);   // gpu3dsBindTexture re-decides on the next bind
+                    C3D_TexBind(0, &src->tex);
                     anyGlow = true;
-                    // the right eye: the sprite plane sits at ownShift here and at
-                    // -ownShift in the left eye the glow came from
-                    // Depth: where the single glow sits - the sprite plane (2x its
-                    // parallax: +p in the left eye the glow came from, -p here),
-                    // the screen (backgrounds at 0: no shift), or halfway
-                    const float spriteShift = 2.0f * ownShift(LAYER_OBJ, 2);
-                    const float shift = !rightEye ? 0.0f : (GPU3DS.stereoGlowDepth == 1 ? 0.0f : (GPU3DS.stereoGlowDepth == 2 ? 0.5f * spriteShift : spriteShift));
-                    compositeGlow(-1, shift);
+                    compositeGlow(-1, 0.0f);
                 }
                 // with persistence every tier shares the one decaying target:
                 // one decay, every marked tier drawn, one composite at the
@@ -1094,7 +1097,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                         if (((usedRows >> row) & 1u) == 0) continue;
                         const int plane = stereo_shadow_row_plane(GPU3DS.stereoBgPlane, row);
                         const float shift = ownShift(id, t);
-                        gpu3dsSetGlowEnv(true, gain, tint);
+                        gpu3dsSetGlowEnv(true, gain, tint, ref);
                         gpu3dsSetGlowPalette(GPU3DS.stereoGlowPal, id == LAYER_OBJ && (GPU3DS.stereoGlowPal & 0xFF) != 0xFF);
                         if (shared) {
                             float sh[4]; for (int u = 0; u < 4; u++) sh[u] = u == t ? shift : 4096.0f;
@@ -1104,7 +1107,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                             sharedDrawn = true;
                         } else if (taps > 0) {
                             clearGlowTarget();
-                            gpu3dsSetGlowEnv(true, gain, tint);
+                            gpu3dsSetGlowEnv(true, gain, tint, ref);
                             gpu3dsSetGlowPalette(GPU3DS.stereoGlowPal, id == LAYER_OBJ && (GPU3DS.stereoGlowPal & 0xFF) != 0xFF);
                             float sh[4]; for (int u = 0; u < 4; u++) sh[u] = u == t ? shift : 4096.0f;
                             setTierShifts(id, sh, 0.0f);
@@ -1123,7 +1126,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // drawn this frame it still shows last frame's decaying glow
                 if (shared) compositeGlow(sharedDrawn ? sharedPlane : -1, 0.0f);
                 if (anyGlow || shared) {
-                    gpu3dsSetGlowEnv(false, 0.0f, 0);
+                    gpu3dsSetGlowEnv(false, 0.0f, 0, 0);
                     gpu3dsGlowPassEnd();
                 }
             }
