@@ -127,6 +127,22 @@ static inline float stereo_shadow_alpha(int opacity, bool fade, int gap)
     return a * k;
 }
 
+// Soft Edge: the silhouette drawn four times, at (0,0), (1,0), (0,1) and
+// (1,1) px - a 2x2 box blur of the mask. Each copy's alpha is chosen so
+// the pixels every copy covers darken exactly like the plain shadow
+// (1 - (1-a)^(1/4)); the 1 px rim gets a quarter of the passes.
+#define STEREO_SHADOW_SOFT_COPIES 4
+static inline float stereo_shadow_soft_alpha(float a)
+{
+    // (1-a)^(1/4) without libm: two square roots by Newton (a is 0..1)
+    float r = 1.0f - a;
+    float s = r; for (int i = 0; i < 12; i++) s = 0.5f * (s + r / (s > 0.0f ? s : 1e-6f));
+    float q = s; for (int i = 0; i < 12; i++) q = 0.5f * (q + s / (q > 0.0f ? q : 1e-6f));
+    return 1.0f - q;
+}
+static inline int stereo_shadow_soft_dx(int copy) { return copy & 1; }
+static inline int stereo_shadow_soft_dy(int copy) { return (copy >> 1) & 1; }
+
 static inline int stereo_shadow_clamp_offset(int v)
 {
     return v < -STEREO_SHADOW_OFFSET_MAX ? -STEREO_SHADOW_OFFSET_MAX : (v > STEREO_SHADOW_OFFSET_MAX ? STEREO_SHADOW_OFFSET_MAX : v);

@@ -20,6 +20,11 @@ of #76 is gone).
   it with the depth gap between caster and receiver in gauge units
   (full at 1, a quarter at 13 or more): a shadow dilutes as the surface
   moves away. Both are TexEnv constants, no extra pass.
+- Soft Edge (`ShadowSoft`): the silhouette drawn four times at (0,0),
+  (1,0), (0,1), (1,1) px, each at 1 - (1-a)^(1/4), so the pixels every
+  copy covers darken exactly like the plain shadow and the 1 px rim gets
+  a quarter of the passes - a 2x2 box blur of the mask. Four passes of
+  the caster instead of one; off by default.
 - Stretch (scaling the silhouette) was built and removed: a scale needs
   an anchor, and the only one a frame offers is the OAM rectangle, which
   changes with every animation frame (per sprite: neighbours overlapped
@@ -74,7 +79,7 @@ of #76 is gone).
   brightness layer of each target (fallback after the loop);
   `-DPROBE_SHADOW_LOG` logs its inputs at frames 598-600.
 - `3dssettings.h/.cpp`, `3dsmain.cpp`: settings, `.3d` keys (`SHADOW`,
-  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWALPHA`, `SHADOWFADE`), editor block; a Shadows
+  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWALPHA`, `SHADOWFADE`, `SHADOWSOFT`), editor block; a Shadows
   checkbox spotlights its row on the top screen like a depth gauge.
 
 ## Limits

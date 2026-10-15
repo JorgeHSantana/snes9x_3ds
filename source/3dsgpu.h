@@ -316,6 +316,7 @@ typedef struct
     int                         stereoShadowColor;  // palette index (stereo_shadow.h)
     int                         stereoShadowAlpha;  // opacity gauge 1..7 (eighths)
     int                         stereoShadowFade;   // 1 = lighter with the depth gap to the receiver
+    int                         stereoShadowSoft;   // 1 = soft edge (four passes)
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds

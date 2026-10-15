@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "stereo_shadow.h"
+#include <initializer_list>
 #include <string.h>
 
 TEST_CASE("stereo shadow: rows map to bits in Depth-list order and reject what is not a row") {
@@ -98,4 +99,15 @@ TEST_CASE("stereo shadow: opacity in eighths, fade lightens with the depth gap d
     CHECK(stereo_shadow_alpha(4, true, 13) == 0.125f);
     CHECK(stereo_shadow_alpha(4, true, 40) == 0.125f);
     CHECK(stereo_shadow_alpha(4, true, 0) == 0.5f);
+}
+
+TEST_CASE("stereo shadow: soft edge copies compound back to the plain alpha, offsets cover a 2x2 box") {
+    for (float a : { 0.125f, 0.5f, 0.875f }) {
+        float remain = 1.0f;
+        for (int c = 0; c < STEREO_SHADOW_SOFT_COPIES; c++) remain *= 1.0f - stereo_shadow_soft_alpha(a);
+        CHECK(remain > 1.0f - a - 0.002f); CHECK(remain < 1.0f - a + 0.002f);
+    }
+    int seen = 0;
+    for (int c = 0; c < STEREO_SHADOW_SOFT_COPIES; c++) seen |= 1 << (stereo_shadow_soft_dx(c) + stereo_shadow_soft_dy(c) * 2);
+    CHECK(seen == 0xF);
 }
