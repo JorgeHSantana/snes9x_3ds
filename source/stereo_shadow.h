@@ -13,6 +13,7 @@
 
 #define STEREO_SHADOW_ROWS 12
 #define STEREO_SHADOW_OFFSET_MAX 4
+#define STEREO_SHADOW_STRETCH_MAX 4
 
 static inline int stereo_shadow_row(int layer, int prio)
 {
@@ -105,6 +106,24 @@ static inline int stereo_shadow_receiver_planes(const int depth[STEREO_SHADOW_RO
         if (!dup && n < 8) out[n++] = pl;
     }
     return n;
+}
+
+// Stretch: the silhouette repeated 1 + stretch times along the light
+// (offset k x Shadow X/Y, k = 1..), each copy at an alpha chosen so the
+// region every copy covers darkens like a single 50 % shadow and the far
+// tip fades out: 1 - 0.5^(1/copies).
+static inline int stereo_shadow_clamp_stretch(int v)
+{
+    return v < 0 ? 0 : (v > STEREO_SHADOW_STRETCH_MAX ? STEREO_SHADOW_STRETCH_MAX : v);
+}
+static inline int stereo_shadow_copies(int stretch)
+{
+    return 1 + stereo_shadow_clamp_stretch(stretch);
+}
+static inline float stereo_shadow_copy_alpha(int stretch)
+{
+    static const float a[STEREO_SHADOW_STRETCH_MAX + 1] = { 0.5f, 0.2929f, 0.2063f, 0.1591f, 0.1294f };
+    return a[stereo_shadow_clamp_stretch(stretch)];
 }
 
 static inline int stereo_shadow_clamp_offset(int v)

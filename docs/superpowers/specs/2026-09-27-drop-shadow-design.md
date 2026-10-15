@@ -8,7 +8,13 @@ of #76 is gone).
 ## Model
 - 12 rows: BG1..BG4 x priority 0/1, Sprites priority 0..3. A profile
   holds a 12-bit `ShadowRows` mask plus `ShadowX`, `ShadowY` (-4..4 px,
-  default 2, 2; one light per scene), `ShadowColor`, `ShadowSmallOnly`.
+  default 2, 2; one light per scene), `ShadowColor`, `ShadowSmallOnly`,
+  `ShadowStretch` (0..4).
+- Shadow Stretch lengthens the shadow along the light without an anchor
+  (an affine stretch needs one per sprite): the silhouette is repeated
+  1 + stretch times at offsets k x (X, Y), each copy at alpha
+  1 - 0.5^(1/copies) so the region every copy covers darkens like the
+  plain 50 % shadow and the tip fades. Cost: copies x the plain pass.
 - The receiver of a row is the nearest row BEHIND it in the gauges
   (largest depth smaller than its own, among rows the scene uses) plus
   every used row sharing that depth: one surface in 3D. The gauges, not
@@ -64,7 +70,7 @@ of #76 is gone).
   brightness layer of each target (fallback after the loop);
   `-DPROBE_SHADOW_LOG` logs its inputs at frames 598-600.
 - `3dssettings.h/.cpp`, `3dsmain.cpp`: settings, `.3d` keys (`SHADOW`,
-  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`), editor block.
+  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`, `SHADOWSTRETCH`), editor block.
 
 ## Limits
 Silhouette, not projected; games that draw their own shadow get two; a

@@ -6,9 +6,11 @@ Notable changes to this project will be documented in this file.
 * Drop shadows per depth row (issue #77): in the 3D Stereo tab, a
   "Shadows" block lets any Depth row (BG priority or sprite priority)
   cast a silhouette of itself onto the layer behind it in depth, with
-  Shadow X / Y offsets and a Shadow Color picker (black, dark gray, navy,
-  brown, purple, white) and "Small Sprites Only", saved per profile in
-  the `.3d` (`SHADOW`, `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`).
+  Shadow X / Y offsets, a Shadow Stretch gauge (the silhouette repeated
+  along the light, fading towards the tip), a Shadow Color picker (black,
+  dark gray, navy, brown, purple, white) and "Small Sprites Only", saved
+  per profile in the `.3d` (`SHADOW`, `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`,
+  `SHADOWSMALL`, `SHADOWSTRETCH`).
   The silhouette is the caster drawn once more at the receiver's depth
   plane with an EQUAL depth test, before colour math: it lands only where
   the layer behind (the nearest smaller Depth gauge, with every row

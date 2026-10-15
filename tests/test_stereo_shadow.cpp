@@ -88,3 +88,15 @@ TEST_CASE("stereo shadow: every used row at the depth behind is a receiver plane
     n = stereo_shadow_receiver_planes(d2, (1u << 1) | (1u << 2), bg, 1, out);
     CHECK(n == 1); CHECK(out[0] == 7);
 }
+
+TEST_CASE("stereo shadow: stretch repeats the silhouette along the light, the full overlap stays a 50 % shadow") {
+    CHECK(stereo_shadow_copies(0) == 1);
+    CHECK(stereo_shadow_copies(4) == 5);
+    CHECK(stereo_shadow_copies(9) == 5);
+    CHECK(stereo_shadow_clamp_stretch(-3) == 0);
+    for (int st = 0; st <= STEREO_SHADOW_STRETCH_MAX; st++) {
+        float remain = 1.0f;
+        for (int k = 0; k < stereo_shadow_copies(st); k++) remain *= 1.0f - stereo_shadow_copy_alpha(st);
+        CHECK(remain > 0.49f); CHECK(remain < 0.51f);
+    }
+}

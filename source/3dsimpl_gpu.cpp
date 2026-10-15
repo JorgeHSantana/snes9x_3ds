@@ -732,9 +732,15 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     const int n = stereo_shadow_receiver_planes(depthRows, usedRows, GPU3DS.stereoBgPlane, row, planes);
                     if (br < 0 || n == 0) continue;
                     const float behindShift = ownShift(br < 8 ? br / 2 : 4, br < 8 ? br & 1 : br - 8);
-                    parkAllBut(id, t, behindShift + (float)GPU3DS.stereoShadowX, (float)GPU3DS.stereoShadowY);
-                    gpu3dsSetShadowEnv(0.5f, rgb);           // RGB = the shadow colour, alpha = texture alpha x 0.5
-                    for (int k = 0; k < n; k++) drawCaster(planes[k]);
+                    // Shadow Stretch: the silhouette repeated along the light at
+                    // steps of X/Y, each copy lighter so the full overlap stays
+                    // a 50 % shadow and the tip fades (stereo_shadow.h)
+                    const int copies = stereo_shadow_copies(GPU3DS.stereoShadowStretch);
+                    gpu3dsSetShadowEnv(stereo_shadow_copy_alpha(GPU3DS.stereoShadowStretch), rgb);   // RGB = the shadow colour, alpha = texture alpha x copy alpha
+                    for (int c = 1; c <= copies; c++) {
+                        parkAllBut(id, t, behindShift + (float)(c * GPU3DS.stereoShadowX), (float)(c * GPU3DS.stereoShadowY));
+                        for (int k = 0; k < n; k++) drawCaster(planes[k]);
+                    }
                     anyPass = true;
                 }
             }

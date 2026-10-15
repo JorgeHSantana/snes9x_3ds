@@ -293,7 +293,7 @@ typedef struct
     float                       stereoParallax;      // current P0 shift
     float                       stereoParallaxP1;    // current P1 shift
     float                       stereoParallaxBnd;   // current plane boundary
-    float                       stereoParallaxApplied;   // composite dedup key
+    float                       stereoParallaxApplied[4];   // the last (p0, p1, boundary, shadowY) sent; [0] = NaN sentinel after a reset
     float                       stereoPrioDimP0;
     float                       stereoPrioDimP1;
     float                       stereoPrioDimP2;
@@ -315,6 +315,7 @@ typedef struct
     int                         stereoShadowX, stereoShadowY;
     int                         stereoShadowColor;  // palette index (stereo_shadow.h)
     int                         stereoShadowSmallOnly;
+    int                         stereoShadowStretch;   // extra copies along the light, 0..4
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
@@ -485,12 +486,13 @@ static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary, 
     GPU3DS.stereoParallaxP1 = p1;
     GPU3DS.stereoParallaxBnd = boundary;
     GPU3DS.stereoShadowOffY = shadowY;
-    // shadowY is -4..4: a small multiplier keeps every term inside float precision
-    float key = p0 + p1 * 1024.0f + boundary * 1048576.0f + shadowY * 0.0625f;
-    if (GPU3DS.stereoParallaxApplied == key)
+    // the four values compared as they are: a composite float key lost
+    // precision once (Y offset), and Shadow Stretch takes Y up to 16
+    float *ap = GPU3DS.stereoParallaxApplied;
+    if (ap[0] == p0 && ap[1] == p1 && ap[2] == boundary && ap[3] == shadowY)
         return;
     C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD], p0, p1, boundary, shadowY);
-    GPU3DS.stereoParallaxApplied = key;
+    ap[0] = p0; ap[1] = p1; ap[2] = boundary; ap[3] = shadowY;
 }
 
 // a boundary no decoded depth plane (max 16/32 = 0.5) can ever reach:
