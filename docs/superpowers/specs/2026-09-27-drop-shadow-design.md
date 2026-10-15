@@ -189,3 +189,16 @@ Mode 7 casts nothing.
   field must not straddle a byte, or the union grows past 64 bits.
 - Azahar: Spread 2 on MMX3: 1774 brighter px (halo path: 852), bbox
   7 px wider, none darker; neutral byte-identical.
+- Vertex scratch: the clear rect and the composite quads use their own
+  ring-buffered `SVertexList`s (`GlowScratch`, own VBO ids so the
+  attribute-buffer cache rebinds). A borrowed slot of the scene VBOs
+  "returned" with `count -= 2` is read by the GPU at the end of the
+  frame with whatever was written there last: the black clear rect
+  shared the depth floor's slot and made the floor write a non-zero
+  depth on the console (artifacts with Spread on).
+- Glow Source (`GlowSource`): "Whole screen" draws the frame so far (the
+  main texture, or the right eye's) as one quad through the same
+  luminance cut into the spread target and composites it back with no
+  depth test - a post-process bloom at quarter res, HUD included; Spread
+  is forced to at least 1. The palette rows show the sprite count per
+  palette (`S9xObjPaletteCountLastFrame`).

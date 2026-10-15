@@ -325,6 +325,7 @@ typedef struct {
     int                 StereoGlowColor;       // tint index
     int                 StereoGlowPal;         // 8-bit mask of sprite palettes that glow (255 = all)
     int                 StereoGlowSpread;      // 0 = halo copies; 1..3 = quarter-res spread with 1/3/5 taps
+    int                 StereoGlowSource;      // 0 = marked rows; 1 = whole screen (everything above the threshold)
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
     int                 ColorSat, ColorCon, ColorBri;   // output colour grade -4..4 each (screen_grade.h), game-global
                                                // (game window narrows, scale kept), 2 = Zoom
@@ -356,6 +357,7 @@ typedef struct {
         int  GlowRows, GlowThresh, GlowStrength, GlowSoft, GlowColor;   // glow per row (stereo_glow.h)
         int  GlowPal;                                                    // sprite palettes that glow, 8-bit mask
         int  GlowSpread;                                                 // 0..3
+        int  GlowSource;                                                 // 0 rows, 1 whole screen
     };
     struct SStereoBind {
         u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C

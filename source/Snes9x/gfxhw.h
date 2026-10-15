@@ -14,6 +14,7 @@ void S9xLayerUseFrameStart();
 void S9xLayerUseFrameEnd();
 bool S9xLayerUsedLastFrame(int layer, int prio);
 unsigned S9xObjPalettesUsedLastFrame();   // bit per OBJ palette drawn last frame (glow by palette)
+int S9xObjPaletteCountLastFrame(int pal);   // sprites drawn with that palette last frame
 bool S9xLayerUsedLastFrameAny(int layer);
 // a Mode 7 plane drew in the last rendered frame (editor: the Mode 7 gauge dims otherwise)
 bool S9xMode7DrawnLastFrame();

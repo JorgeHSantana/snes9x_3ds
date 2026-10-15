@@ -430,6 +430,54 @@ static void gpu3dsSetGlowEnv(bool on, float gain, uint32_t rgb)
     C3D_TexEnvFunc(e5, C3D_Alpha, GPU_MULTIPLY_ADD);
 }
 
+// Vertex scratch for the glow spread's clear rect and composite quads
+// (issue #77). The GPU reads vertex data when the frame's command list
+// runs, so a quad written into a borrowed slot of the scene VBOs and
+// "returned" (count -= 2) is read back as whatever was written there
+// last: the black clear rect sharing the depth floor's slot made the
+// floor write a non-zero depth on the console (artifacts with Spread
+// on). Own buffers, a ring deep enough for both eyes of two frames, and
+// their own VBO ids so the attribute-buffer cache rebinds.
+struct GlowScratch
+{
+    SVertexList rect, quad;
+    int rectIdx, quadIdx;
+    bool ready;
+    static const int RING = 64;   // entries of 2 vertices
+    void init()
+    {
+        if (ready) return;
+        rect = GPU3DS.vertices[VBO_SCENE_RECT];
+        rect.id = (SGPU_VBO_ID)(VBO_COUNT + 1);
+        rect.sizeInBytes = RING * 2 * rect.vertexSize;
+        rect.data = rect.data_base = linearAlloc(rect.sizeInBytes);
+        rect.from = 0; rect.count = 0;
+        quad = GPU3DS.vertices[VBO_SCENE_TILE];
+        quad.id = (SGPU_VBO_ID)(VBO_COUNT + 2);
+        quad.sizeInBytes = RING * 2 * quad.vertexSize;
+        quad.data = quad.data_base = linearAlloc(quad.sizeInBytes);
+        quad.from = 0; quad.count = 0;
+        rectIdx = quadIdx = 0;
+        ready = rect.data != nullptr && quad.data != nullptr;
+    }
+    // a black rect over the whole target; returns the vertex index to draw from
+    int addRect(u32 color)
+    {
+        SRectVertex *v = &((SRectVertex *)rect.data)[rectIdx * 2];
+        v[0].Position = (SVector2i){ 0, 0 }; v[1].Position = (SVector2i){ 512, 256 };
+        v[0].Color = v[1].Color = __builtin_bswap32(color);
+        const int from = rectIdx * 2; rectIdx = (rectIdx + 1) % RING; return from;
+    }
+    int addQuad(s16 x0, s16 y0, s16 x1, s16 y1, s16 tx0, s16 ty0, s16 tx1, s16 ty1)
+    {
+        STileVertex *v = &((STileVertex *)quad.data)[quadIdx * 2];
+        v[0].Position = (SVector3i){ x0, y0, 0 }; v[1].Position = (SVector3i){ x1, y1, 0 };
+        v[0].TexCoord = (STexCoord2i){ tx0, ty0 }; v[1].TexCoord = (STexCoord2i){ tx1, ty1 };
+        const int from = quadIdx * 2; quadIdx = (quadIdx + 1) % RING; return from;
+    }
+};
+static GlowScratch s_glowScratch;
+
 // Stage 3 for the glow spread's composite taps: RGB = texel x gain,
 // alpha untouched. gain <= 0 restores passthrough.
 static void gpu3dsSetGlowTapEnv(float gain)
@@ -657,7 +705,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
             if (shadowPhaseDone) return;
             shadowPhaseDone = true;
             const bool shadowsOn = GPU3DS.stereoShadowRows != 0 && GPU3DS.stereoEyeIOD != 0.0f;
-            const bool glowOn = GPU3DS.stereoGlowRows != 0 && !sub;   // never into the sub screen: subtractive colour math would darken it
+            const bool glowWhole = GPU3DS.stereoGlowSource == 1 && GPU3DS.glowTexAvailable;
+            const bool glowOn = (GPU3DS.stereoGlowRows != 0 || glowWhole) && !sub;   // never into the sub screen: subtractive colour math would darken it
             if (!shadowsOn && !glowOn) return;
             int depthRows[STEREO_SHADOW_ROWS]; unsigned usedRows = 0;
             for (int l = 0; l < 5; l++) {
@@ -831,7 +880,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // Glow Spread: the glow drawn once at quarter resolution into
                 // SNES_GLOW and magnified back with bilinear taps (the light
                 // leaks ~4-8 px); replaces the halo copies while on
-                const int spread = GPU3DS.glowTexAvailable ? stereo_glow_clamp_spread(GPU3DS.stereoGlowSpread - tierDrop) : 0;
+                int spread = GPU3DS.glowTexAvailable ? stereo_glow_clamp_spread(GPU3DS.stereoGlowSpread - tierDrop) : 0;
+                if (glowWhole && spread < 1) spread = 1;   // the whole-screen source lives in the spread target
                 const int taps = stereo_glow_spread_taps(spread);
                 const int soft = taps > 0 ? 0 : stereo_glow_clamp_soft(GPU3DS.stereoGlowSoft - tierDrop);
                 const int copies = stereo_glow_copies(soft);
@@ -844,8 +894,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // so nothing glows through a wall; the light leaks only onto
                 // what is behind the sprite), and the plane is a constant per
                 // draw through the depth map, like the shadow's
-                SVertexList *tiles = &GPU3DS.vertices[VBO_SCENE_TILE];
-                SVertexList *rects = &GPU3DS.vertices[VBO_SCENE_RECT];
+                if (taps > 0) { s_glowScratch.init(); if (!s_glowScratch.ready) return; }
                 auto drawGlowGeometry = [&](int id, int plane, SGPU_TARGET_ID target, bool depthTested) {
                     int cFrom, cTo;
                     if (!sectionsOf(id, cFrom, cTo)) return;
@@ -888,10 +937,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
                     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
                     gpu3dsGlowPassEnd();   // plain state for the clear
-                    int rFrom = rects->from + rects->count;
-                    gpu3dsAddRectangleVertexes(0, 0, 512, 256, 0x000000FF);
-                    gpu3dsDraw(rects, NULL, 2, rFrom);
-                    rects->count -= 2;
+                    gpu3dsDraw(&s_glowScratch.rect, NULL, 2, s_glowScratch.addRect(0x000000FF));
                 };
                 // composite: the glow texture over the SNES area, bilinear (4x
                 // magnified = blurred), added once per tap at 1/taps, the
@@ -911,28 +957,52 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
                     gpu3dsSetGlowEnv(false, 0.0f, 0);
                     gpu3dsSetGlowTapEnv(1.0f / (float)taps);
-                    C3D_DepthMap(true, 0.0f, (float)plane / 32.0f);
-                    C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_COLOR);
+                    if (plane >= 0) {
+                        C3D_DepthMap(true, 0.0f, (float)plane / 32.0f);
+                        C3D_DepthTest(true, GPU_GEQUAL, GPU_WRITE_COLOR);
+                    } else {
+                        C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
+                    }
                     C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ONE, GPU_ONE, GPU_ZERO, GPU_ONE);
                     for (int tp = 0; tp < taps; tp++) {
-                        const int tFrom = tiles->from + tiles->count;
                         const s16 dx = (s16)stereo_glow_tap_dx(tp), dy = (s16)stereo_glow_tap_dy(tp);
                         // tile index 0 = raw texcoords: the quad covers the SNES area, sampling the 128x64 texture
-                        gpu3dsAddTileVertexes(0, 0, 512, 240, dx, dy, (s16)(128 + dx), (s16)(60 + dy), 0);
-                        if (list->useDrawArraysForTiledLayers) {
-                            gpu3dsDraw(tiles, NULL, 2, tFrom);
-                        } else if (shadowIbo != nullptr && shadowIboUsed + 2 <= SHADOW_IBO_MAX) {
-                            u16 *dst = shadowIbo + shadowIboUsed; dst[0] = (u16)tFrom; dst[1] = (u16)(tFrom + 1);
-                            gpu3dsDraw(tiles, (void *)dst, 2); shadowIboUsed += 2;
-                        }
-                        tiles->count -= 2;
+                        const int qFrom = s_glowScratch.addQuad(0, 0, 512, 240, dx, dy, (s16)(128 + dx), (s16)(60 + dy));
+                        gpu3dsDraw(&s_glowScratch.quad, NULL, 2, qFrom);
                         GPU3DSExt.glowDraws++;
                     }
                     gpu3dsSetGlowTapEnv(0.0f);
                     gpu3dsGlowPassEnd();
                     GPU3DS.appliedRenderState.target = TARGET_UNSET;
                 };
-                for (int id = LAYER_BG0; id <= LAYER_OBJ; id++) {
+                if (glowWhole) {
+                    // Whole screen (Jorge): the frame drawn so far, as one quad,
+                    // through the same luminance cut into the spread target,
+                    // then composited back - a post-process bloom at quarter
+                    // res; no depth test (screen space), the HUD glows too
+                    clearGlowTarget();
+                    gpu3dsSetGlowEnv(true, gain, tint);
+                    gpu3dsSetGlowPalette(255, false);
+                    GPU3DS.currentRenderState.target = TARGET_SNES_GLOW;
+                    GPU3DS.currentRenderState.textureBind = GPU3DS.stereoRightPass ? SNES_MAIN_RIGHT : SNES_MAIN;
+                    GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
+                    GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
+                    GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+                    GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+                    GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
+                    GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
+                    gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
+                    gpu3dsSetStereoParallaxHi(0.0f, 0.0f, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
+                    gpu3dsSetMode7Persp(0.0f, 1.0f, 0.0f, 0.0f);
+                    gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
+                    gpu3dsGlowPassState(ref, -1);
+                    const int qFrom = s_glowScratch.addQuad(0, 0, 512, 240, 0, 0, 512, 240);
+                    gpu3dsDraw(&s_glowScratch.quad, NULL, 2, qFrom);
+                    GPU3DSExt.glowDraws++;
+                    anyGlow = true;
+                    compositeGlow(-1);
+                }
+                for (int id = LAYER_BG0; id <= LAYER_OBJ && !glowWhole; id++) {
                     if (!settings3DS.LayerEnabled[id]) continue;
                     const int tiers = id == LAYER_OBJ ? 4 : 2;
                     for (int t = 0; t < tiers; t++) {

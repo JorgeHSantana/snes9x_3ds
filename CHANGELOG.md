@@ -21,9 +21,12 @@ Notable changes to this project will be documented in this file.
   drawn at a quarter of the resolution into a small VRAM target and
   blurred back over the frame with bilinear taps (~4-8 px). The glow is
   depth-tested at the sprite's own plane, so nothing glows through a wall
-  in front; the light leaks only onto what is behind. Saved per profile
-  (`GLOW`, `GLOWTHRESH`, `GLOWSTRENGTH`, `GLOWSOFT`, `GLOWCOLOR`,
-  `GLOWPAL`, `GLOWSPREAD`).
+  in front; the light leaks only onto what is behind. A Glow Source
+  picker switches to "Whole screen": everything in the frame above the
+  threshold glows (HUD included), a post-process bloom through the same
+  quarter-res target. Palette rows show how many sprites use each.
+  Saved per profile (`GLOW`, `GLOWTHRESH`, `GLOWSTRENGTH`, `GLOWSOFT`,
+  `GLOWCOLOR`, `GLOWPAL`, `GLOWSPREAD`, `GLOWSRC`).
 
 
 ## Stable v2.5 (2026-10-15)

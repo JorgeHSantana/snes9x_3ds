@@ -733,12 +733,15 @@ void S9xLayerUseFrameStart()
     layerUseFrameStart(&s_layerUse); s_m7DrawnAcc = false;
 }
 static unsigned s_objPalAcc = 0, s_objPalLast = 0;   // sprite palettes drawn this / last frame (glow by palette)
+static unsigned short s_objPalCountAcc[8], s_objPalCountLast[8];   // sprites per palette
 void S9xLayerUseFrameEnd()
 {
     layerUseFrameEnd(&s_layerUse); s_m7DrawnLast = s_m7DrawnAcc;
     s_objPalLast = s_objPalAcc; s_objPalAcc = 0;
+    for (int p = 0; p < 8; p++) { s_objPalCountLast[p] = s_objPalCountAcc[p]; s_objPalCountAcc[p] = 0; }
 }
 unsigned S9xObjPalettesUsedLastFrame() { return s_objPalLast; }
+int S9xObjPaletteCountLastFrame(int pal) { return s_objPalCountLast[pal & 7]; }
 bool S9xMode7DrawnLastFrame() { return s_m7DrawnLast; }
 bool S9xLayerUsedLastFrame(int layer, int prio) { return layerUseUsed(&s_layerUse, layer, prio); }
 bool S9xLayerUsedLastFrameAny(int layer)        { return layerUseLayerUsed(&s_layerUse, layer); }
@@ -2884,6 +2887,7 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 				int priorityOffset = (PPU.OBJ[S].Priority + 1) * 3 * 256 + depth;
 				layerUseMark(&s_layerUse, 4, PPU.OBJ[S].Priority & 3);
 				s_objPalAcc |= 1u << (PPU.OBJ[S].Palette & 7);
+				s_objPalCountAcc[PPU.OBJ[S].Palette & 7]++;
 				bool isVFlipped = PPU.OBJ[S].VFlip;
 				bool isHFlipped = PPU.OBJ[S].HFlip;
 				int objWidth = GFX.OBJWidths[S];
