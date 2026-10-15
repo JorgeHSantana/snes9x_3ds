@@ -1250,6 +1250,7 @@ void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
     // the editor previews the shadow as set, not as the load controller left it
     GPU3DSExt.shadowSoftLevel = GPU3DS.stereoShadowSoft;
     GPU3DSExt.shadowAlphaMul = 1.0f;
+    const unsigned drawsBefore = GPU3DSExt.shadowDraws;   // the preview's draws are not the game's
     // two passes fill BOTH framebuffers of the double-buffered game
     // screen - a single one shows only on the right swap parity, which
     // read as "sometimes it works" in the field
@@ -1274,6 +1275,7 @@ void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
         gpu3dsFrameEnd();
     }
     gpu3dsSetStereoPreviewHighlight(-1, -1);
+    GPU3DSExt.shadowDraws = drawsBefore;
     if (pausedLook)
         notif3dsHide();
     // both buffers now hold this frame: the menu's own redraw is one pass,
