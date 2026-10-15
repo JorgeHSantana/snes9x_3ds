@@ -904,6 +904,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // the visible SNES area (256 or 512 wide, 224 or 239 high)
                 const int glowW = GPU3DSExt.renderWidth > 0 ? GPU3DSExt.renderWidth : 256;
                 const int glowH = PPU.ScreenHeight > 0 && PPU.ScreenHeight <= 240 ? (int)PPU.ScreenHeight : 224;
+                // (an edge crop by the per-eye parallax margin was tried for the
+                // whole-screen source and dropped: an object half inside the
+                // margin lost source in one eye only - more asymmetry, not less)
+                const int glowX0 = 0, glowX1 = glowW;
                 auto drawGlowGeometry = [&](int id, int plane, SGPU_TARGET_ID target, bool depthTested) {
                     int cFrom, cTo;
                     if (!sectionsOf(id, cFrom, cTo)) return;
@@ -988,7 +992,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     for (int tp = 0; tp < taps; tp++) {
                         const s16 dx = (s16)stereo_glow_tap_dx(tp), dy = (s16)stereo_glow_tap_dy(tp);
                         // tile index 0 = raw texcoords: the quad covers the visible SNES area, sampling the 128x64 texture at a quarter
-                        const int qFrom = s_glowScratch.addQuad(0, 0, (s16)glowW, (s16)glowH, dx, dy, (s16)(glowW / 4 + dx), (s16)(glowH / 4 + dy));
+                        const int qFrom = s_glowScratch.addQuad((s16)glowX0, 0, (s16)glowX1, (s16)glowH, (s16)(glowX0 / 4 + dx), dy, (s16)(glowX1 / 4 + dx), (s16)(glowH / 4 + dy));
                         gpu3dsDraw(&s_glowScratch.quad, NULL, 2, qFrom);
                         GPU3DSExt.glowDraws++;
                     }
@@ -1020,7 +1024,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     // only the visible area: the texture beyond it (the right
                     // half in 256 px modes, rows past the screen height) keeps
                     // leftovers that the blur would pull into the frame's edge
-                    const int qFrom = s_glowScratch.addQuad(0, 0, (s16)glowW, (s16)glowH, 0, 0, (s16)glowW, (s16)glowH);
+                    const int qFrom = s_glowScratch.addQuad((s16)glowX0, 0, (s16)glowX1, (s16)glowH, (s16)glowX0, 0, (s16)glowX1, (s16)glowH);
                     gpu3dsDraw(&s_glowScratch.quad, NULL, 2, qFrom);
                     GPU3DSExt.glowDraws++;
                     anyGlow = true;
