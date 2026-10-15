@@ -701,14 +701,22 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 const int tiers = id == LAYER_OBJ ? 4 : 2;
                 int cFrom, cTo;
                 if (!sectionsOf(id, cFrom, cTo)) continue;
-                // small-sprite spans of this target (OBJ only); none recorded = whole section
+                // sprite spans of this target (OBJ only; none recorded = whole
+                // section): "Small Sprites Only" filters by OBSEL size, and a
+                // Stretch scales every sprite about its own feet, so each
+                // sprite then draws on its own with its anchor in the uniform
                 const ObjSpanTable *spans = S9xObjSpans();
-                ObjSpan small[64]; int nSmall = 0;
+                ObjSpan sp[ObjSpanTable::MAX]; int nSp = 0;
+                const float sx = stereo_shadow_stretch_factor(GPU3DS.stereoShadowSX);
+                const float sy = stereo_shadow_stretch_factor(GPU3DS.stereoShadowSY);
+                const bool stretched = id == LAYER_OBJ && spans->n > 0 && (sx != 1.0f || sy != 1.0f);
                 const bool smallOnly = id == LAYER_OBJ && GPU3DS.stereoShadowSmallOnly && spans->n > 0;
-                if (smallOnly) nSmall = spans->small_ranges(sub, small, 64);
+                const bool perSprite = stretched || smallOnly;
+                if (perSprite) nSp = stretched ? spans->ranges(sub, smallOnly, sp, ObjSpanTable::MAX)
+                                               : spans->small_ranges(sub, sp, ObjSpanTable::MAX);
                 SLayer *ly = &list->layers[id];
                 auto drawCaster = [&](int plane) {
-                    if (!smallOnly) {
+                    if (!perSprite) {
                         for (int k = cFrom; k < cTo; k++) {
                             SLayerSection *sec = &list->sections[k];
                             drawRange(ly, sec, sec->from, sec->count, plane);
@@ -716,8 +724,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
                         return;
                     }
                     SLayerSection *sec = &list->sections[cFrom];
-                    for (int k = 0; k < nSmall; k++)
-                        drawRange(ly, sec, small[k].from, small[k].count, plane);
+                    for (int k = 0; k < nSp; k++) {
+                        if (stretched) gpu3dsSetShadowStretch((float)sp[k].ax, (float)sp[k].ay, sx, sy);
+                        drawRange(ly, sec, sp[k].from, sp[k].count, plane);
+                    }
                 };
 
                 // one silhouette per casting tier, at the parallax and planes
@@ -732,15 +742,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     const int n = stereo_shadow_receiver_planes(depthRows, usedRows, GPU3DS.stereoBgPlane, row, planes);
                     if (br < 0 || n == 0) continue;
                     const float behindShift = ownShift(br < 8 ? br / 2 : 4, br < 8 ? br & 1 : br - 8);
-                    // Shadow Stretch: the silhouette repeated along the light at
-                    // steps of X/Y, each copy lighter so the full overlap stays
-                    // a 50 % shadow and the tip fades (stereo_shadow.h)
-                    const int copies = stereo_shadow_copies(GPU3DS.stereoShadowStretch);
-                    gpu3dsSetShadowEnv(stereo_shadow_copy_alpha(GPU3DS.stereoShadowStretch), rgb);   // RGB = the shadow colour, alpha = texture alpha x copy alpha
-                    for (int c = 1; c <= copies; c++) {
-                        parkAllBut(id, t, behindShift + (float)(c * GPU3DS.stereoShadowX), (float)(c * GPU3DS.stereoShadowY));
-                        for (int k = 0; k < n; k++) drawCaster(planes[k]);
-                    }
+                    parkAllBut(id, t, behindShift + (float)GPU3DS.stereoShadowX, (float)GPU3DS.stereoShadowY);
+                    gpu3dsSetShadowEnv(0.5f, rgb);           // RGB = the shadow colour, alpha = texture alpha x 0.5
+                    for (int k = 0; k < n; k++) drawCaster(planes[k]);
                     anyPass = true;
                 }
             }

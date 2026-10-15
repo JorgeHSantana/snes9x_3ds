@@ -2939,8 +2939,16 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 					else
 						StartLine += TileHeight;
 				}
-				s_objSpans.add(spanFrom, GPU3DS.vertices[VBO_SCENE_OBJ].from + GPU3DS.vertices[VBO_SCENE_OBJ].count - spanFrom,
-					PPU.OBJ[S].Size != 0, sub != 0);
+				{
+					// the sprite's feet, for the drop shadow's stretch (issue #77):
+					// bottom centre of its OAM rectangle, in SNES pixels
+					const int w = GFX.OBJWidths[S];
+					const int h = PPU.OBJSizeSelect == 6 ? w * 2 : (PPU.OBJSizeSelect == 7 ? 32 : w);
+					int hp = PPU.OBJ[S].HPos; if (hp == -256) hp = 256;
+					int vp = PPU.OBJ[S].VPos & 0xff; if (vp > 239) vp -= 256;
+					s_objSpans.add(spanFrom, GPU3DS.vertices[VBO_SCENE_OBJ].from + GPU3DS.vertices[VBO_SCENE_OBJ].count - spanFrom,
+						PPU.OBJ[S].Size != 0, sub != 0, hp + w / 2, vp + h);
+				}
 			}
 
 			S = (S-1) & 0x7F;

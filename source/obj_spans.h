@@ -12,7 +12,7 @@
 // The per-scanline sprite path interleaves sprites; it records nothing,
 // and the phase then draws the whole section (no size filter).
 
-struct ObjSpan { uint16_t from, count; bool large, sub; };
+struct ObjSpan { uint16_t from, count; bool large, sub; int16_t ax, ay; };   // ax/ay: bottom-centre anchor (SNES px)
 
 struct ObjSpanTable
 {
@@ -22,12 +22,26 @@ struct ObjSpanTable
 
     void reset() { n = 0; }
 
-    void add(unsigned int from, unsigned int count, bool large, bool sub)
+    void add(unsigned int from, unsigned int count, bool large, bool sub, int ax = 0, int ay = 0)
     {
         if (count == 0 || n >= MAX) return;
         spans[n].from = (uint16_t)from; spans[n].count = (uint16_t)count;
         spans[n].large = large; spans[n].sub = sub;
+        spans[n].ax = (int16_t)ax; spans[n].ay = (int16_t)ay;
         n++;
+    }
+
+    // Every sprite of one target, one range each (no merging: the stretch
+    // anchors every sprite at its own feet). Returns how many `out` holds.
+    int ranges(bool sub, bool smallOnly, ObjSpan* out, int cap) const
+    {
+        int m = 0;
+        for (int i = 0; i < n && m < cap; i++) {
+            const ObjSpan& s = spans[i];
+            if (s.sub != sub || (smallOnly && s.large)) continue;
+            out[m++] = s;
+        }
+        return m;
     }
 
     // Small sprites of one target, adjacent spans merged. Returns how many

@@ -26,3 +26,18 @@ TEST_CASE("obj spans: empty spans are ignored, the table caps at 128 and the out
     ObjSpan out[4];
     CHECK(t.small_ranges(false, out, 4) == 4);
 }
+
+TEST_CASE("obj spans: ranges keep one sprite per entry with its feet anchor") {
+    ObjSpanTable t; t.reset();
+    t.add(100, 4, false, false, 16, 40);
+    t.add(104, 6, false, false, 48, 40);     // adjacent, still its own range
+    t.add(110, 8, true, false, 80, 72);
+    t.add(120, 2, false, true, 8, 8);
+    ObjSpan out[8];
+    CHECK(t.ranges(false, false, out, 8) == 3);
+    CHECK(out[1].from == 104); CHECK(out[1].ax == 48); CHECK(out[1].ay == 40);
+    CHECK(out[2].large);
+    CHECK(t.ranges(false, true, out, 8) == 2);
+    CHECK(t.ranges(true, false, out, 8) == 1); CHECK(out[0].ax == 8);
+    CHECK(t.ranges(false, false, out, 1) == 1);
+}

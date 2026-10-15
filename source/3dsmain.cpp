@@ -978,7 +978,7 @@ static int *stereoEditField(int which) {
             case 2: return &p->Blur;      case 3: return &p->FocusBack;
             case 4: return &p->FocusFront; case 6: return &p->Mode7Persp;
             case 7: return &p->Mode7Fx;
-            case 8: return &p->ShadowRows;  case 9: return &p->ShadowX;  case 10: return &p->ShadowY;  case 11: return &p->ShadowColor;  case 12: return &p->ShadowSmallOnly;  case 13: return &p->ShadowStretch;
+            case 8: return &p->ShadowRows;  case 9: return &p->ShadowX;  case 10: return &p->ShadowY;  case 11: return &p->ShadowColor;  case 12: return &p->ShadowSmallOnly;  case 13: return &p->ShadowSX;  case 14: return &p->ShadowSY;
             default: return &p->EdgeMode;
         }
     }
@@ -987,7 +987,7 @@ static int *stereoEditField(int which) {
         case 2: return &settings3DS.StereoBlur;      case 3: return &settings3DS.StereoFocusBack;
         case 4: return &settings3DS.StereoFocusFront; case 6: return &settings3DS.StereoMode7Persp;
         case 7: return &settings3DS.StereoMode7Fx;
-        case 8: return &settings3DS.StereoShadowRows;  case 9: return &settings3DS.StereoShadowX;  case 10: return &settings3DS.StereoShadowY;  case 11: return &settings3DS.StereoShadowColor;  case 12: return &settings3DS.StereoShadowSmallOnly;  case 13: return &settings3DS.StereoShadowStretch;
+        case 8: return &settings3DS.StereoShadowRows;  case 9: return &settings3DS.StereoShadowX;  case 10: return &settings3DS.StereoShadowY;  case 11: return &settings3DS.StereoShadowColor;  case 12: return &settings3DS.StereoShadowSmallOnly;  case 13: return &settings3DS.StereoShadowSX;  case 14: return &settings3DS.StereoShadowSY;
         default: return &settings3DS.StereoEdgeMode;
     }
 }
@@ -1672,6 +1672,9 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 // ---- live 3D editor preview (issue #61) ----
 static int  s_stereoGaugeFirst = -1;    // item index of the first depth gauge
 static int  s_stereoGaugeCount = 0;     // gauges actually listed (Hide Unused filters)
+static int  s_stereoShadowFirst = -1;   // item index of the first Shadows checkbox
+static int  s_stereoShadowCount = 0;
+static int  s_stereoShadowLayer[12], s_stereoShadowPrio[12];
 static int  s_stereoGaugeLayer[12];     // per listed gauge: layer (0..3 BG, 4 sprites)
 static int  s_stereoGaugePrio[12];      // per listed gauge: priority
 
@@ -1759,6 +1762,10 @@ static void stereo3dIdleTick()
     // any depth row
     if (sel >= 0 && sel == s_stereoPlaneGaugeIdx) { inGauges = true; layer = 0; prio = 0; }
     if (sel >= 0 && sel == s_stereoExtbgGaugeIdx) { inGauges = true; layer = 1; prio = 1; }
+    // a Shadows checkbox spotlights its row like the depth gauge does
+    if (!inGauges && s_stereoShadowFirst >= 0 && sel >= s_stereoShadowFirst && sel < s_stereoShadowFirst + s_stereoShadowCount) {
+        inGauges = true; layer = s_stereoShadowLayer[sel - s_stereoShadowFirst]; prio = s_stereoShadowPrio[sel - s_stereoShadowFirst];
+    }
     // Focus/Effects gauges: full-scene preview, effects applied live
     bool inFx = !inGauges && s_stereoFxFirst >= 0 &&
         sel >= s_stereoFxFirst && sel < s_stereoFxLast;
@@ -1832,7 +1839,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                             for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = settings3DS.StereoDepthOBJHi[i];
                             p->Fade = settings3DS.StereoFade; p->Haze = settings3DS.StereoHaze;
                             p->Blur = settings3DS.StereoBlur;
-                            p->ShadowRows = settings3DS.StereoShadowRows; p->ShadowX = settings3DS.StereoShadowX; p->ShadowY = settings3DS.StereoShadowY; p->ShadowColor = settings3DS.StereoShadowColor; p->ShadowSmallOnly = settings3DS.StereoShadowSmallOnly; p->ShadowStretch = settings3DS.StereoShadowStretch;
+                            p->ShadowRows = settings3DS.StereoShadowRows; p->ShadowX = settings3DS.StereoShadowX; p->ShadowY = settings3DS.StereoShadowY; p->ShadowColor = settings3DS.StereoShadowColor; p->ShadowSmallOnly = settings3DS.StereoShadowSmallOnly; p->ShadowSX = settings3DS.StereoShadowSX; p->ShadowSY = settings3DS.StereoShadowSY;
                             p->FocusBack = settings3DS.StereoFocusBack;
                             p->FocusFront = settings3DS.StereoFocusFront;
                             p->EdgeMode = settings3DS.StereoEdgeMode;
@@ -1993,9 +2000,14 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
 
         // Drop shadows (issue #77): one checkbox per used row, one light
         AddMenuHeader2(items, "Shadows"_s);
+        s_stereoShadowFirst = (int)items.size();
+        s_stereoShadowCount = 0;
         for (int r = 0; r < 12; r++) {
             int layer = rows[r].layer, prio = rows[r].prio;
             if (!stereo3dRowUsed(layer, prio) && settings3DS.StereoHideUnused) continue;
+            s_stereoShadowLayer[s_stereoShadowCount] = layer;   // the row spotlights on the top screen (Jorge)
+            s_stereoShadowPrio[s_stereoShadowCount] = prio;
+            s_stereoShadowCount++;
             const int bit = stereo_shadow_row(layer, prio);
             char label[40]; snprintf(label, sizeof(label), "%s", rows[r].name);
             AddMenuCheckbox(items, std::string(label), ((*stereoEditField(8)) >> bit) & 1,
@@ -2013,9 +2025,12 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         AddMenuGauge(items, "  Shadow Y"_s, -4, 4, *stereoEditField(10),
             []( int val ) { if (CheckAndUpdate(*stereoEditField(10), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
         stereoHelp(items, "Vertical offset of every shadow, in pixels (+ = down).");
-        AddMenuGauge(items, "  Shadow Stretch"_s, 0, STEREO_SHADOW_STRETCH_MAX, *stereoEditField(13),
+        AddMenuGauge(items, "  Stretch X"_s, STEREO_SHADOW_STRETCH_MIN, STEREO_SHADOW_STRETCH_MAX, *stereoEditField(13),
             []( int val ) { if (CheckAndUpdate(*stereoEditField(13), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
-        stereoHelp(items, "Lengthens every shadow along the light: the silhouette\nrepeated this many more times at steps of Shadow X/Y,\nfading towards the tip. Each step is one more pass of\nthe caster.");
+        stereoHelp(items, "Widens every sprite's shadow about its feet, in quarters\n(0 = as drawn, 4 = twice as wide, -3 = a quarter).\nSprites only; one pass per sprite while on.");
+        AddMenuGauge(items, "  Stretch Y"_s, STEREO_SHADOW_STRETCH_MIN, STEREO_SHADOW_STRETCH_MAX, *stereoEditField(14),
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(14), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
+        stereoHelp(items, "Lengthens every sprite's shadow upward from its feet,\nin quarters (4 = twice as tall, -3 = a quarter: flat on\nthe floor). Sprites only; one pass per sprite while on.");
         {
             std::vector<SMenuItem> colorOptions;
             for (int c = 0; c < STEREO_SHADOW_COLORS; c++)
@@ -2838,7 +2853,7 @@ void settingsResetStereo3D()
     settings3DS.StereoFade = 0;
     settings3DS.StereoHaze = 0;
     settings3DS.StereoBlur = 0;
-    settings3DS.StereoShadowRows = 0; settings3DS.StereoShadowX = 2; settings3DS.StereoShadowY = 2; settings3DS.StereoShadowColor = 0; settings3DS.StereoShadowSmallOnly = 0; settings3DS.StereoShadowStretch = 0;
+    settings3DS.StereoShadowRows = 0; settings3DS.StereoShadowX = 2; settings3DS.StereoShadowY = 2; settings3DS.StereoShadowColor = 0; settings3DS.StereoShadowSmallOnly = 0; settings3DS.StereoShadowSX = 0; settings3DS.StereoShadowSY = 0;
     settings3DS.StereoFocusBack = -1;
     settings3DS.StereoFocusFront = 1;
     settings3DS.StereoEdgeMode = 1;   // Trim
@@ -2875,7 +2890,7 @@ void settingsLoadStereo3D()
     int *tFade = &settings3DS.StereoFade;
     int *tHaze = &settings3DS.StereoHaze;
     int *tBlur = &settings3DS.StereoBlur;
-    int *tShRows = &settings3DS.StereoShadowRows, *tShX = &settings3DS.StereoShadowX, *tShY = &settings3DS.StereoShadowY, *tShColor = &settings3DS.StereoShadowColor, *tShSmall = &settings3DS.StereoShadowSmallOnly, *tShStretch = &settings3DS.StereoShadowStretch;
+    int *tShRows = &settings3DS.StereoShadowRows, *tShX = &settings3DS.StereoShadowX, *tShY = &settings3DS.StereoShadowY, *tShColor = &settings3DS.StereoShadowColor, *tShSmall = &settings3DS.StereoShadowSmallOnly, *tShSX = &settings3DS.StereoShadowSX, *tShSY = &settings3DS.StereoShadowSY;
     int *tFB = &settings3DS.StereoFocusBack;
     int *tFF = &settings3DS.StereoFocusFront;
     int *tEdge = &settings3DS.StereoEdgeMode;
@@ -2902,9 +2917,9 @@ void settingsLoadStereo3D()
                 for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = stereoDepthDefault[4];
                 p->Fade = p->Haze = p->Blur = 0;
                 p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1; p->Mode7Persp = 8; p->Mode7Fx = 1;
-                p->ShadowRows = 0; p->ShadowX = 2; p->ShadowY = 2; p->ShadowColor = 0; p->ShadowSmallOnly = 0; p->ShadowStretch = 0;
+                p->ShadowRows = 0; p->ShadowX = 2; p->ShadowY = 2; p->ShadowColor = 0; p->ShadowSmallOnly = 0; p->ShadowSX = 0; p->ShadowSY = 0;
                 tDepth = p->Depth; tDepthP1 = p->DepthP1; tObjHi = p->DepthOBJHi;
-                tShRows = &p->ShadowRows; tShX = &p->ShadowX; tShY = &p->ShadowY; tShColor = &p->ShadowColor; tShSmall = &p->ShadowSmallOnly; tShStretch = &p->ShadowStretch;
+                tShRows = &p->ShadowRows; tShX = &p->ShadowX; tShY = &p->ShadowY; tShColor = &p->ShadowColor; tShSmall = &p->ShadowSmallOnly; tShSX = &p->ShadowSX; tShSY = &p->ShadowSY;
                 tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
                 tEdge = &p->EdgeMode; tM7 = &p->Mode7Persp; tM7Fx = &p->Mode7Fx;
@@ -2986,8 +3001,10 @@ void settingsLoadStereo3D()
             *tShColor = v < 0 ? 0 : (v >= STEREO_SHADOW_COLORS ? 0 : v);
         if (sscanf(line, "SHADOWSMALL=%d", &v) == 1)
             *tShSmall = v ? 1 : 0;
-        if (sscanf(line, "SHADOWSTRETCH=%d", &v) == 1)
-            *tShStretch = stereo_shadow_clamp_stretch(v);
+        if (sscanf(line, "SHADOWSX=%d", &v) == 1)
+            *tShSX = stereo_shadow_clamp_stretch(v);
+        if (sscanf(line, "SHADOWSY=%d", &v) == 1)
+            *tShSY = stereo_shadow_clamp_stretch(v);
     }
     fclose(f);
 }
@@ -3016,7 +3033,7 @@ static void settingsWriteStereo3DGlobals(FILE *f)
     fprintf(f, "# Mode 7 effects by distance: fade/haze/blur grow towards the horizon (0/1)\n");
     fprintf(f, "M7FX=%d\n", settings3DS.StereoMode7Fx);
     fprintf(f, "# drop shadows: 12-bit mask of Depth rows that cast one (BG1P0=1 BG1P1=2 ... OBJP3=2048), offset in px\n");
-    fprintf(f, "SHADOW=%d\nSHADOWX=%d\nSHADOWY=%d\nSHADOWCOLOR=%d\nSHADOWSMALL=%d\nSHADOWSTRETCH=%d\n", settings3DS.StereoShadowRows, settings3DS.StereoShadowX, settings3DS.StereoShadowY, settings3DS.StereoShadowColor, settings3DS.StereoShadowSmallOnly, settings3DS.StereoShadowStretch);
+    fprintf(f, "SHADOW=%d\nSHADOWX=%d\nSHADOWY=%d\nSHADOWCOLOR=%d\nSHADOWSMALL=%d\nSHADOWSX=%d\nSHADOWSY=%d\n", settings3DS.StereoShadowRows, settings3DS.StereoShadowX, settings3DS.StereoShadowY, settings3DS.StereoShadowColor, settings3DS.StereoShadowSmallOnly, settings3DS.StereoShadowSX, settings3DS.StereoShadowSY);
 }
 
 // Writes the current game's LOOK (depths/focus/effects/edge) as the global
@@ -3058,7 +3075,7 @@ void settingsSaveStereo3D()
         fprintf(f, "FADE=%d\nHAZE=%d\nBLUR=%d\n", p->Fade, p->Haze, p->Blur);
         fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\nM7PERSP=%d\nM7FX=%d\n",
             p->FocusBack, p->FocusFront, p->EdgeMode, p->Mode7Persp, p->Mode7Fx);
-        fprintf(f, "SHADOW=%d\nSHADOWX=%d\nSHADOWY=%d\nSHADOWCOLOR=%d\nSHADOWSMALL=%d\nSHADOWSTRETCH=%d\n", p->ShadowRows, p->ShadowX, p->ShadowY, p->ShadowColor, p->ShadowSmallOnly, p->ShadowStretch);
+        fprintf(f, "SHADOW=%d\nSHADOWX=%d\nSHADOWY=%d\nSHADOWCOLOR=%d\nSHADOWSMALL=%d\nSHADOWSX=%d\nSHADOWSY=%d\n", p->ShadowRows, p->ShadowX, p->ShadowY, p->ShadowColor, p->ShadowSmallOnly, p->ShadowSX, p->ShadowSY);
     }
     if (settings3DS.StereoWatchAddr >= 0)
         fprintf(f, "WATCH=%X\n", settings3DS.StereoWatchAddr);

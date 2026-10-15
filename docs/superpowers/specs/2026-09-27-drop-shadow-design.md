@@ -9,12 +9,17 @@ of #76 is gone).
 - 12 rows: BG1..BG4 x priority 0/1, Sprites priority 0..3. A profile
   holds a 12-bit `ShadowRows` mask plus `ShadowX`, `ShadowY` (-4..4 px,
   default 2, 2; one light per scene), `ShadowColor`, `ShadowSmallOnly`,
-  `ShadowStretch` (0..4).
-- Shadow Stretch lengthens the shadow along the light without an anchor
-  (an affine stretch needs one per sprite): the silhouette is repeated
-  1 + stretch times at offsets k x (X, Y), each copy at alpha
-  1 - 0.5^(1/copies) so the region every copy covers darkens like the
-  plain 50 % shadow and the tip fades. Cost: copies x the plain pass.
+  `ShadowSX`, `ShadowSY` (-3..8, quarters: x0.25 .. x3).
+- Stretch X / Y scale every sprite's silhouette about its own feet (the
+  bottom centre of its OAM rectangle, recorded with the sprite's vertex
+  span in `obj_spans.h`): the tile shader's `shadowStretch` uniform
+  (anchor x, anchor y, scale x, scale y) is applied before the parallax
+  and the shadow offset, (0, 0, 1, 1) everywhere else = exact no-op.
+  While a stretch is on, the OBJ caster draws one span per sprite with
+  its anchor in the uniform (the span table has no anchor for the
+  per-scanline sprite path: no stretch there). BG casters never stretch.
+  A smear (the silhouette repeated along the light, fading) was tried
+  first and dropped: it multiplied the shadow instead of stretching it.
 - The receiver of a row is the nearest row BEHIND it in the gauges
   (largest depth smaller than its own, among rows the scene uses) plus
   every used row sharing that depth: one surface in 3D. The gauges, not
@@ -70,7 +75,8 @@ of #76 is gone).
   brightness layer of each target (fallback after the loop);
   `-DPROBE_SHADOW_LOG` logs its inputs at frames 598-600.
 - `3dssettings.h/.cpp`, `3dsmain.cpp`: settings, `.3d` keys (`SHADOW`,
-  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`, `SHADOWSTRETCH`), editor block.
+  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWSMALL`, `SHADOWSX`, `SHADOWSY`), editor block; a Shadows
+  checkbox spotlights its row on the top screen like a depth gauge.
 
 ## Limits
 Silhouette, not projected; games that draw their own shadow get two; a
