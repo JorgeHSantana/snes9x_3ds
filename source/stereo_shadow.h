@@ -2,6 +2,7 @@
 #define STEREO_SHADOW_H
 
 #include <stdint.h>
+#include <math.h>
 
 // Drop shadows per depth row (issue #77): the 12 rows of the 3D tab's
 // Depth list, as a bit mask, and the depth the shadow of a row takes -
@@ -127,21 +128,24 @@ static inline float stereo_shadow_alpha(int opacity, bool fade, int gap)
     return a * k;
 }
 
-// Soft Edge: the silhouette drawn four times, at (0,0), (1,0), (0,1) and
-// (1,1) px - a 2x2 box blur of the mask. Each copy's alpha is chosen so
-// the pixels every copy covers darken exactly like the plain shadow
-// (1 - (1-a)^(1/4)); the 1 px rim gets a quarter of the passes.
-#define STEREO_SHADOW_SOFT_COPIES 4
-static inline float stereo_shadow_soft_alpha(float a)
+// Soft Edge levels: 0 off (one pass), 1 Light (a 2x2 px box, four
+// passes), 2 Full (a 3x3 px box centred on the shadow, nine passes).
+// Each copy's alpha is 1 - (1-a)^(1/copies), so the pixels every copy
+// covers darken exactly like the plain shadow and the rim gets less.
+#define STEREO_SHADOW_SOFT_MAX 2
+static inline int stereo_shadow_clamp_soft(int v) { return v < 0 ? 0 : (v > STEREO_SHADOW_SOFT_MAX ? STEREO_SHADOW_SOFT_MAX : v); }
+static inline int stereo_shadow_soft_copies(int level)
 {
-    // (1-a)^(1/4) without libm: two square roots by Newton (a is 0..1)
-    float r = 1.0f - a;
-    float s = r; for (int i = 0; i < 12; i++) s = 0.5f * (s + r / (s > 0.0f ? s : 1e-6f));
-    float q = s; for (int i = 0; i < 12; i++) q = 0.5f * (q + s / (q > 0.0f ? q : 1e-6f));
-    return 1.0f - q;
+    level = stereo_shadow_clamp_soft(level);
+    return level == 0 ? 1 : (level == 1 ? 4 : 9);
 }
-static inline int stereo_shadow_soft_dx(int copy) { return copy & 1; }
-static inline int stereo_shadow_soft_dy(int copy) { return (copy >> 1) & 1; }
+static inline float stereo_shadow_soft_alpha(float a, int copies)
+{
+    if (copies <= 1) return a;
+    return 1.0f - powf(1.0f - a, 1.0f / (float)copies);
+}
+static inline int stereo_shadow_soft_dx(int level, int copy) { return level >= 2 ? (copy % 3) - 1 : (copy & 1); }
+static inline int stereo_shadow_soft_dy(int level, int copy) { return level >= 2 ? (copy / 3) - 1 : ((copy >> 1) & 1); }
 
 static inline int stereo_shadow_clamp_offset(int v)
 {

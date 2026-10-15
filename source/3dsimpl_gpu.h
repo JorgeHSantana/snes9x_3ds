@@ -198,6 +198,8 @@ typedef struct
     bool            mode7SectionsModified[4];
     bool            mode7TilesModified;
 
+    int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
+    float           shadowAlphaMul;  // ...and the fade multiplier on the shadow's alpha (1 = as set)
     bool            blurAutoOff;    // Blur Quality "Auto, Off under load": the ghost passes are skipped
     bool            blurAutoLight;  // Blur Quality Auto verdict (issue #71): true while
                                     // the frame loop reports load - fed per emulated

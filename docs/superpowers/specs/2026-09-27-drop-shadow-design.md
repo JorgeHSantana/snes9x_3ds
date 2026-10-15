@@ -20,11 +20,21 @@ of #76 is gone).
   it with the depth gap between caster and receiver in gauge units
   (full at 1, a quarter at 13 or more): a shadow dilutes as the surface
   moves away. Both are TexEnv constants, no extra pass.
-- Soft Edge (`ShadowSoft`): the silhouette drawn four times at (0,0),
-  (1,0), (0,1), (1,1) px, each at 1 - (1-a)^(1/4), so the pixels every
-  copy covers darken exactly like the plain shadow and the 1 px rim gets
-  a quarter of the passes - a 2x2 box blur of the mask. Four passes of
-  the caster instead of one; off by default.
+- Soft Edge (`ShadowSoft` 0..2): Light = the silhouette drawn four times
+  in a 2x2 px box, Full = nine times in a 3x3 box centred on the shadow,
+  each copy at 1 - (1-a)^(1/copies), so the pixels every copy covers
+  darken exactly like the plain shadow and the rim gets less - a box
+  blur of the mask. Off by default.
+- Shadow Quality (`ShadowQuality`, `shadow_auto.h`, default Auto): the
+  Blur Auto controller's load verdict (Full / Light / Off, read whatever
+  Blur Quality is set to) drives the shadow. Full: no optimisation. Auto:
+  the Soft Edge level drops one step per load tier and climbs back with
+  the controller's hysteresis; the shadow itself stays. Auto, Off under
+  load: at the Off tier the whole shadow fades out over 30 frames (and
+  back in the same way) - never a one-frame switch, which is what made
+  the first Blur Auto gate flicker. The editor previews the shadow as
+  set. The frame loop steps the controller once per emulated frame and
+  publishes the level and the fade multiplier in `GPU3DSExt`.
 - Stretch (scaling the silhouette) was built and removed: a scale needs
   an anchor, and the only one a frame offers is the OAM rectangle, which
   changes with every animation frame (per sprite: neighbours overlapped
@@ -79,7 +89,7 @@ of #76 is gone).
   brightness layer of each target (fallback after the loop);
   `-DPROBE_SHADOW_LOG` logs its inputs at frames 598-600.
 - `3dssettings.h/.cpp`, `3dsmain.cpp`: settings, `.3d` keys (`SHADOW`,
-  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWALPHA`, `SHADOWFADE`, `SHADOWSOFT`), editor block; a Shadows
+  `SHADOWX`, `SHADOWY`, `SHADOWCOLOR`, `SHADOWALPHA`, `SHADOWFADE`, `SHADOWSOFT`, `SHADOWQUALITY`), editor block; a Shadows
   checkbox spotlights its row on the top screen like a depth gauge.
 
 ## Limits

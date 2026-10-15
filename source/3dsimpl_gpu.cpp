@@ -720,13 +720,18 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     const float behindShift = ownShift(br < 8 ? br / 2 : 4, br < 8 ? br & 1 : br - 8);
                     // RGB = the shadow colour, alpha = texture alpha x opacity (lighter with the depth gap when Fade is on)
                     float alpha = stereo_shadow_alpha(GPU3DS.stereoShadowAlpha, GPU3DS.stereoShadowFade != 0, depthRows[row] - depthRows[br]);
-                    // Soft Edge: a 2x2 box of copies, each a quarter of the way to the plain alpha
-                    const int copies = GPU3DS.stereoShadowSoft ? STEREO_SHADOW_SOFT_COPIES : 1;
-                    if (copies > 1) alpha = stereo_shadow_soft_alpha(alpha);
+                    // Shadow Quality (shadow_auto.h): the load controller's Soft Edge
+                    // level and fade multiplier for this frame
+                    alpha *= GPU3DSExt.shadowAlphaMul;
+                    if (alpha < 0.01f) continue;
+                    // Soft Edge: a box of copies, each part of the way to the plain alpha
+                    const int level = stereo_shadow_clamp_soft(GPU3DSExt.shadowSoftLevel);
+                    const int copies = stereo_shadow_soft_copies(level);
+                    alpha = stereo_shadow_soft_alpha(alpha, copies);
                     gpu3dsSetShadowEnv(alpha, rgb);
                     for (int c = 0; c < copies; c++) {
-                        parkAllBut(id, t, behindShift + (float)(GPU3DS.stereoShadowX + stereo_shadow_soft_dx(c)),
-                                   (float)(GPU3DS.stereoShadowY + stereo_shadow_soft_dy(c)));
+                        parkAllBut(id, t, behindShift + (float)(GPU3DS.stereoShadowX + stereo_shadow_soft_dx(level, c)),
+                                   (float)(GPU3DS.stereoShadowY + stereo_shadow_soft_dy(level, c)));
                         for (int k = 0; k < n; k++) drawCaster(planes[k]);
                     }
                     anyPass = true;

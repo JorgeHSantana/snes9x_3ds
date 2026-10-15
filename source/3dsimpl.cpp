@@ -35,6 +35,7 @@
 #include "3dsimpl_tilecache.h"
 #include "3dsimpl_gpu.h"
 #include "3dsblurauto.h"
+#include "shadow_auto.h"
 #include "sram_save.h"
 #include "3dssram.h"
 #include "perf_stats.h"
@@ -977,6 +978,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 //---------------------------------------------------------
 
 static BlurAutoState s_blurAuto;   // zero-init == blurAutoReset
+static ShadowAutoState s_shadowAuto;   // Shadow Quality (shadow_auto.h)
 
 #ifdef PROBE_FBDUMP
 int g_probeFrames = 0;   // frames since the ROM loaded (the probes above/below read it)
@@ -998,6 +1000,16 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		GPU3DSExt.blurAutoOff = tier == 2;
 		if (tier != wasTier)
 			log3dsWrite("[blur] auto -> %s", tier == 2 ? "off" : (tier == 1 ? "light" : "full"));
+		// Shadow Quality (issue #77): the same verdict, Off tier included
+		// whatever Blur Quality is, drives the Soft Edge level and the fade
+		if (firstFrame)
+			shadowAutoReset(&s_shadowAuto, GPU3DS.stereoShadowSoft);
+		const int wasLevel = s_shadowAuto.level;
+		shadowAutoStep(&s_shadowAuto, GPU3DS.stereoShadowQuality, blurAutoTier(&s_blurAuto, true), GPU3DS.stereoShadowSoft);
+		GPU3DSExt.shadowSoftLevel = s_shadowAuto.level;
+		GPU3DSExt.shadowAlphaMul = s_shadowAuto.alphaMul;
+		if (s_shadowAuto.level != wasLevel && GPU3DS.stereoShadowRows != 0)
+			log3dsWrite("[shadow] auto soft edge -> %d", s_shadowAuto.level);
 	}
 
 	// per-scene 3D profiles (issue #23): match the PPU scene signature and
@@ -1235,6 +1247,9 @@ void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
         notif3dsSync();
     }
     gpu3dsSetStereoPreviewHighlight(highlightLayer, highlightPrio);
+    // the editor previews the shadow as set, not as the load controller left it
+    GPU3DSExt.shadowSoftLevel = GPU3DS.stereoShadowSoft;
+    GPU3DSExt.shadowAlphaMul = 1.0f;
     // two passes fill BOTH framebuffers of the double-buffered game
     // screen - a single one shows only on the right swap parity, which
     // read as "sometimes it works" in the field

@@ -558,7 +558,8 @@ bool gpu3dsInitialize()
     GPU3DS.stereoPrioDimP0 = 1.0f;
     GPU3DS.stereoMode7Persp = 0.0f;
     GPU3DS.stereoMode7Fx = 0.0f;
-    GPU3DS.stereoShadowRows = 0; GPU3DS.stereoShadowX = 2; GPU3DS.stereoShadowY = 2; GPU3DS.stereoShadowColor = 0; GPU3DS.stereoShadowAlpha = 4; GPU3DS.stereoShadowFade = 0; GPU3DS.stereoShadowSoft = 0;
+    GPU3DS.stereoShadowRows = 0; GPU3DS.stereoShadowX = 2; GPU3DS.stereoShadowY = 2; GPU3DS.stereoShadowColor = 0; GPU3DS.stereoShadowAlpha = 4; GPU3DS.stereoShadowFade = 0; GPU3DS.stereoShadowSoft = 0; GPU3DS.stereoShadowQuality = 1;
+    GPU3DSExt.shadowSoftLevel = 0; GPU3DSExt.shadowAlphaMul = 1.0f;   // until the frame loop steps the controller
     GPU3DS.stereoShadowOffY = 0.0f;
     GPU3DS.mode7PerspApplied = -1.0f;
     GPU3DS.mode7PerspSet[0] = GPU3DS.mode7PerspSet[2] = GPU3DS.mode7PerspSet[3] = 0.0f;

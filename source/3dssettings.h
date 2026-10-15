@@ -316,7 +316,8 @@ typedef struct {
     int                 StereoShadowColor;     // index into stereo_shadow.h's table
     int                 StereoShadowAlpha;     // opacity gauge 1..7 (eighths), default 4
     int                 StereoShadowFade;      // 1 = lighter with the depth gap to the receiver
-    int                 StereoShadowSoft;      // 1 = soft edge (2x2 box of the silhouette, four passes)
+    int                 StereoShadowSoft;      // soft edge level 0..2 (stereo_shadow.h)
+    int                 StereoShadowQuality;   // 0 Full, 1 Auto, 2 Auto Off under load (shadow_auto.h)
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
                                                // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)
@@ -342,7 +343,8 @@ typedef struct {
         int  ShadowColor;        // index into stereo_shadow.h's table
         int  ShadowAlpha;        // opacity 1..7 (eighths)
         int  ShadowFade;         // 1 = fade with the depth gap
-        int  ShadowSoft;         // 1 = soft edge
+        int  ShadowSoft;         // soft edge level 0..2
+        int  ShadowQuality;      // 0 Full, 1 Auto, 2 Auto Off under load
     };
     struct SStereoBind {
         u64  Sig;          // packed tuple: b0=2105 b1=TM b2=TS b3=2130 b4=2131 b5=2106 b6=420C

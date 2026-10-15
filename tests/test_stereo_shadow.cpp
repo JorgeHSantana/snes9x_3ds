@@ -101,13 +101,22 @@ TEST_CASE("stereo shadow: opacity in eighths, fade lightens with the depth gap d
     CHECK(stereo_shadow_alpha(4, true, 0) == 0.5f);
 }
 
-TEST_CASE("stereo shadow: soft edge copies compound back to the plain alpha, offsets cover a 2x2 box") {
-    for (float a : { 0.125f, 0.5f, 0.875f }) {
-        float remain = 1.0f;
-        for (int c = 0; c < STEREO_SHADOW_SOFT_COPIES; c++) remain *= 1.0f - stereo_shadow_soft_alpha(a);
-        CHECK(remain > 1.0f - a - 0.002f); CHECK(remain < 1.0f - a + 0.002f);
+TEST_CASE("stereo shadow: soft edge copies compound back to the plain alpha, the boxes cover 2x2 and 3x3") {
+    for (int level = 1; level <= 2; level++) {
+        const int copies = stereo_shadow_soft_copies(level);
+        for (float a : { 0.125f, 0.5f, 0.875f }) {
+            float remain = 1.0f;
+            for (int c = 0; c < copies; c++) remain *= 1.0f - stereo_shadow_soft_alpha(a, copies);
+            CHECK(remain > 1.0f - a - 0.002f); CHECK(remain < 1.0f - a + 0.002f);
+        }
     }
+    CHECK(stereo_shadow_soft_copies(0) == 1); CHECK(stereo_shadow_soft_copies(1) == 4); CHECK(stereo_shadow_soft_copies(2) == 9);
+    CHECK(stereo_shadow_soft_copies(7) == 9);
+    CHECK(stereo_shadow_soft_alpha(0.5f, 1) == 0.5f);
     int seen = 0;
-    for (int c = 0; c < STEREO_SHADOW_SOFT_COPIES; c++) seen |= 1 << (stereo_shadow_soft_dx(c) + stereo_shadow_soft_dy(c) * 2);
+    for (int c = 0; c < 4; c++) seen |= 1 << (stereo_shadow_soft_dx(1, c) + stereo_shadow_soft_dy(1, c) * 2);
     CHECK(seen == 0xF);
+    seen = 0;
+    for (int c = 0; c < 9; c++) seen |= 1 << ((stereo_shadow_soft_dx(2, c) + 1) + (stereo_shadow_soft_dy(2, c) + 1) * 3);
+    CHECK(seen == 0x1FF);
 }
