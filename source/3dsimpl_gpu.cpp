@@ -935,6 +935,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
                         anyGlow = true;
                     }
                 };
+                // Persistence (Jorge: the two eyes are drawn on alternate frames,
+                // so a flash blinking every frame glows in one eye only): instead
+                // of clearing, the target keeps k/4 of last frame's glow - a rect
+                // with blend (ZERO, CONSTANT) multiplies what is there
+                const int persist = taps > 0 ? (GPU3DS.stereoGlowPersist < 0 ? 0 : (GPU3DS.stereoGlowPersist > STEREO_GLOW_PERSIST_MAX ? STEREO_GLOW_PERSIST_MAX : GPU3DS.stereoGlowPersist)) : 0;
                 auto clearGlowTarget = [&]() {
                     GPU3DS.currentRenderState.target = TARGET_SNES_GLOW;
                     GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_COLOR;
@@ -946,7 +951,14 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     gpu3dsSetStereoParallax3(0.0f, 0.0f, 0.0f, 0.0f);
                     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
                     gpu3dsGlowPassEnd();   // plain state for the clear
+                    if (persist > 0) {
+                        const u32 k = (u32)(persist * 64 - 1);   // 63 / 127 / 191 of 255
+                        C3D_BlendingColor((k << 16) | (k << 8) | k);
+                        C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ZERO, GPU_CONSTANT_COLOR, GPU_ZERO, GPU_ONE);
+                        GPU3DS.appliedRenderState.alphaBlending = (SGPU_ALPHA_BLENDINGMODE)(ALPHA_BLENDING_GHOST + 1);
+                    }
                     gpu3dsDraw(&s_glowScratch.rect, NULL, 2, s_glowScratch.addRect(0x000000FF));
+                    if (persist > 0) gpu3dsDisableAlphaBlending();
                 };
                 // composite: the glow texture over the SNES area, bilinear (4x
                 // magnified = blurred), added once per tap at 1/taps, the
@@ -1014,6 +1026,12 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     anyGlow = true;
                     compositeGlow(-1);
                 }
+                // with persistence every tier shares the one decaying target:
+                // one decay, every marked tier drawn, one composite at the
+                // lowest marked plane (occlusion between tiers is approximate)
+                const bool shared = taps > 0 && persist > 0 && !glowWhole;
+                int sharedPlane = 99; bool sharedDrawn = false;
+                if (shared) clearGlowTarget();
                 for (int id = LAYER_BG0; id <= LAYER_OBJ && !glowWhole; id++) {
                     if (!settings3DS.LayerEnabled[id]) continue;
                     const int tiers = id == LAYER_OBJ ? 4 : 2;
@@ -1025,7 +1043,13 @@ void gpu3dsDrawLayers(SLayerList *list) {
                         const float shift = ownShift(id, t);
                         gpu3dsSetGlowEnv(true, gain, tint);
                         gpu3dsSetGlowPalette(GPU3DS.stereoGlowPal, id == LAYER_OBJ && (GPU3DS.stereoGlowPal & 0xFF) != 0xFF);
-                        if (taps > 0) {
+                        if (shared) {
+                            float sh[4]; for (int u = 0; u < 4; u++) sh[u] = u == t ? shift : 4096.0f;
+                            setTierShifts(id, sh, 0.0f);
+                            drawGlowGeometry(id, plane, TARGET_SNES_GLOW, false);
+                            if (plane < sharedPlane) sharedPlane = plane;
+                            sharedDrawn = true;
+                        } else if (taps > 0) {
                             clearGlowTarget();
                             gpu3dsSetGlowEnv(true, gain, tint);
                             gpu3dsSetGlowPalette(GPU3DS.stereoGlowPal, id == LAYER_OBJ && (GPU3DS.stereoGlowPal & 0xFF) != 0xFF);
@@ -1042,7 +1066,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
                         }
                     }
                 }
-                if (anyGlow) {
+                // the shared (persisting) target composites once; with nothing
+                // drawn this frame it still shows last frame's decaying glow
+                if (shared) compositeGlow(sharedDrawn ? sharedPlane : -1);
+                if (anyGlow || shared) {
                     gpu3dsSetGlowEnv(false, 0.0f, 0);
                     gpu3dsGlowPassEnd();
                 }

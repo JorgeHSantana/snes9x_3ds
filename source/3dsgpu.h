@@ -334,6 +334,7 @@ typedef struct
     int                         stereoGlowPal;      // sprite palettes that glow, 8-bit mask
     int                         stereoGlowSpread;   // 0..3 (stereo_glow.h)
     int                         stereoGlowSource;   // 0 marked rows, 1 whole screen
+    int                         stereoGlowPersist;  // 0..3 quarters of the last glow kept
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
     float                       glowPalSet[2];      // (mask, enable) the tile shader holds; (255, 0) = no-op
     float                       mode7PerspApplied;  // composite key of mode7PerspSet

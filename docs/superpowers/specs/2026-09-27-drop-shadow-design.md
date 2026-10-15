@@ -202,3 +202,16 @@ Mode 7 casts nothing.
   depth test - a post-process bloom at quarter res, HUD included; Spread
   is forced to at least 1. The palette rows show the sprite count per
   palette (`S9xObjPaletteCountLastFrame`).
+- Persistence (`GlowPersist` 0..3, needs Spread): the spread target is
+  not cleared but multiplied by k/4 (a rect with blend ZERO / CONSTANT
+  colour) before this frame's glow is added, so the glow decays over a
+  few frames. Reason: the console renders ONE eye's layer pass per frame
+  (alternate-eye stereo, both eyes composited from retained textures),
+  so each eye always shows a different emulated frame; a flash that
+  blinks every frame (the charged shot's palette cycle) glows in one eye
+  only, and the blur amplifies the mismatch into eye strain (Jorge).
+  With persistence on, marked rows share one decaying target: one decay,
+  every marked tier drawn, one composite at the lowest marked plane.
+  Azahar's SBS probe draws both eyes every frame and cannot reproduce
+  the mismatch; it did confirm the glow's parallax equals the sprite's
+  in both eyes (-4 px at depth 4), still and walking.

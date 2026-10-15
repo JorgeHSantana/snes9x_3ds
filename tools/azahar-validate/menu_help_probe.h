@@ -13,8 +13,8 @@ static const MenuHelpProbeCase MENU_HELP_PROBE_CASES[] = {
     {TAB_SETTINGS, "  BG2"},
     {TAB_SETTINGS, "  BG3"},
     {TAB_CONTROLS, "  Bind Circle Pad to D-Pad"},
-    {TAB_EFFECTS, "  Shadow X"},
-    {TAB_EFFECTS, "  Glow Source"}
+    {TAB_EFFECTS, "  Offset X"},
+    {TAB_EFFECTS, "  Source"}
 };
 static size_t menu_help_probe_case = 0;
 

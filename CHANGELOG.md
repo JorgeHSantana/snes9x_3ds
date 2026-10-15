@@ -10,7 +10,12 @@ Notable changes to this project will be documented in this file.
   Source on "Whole screen" the row and palette checkboxes are hidden.
   The cursor comes back to the row it was on after a rebuild (rows with
   the same name in several blocks no longer send it to the first one).
-  The file tab is "Games".
+  The file tab is "Games". Effects labels drop the block's name
+  ("Offset X", "Threshold"...). Glow "Persistence" keeps part of the
+  last frame's glow in the spread target: on the console the two eyes
+  are drawn on alternate frames, so a flash blinking every frame glowed
+  in one eye only (Jorge's eye strain); with persistence both eyes glow
+  alike, at the price of a short fading trail on fast motion.
 * Output colour: Saturation, Contrast and Brightness gauges (-4..4) in
   the Display block of the options menu, applied in the TexEnv stages of
   the screen blit itself - no extra pass, so free on an Old 3DS. Saved
