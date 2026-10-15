@@ -718,6 +718,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 for (int t = 0; t < tiers; t++) {
                     if (tierDone[t] || !stereo_shadow_marked((unsigned)GPU3DS.stereoShadowRows, id, t)) continue;
                     const int row = stereo_shadow_row(id, t);
+                    // a marked row this scene does not draw has nothing to cast:
+                    // skip it, or its whole layer is drawn for no pixel (Jorge's
+                    // water stage: BG1 P1 marked in another scene of the profile)
+                    if (((usedRows >> row) & 1u) == 0) { tierDone[t] = true; continue; }
                     const int br = stereo_shadow_behind_row(depthRows, usedRows, row);
                     int planes[8];
                     const int n = stereo_shadow_receiver_planes(depthRows, usedRows, GPU3DS.stereoBgPlane, row, planes);
@@ -728,6 +732,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     for (int u = t + 1; u < tiers; u++) {
                         if (tierDone[u] || !stereo_shadow_marked((unsigned)GPU3DS.stereoShadowRows, id, u)) continue;
                         const int rowU = stereo_shadow_row(id, u);
+                        if (((usedRows >> rowU) & 1u) == 0) continue;
                         if (stereo_shadow_behind_row(depthRows, usedRows, rowU) != br || depthRows[rowU] - depthRows[br] != gap) continue;
                         int planesU[8];
                         const int nU = stereo_shadow_receiver_planes(depthRows, usedRows, GPU3DS.stereoBgPlane, rowU, planesU);

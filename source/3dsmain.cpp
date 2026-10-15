@@ -2010,7 +2010,11 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
         s_stereoShadowCount = 0;
         for (int r = 0; r < 12; r++) {
             int layer = rows[r].layer, prio = rows[r].prio;
-            if (!stereo3dRowUsed(layer, prio) && settings3DS.StereoHideUnused) continue;
+            // a marked row stays listed even when this scene does not use it:
+            // hidden, it could never be unmarked (Jorge: BG1 P1 marked in one
+            // scene kept casting, invisibly and at a BG layer's cost, in another)
+            const bool markedHere = ((*stereoEditField(8)) >> stereo_shadow_row(layer, prio)) & 1;
+            if (!stereo3dRowUsed(layer, prio) && settings3DS.StereoHideUnused && !markedHere) continue;
             s_stereoShadowLayer[s_stereoShadowCount] = layer;   // the row spotlights on the top screen (Jorge)
             s_stereoShadowPrio[s_stereoShadowCount] = prio;
             s_stereoShadowCount++;

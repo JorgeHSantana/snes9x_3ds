@@ -64,6 +64,12 @@ of #76 is gone).
   plane); it never casts.
 - Cost per casting tier and eye: the caster's vertices once per receiver
   plane (typically 1-3). No rects, no BG passes, no erase, no stencil.
+  Tiers sharing receiver, depth gap and planes draw in one pass. A
+  marked row the scene does not draw casts nothing (skipped: its whole
+  layer would otherwise be drawn for no pixel), and the editor keeps a
+  marked row listed even when unused so it can be unmarked. A BG caster
+  costs a full layer pass per receiver plane and eye; sprites are the
+  cheap case.
 - Only in 3D (slider on). No Blur Auto gate (its tier flips switched
   the shadow on and off).
 
