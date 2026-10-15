@@ -175,3 +175,4 @@ and pending hardware evidence. These deliveries do not close #78/#79/#63.
 | 86 | Sincronizar com o upstream matbo87 | ABERTA | vblank pacer, tile cache 2 bancos, rcheevos, SuperFX ASM; plano de merge na issue; próximo depois do bloom |
 | 87 | 3D: sombra achatada ao horizonte no plano de Mode 7 | ABERTA | quarta melhoria da lista do #77; uniform (h, k) no shader, só receptor Mode 7 |
 | 88 | 3D: perfil de cena por modelo (New / Old) | ABERTA | fallback para perfil sem modelo; critério pelo clock efetivo, não pelo modelo; depois do bloom e do #86 |
+| 89 | 3D: sombra "sempre" (tudo atrás) ou só na camada anterior | ABERTA | modo "sempre" = uma passada com depth LESS no plano do caster; picker Shadow Lands On |
