@@ -267,9 +267,17 @@ const char* github3dsSendScreens(char* out, size_t outSize)
         if (b64Len == 0) { err = "png too large"; break; }
         const int parts = (int)((b64Len + partChars - 1) / partChars);
         for (int p = 0; p < parts && err == NULL; p++) {
-            char name[64];
-            if (parts > 1) snprintf(name, sizeof(name), "screen_%s.png (part %d/%d)", i == 0 ? "left" : "right", p + 1, parts);
-            else           snprintf(name, sizeof(name), "screen_%s.png", i == 0 ? "left" : "right");
+            // the Effects settings in force ride along: what a screenshot is
+            // usually about (issue #77)
+            char name[200];
+            char fx[128];
+            snprintf(fx, sizeof(fx), " | shadow rows=%03x q=%d soft=%d | glow src=%d rows=%03x pal=%02x th=%d st=%d sp=%d halo=%d pers=%d | color %d/%d/%d",
+                GPU3DS.stereoShadowRows, GPU3DS.stereoShadowQuality, GPU3DS.stereoShadowSoft,
+                GPU3DS.stereoGlowSource, GPU3DS.stereoGlowRows, GPU3DS.stereoGlowPal & 0xFF, GPU3DS.stereoGlowThresh, GPU3DS.stereoGlowStrength,
+                GPU3DS.stereoGlowSpread, GPU3DS.stereoGlowSoft, GPU3DS.stereoGlowPersist,
+                settings3DS.ColorSat, settings3DS.ColorCon, settings3DS.ColorBri);
+            if (parts > 1) snprintf(name, sizeof(name), "screen_%s.png (part %d/%d)%s", i == 0 ? "left" : "right", p + 1, parts, fx);
+            else           snprintf(name, sizeof(name), "screen_%s.png%s", i == 0 ? "left" : "right", fx);
             GithubHeader h = {};
             h.version = settings3dsGetAppVersion("v"); h.sha = updater3dsRunningSha();
             h.model = modelName(); h.mode = clockMode(); h.date = log3dsGetCurrentDate();
