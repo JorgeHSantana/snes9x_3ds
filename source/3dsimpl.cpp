@@ -1994,7 +1994,10 @@ void impl3dsAllocGlowTexture()
 {
 	GPU3DS.glowTexAvailable = false;
 	const SGPUTextureConfig cfg = {
-		GPU_TEXTURE_MAG_FILTER(GPU_LINEAR) | GPU_TEXTURE_MIN_FILTER(GPU_LINEAR) | GPU_TEXTURE_WRAP_S(GPU_CLAMP_TO_BORDER) | GPU_TEXTURE_WRAP_T(GPU_CLAMP_TO_BORDER),
+		// clamp to EDGE, not border: the composite's bilinear samples cross
+		// the texture's edge by half a texel, and on the console the border
+		// colour lit the first two screen rows of one eye (Jorge's shots)
+		GPU_TEXTURE_MAG_FILTER(GPU_LINEAR) | GPU_TEXTURE_MIN_FILTER(GPU_LINEAR) | GPU_TEXTURE_WRAP_S(GPU_CLAMP_TO_EDGE) | GPU_TEXTURE_WRAP_T(GPU_CLAMP_TO_EDGE),
 		SNES_GLOW, GPU_RGB565, 128, 64 };
 	SGPUTexture *glow = &GPU3DS.textures[SNES_GLOW];
 	if (!gpu3dsAllocVramTextureAndTarget(glow, &cfg)) {
@@ -2005,6 +2008,7 @@ void impl3dsAllocGlowTexture()
 	// centres half a texel (2 screen px) late, which read as a glow leaning
 	// right on the console (Jorge's screenshots: +5 px vs the life bar)
 	Mtx_Ortho(&glow->projection, 2.0f, 514.0f, 0.0f, 256.0f, 0.0f, 1.0f, true);
+	glow->tex.border = 0;   // and black if a border is ever read
 	glow->projection.m[8] = 0.0f;
 	glow->projection.m[9] = -1.0f;
 	GPU3DS.glowTexAvailable = true;

@@ -276,6 +276,7 @@ const char* github3dsSendScreens(char* out, size_t outSize)
                 GPU3DS.stereoGlowSource, GPU3DS.stereoGlowRows, GPU3DS.stereoGlowPal & 0xFF, GPU3DS.stereoGlowThresh, GPU3DS.stereoGlowStrength,
                 GPU3DS.stereoGlowSpread, GPU3DS.stereoGlowSoft, GPU3DS.stereoGlowPersist,
                 settings3DS.ColorSat, settings3DS.ColorCon, settings3DS.ColorBri);
+            { size_t n0 = strlen(fx); snprintf(fx + n0, sizeof(fx) - n0, " | edge=%d", settings3DS.StereoEdgeMode); }
             if (parts > 1) snprintf(name, sizeof(name), "screen_%s.png (part %d/%d)%s", i == 0 ? "left" : "right", p + 1, parts, fx);
             else           snprintf(name, sizeof(name), "screen_%s.png%s", i == 0 ? "left" : "right", fx);
             GithubHeader h = {};
