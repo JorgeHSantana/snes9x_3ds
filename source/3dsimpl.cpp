@@ -1052,10 +1052,12 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 	gpu3dsPrepareSnesScreenForNextFrame();
 
 	t3dsStartTimer(TIMER_S9X_MAIN_LOOP);
+	const u64 coreTick0 = svcGetSystemTick();
 	if (!Settings.SA1)
 		S9xMainLoop();
 	else
 		S9xMainLoopWithSA1();
+	GPU3DSExt.coreTicks += svcGetSystemTick() - coreTick0;
 	t3dsStopTimer(TIMER_S9X_MAIN_LOOP);
 
 	// MSU-1 FMV: a frame marked torn (a large VRAM upload landed inside the
@@ -1120,6 +1122,8 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			// positive depths pop out of the screen. 0 with the slider off
 			// (2D parity), and the right pass is skipped entirely then.
 			float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
+			GPU3DSExt.stereoOnLastFrame = slider != 0.0f;
+			const u64 drawTick0 = svcGetSystemTick();
 			GPU3DS.stereoRightPass = false;
 			GPU3DS.stereoEyeIOD = slider;
     		gpu3dsDrawSnesScreen();
@@ -1130,6 +1134,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 				gpu3dsDrawSnesScreen();
 				GPU3DS.stereoRightPass = false;
 			}
+			GPU3DSExt.drawTicks += svcGetSystemTick() - drawTick0;
 			t3dsStopTimer(TIMER_DRAW_SNES_SCREEN);
 		}
 

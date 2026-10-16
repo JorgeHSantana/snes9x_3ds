@@ -3,6 +3,11 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+- **Shadows & Glow switch** (Effects tab, saved with the game as `EFFECTS`):
+  Off, 3D only (only while the 3D slider is up) or Always. The
+  `[perf][frame]` log line now also says whether 3D was on, the edge mode,
+  the glow source/spread/halo/persistence, and the CPU time per frame of
+  the core, the eyes' layer submission and the shadow/glow phase.
 * Send Screenshot to GitHub (Emulation tab, with the log and crash dump
   items): the paused top screen, left and right eye, redrawn undimmed
   and posted as PNG (base64) comments on the issue named in

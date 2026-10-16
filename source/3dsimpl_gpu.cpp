@@ -715,10 +715,14 @@ void gpu3dsDrawLayers(SLayerList *list) {
         auto drawShadowPhase = [&]() {
             if (shadowPhaseDone) return;
             shadowPhaseDone = true;
+            // Shadows & Glow master switch: Off, or 3D only while the slider is down
+            if (settings3DS.EffectsMode == 0 || (settings3DS.EffectsMode == 1 && GPU3DS.stereoEyeIOD == 0.0f)) return;
             const bool shadowsOn = GPU3DS.stereoShadowRows != 0 && GPU3DS.stereoEyeIOD != 0.0f;
             const bool glowWhole = GPU3DS.stereoGlowSource == 1 && GPU3DS.glowTexAvailable;
             const bool glowOn = (GPU3DS.stereoGlowRows != 0 || glowWhole) && !sub;   // never into the sub screen: subtractive colour math would darken it
             if (!shadowsOn && !glowOn) return;
+            const u64 fxTick0 = svcGetSystemTick();
+            struct FxTicks { u64 t0; ~FxTicks() { GPU3DSExt.fxTicks += svcGetSystemTick() - t0; } } fxTicks{ fxTick0 };
             int depthRows[STEREO_SHADOW_ROWS]; unsigned usedRows = 0;
             for (int l = 0; l < 5; l++) {
                 depthRows[stereo_shadow_row(l, 0)] = (int)GPU3DS.stereoLayerDepth[l];
