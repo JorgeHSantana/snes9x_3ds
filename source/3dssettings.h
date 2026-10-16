@@ -328,7 +328,8 @@ typedef struct {
     int                 StereoGlowSource;      // 0 = marked rows; 1 = whole screen (everything above the threshold)
     int                 StereoGlowPersist;     // 0..3: quarters of the last frame's glow kept (needs Spread)
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
-    int                 EffectsMode;                    // Shadows & Glow: 0 off, 1 only with the 3D slider up, 2 always (default)
+    int                 ShadowsMode;                    // Shadows: 0 off, 1 on (they need the 3D slider anyway)
+    int                 GlowMode;                       // Glow: 0 off, 1 only with the 3D slider up, 2 always (default)
     int                 ColorSat, ColorCon, ColorBri;   // output colour grade -4..4 each (screen_grade.h), game-global
                                                // (game window narrows, scale kept), 2 = Zoom
                                                // (crop absorbed by the stretch; default)

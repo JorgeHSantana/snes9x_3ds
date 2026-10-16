@@ -1886,12 +1886,6 @@ void makeEffectsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuT
     s_stereoShadowFxFirst = -1; s_stereoShadowFxLast = -1;
 
     if (settings3DS.isRomLoaded) {
-        // the master switch (Jorge): the shadows and the glow cost draws
-        // on every frame; off, or only while the 3D slider is up
-        AddMenuPicker(items, "  Shadows & Glow"_s,
-            "Off: no shadows and no glow.\n3D only: only while the 3D slider is up.\nAlways: in 2D too (the glow works in 2D; shadows need 3D).\nSaved with the game."_s,
-            makePickerOptions({"Off", "3D only", "Always"}), settings3DS.EffectsMode, DIALOG_TYPE_INFO, true,
-            []( int val ) { CheckAndUpdate(settings3DS.EffectsMode, val); });
         if (s_stereoEditIdx >= settings3DS.StereoProfilesCount)
             s_stereoEditIdx = -1;
         std::vector<std::string> profNames;
@@ -1913,9 +1907,12 @@ void makeEffectsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuT
     if (gpu3dsIs3DAvailable() && settings3DS.isRomLoaded) {
         // Drop shadows (issue #77): one checkbox per used row, one light
         AddMenuHeader2(items, "Shadows"_s);
+        AddMenuPicker(items, "  Shadows"_s, "Off: no shadows, and the options below are hidden.\nOn: the rows checked below cast (shadows need the 3D slider).\nSaved with the game."_s,
+            makePickerOptions({"Off", "On"}), settings3DS.ShadowsMode, DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(settings3DS.ShadowsMode, val)) { s_stereoPreviewDirty = true; stereo3dMarkTabsDirty(); } });
         s_stereoShadowFirst = (int)items.size();
         s_stereoShadowCount = 0;
-        for (int r = 0; r < 12; r++) {
+        for (int r = 0; r < 12 && settings3DS.ShadowsMode != 0; r++) {
             int layer = rows[r].layer, prio = rows[r].prio;
             // a marked row stays listed even when this scene does not use it:
             // hidden, it could never be unmarked (Jorge: BG1 P1 marked in one
@@ -1936,6 +1933,7 @@ void makeEffectsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuT
             stereoHelp(items, "This row draws a silhouette of itself, offset by\nShadow X/Y, at the depth of the row behind it (the nearest\nsmaller Depth gauge), in Shadow Color, only where that row is the\nvisible surface. One extra pass of this row per\nreceiving plane, only in 3D.");
             if (!stereo3dRowUsed(layer, prio)) items.back().TextColor = stereo3dDimColor();
         }
+        if (settings3DS.ShadowsMode != 0) {
         s_stereoShadowFxFirst = (int)items.size();
         AddMenuGauge(items, "  Offset X"_s, -4, 4, *stereoEditField(9),
             []( int val ) { if (CheckAndUpdate(*stereoEditField(9), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
@@ -1963,8 +1961,13 @@ void makeEffectsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuT
                 colorOptions, *stereoEditField(11), DIALOG_TYPE_INFO, true,
                 []( int val ) { if (CheckAndUpdate(*stereoEditField(11), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
         }
+        }   // ShadowsMode
         // Glow (issue #77): the marked rows' bright texels glow, additively
         AddMenuHeader2(items, "Glow"_s);
+        AddMenuPicker(items, "  Glow"_s, "Off: no glow, and the options below are hidden.\n3D only: only while the 3D slider is up.\nAlways: in 2D too.\nSaved with the game."_s,
+            makePickerOptions({"Off", "3D only", "Always"}), settings3DS.GlowMode, DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(settings3DS.GlowMode, val)) { s_stereoPreviewDirty = true; stereo3dMarkTabsDirty(); } });
+        if (settings3DS.GlowMode != 0) {
         AddMenuPicker(items, "  Source"_s, "Marked rows: the rows and palettes checked below glow,\nhidden by layers in front. Whole screen: everything\nin the frame above Glow Threshold glows, HUD included -\na post-process bloom through the Spread target (needs\nGlow Spread, 1 if it is 0)."_s,
             makePickerOptions({"Marked rows", "Whole screen"}), *stereoEditField(23), DIALOG_TYPE_INFO, true,
             []( int val ) { if (CheckAndUpdate(*stereoEditField(23), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; menu3dsMarkTabDirty(TAB_EFFECTS); } });
@@ -2038,6 +2041,7 @@ void makeEffectsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuT
                 tintOptions, *stereoEditField(20), DIALOG_TYPE_INFO, true,
                 []( int val ) { if (CheckAndUpdate(*stereoEditField(20), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
         }
+        }   // GlowMode
         s_stereoShadowFxLast = (int)items.size();
 
     } else if (settings3DS.isRomLoaded) {
@@ -3056,7 +3060,7 @@ void settingsResetStereo3D()
     settings3DS.StereoFocusFront = 1;
     settings3DS.StereoEdgeMode = 1;   // Trim
     settings3DS.ColorSat = settings3DS.ColorCon = settings3DS.ColorBri = 0;
-    settings3DS.EffectsMode = 2;
+    settings3DS.ShadowsMode = 1; settings3DS.GlowMode = 2;
     settings3DS.StereoMode7Persp = 8;   // full perspective on Mode 7 planes
     settings3DS.StereoMode7Fx = 1;      // effects by distance on the plane
     settings3DS.StereoProfilesCount = 0;
@@ -3182,7 +3186,9 @@ void settingsLoadStereo3D()
             *tFB = v < -8 ? -8 : (v > 0 ? 0 : v);
         if (sscanf(line, "FOCUSFRONT=%d", &v) == 1)
             *tFF = v < 0 ? 0 : (v > 8 ? 8 : v);
-        if (sscanf(line, "EFFECTS=%d", &v) == 1) settings3DS.EffectsMode = v < 0 ? 0 : (v > 2 ? 2 : v);
+        if (sscanf(line, "EFFECTS=%d", &v) == 1) { settings3DS.ShadowsMode = v != 0; settings3DS.GlowMode = v < 0 ? 0 : (v > 2 ? 2 : v); }   // nightly 075b025's single switch
+        if (sscanf(line, "SHADOWS=%d", &v) == 1) settings3DS.ShadowsMode = v != 0;
+        if (sscanf(line, "GLOWMODE=%d", &v) == 1) settings3DS.GlowMode = v < 0 ? 0 : (v > 2 ? 2 : v);
         if (sscanf(line, "COLORSAT=%d", &v) == 1) settings3DS.ColorSat = screen_grade_clamp(v);
         if (sscanf(line, "COLORCON=%d", &v) == 1) settings3DS.ColorCon = screen_grade_clamp(v);
         if (sscanf(line, "COLORBRI=%d", &v) == 1) settings3DS.ColorBri = screen_grade_clamp(v);
@@ -3256,8 +3262,8 @@ static void settingsWriteStereo3DGlobals(FILE *f)
     fprintf(f, "FOCUSFRONT=%d\n", settings3DS.StereoFocusFront);
     fprintf(f, "# edge cleanup for parallax side columns: 0 off, 1 trim, 2 zoom\n");
     fprintf(f, "EDGEMODE=%d\n", settings3DS.StereoEdgeMode);
-    fprintf(f, "# shadows and glow: 0 off, 1 only with the 3D slider up, 2 always\n");
-    fprintf(f, "EFFECTS=%d\n", settings3DS.EffectsMode);
+    fprintf(f, "# shadows: 0 off, 1 on; glow: 0 off, 1 only with the 3D slider up, 2 always\n");
+    fprintf(f, "SHADOWS=%d\nGLOWMODE=%d\n", settings3DS.ShadowsMode, settings3DS.GlowMode);
     fprintf(f, "# output colour: saturation / contrast / brightness, -4..4 (0 = untouched), applied in the screen blit\n");
     fprintf(f, "COLORSAT=%d\nCOLORCON=%d\nCOLORBRI=%d\n", settings3DS.ColorSat, settings3DS.ColorCon, settings3DS.ColorBri);
     fprintf(f, "# Mode 7 perspective: each scanline shifts by its own distance (0 flat .. 8 full)\n");
@@ -4422,18 +4428,18 @@ void emulatorLoop()
                 // submission, the shadow/glow phase inside it - the rest is
                 // input, audio, the blit and the pacer
                 const u64 N = (u64)s_frameLoadN, TPU = 268111856ull / 1000000ull;   // ticks per us (SYSCLOCK_ARM11)
-                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d fx=%d src=%d spread=%d halo=%d persist=%d | us/frame core=%u draw=%u fx=%u",
+                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d sh=%d gm=%d src=%d spread=%d halo=%d persist=%d | us/frame core=%u (ppu=%u) draw=%u fx=%u",
                     s_frameLoadN,
                     (int)(s_frameLoad.average_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
                     (int)(s_frameLoad.maximum_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
                     s_frameOver, s_frameSkips, tier == 2 ? "off" : (tier == 1 ? "light" : "full"),
                     GPU3DSExt.shadowDraws / (unsigned)s_frameLoadN, GPU3DSExt.shadowSoftLevel, (unsigned)GPU3DS.stereoShadowRows,
                     GPU3DSExt.glowDraws / (unsigned)s_frameLoadN, (unsigned)GPU3DS.stereoGlowRows,
-                    GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.StereoEdgeMode, settings3DS.EffectsMode,
+                    GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.StereoEdgeMode, settings3DS.ShadowsMode, settings3DS.GlowMode,
                     GPU3DS.stereoGlowSource, GPU3DS.stereoGlowSpread, GPU3DS.stereoGlowSoft, GPU3DS.stereoGlowPersist,
-                    (unsigned)(GPU3DSExt.coreTicks / N / TPU), (unsigned)(GPU3DSExt.drawTicks / N / TPU), (unsigned)(GPU3DSExt.fxTicks / N / TPU));
+                    (unsigned)(GPU3DSExt.coreTicks / N / TPU), (unsigned)(GPU3DSExt.ppuTicks / N / TPU), (unsigned)(GPU3DSExt.drawTicks / N / TPU), (unsigned)(GPU3DSExt.fxTicks / N / TPU));
                 s_frameLoad.reset(); s_frameLoadN = 0; s_frameOver = 0; s_frameSkips = 0; GPU3DSExt.shadowDraws = 0; GPU3DSExt.glowDraws = 0;
-                GPU3DSExt.coreTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = 0;
+                GPU3DSExt.coreTicks = GPU3DSExt.ppuTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = 0;
             }
         }
 

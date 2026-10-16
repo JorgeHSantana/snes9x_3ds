@@ -3970,6 +3970,8 @@ void S9xFlushDeferredLayers ()
 void S9xUpdateScreenHardware ()
 {	
 	t3dsStartTimer(TIMER_S9X_UPDATE_SCREEN);
+	const u64 ppuTick0 = svcGetSystemTick();
+	struct PpuTicks { u64 t0; ~PpuTicks() { GPU3DSExt.ppuTicks += svcGetSystemTick() - t0; } } ppuTicks{ ppuTick0 };
 
     GFX.S = GFX.Screen;
     GFX.r2131 = Memory.FillRAM [0x2131];

@@ -2018,4 +2018,18 @@ void impl3dsAllocGlowTexture()
 	glow->projection.m[9] = -1.0f;
 	GPU3DS.glowTexAvailable = true;
 	log3dsWrite("glow spread vram texture allocated (16.00kb, 128x64 RGB565)");
+	// the right eye's own target (Jorge: "Persistence makes little
+	// difference" - with ONE target the decay ran per pass, so each eye
+	// kept a quarter of the OTHER eye's glow and the trail faded twice
+	// per frame); optional, the shared target is the fallback
+	GPU3DS.glowRightAvailable = false;
+	SGPUTextureConfig cfgR = cfg; cfgR.id = SNES_GLOW_RIGHT;
+	SGPUTexture *glowR = &GPU3DS.textures[SNES_GLOW_RIGHT];
+	if (gpu3dsAllocVramTextureAndTarget(glowR, &cfgR)) {
+		glowR->projection = glow->projection;
+		glowR->tex.border = 0;
+		GPU3DS.glowRightAvailable = true;
+		log3dsWrite("glow right-eye vram texture allocated (16.00kb)");
+	} else
+		log3dsWrite("glow right-eye vram texture not allocated: Persistence shared between the eyes");
 }

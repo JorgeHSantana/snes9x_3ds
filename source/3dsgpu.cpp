@@ -1214,6 +1214,10 @@ void gpu3dsSetRenderTargetToTexture(SGPU_TARGET_ID target)
         C3D_FrameDrawOn(GPU3DS.textures[SNES_MAIN_RIGHT].target);
         return;
     }
+    if (target == TARGET_SNES_GLOW && GPU3DS.stereoRightPass && GPU3DS.glowRightAvailable) {
+        C3D_FrameDrawOn(GPU3DS.textures[SNES_GLOW_RIGHT].target);   // same dims and projection as SNES_GLOW
+        return;
+    }
 
     SGPUTexture *texture = &GPU3DS.textures[target];
 

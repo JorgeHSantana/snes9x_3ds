@@ -715,11 +715,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
         auto drawShadowPhase = [&]() {
             if (shadowPhaseDone) return;
             shadowPhaseDone = true;
-            // Shadows & Glow master switch: Off, or 3D only while the slider is down
-            if (settings3DS.EffectsMode == 0 || (settings3DS.EffectsMode == 1 && GPU3DS.stereoEyeIOD == 0.0f)) return;
-            const bool shadowsOn = GPU3DS.stereoShadowRows != 0 && GPU3DS.stereoEyeIOD != 0.0f;
+            // the per-block switches (Jorge): Shadows Off/On, Glow Off / 3D only / Always
+            const bool shadowsOn = settings3DS.ShadowsMode != 0 && GPU3DS.stereoShadowRows != 0 && GPU3DS.stereoEyeIOD != 0.0f;
             const bool glowWhole = GPU3DS.stereoGlowSource == 1 && GPU3DS.glowTexAvailable;
-            const bool glowOn = (GPU3DS.stereoGlowRows != 0 || glowWhole) && !sub;   // never into the sub screen: subtractive colour math would darken it
+            const bool glowAllowed = settings3DS.GlowMode == 2 || (settings3DS.GlowMode == 1 && GPU3DS.stereoEyeIOD != 0.0f);
+            const bool glowOn = glowAllowed && (GPU3DS.stereoGlowRows != 0 || glowWhole) && !sub;   // never into the sub screen: subtractive colour math would darken it
             if (!shadowsOn && !glowOn) return;
             const u64 fxTick0 = svcGetSystemTick();
             struct FxTicks { u64 t0; ~FxTicks() { GPU3DSExt.fxTicks += svcGetSystemTick() - t0; } } fxTicks{ fxTick0 };
@@ -966,19 +966,30 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     gpu3dsGlowPassEnd();   // plain state for the clear
                     if (persist > 0) {
                         const u32 k = (u32)(persist * 64 - 1);   // 63 / 127 / 191 of 255
+                        // gpu3dsGlowPassEnd above poisoned the applied blend: make it
+                        // agree with the current state so the draw's apply leaves
+                        // the blend set here alone
+                        GPU3DS.appliedRenderState.alphaBlending = GPU3DS.currentRenderState.alphaBlending;
                         C3D_BlendingColor((k << 16) | (k << 8) | k);
                         C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ZERO, GPU_CONSTANT_COLOR, GPU_ZERO, GPU_ONE);
-                        GPU3DS.appliedRenderState.alphaBlending = (SGPU_ALPHA_BLENDINGMODE)(ALPHA_BLENDING_GHOST + 1);
+                        // NOT poisoned before the draw: gpu3dsDraw re-applies the
+                        // render state, and a poisoned "applied" blend made it put
+                        // DISABLED back over this blend - the rect cleared to black
+                        // and Persistence never did anything (Jorge, 2026-10-16;
+                        // the glow pass keeps its own blend the same way)
                     }
                     gpu3dsDraw(&s_glowScratch.rect, NULL, 2, s_glowScratch.addRect(0x000000FF));
-                    if (persist > 0) gpu3dsDisableAlphaBlending();
+                    if (persist > 0) {
+                        gpu3dsDisableAlphaBlending();
+                        GPU3DS.appliedRenderState.alphaBlending = (SGPU_ALPHA_BLENDINGMODE)(ALPHA_BLENDING_GHOST + 1);   // the next apply re-decides
+                    }
                 };
                 // composite: the glow texture over the SNES area, bilinear (4x
                 // magnified = blurred), added once per tap at 1/taps, the
                 // diagonal taps one texel (4 px) away; depth-tested at the tier's plane
                 auto compositeGlow = [&](int plane, float shift) {
                     GPU3DS.currentRenderState.target = (SGPU_TARGET_ID)i;
-                    GPU3DS.currentRenderState.textureBind = SNES_GLOW;
+                    GPU3DS.currentRenderState.textureBind = (GPU3DS.stereoRightPass && GPU3DS.glowRightAvailable) ? SNES_GLOW_RIGHT : SNES_GLOW;
                     GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0;
                     GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
                     GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;

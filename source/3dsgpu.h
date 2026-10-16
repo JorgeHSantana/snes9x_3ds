@@ -120,6 +120,7 @@ typedef enum
 	SNES_MODE7_TILE_0,
 	SNES_GLOW,                  // 128x64 RGBA8: the glow pass at quarter res, bilinear-magnified back (spread)
 	SNES_MAIN_RIGHT,            // retained right-eye main screen (stereo)
+	SNES_GLOW_RIGHT,            // the right eye's own glow target: Persistence decays per EYE, not per pass (optional, 16 KB)
 	SNES_TILE_CACHE,
     SNES_MODE7_TILE_CACHE,
     
@@ -344,6 +345,7 @@ typedef struct
     // false when the optional right-eye VRAM texture failed to allocate;
     // gates the whole stereo path off (gpu3dsGetIOD returns 0)
     bool                        stereoTexAvailable;
+    bool                        glowRightAvailable; // SNES_GLOW_RIGHT allocated
     bool                        glowTexAvailable;   // SNES_GLOW allocated (Glow Spread); allocated last, optional
     // signed slider factor for the CURRENT eye's layer pass: +slider for
     // the left eye, -slider for the right (positive layer depth then pops

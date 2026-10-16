@@ -3,11 +3,16 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
-- **Shadows & Glow switch** (Effects tab, saved with the game as `EFFECTS`):
-  Off, 3D only (only while the 3D slider is up) or Always. The
-  `[perf][frame]` log line now also says whether 3D was on, the edge mode,
-  the glow source/spread/halo/persistence, and the CPU time per frame of
-  the core, the eyes' layer submission and the shadow/glow phase.
+- **Shadows and Glow switches** at the head of each Effects block, saved
+  with the game (`SHADOWS`, `GLOWMODE`): Shadows Off/On; Glow Off, 3D only
+  (only while the 3D slider is up) or Always. Off hides the block's options.
+- **Glow Persistence fixed**: it never did anything (the decay rect's blend
+  was undone by the draw's own state re-apply), and the right eye now has
+  its own glow target so the trail decays per eye instead of per pass.
+- The `[perf][frame]` log line also says whether 3D was on, the edge mode,
+  the switches, the glow source/spread/halo/persistence, and the CPU time
+  per frame of the core (and its PPU layer walk), the eyes' layer
+  submission and the shadow/glow phase.
 * Send Screenshot to GitHub (Emulation tab, with the log and crash dump
   items): the paused top screen, left and right eye, redrawn undimmed
   and posted as PNG (base64) comments on the issue named in

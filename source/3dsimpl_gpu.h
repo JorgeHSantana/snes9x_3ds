@@ -203,6 +203,7 @@ typedef struct
     unsigned        glowDraws;       // glow draw calls since the last [perf][frame] line
     u64             fxTicks;         // CPU ticks spent submitting the shadow/glow phase since the last [perf][frame] line
     u64             coreTicks;       // ...in the SNES core (S9xMainLoop)
+    u64             ppuTicks;        // ...of which the PPU layer walk (S9xUpdateScreenHardware: tiles to vertices)
     u64             drawTicks;       // ...submitting the eyes' layer passes (gpu3dsDrawSnesScreen, both eyes)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
