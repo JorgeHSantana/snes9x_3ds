@@ -118,7 +118,7 @@ void gpu3dsShadowPassState(int receiverPlane)
     GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
     GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;
 }
-void gpu3dsGlowPassState(int plane)
+void gpu3dsGlowPassState(int alphaRef, int plane)
 {
     // colour = texel x tint x gain (x luminance through SRC_ALPHA) added to
     // the frame; destination alpha untouched (colour math reads it). With a
@@ -131,7 +131,7 @@ void gpu3dsGlowPassState(int plane)
         C3D_DepthMap(true, -1.0f, 0.0f);
         C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
     }
-    C3D_AlphaTest(true, GPU_GREATER, 0);   // the soft threshold lives in the TexEnv; zero alpha still never draws
+    C3D_AlphaTest(true, GPU_GEQUAL, alphaRef);
     C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_SRC_ALPHA, GPU_ONE, GPU_ZERO, GPU_ONE);
     GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
     GPU3DS.appliedRenderState.depthTest = SGPU_STATE_DISABLED;

@@ -555,7 +555,7 @@ static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float gho
 void gpu3dsShadowPassState(int receiverPlane);
 void gpu3dsShadowPassEnd();
 // Glow (issue #77): additive pass of the bright texels - alpha test by luminance
-void gpu3dsGlowPassState(int plane);   // plane >= 0: depth GEQUAL at that plane (covered by layers in front), -1: no depth test
+void gpu3dsGlowPassState(int alphaRef, int plane);   // plane >= 0: depth GEQUAL at that plane (covered by layers in front), -1: no depth test
 void gpu3dsGlowPassEnd();
 void gpu3dsSetGlowPalette(int mask, bool enable);   // sprite palettes that draw in the tile shader; (255, false) = no-op
 // Output colour grade (screen_grade.h) in the blit's TexEnv stages 1-5; no extra pass

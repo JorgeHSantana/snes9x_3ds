@@ -44,9 +44,9 @@ Notable changes to this project will be documented in this file.
   threshold glows (HUD included), a post-process bloom through the same
   quarter-res target, rendered per eye from that eye's own frame (a
   4x4 box average, so the screen scrolling does not make isolated bright
-  pixels blink). The threshold is soft: a pixel near it fades in over a
-  quarter of the luminance range instead of popping. Palette rows show
-  how many sprites use each.
+  pixels blink). Glow Persistence smooths the glow over frames, which
+  also tames pixels that flicker across the threshold while scrolling.
+  Palette rows show how many sprites use each.
   Saved per profile (`GLOW`, `GLOWTHRESH`, `GLOWSTRENGTH`, `GLOWSOFT`,
   `GLOWCOLOR`, `GLOWPAL`, `GLOWSPREAD`, `GLOWSRC`).
 
