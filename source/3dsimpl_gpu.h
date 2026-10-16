@@ -208,6 +208,8 @@ typedef struct
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
     float           shadowAlphaMul;  // ...and the fade multiplier on the shadow's alpha (1 = as set)
+    int             glowLoadDrop;    // Glow Quality (glow_auto.h): levels taken off the Halo/Spread this frame
+    float           glowGainMul;     // ...and the crossfade multiplier on the glow's gain (1 = as set)
     bool            blurAutoOff;    // Blur Quality "Auto, Off under load": the ghost passes are skipped
     bool            blurAutoLight;  // Blur Quality Auto verdict (issue #71): true while
                                     // the frame loop reports load - fed per emulated

@@ -3,6 +3,13 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+- **Effects tab**: the full scene-profile block (New / Rename / Delete /
+  Capture / Release This Screen) is there too, shared with 3D Stereo; the
+  Shadows and Glow switches are named "Enabled"; **Glow Quality** Full /
+  Auto - in Auto the Halo and the Spread drop one level per load tier with
+  a smooth crossfade (`GLOWQUALITY`, per profile). New defaults: shadows
+  off, offset 3/-1, opacity 3; glow off, threshold 12, strength 2, spread 1,
+  halo Cross, persistence 1, quality Auto; colour saturation 1, brightness -1.
 - **Glow Source defaults to "Whole screen"** (new games and new profiles).
 ### Fixes
 - **MSU-1: the music no longer restarts when a sound effect plays.** A

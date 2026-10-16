@@ -890,8 +890,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // their own parallax, added to the frame, with a halo of copies.
             // Works in 2D too (shifts are 0). The load controller's tier
             // lowers the halo and its fade multiplier scales the gain.
-            if (glowOn && GPU3DSExt.shadowAlphaMul > 0.01f) {
-                const int tierDrop = GPU3DS.stereoShadowQuality >= 1 ? GPU3DSExt.shadowLoadTier : 0;
+            if (glowOn && GPU3DSExt.glowGainMul > 0.01f) {
+                const int tierDrop = GPU3DSExt.glowLoadDrop;   // Glow Quality Auto (glow_auto.h), crossfaded through glowGainMul
                 // Glow Spread: the glow drawn once at quarter resolution into
                 // SNES_GLOW and magnified back with bilinear taps (the light
                 // leaks ~4-8 px); replaces the halo copies while on
@@ -900,7 +900,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 const int taps = stereo_glow_spread_taps(spread);
                 const int soft = taps > 0 ? 0 : stereo_glow_clamp_soft(GPU3DS.stereoGlowSoft - tierDrop);
                 const int copies = stereo_glow_copies(soft);
-                const float gain = stereo_glow_copy_gain(GPU3DS.stereoGlowStrength, soft) * GPU3DSExt.shadowAlphaMul;
+                const float gain = stereo_glow_copy_gain(GPU3DS.stereoGlowStrength, soft) * GPU3DSExt.glowGainMul;
                 const uint32_t tint = stereo_glow_color_rgb(GPU3DS.stereoGlowColor);
                 const int ref = stereo_glow_alpha_ref(GPU3DS.stereoGlowThresh);
                 bool anyGlow = false;

@@ -987,7 +987,7 @@ static int *stereoEditField(int which) {
             case 4: return &p->FocusFront; case 6: return &p->Mode7Persp;
             case 7: return &p->Mode7Fx;
             case 8: return &p->ShadowRows;  case 9: return &p->ShadowX;  case 10: return &p->ShadowY;  case 11: return &p->ShadowColor;  case 13: return &p->ShadowAlpha;  case 14: return &p->ShadowFade;  case 12: return &p->ShadowSoft;  case 15: return &p->ShadowQuality;
-            case 16: return &p->GlowRows;  case 17: return &p->GlowThresh;  case 18: return &p->GlowStrength;  case 19: return &p->GlowSoft;  case 20: return &p->GlowColor;  case 21: return &p->GlowPal;  case 22: return &p->GlowSpread;  case 23: return &p->GlowSource;  case 24: return &p->GlowPersist;
+            case 16: return &p->GlowRows;  case 17: return &p->GlowThresh;  case 18: return &p->GlowStrength;  case 19: return &p->GlowSoft;  case 20: return &p->GlowColor;  case 21: return &p->GlowPal;  case 22: return &p->GlowSpread;  case 23: return &p->GlowSource;  case 24: return &p->GlowPersist;  case 26: return &p->GlowQuality;
             default: return &p->EdgeMode;
         }
     }
@@ -997,7 +997,7 @@ static int *stereoEditField(int which) {
         case 4: return &settings3DS.StereoFocusFront; case 6: return &settings3DS.StereoMode7Persp;
         case 7: return &settings3DS.StereoMode7Fx;
         case 8: return &settings3DS.StereoShadowRows;  case 9: return &settings3DS.StereoShadowX;  case 10: return &settings3DS.StereoShadowY;  case 11: return &settings3DS.StereoShadowColor;  case 13: return &settings3DS.StereoShadowAlpha;  case 14: return &settings3DS.StereoShadowFade;  case 12: return &settings3DS.StereoShadowSoft;  case 15: return &settings3DS.StereoShadowQuality;
-        case 16: return &settings3DS.StereoGlowRows;  case 17: return &settings3DS.StereoGlowThresh;  case 18: return &settings3DS.StereoGlowStrength;  case 19: return &settings3DS.StereoGlowSoft;  case 20: return &settings3DS.StereoGlowColor;  case 21: return &settings3DS.StereoGlowPal;  case 22: return &settings3DS.StereoGlowSpread;  case 23: return &settings3DS.StereoGlowSource;  case 24: return &settings3DS.StereoGlowPersist;
+        case 16: return &settings3DS.StereoGlowRows;  case 17: return &settings3DS.StereoGlowThresh;  case 18: return &settings3DS.StereoGlowStrength;  case 19: return &settings3DS.StereoGlowSoft;  case 20: return &settings3DS.StereoGlowColor;  case 21: return &settings3DS.StereoGlowPal;  case 22: return &settings3DS.StereoGlowSpread;  case 23: return &settings3DS.StereoGlowSource;  case 24: return &settings3DS.StereoGlowPersist;  case 26: return &settings3DS.StereoGlowQuality;
         default: return &settings3DS.StereoEdgeMode;
     }
 }
@@ -1876,196 +1876,12 @@ static void stereo3dMarkTabsDirty()
 // Effects tab (Jorge: the "shines" apart from the depth work): Shadows and
 // Glow per profile, output Color per game. Shadows need 3D; Glow and Color
 // work on a 2DS too, so the tab exists on every console.
-void makeEffectsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
-    items.clear();
-    AddMenuHeader1(items, "EFFECTS"_s);
-    AddMenuDisabledOption(items, ""_s);
-    s_stereoShadowFirst = -1; s_stereoShadowCount = 0;
-    s_stereoGlowFirst = -1; s_stereoGlowCount = 0;
-    s_stereoPalFirst = -1; s_stereoPalCount = 0;
-    s_stereoShadowFxFirst = -1; s_stereoShadowFxLast = -1;
-
-    if (settings3DS.isRomLoaded) {
-        if (s_stereoEditIdx >= settings3DS.StereoProfilesCount)
-            s_stereoEditIdx = -1;
-        std::vector<std::string> profNames;
-        profNames.push_back("Default");
-        for (int i = 0; i < settings3DS.StereoProfilesCount; i++)
-            profNames.push_back(settings3DS.StereoProfiles[i].Name);
-        AddMenuPicker(items, "  Editing Profile"_s,
-            "Shadows and Glow below edit the selected scene profile - the\nsame profiles as the 3D Stereo tab, where new ones are created\nand screens are bound."_s,
-            makePickerOptions(profNames), s_stereoEditIdx + 1, DIALOG_TYPE_INFO, true,
-            []( int val ) {
-                int idx = val - 1;
-                if (idx >= settings3DS.StereoProfilesCount) idx = settings3DS.StereoProfilesCount - 1;
-                if (CheckAndUpdate(s_stereoEditIdx, idx)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; stereo3dMarkTabsDirty(); }
-            });
-        AddMenuDisabledOption(items, ""_s);
-    }
-
-    const GaugeRow *rows = stereoRowTable();
-    if (gpu3dsIs3DAvailable() && settings3DS.isRomLoaded) {
-        // Drop shadows (issue #77): one checkbox per used row, one light
-        AddMenuHeader2(items, "Shadows"_s);
-        AddMenuPicker(items, "  Shadows"_s, "Off: no shadows, and the options below are hidden.\nOn: the rows checked below cast (shadows need the 3D slider).\nSaved with the game."_s,
-            makePickerOptions({"Off", "On"}), settings3DS.ShadowsMode, DIALOG_TYPE_INFO, true,
-            []( int val ) { if (CheckAndUpdate(settings3DS.ShadowsMode, val)) { s_stereoPreviewDirty = true; stereo3dMarkTabsDirty(); } });
-        s_stereoShadowFirst = (int)items.size();
-        s_stereoShadowCount = 0;
-        for (int r = 0; r < 12 && settings3DS.ShadowsMode != 0; r++) {
-            int layer = rows[r].layer, prio = rows[r].prio;
-            // a marked row stays listed even when this scene does not use it:
-            // hidden, it could never be unmarked (Jorge: BG1 P1 marked in one
-            // scene kept casting, invisibly and at a BG layer's cost, in another)
-            const bool markedHere = ((*stereoEditField(8)) >> stereo_shadow_row(layer, prio)) & 1;
-            if (!stereo3dRowUsed(layer, prio) && settings3DS.StereoHideUnused && !markedHere) continue;
-            s_stereoShadowLayer[s_stereoShadowCount] = layer;   // the row spotlights on the top screen (Jorge)
-            s_stereoShadowPrio[s_stereoShadowCount] = prio;
-            s_stereoShadowCount++;
-            const int bit = stereo_shadow_row(layer, prio);
-            char label[40]; snprintf(label, sizeof(label), "%s", rows[r].name);
-            AddMenuCheckbox(items, std::string(label), ((*stereoEditField(8)) >> bit) & 1,
-                [bit]( int val ) {
-                    int *mask = stereoEditField(8);
-                    int next = val ? (*mask | (1 << bit)) : (*mask & ~(1 << bit));
-                    if (CheckAndUpdate(*mask, next)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; }
-                });
-            stereoHelp(items, "This row draws a silhouette of itself, offset by\nShadow X/Y, at the depth of the row behind it (the nearest\nsmaller Depth gauge), in Shadow Color, only where that row is the\nvisible surface. One extra pass of this row per\nreceiving plane, only in 3D.");
-            if (!stereo3dRowUsed(layer, prio)) items.back().TextColor = stereo3dDimColor();
-        }
-        if (settings3DS.ShadowsMode != 0) {
-        s_stereoShadowFxFirst = (int)items.size();
-        AddMenuGauge(items, "  Offset X"_s, -4, 4, *stereoEditField(9),
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(9), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
-        stereoHelp(items, "Horizontal offset of every shadow, in pixels (+ = right).\nOne light per scene.");
-        AddMenuGauge(items, "  Offset Y"_s, -4, 4, *stereoEditField(10),
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(10), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
-        stereoHelp(items, "Vertical offset of every shadow, in pixels (+ = down).");
-        AddMenuGauge(items, "  Opacity"_s, STEREO_SHADOW_ALPHA_MIN, STEREO_SHADOW_ALPHA_MAX, *stereoEditField(13),
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(13), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
-        stereoHelp(items, "How dark every shadow is, in eighths (4 = half).");
-        AddMenuCheckbox(items, "  Fade by Distance"_s, *stereoEditField(14) != 0,
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(14), val ? 1 : 0)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
-        stereoHelp(items, "A shadow gets lighter the further its row sits from\nthe row behind it in the Depth gauges, like a real\nshadow diluting as the surface moves away.");
-        AddMenuPicker(items, "  Soft Edge"_s, "Softens every shadow's edge. Light: a 2x2 pixel box of the\nsilhouette, four passes of the caster. Full: a 3x3 box, nine\npasses. Shadow Quality Auto lowers it under load."_s,
-            makePickerOptions({"Off", "Light (4 passes)", "Full (9 passes)"}), *stereoEditField(12), DIALOG_TYPE_INFO, true,
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(12), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
-        AddMenuPicker(items, "  Quality"_s, "Full: as set, always. Auto: the Soft Edge drops one level\nfor each load tier the Blur Auto controller reports (a missed\nframe), and climbs back after clean windows. Auto, Off under\nload: also fades the whole shadow out over half a second when\nload persists, and back in the same way."_s,
-            makePickerOptions({"Full", "Auto", "Auto, Off under load"}), *stereoEditField(15), DIALOG_TYPE_INFO, true,
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(15), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
-        {
-            std::vector<SMenuItem> colorOptions;
-            for (int c = 0; c < STEREO_SHADOW_COLORS; c++)
-                AddMenuDialogOption(colorOptions, c, std::string(stereo_shadow_color_name(c)), ""_s);
-            AddMenuPicker(items, "  Color"_s, "Colour of every shadow. Black reads as a shadow;\nlighter colours work as a halo.\nOne light per scene."_s,
-                colorOptions, *stereoEditField(11), DIALOG_TYPE_INFO, true,
-                []( int val ) { if (CheckAndUpdate(*stereoEditField(11), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
-        }
-        }   // ShadowsMode
-        // Glow (issue #77): the marked rows' bright texels glow, additively
-        AddMenuHeader2(items, "Glow"_s);
-        AddMenuPicker(items, "  Glow"_s, "Off: no glow, and the options below are hidden.\n3D only: only while the 3D slider is up.\nAlways: in 2D too.\nSaved with the game."_s,
-            makePickerOptions({"Off", "3D only", "Always"}), settings3DS.GlowMode, DIALOG_TYPE_INFO, true,
-            []( int val ) { if (CheckAndUpdate(settings3DS.GlowMode, val)) { s_stereoPreviewDirty = true; stereo3dMarkTabsDirty(); } });
-        if (settings3DS.GlowMode != 0) {
-        AddMenuPicker(items, "  Source"_s, "Marked rows: the rows and palettes checked below glow,\nhidden by layers in front. Whole screen: everything\nin the frame above Glow Threshold glows, HUD included -\na post-process bloom through the Spread target (needs\nGlow Spread, 1 if it is 0)."_s,
-            makePickerOptions({"Marked rows", "Whole screen"}), *stereoEditField(23), DIALOG_TYPE_INFO, true,
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(23), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; menu3dsMarkTabDirty(TAB_EFFECTS); } });
-        const bool glowWholeScreen = *stereoEditField(23) == 1;   // rows and palettes do not apply (Jorge)
-        s_stereoGlowFirst = (int)items.size();
-        s_stereoGlowCount = 0;
-        for (int r = 0; r < 12 && !glowWholeScreen; r++) {
-            int layer = rows[r].layer, prio = rows[r].prio;
-            const int bit = stereo_shadow_row(layer, prio);
-            const bool markedHere = ((*stereoEditField(16)) >> bit) & 1;
-            if (!stereo3dRowUsed(layer, prio) && settings3DS.StereoHideUnused && !markedHere) continue;
-            s_stereoGlowLayer[s_stereoGlowCount] = layer;
-            s_stereoGlowPrio[s_stereoGlowCount] = prio;
-            s_stereoGlowCount++;
-            char label[40]; snprintf(label, sizeof(label), "%s", rows[r].name);
-            AddMenuCheckbox(items, std::string(label), markedHere,
-                [bit]( int val ) {
-                    int *mask = stereoEditField(16);
-                    int next = val ? (*mask | (1 << bit)) : (*mask & ~(1 << bit));
-                    if (CheckAndUpdate(*mask, next)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; }
-                });
-            stereoHelp(items, "This row's bright texels (above Glow Threshold) are\ndrawn again, added to the frame in their own colours\nwith a small halo. One pass of the row per halo copy.");
-            if (!stereo3dRowUsed(layer, prio)) items.back().TextColor = stereo3dDimColor();
-        }
-        // which sprite palettes glow (Jorge: per sprite, not only per row):
-        // the charged shot, explosions and effects rarely share X's palette
-        s_stereoPalFirst = (int)items.size();
-        s_stereoPalCount = 0;
-        if (!glowWholeScreen) {
-            const unsigned palUsed = settings3DS.isRomLoaded ? S9xObjPalettesUsedLastFrame() : 0xFF;
-            for (int pal = 0; pal < 8; pal++) {
-                const bool used = (palUsed >> pal) & 1, marked = ((*stereoEditField(21)) >> pal) & 1;
-                if (!used && settings3DS.StereoHideUnused && marked) continue;   // an unused but marked palette costs nothing: no row to show
-                if (!used && settings3DS.StereoHideUnused) continue;
-                s_stereoPalIdx[s_stereoPalCount++] = pal;
-                char label[40];
-                const int n = settings3DS.isRomLoaded ? S9xObjPaletteCountLastFrame(pal) : 0;
-                if (n > 0) snprintf(label, sizeof(label), "  Palette %d (%d sprite%s)", pal, n, n == 1 ? "" : "s");
-                else       snprintf(label, sizeof(label), "  Palette %d", pal);
-                AddMenuCheckbox(items, std::string(label), marked,
-                    [pal]( int val ) {
-                        int *mask = stereoEditField(21);
-                        int next = val ? (*mask | (1 << pal)) : (*mask & ~(1 << pal));
-                        if (CheckAndUpdate(*mask, next)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; }
-                    });
-                stereoHelp(items, "Sprites drawn with this OBJ palette glow (the marked\nrows above still decide which priorities). The top screen\nshows only this palette's sprites while the cursor is here.");
-                if (!used) items.back().TextColor = stereo3dDimColor();
-            }
-        }
-        AddMenuGauge(items, "  Threshold"_s, 0, STEREO_GLOW_THRESH_MAX, *stereoEditField(17),
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(17), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
-        stereoHelp(items, "How bright a texel must be to glow (0 = everything,\n15 = only near-white). Luminance of the texel, like\na bloom's bright pass.");
-        AddMenuGauge(items, "  Strength"_s, 1, STEREO_GLOW_STRENGTH_MAX, *stereoEditField(18),
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(18), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
-        stereoHelp(items, "How much is added, in quarters (4 = the texel's own\ncolour once more).");
-        AddMenuGauge(items, "  Spread"_s, 0, STEREO_GLOW_SPREAD_MAX, *stereoEditField(22),
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(22), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
-        stereoHelp(items, "Lets the light leak: the glow is drawn at a quarter of the\nresolution and blurred back over the frame (1: ~4 px,\n2: ~8 px with 3 taps, 3: ~8 px with 5 taps). Replaces the\nhalo while on. Each tap is one full-frame fill.");
-        AddMenuPicker(items, "  Halo"_s, "Off: brightens in place, one pass. Cross: plus the four\nneighbours, five passes. Box: 3x3, nine passes. Ignored\nwhile Spread is on (the blur replaces it). Quality Auto\nlowers it under load."_s,
-            makePickerOptions({"Off (1 pass)", "Cross (5 passes)", "Box (9 passes)"}), *stereoEditField(19), DIALOG_TYPE_INFO, true,
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(19), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
-        if (*stereoEditField(22) > 0) items.back().TextColor = stereo3dDimColor();   // Spread replaces the halo
-        AddMenuGauge(items, "  Persistence"_s, 0, STEREO_GLOW_PERSIST_MAX, *stereoEditField(24),
-            []( int val ) { if (CheckAndUpdate(*stereoEditField(24), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
-        stereoHelp(items, "Keeps part of the last frame's glow (1 = a quarter, 3 = three\nquarters): a flash that blinks every frame then glows alike in\nboth eyes, which are drawn on alternate frames. Needs Spread.\nA short, fading trail on fast motion is the price.");
-        {
-            std::vector<SMenuItem> tintOptions;
-            for (int c = 0; c < STEREO_GLOW_COLORS; c++)
-                AddMenuDialogOption(tintOptions, c, std::string(stereo_glow_color_name(c)), ""_s);
-            AddMenuPicker(items, "  Tint"_s, "Multiplies the glow's colour."_s,
-                tintOptions, *stereoEditField(20), DIALOG_TYPE_INFO, true,
-                []( int val ) { if (CheckAndUpdate(*stereoEditField(20), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
-        }
-        }   // GlowMode
-        s_stereoShadowFxLast = (int)items.size();
-
-    } else if (settings3DS.isRomLoaded) {
-        AddMenuDisabledOption(items, "  Shadows need the 3D slider (not on this console)."_s);
-        AddMenuDisabledOption(items, ""_s);
-    }
-
-    AddMenuHeader2(items, "Color"_s);
-    AddMenuGauge(items, "  Saturation"_s, SCREEN_GRADE_MIN, SCREEN_GRADE_MAX, settings3DS.ColorSat,
-        []( int val ) { CheckAndUpdate(settings3DS.ColorSat, val); }, true, true);
-    AddMenuGauge(items, "  Contrast"_s, SCREEN_GRADE_MIN, SCREEN_GRADE_MAX, settings3DS.ColorCon,
-        []( int val ) { CheckAndUpdate(settings3DS.ColorCon, val); }, true, true);
-    AddMenuGauge(items, "  Brightness"_s, SCREEN_GRADE_MIN, SCREEN_GRADE_MAX, settings3DS.ColorBri,
-        []( int val ) { CheckAndUpdate(settings3DS.ColorBri, val); }, true, true);
-    AddMenuDisabledOption(items, ""_s);
-}
-
-void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
-    items.clear();
-
-    AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
-    AddMenuDisabledOption(items, ""_s);
-
-    if (gpu3dsIs3DAvailable()) {
+// The scene-profile block (Editing Profile with "+ New Profile", Rename,
+// Delete, Capture/Release This Screen), shared by the 3D Stereo and the
+// Effects tabs (Jorge: "where is the rest of the Profile options in Effects?")
+static void addSceneProfileItems(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab)
+{
+    if (true) {
         AddMenuHeader2(items, "Scene Profiles"_s);
 
         if (s_stereoEditIdx >= settings3DS.StereoProfilesCount)
@@ -2095,7 +1911,7 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
                             p->Fade = settings3DS.StereoFade; p->Haze = settings3DS.StereoHaze;
                             p->Blur = settings3DS.StereoBlur;
                             p->ShadowRows = settings3DS.StereoShadowRows; p->ShadowX = settings3DS.StereoShadowX; p->ShadowY = settings3DS.StereoShadowY; p->ShadowColor = settings3DS.StereoShadowColor; p->ShadowAlpha = settings3DS.StereoShadowAlpha; p->ShadowFade = settings3DS.StereoShadowFade; p->ShadowSoft = settings3DS.StereoShadowSoft; p->ShadowQuality = settings3DS.StereoShadowQuality;
-                            p->GlowRows = settings3DS.StereoGlowRows; p->GlowThresh = settings3DS.StereoGlowThresh; p->GlowStrength = settings3DS.StereoGlowStrength; p->GlowSoft = settings3DS.StereoGlowSoft; p->GlowColor = settings3DS.StereoGlowColor; p->GlowPal = settings3DS.StereoGlowPal; p->GlowSpread = settings3DS.StereoGlowSpread; p->GlowSource = settings3DS.StereoGlowSource; p->GlowPersist = settings3DS.StereoGlowPersist;
+                            p->GlowRows = settings3DS.StereoGlowRows; p->GlowThresh = settings3DS.StereoGlowThresh; p->GlowStrength = settings3DS.StereoGlowStrength; p->GlowSoft = settings3DS.StereoGlowSoft; p->GlowColor = settings3DS.StereoGlowColor; p->GlowPal = settings3DS.StereoGlowPal; p->GlowSpread = settings3DS.StereoGlowSpread; p->GlowSource = settings3DS.StereoGlowSource; p->GlowPersist = settings3DS.StereoGlowPersist; p->GlowQuality = settings3DS.StereoGlowQuality;
                             p->FocusBack = settings3DS.StereoFocusBack;
                             p->FocusFront = settings3DS.StereoFocusFront;
                             p->EdgeMode = settings3DS.StereoEdgeMode;
@@ -2189,6 +2005,192 @@ void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             stereo3dMarkTabsDirty();
         }, MenuItemType::Action, "  Release This Screen"_s, ""_s);
         stereoHelp(items, "Unbinds the screen you paused on. It uses the Default\nprofile again.");
+    }
+}
+
+void makeEffectsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
+    items.clear();
+    AddMenuHeader1(items, "EFFECTS"_s);
+    AddMenuDisabledOption(items, ""_s);
+    s_stereoShadowFirst = -1; s_stereoShadowCount = 0;
+    s_stereoGlowFirst = -1; s_stereoGlowCount = 0;
+    s_stereoPalFirst = -1; s_stereoPalCount = 0;
+    s_stereoShadowFxFirst = -1; s_stereoShadowFxLast = -1;
+
+    if (settings3DS.isRomLoaded) {
+        if (s_stereoEditIdx >= settings3DS.StereoProfilesCount)
+            s_stereoEditIdx = -1;
+        addSceneProfileItems(items, menuTabs, currentMenuTab);
+        AddMenuDisabledOption(items, ""_s);
+    }
+
+    const GaugeRow *rows = stereoRowTable();
+    if (gpu3dsIs3DAvailable() && settings3DS.isRomLoaded) {
+        // Drop shadows (issue #77): one checkbox per used row, one light
+        AddMenuHeader2(items, "Shadows"_s);
+        AddMenuPicker(items, "  Enabled"_s, "Off: no shadows, and the options below are hidden.\nOn: the rows checked below cast (shadows need the 3D slider).\nSaved with the game."_s,
+            makePickerOptions({"Off", "On"}), settings3DS.ShadowsMode, DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(settings3DS.ShadowsMode, val)) { s_stereoPreviewDirty = true; stereo3dMarkTabsDirty(); } });
+        s_stereoShadowFirst = (int)items.size();
+        s_stereoShadowCount = 0;
+        for (int r = 0; r < 12 && settings3DS.ShadowsMode != 0; r++) {
+            int layer = rows[r].layer, prio = rows[r].prio;
+            // a marked row stays listed even when this scene does not use it:
+            // hidden, it could never be unmarked (Jorge: BG1 P1 marked in one
+            // scene kept casting, invisibly and at a BG layer's cost, in another)
+            const bool markedHere = ((*stereoEditField(8)) >> stereo_shadow_row(layer, prio)) & 1;
+            if (!stereo3dRowUsed(layer, prio) && settings3DS.StereoHideUnused && !markedHere) continue;
+            s_stereoShadowLayer[s_stereoShadowCount] = layer;   // the row spotlights on the top screen (Jorge)
+            s_stereoShadowPrio[s_stereoShadowCount] = prio;
+            s_stereoShadowCount++;
+            const int bit = stereo_shadow_row(layer, prio);
+            char label[40]; snprintf(label, sizeof(label), "%s", rows[r].name);
+            AddMenuCheckbox(items, std::string(label), ((*stereoEditField(8)) >> bit) & 1,
+                [bit]( int val ) {
+                    int *mask = stereoEditField(8);
+                    int next = val ? (*mask | (1 << bit)) : (*mask & ~(1 << bit));
+                    if (CheckAndUpdate(*mask, next)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; }
+                });
+            stereoHelp(items, "This row draws a silhouette of itself, offset by\nShadow X/Y, at the depth of the row behind it (the nearest\nsmaller Depth gauge), in Shadow Color, only where that row is the\nvisible surface. One extra pass of this row per\nreceiving plane, only in 3D.");
+            if (!stereo3dRowUsed(layer, prio)) items.back().TextColor = stereo3dDimColor();
+        }
+        if (settings3DS.ShadowsMode != 0) {
+        s_stereoShadowFxFirst = (int)items.size();
+        AddMenuGauge(items, "  Offset X"_s, -4, 4, *stereoEditField(9),
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(9), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
+        stereoHelp(items, "Horizontal offset of every shadow, in pixels (+ = right).\nOne light per scene.");
+        AddMenuGauge(items, "  Offset Y"_s, -4, 4, *stereoEditField(10),
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(10), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
+        stereoHelp(items, "Vertical offset of every shadow, in pixels (+ = down).");
+        AddMenuGauge(items, "  Opacity"_s, STEREO_SHADOW_ALPHA_MIN, STEREO_SHADOW_ALPHA_MAX, *stereoEditField(13),
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(13), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
+        stereoHelp(items, "How dark every shadow is, in eighths (4 = half).");
+        AddMenuCheckbox(items, "  Fade by Distance"_s, *stereoEditField(14) != 0,
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(14), val ? 1 : 0)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
+        stereoHelp(items, "A shadow gets lighter the further its row sits from\nthe row behind it in the Depth gauges, like a real\nshadow diluting as the surface moves away.");
+        AddMenuPicker(items, "  Soft Edge"_s, "Softens every shadow's edge. Light: a 2x2 pixel box of the\nsilhouette, four passes of the caster. Full: a 3x3 box, nine\npasses. Shadow Quality Auto lowers it under load."_s,
+            makePickerOptions({"Off", "Light (4 passes)", "Full (9 passes)"}), *stereoEditField(12), DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(12), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
+        AddMenuPicker(items, "  Quality"_s, "Full: as set, always. Auto: the Soft Edge drops one level\nfor each load tier the Blur Auto controller reports (a missed\nframe), and climbs back after clean windows. Auto, Off under\nload: also fades the whole shadow out over half a second when\nload persists, and back in the same way."_s,
+            makePickerOptions({"Full", "Auto", "Auto, Off under load"}), *stereoEditField(15), DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(15), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
+        {
+            std::vector<SMenuItem> colorOptions;
+            for (int c = 0; c < STEREO_SHADOW_COLORS; c++)
+                AddMenuDialogOption(colorOptions, c, std::string(stereo_shadow_color_name(c)), ""_s);
+            AddMenuPicker(items, "  Color"_s, "Colour of every shadow. Black reads as a shadow;\nlighter colours work as a halo.\nOne light per scene."_s,
+                colorOptions, *stereoEditField(11), DIALOG_TYPE_INFO, true,
+                []( int val ) { if (CheckAndUpdate(*stereoEditField(11), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
+        }
+        }   // ShadowsMode
+        // Glow (issue #77): the marked rows' bright texels glow, additively
+        AddMenuHeader2(items, "Glow"_s);
+        AddMenuPicker(items, "  Enabled"_s, "Off: no glow, and the options below are hidden.\n3D only: only while the 3D slider is up.\nAlways: in 2D too.\nSaved with the game."_s,
+            makePickerOptions({"Off", "3D only", "Always"}), settings3DS.GlowMode, DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(settings3DS.GlowMode, val)) { s_stereoPreviewDirty = true; stereo3dMarkTabsDirty(); } });
+        if (settings3DS.GlowMode != 0) {
+        AddMenuPicker(items, "  Source"_s, "Marked rows: the rows and palettes checked below glow,\nhidden by layers in front. Whole screen: everything\nin the frame above Glow Threshold glows, HUD included -\na post-process bloom through the Spread target (needs\nGlow Spread, 1 if it is 0)."_s,
+            makePickerOptions({"Marked rows", "Whole screen"}), *stereoEditField(23), DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(23), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; menu3dsMarkTabDirty(TAB_EFFECTS); } });
+        const bool glowWholeScreen = *stereoEditField(23) == 1;   // rows and palettes do not apply (Jorge)
+        s_stereoGlowFirst = (int)items.size();
+        s_stereoGlowCount = 0;
+        for (int r = 0; r < 12 && !glowWholeScreen; r++) {
+            int layer = rows[r].layer, prio = rows[r].prio;
+            const int bit = stereo_shadow_row(layer, prio);
+            const bool markedHere = ((*stereoEditField(16)) >> bit) & 1;
+            if (!stereo3dRowUsed(layer, prio) && settings3DS.StereoHideUnused && !markedHere) continue;
+            s_stereoGlowLayer[s_stereoGlowCount] = layer;
+            s_stereoGlowPrio[s_stereoGlowCount] = prio;
+            s_stereoGlowCount++;
+            char label[40]; snprintf(label, sizeof(label), "%s", rows[r].name);
+            AddMenuCheckbox(items, std::string(label), markedHere,
+                [bit]( int val ) {
+                    int *mask = stereoEditField(16);
+                    int next = val ? (*mask | (1 << bit)) : (*mask & ~(1 << bit));
+                    if (CheckAndUpdate(*mask, next)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; }
+                });
+            stereoHelp(items, "This row's bright texels (above Glow Threshold) are\ndrawn again, added to the frame in their own colours\nwith a small halo. One pass of the row per halo copy.");
+            if (!stereo3dRowUsed(layer, prio)) items.back().TextColor = stereo3dDimColor();
+        }
+        // which sprite palettes glow (Jorge: per sprite, not only per row):
+        // the charged shot, explosions and effects rarely share X's palette
+        s_stereoPalFirst = (int)items.size();
+        s_stereoPalCount = 0;
+        if (!glowWholeScreen) {
+            const unsigned palUsed = settings3DS.isRomLoaded ? S9xObjPalettesUsedLastFrame() : 0xFF;
+            for (int pal = 0; pal < 8; pal++) {
+                const bool used = (palUsed >> pal) & 1, marked = ((*stereoEditField(21)) >> pal) & 1;
+                if (!used && settings3DS.StereoHideUnused && marked) continue;   // an unused but marked palette costs nothing: no row to show
+                if (!used && settings3DS.StereoHideUnused) continue;
+                s_stereoPalIdx[s_stereoPalCount++] = pal;
+                char label[40];
+                const int n = settings3DS.isRomLoaded ? S9xObjPaletteCountLastFrame(pal) : 0;
+                if (n > 0) snprintf(label, sizeof(label), "  Palette %d (%d sprite%s)", pal, n, n == 1 ? "" : "s");
+                else       snprintf(label, sizeof(label), "  Palette %d", pal);
+                AddMenuCheckbox(items, std::string(label), marked,
+                    [pal]( int val ) {
+                        int *mask = stereoEditField(21);
+                        int next = val ? (*mask | (1 << pal)) : (*mask & ~(1 << pal));
+                        if (CheckAndUpdate(*mask, next)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; }
+                    });
+                stereoHelp(items, "Sprites drawn with this OBJ palette glow (the marked\nrows above still decide which priorities). The top screen\nshows only this palette's sprites while the cursor is here.");
+                if (!used) items.back().TextColor = stereo3dDimColor();
+            }
+        }
+        AddMenuGauge(items, "  Threshold"_s, 0, STEREO_GLOW_THRESH_MAX, *stereoEditField(17),
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(17), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
+        stereoHelp(items, "How bright a texel must be to glow (0 = everything,\n15 = only near-white). Luminance of the texel, like\na bloom's bright pass.");
+        AddMenuGauge(items, "  Strength"_s, 1, STEREO_GLOW_STRENGTH_MAX, *stereoEditField(18),
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(18), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
+        stereoHelp(items, "How much is added, in quarters (4 = the texel's own\ncolour once more).");
+        AddMenuGauge(items, "  Spread"_s, 0, STEREO_GLOW_SPREAD_MAX, *stereoEditField(22),
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(22), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
+        stereoHelp(items, "Lets the light leak: the glow is drawn at a quarter of the\nresolution and blurred back over the frame (1: ~4 px,\n2: ~8 px with 3 taps, 3: ~8 px with 5 taps). Replaces the\nhalo while on. Each tap is one full-frame fill.");
+        AddMenuPicker(items, "  Halo"_s, "Off: brightens in place, one pass. Cross: plus the four\nneighbours, five passes. Box: 3x3, nine passes. Ignored\nwhile Spread is on (the blur replaces it). Quality Auto\nlowers it under load."_s,
+            makePickerOptions({"Off (1 pass)", "Cross (5 passes)", "Box (9 passes)"}), *stereoEditField(19), DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(19), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
+        if (*stereoEditField(22) > 0) items.back().TextColor = stereo3dDimColor();   // Spread replaces the halo
+        AddMenuPicker(items, "  Quality"_s, "Full: Halo and Spread as set, always. Auto: they drop one\nlevel for each load tier the Blur Auto controller reports,\nwith a smooth crossfade (the glow fades out, switches, fades\nback in), and climb back the same way when the load eases."_s,
+            makePickerOptions({"Full", "Auto"}), *stereoEditField(26), DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(26), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
+        AddMenuGauge(items, "  Persistence"_s, 0, STEREO_GLOW_PERSIST_MAX, *stereoEditField(24),
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(24), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
+        stereoHelp(items, "Keeps part of the last frame's glow (1 = a quarter, 3 = three\nquarters): a flash that blinks every frame then glows alike in\nboth eyes, which are drawn on alternate frames. Needs Spread.\nA short, fading trail on fast motion is the price.");
+        {
+            std::vector<SMenuItem> tintOptions;
+            for (int c = 0; c < STEREO_GLOW_COLORS; c++)
+                AddMenuDialogOption(tintOptions, c, std::string(stereo_glow_color_name(c)), ""_s);
+            AddMenuPicker(items, "  Tint"_s, "Multiplies the glow's colour."_s,
+                tintOptions, *stereoEditField(20), DIALOG_TYPE_INFO, true,
+                []( int val ) { if (CheckAndUpdate(*stereoEditField(20), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
+        }
+        }   // GlowMode
+        s_stereoShadowFxLast = (int)items.size();
+
+    } else if (settings3DS.isRomLoaded) {
+        AddMenuDisabledOption(items, "  Shadows need the 3D slider (not on this console)."_s);
+        AddMenuDisabledOption(items, ""_s);
+    }
+
+    AddMenuHeader2(items, "Color"_s);
+    AddMenuGauge(items, "  Saturation"_s, SCREEN_GRADE_MIN, SCREEN_GRADE_MAX, settings3DS.ColorSat,
+        []( int val ) { CheckAndUpdate(settings3DS.ColorSat, val); }, true, true);
+    AddMenuGauge(items, "  Contrast"_s, SCREEN_GRADE_MIN, SCREEN_GRADE_MAX, settings3DS.ColorCon,
+        []( int val ) { CheckAndUpdate(settings3DS.ColorCon, val); }, true, true);
+    AddMenuGauge(items, "  Brightness"_s, SCREEN_GRADE_MIN, SCREEN_GRADE_MAX, settings3DS.ColorBri,
+        []( int val ) { CheckAndUpdate(settings3DS.ColorBri, val); }, true, true);
+    AddMenuDisabledOption(items, ""_s);
+}
+
+void makeStereo3dMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTabs, int& currentMenuTab) {
+    items.clear();
+
+    AddMenuHeader1(items, "3D STEREOSCOPIC SETTINGS"_s);
+    AddMenuDisabledOption(items, ""_s);
+
+    if (gpu3dsIs3DAvailable()) {
+        addSceneProfileItems(items, menuTabs, currentMenuTab);
 
 
 
@@ -3054,13 +3056,13 @@ void settingsResetStereo3D()
     settings3DS.StereoFade = 0;
     settings3DS.StereoHaze = 0;
     settings3DS.StereoBlur = 0;
-    settings3DS.StereoShadowRows = 0; settings3DS.StereoShadowX = 2; settings3DS.StereoShadowY = 2; settings3DS.StereoShadowColor = 0; settings3DS.StereoShadowAlpha = 4; settings3DS.StereoShadowFade = 0; settings3DS.StereoShadowSoft = 0; settings3DS.StereoShadowQuality = 1;
-    settings3DS.StereoGlowRows = 0; settings3DS.StereoGlowThresh = 8; settings3DS.StereoGlowStrength = 4; settings3DS.StereoGlowSoft = 1; settings3DS.StereoGlowColor = 0; settings3DS.StereoGlowPal = 255; settings3DS.StereoGlowSpread = 0; settings3DS.StereoGlowSource = 1; settings3DS.StereoGlowPersist = 0;
+    settings3DS.StereoShadowRows = 0; settings3DS.StereoShadowX = 3; settings3DS.StereoShadowY = -1; settings3DS.StereoShadowColor = 0; settings3DS.StereoShadowAlpha = 3; settings3DS.StereoShadowFade = 0; settings3DS.StereoShadowSoft = 0; settings3DS.StereoShadowQuality = 1;
+    settings3DS.StereoGlowRows = 0; settings3DS.StereoGlowThresh = 12; settings3DS.StereoGlowStrength = 2; settings3DS.StereoGlowSoft = 1; settings3DS.StereoGlowColor = 0; settings3DS.StereoGlowPal = 255; settings3DS.StereoGlowSpread = 1; settings3DS.StereoGlowSource = 1; settings3DS.StereoGlowPersist = 1; settings3DS.StereoGlowQuality = 1;
     settings3DS.StereoFocusBack = -1;
     settings3DS.StereoFocusFront = 1;
     settings3DS.StereoEdgeMode = 1;   // Trim
-    settings3DS.ColorSat = settings3DS.ColorCon = settings3DS.ColorBri = 0;
-    settings3DS.ShadowsMode = 1; settings3DS.GlowMode = 2;
+    settings3DS.ColorSat = 1; settings3DS.ColorCon = 0; settings3DS.ColorBri = -1;   // Jorge's defaults (2026-10-16)
+    settings3DS.ShadowsMode = 0; settings3DS.GlowMode = 0;
     settings3DS.StereoMode7Persp = 8;   // full perspective on Mode 7 planes
     settings3DS.StereoMode7Fx = 1;      // effects by distance on the plane
     settings3DS.StereoProfilesCount = 0;
@@ -3095,7 +3097,7 @@ void settingsLoadStereo3D()
     int *tHaze = &settings3DS.StereoHaze;
     int *tBlur = &settings3DS.StereoBlur;
     int *tShRows = &settings3DS.StereoShadowRows, *tShX = &settings3DS.StereoShadowX, *tShY = &settings3DS.StereoShadowY, *tShColor = &settings3DS.StereoShadowColor, *tShAlpha = &settings3DS.StereoShadowAlpha, *tShFade = &settings3DS.StereoShadowFade, *tShSoft = &settings3DS.StereoShadowSoft, *tShQual = &settings3DS.StereoShadowQuality;
-    int *tGlRows = &settings3DS.StereoGlowRows, *tGlThresh = &settings3DS.StereoGlowThresh, *tGlStr = &settings3DS.StereoGlowStrength, *tGlSoft = &settings3DS.StereoGlowSoft, *tGlColor = &settings3DS.StereoGlowColor, *tGlPal = &settings3DS.StereoGlowPal, *tGlSpread = &settings3DS.StereoGlowSpread, *tGlSrc = &settings3DS.StereoGlowSource, *tGlPersist = &settings3DS.StereoGlowPersist;
+    int *tGlRows = &settings3DS.StereoGlowRows, *tGlThresh = &settings3DS.StereoGlowThresh, *tGlStr = &settings3DS.StereoGlowStrength, *tGlSoft = &settings3DS.StereoGlowSoft, *tGlColor = &settings3DS.StereoGlowColor, *tGlPal = &settings3DS.StereoGlowPal, *tGlSpread = &settings3DS.StereoGlowSpread, *tGlSrc = &settings3DS.StereoGlowSource, *tGlPersist = &settings3DS.StereoGlowPersist, *tGlQual = &settings3DS.StereoGlowQuality;
     int *tFB = &settings3DS.StereoFocusBack;
     int *tFF = &settings3DS.StereoFocusFront;
     int *tEdge = &settings3DS.StereoEdgeMode;
@@ -3122,11 +3124,11 @@ void settingsLoadStereo3D()
                 for (int i = 0; i < 2; i++) p->DepthOBJHi[i] = stereoDepthDefault[4];
                 p->Fade = p->Haze = p->Blur = 0;
                 p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1; p->Mode7Persp = 8; p->Mode7Fx = 1;
-                p->ShadowRows = 0; p->ShadowX = 2; p->ShadowY = 2; p->ShadowColor = 0; p->ShadowAlpha = 4; p->ShadowFade = 0; p->ShadowSoft = 0; p->ShadowQuality = 1;
-                p->GlowRows = 0; p->GlowThresh = 8; p->GlowStrength = 4; p->GlowSoft = 1; p->GlowColor = 0; p->GlowPal = 255; p->GlowSpread = 0; p->GlowSource = 1; p->GlowPersist = 0;
+                p->ShadowRows = 0; p->ShadowX = 3; p->ShadowY = -1; p->ShadowColor = 0; p->ShadowAlpha = 3; p->ShadowFade = 0; p->ShadowSoft = 0; p->ShadowQuality = 1;
+                p->GlowRows = 0; p->GlowThresh = 12; p->GlowStrength = 2; p->GlowSoft = 1; p->GlowColor = 0; p->GlowPal = 255; p->GlowSpread = 1; p->GlowSource = 1; p->GlowPersist = 1; p->GlowQuality = 1;
                 tDepth = p->Depth; tDepthP1 = p->DepthP1; tObjHi = p->DepthOBJHi;
                 tShRows = &p->ShadowRows; tShX = &p->ShadowX; tShY = &p->ShadowY; tShColor = &p->ShadowColor; tShAlpha = &p->ShadowAlpha; tShFade = &p->ShadowFade; tShSoft = &p->ShadowSoft; tShQual = &p->ShadowQuality;
-                tGlRows = &p->GlowRows; tGlThresh = &p->GlowThresh; tGlStr = &p->GlowStrength; tGlSoft = &p->GlowSoft; tGlColor = &p->GlowColor; tGlPal = &p->GlowPal; tGlSpread = &p->GlowSpread; tGlSrc = &p->GlowSource; tGlPersist = &p->GlowPersist;
+                tGlRows = &p->GlowRows; tGlThresh = &p->GlowThresh; tGlStr = &p->GlowStrength; tGlSoft = &p->GlowSoft; tGlColor = &p->GlowColor; tGlPal = &p->GlowPal; tGlSpread = &p->GlowSpread; tGlSrc = &p->GlowSource; tGlPersist = &p->GlowPersist; tGlQual = &p->GlowQuality;
                 tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
                 tEdge = &p->EdgeMode; tM7 = &p->Mode7Persp; tM7Fx = &p->Mode7Fx;
@@ -3239,6 +3241,8 @@ void settingsLoadStereo3D()
             *tGlSrc = v ? 1 : 0;
         if (sscanf(line, "GLOWPERSIST=%d", &v) == 1)
             *tGlPersist = v < 0 ? 0 : (v > STEREO_GLOW_PERSIST_MAX ? STEREO_GLOW_PERSIST_MAX : v);
+        if (sscanf(line, "GLOWQUALITY=%d", &v) == 1)
+            *tGlQual = v != 0;
     }
     fclose(f);
 }
@@ -3273,7 +3277,7 @@ static void settingsWriteStereo3DGlobals(FILE *f)
     fprintf(f, "# drop shadows: 12-bit mask of Depth rows that cast one (BG1P0=1 BG1P1=2 ... OBJP3=2048), offset in px\n");
     fprintf(f, "SHADOW=%d\nSHADOWX=%d\nSHADOWY=%d\nSHADOWCOLOR=%d\nSHADOWALPHA=%d\nSHADOWFADE=%d\nSHADOWSOFT=%d\nSHADOWQUALITY=%d\n", settings3DS.StereoShadowRows, settings3DS.StereoShadowX, settings3DS.StereoShadowY, settings3DS.StereoShadowColor, settings3DS.StereoShadowAlpha, settings3DS.StereoShadowFade, settings3DS.StereoShadowSoft, settings3DS.StereoShadowQuality);
     fprintf(f, "# glow: 12-bit mask of Depth rows whose bright texels glow, threshold 0-15, strength quarters, halo 0-2, tint\n");
-    fprintf(f, "GLOW=%d\nGLOWTHRESH=%d\nGLOWSTRENGTH=%d\nGLOWSOFT=%d\nGLOWCOLOR=%d\nGLOWPAL=%d\nGLOWSPREAD=%d\nGLOWSRC=%d\nGLOWPERSIST=%d\n", settings3DS.StereoGlowRows, settings3DS.StereoGlowThresh, settings3DS.StereoGlowStrength, settings3DS.StereoGlowSoft, settings3DS.StereoGlowColor, settings3DS.StereoGlowPal, settings3DS.StereoGlowSpread, settings3DS.StereoGlowSource, settings3DS.StereoGlowPersist);
+    fprintf(f, "GLOW=%d\nGLOWTHRESH=%d\nGLOWSTRENGTH=%d\nGLOWSOFT=%d\nGLOWCOLOR=%d\nGLOWPAL=%d\nGLOWSPREAD=%d\nGLOWSRC=%d\nGLOWPERSIST=%d\nGLOWQUALITY=%d\n", settings3DS.StereoGlowRows, settings3DS.StereoGlowThresh, settings3DS.StereoGlowStrength, settings3DS.StereoGlowSoft, settings3DS.StereoGlowColor, settings3DS.StereoGlowPal, settings3DS.StereoGlowSpread, settings3DS.StereoGlowSource, settings3DS.StereoGlowPersist, settings3DS.StereoGlowQuality);
 }
 
 // Writes the current game's LOOK (depths/focus/effects/edge) as the global
@@ -3316,7 +3320,7 @@ void settingsSaveStereo3D()
         fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\nM7PERSP=%d\nM7FX=%d\n",
             p->FocusBack, p->FocusFront, p->EdgeMode, p->Mode7Persp, p->Mode7Fx);
         fprintf(f, "SHADOW=%d\nSHADOWX=%d\nSHADOWY=%d\nSHADOWCOLOR=%d\nSHADOWALPHA=%d\nSHADOWFADE=%d\nSHADOWSOFT=%d\nSHADOWQUALITY=%d\n", p->ShadowRows, p->ShadowX, p->ShadowY, p->ShadowColor, p->ShadowAlpha, p->ShadowFade, p->ShadowSoft, p->ShadowQuality);
-        fprintf(f, "GLOW=%d\nGLOWTHRESH=%d\nGLOWSTRENGTH=%d\nGLOWSOFT=%d\nGLOWCOLOR=%d\nGLOWPAL=%d\nGLOWSPREAD=%d\nGLOWSRC=%d\nGLOWPERSIST=%d\n", p->GlowRows, p->GlowThresh, p->GlowStrength, p->GlowSoft, p->GlowColor, p->GlowPal, p->GlowSpread, p->GlowSource, p->GlowPersist);
+        fprintf(f, "GLOW=%d\nGLOWTHRESH=%d\nGLOWSTRENGTH=%d\nGLOWSOFT=%d\nGLOWCOLOR=%d\nGLOWPAL=%d\nGLOWSPREAD=%d\nGLOWSRC=%d\nGLOWPERSIST=%d\nGLOWQUALITY=%d\n", p->GlowRows, p->GlowThresh, p->GlowStrength, p->GlowSoft, p->GlowColor, p->GlowPal, p->GlowSpread, p->GlowSource, p->GlowPersist, p->GlowQuality);
     }
     if (settings3DS.StereoWatchAddr >= 0)
         fprintf(f, "WATCH=%X\n", settings3DS.StereoWatchAddr);

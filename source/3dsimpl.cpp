@@ -36,6 +36,7 @@
 #include "3dsimpl_gpu.h"
 #include "3dsblurauto.h"
 #include "shadow_auto.h"
+#include "glow_auto.h"
 #include "screen_grade.h"
 #include "sram_save.h"
 #include "3dssram.h"
@@ -990,6 +991,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 
 static BlurAutoState s_blurAuto;   // zero-init == blurAutoReset
 static ShadowAutoState s_shadowAuto;   // Shadow Quality (shadow_auto.h)
+static GlowAutoState s_glowAuto;       // Glow Quality (glow_auto.h)
 
 #ifdef PROBE_FBDUMP
 int g_probeFrames = 0;   // frames since the ROM loaded (the probes above/below read it)
@@ -1022,6 +1024,14 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		GPU3DSExt.shadowAlphaMul = s_shadowAuto.alphaMul;
 		if (s_shadowAuto.level != wasLevel && GPU3DS.stereoShadowRows != 0)
 			log3dsWrite("[shadow] auto soft edge -> %d", s_shadowAuto.level);
+		// Glow Quality: the same tier drops the Halo/Spread, crossfaded
+		if (firstFrame) glowAutoReset(&s_glowAuto);
+		const int wasDrop = s_glowAuto.drop;
+		glowAutoStep(&s_glowAuto, GPU3DS.stereoGlowQuality, GPU3DSExt.shadowLoadTier);
+		GPU3DSExt.glowLoadDrop = s_glowAuto.drop;
+		GPU3DSExt.glowGainMul = s_glowAuto.gainMul;
+		if (s_glowAuto.drop != wasDrop)
+			log3dsWrite("[glow] auto drop -> %d", s_glowAuto.drop);
 	}
 
 	// per-scene 3D profiles (issue #23): match the PPU scene signature and
@@ -1273,6 +1283,7 @@ void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
     GPU3DSExt.shadowSoftLevel = GPU3DS.stereoShadowSoft;
     GPU3DSExt.shadowAlphaMul = 1.0f;
     GPU3DSExt.shadowLoadTier = 0;
+    GPU3DSExt.glowLoadDrop = 0; GPU3DSExt.glowGainMul = 1.0f;   // and the glow as set
     const unsigned drawsBefore = GPU3DSExt.shadowDraws, glowBefore = GPU3DSExt.glowDraws;   // the preview's draws are not the game's
     // two passes fill BOTH framebuffers of the double-buffered game
     // screen - a single one shows only on the right swap parity, which

@@ -9,7 +9,7 @@
     "AutoSaveLoad": "0"
   },
   "probe": "PROBE_MENU_HELP",
-  "cases": 11,
+  "cases": 14,
   "regions": {
     "menu_body": [
       0,
@@ -23,5 +23,11 @@
       1,
       100
     ]
-  }
+  },
+  "stereo3d": [
+    {
+      "file": "SUPER MARIO KART",
+      "content": "SHADOWS=1\nGLOWMODE=2\nGLOWSRC=1"
+    }
+  ]
 }
