@@ -206,6 +206,32 @@ TEST_CASE("$2007 play+resume continues byte-exact; plain play restarts from the 
     msu1_shutdown(st);
 }
 
+TEST_CASE("$2007 play while already playing keeps the position (only the repeat bit changes)")
+{
+    // a sound engine that re-asserts play+loop on every sound effect must not
+    // restart the music (field log 2026-10-16: control write 03 with status=31)
+    std::string dir;
+    Msu1State st = make_paused_state(dir);
+    msu1_write_port(st, 7, 0x05);            // resume at byte 32
+    uint8_t frame[4]; int16_t l;
+    REQUIRE(msu1_read_audio(st, frame, 4) == 4);   // frame 8 consumed, pos 36
+    CHECK(st.audio_play_pos == 36);
+
+    msu1_write_port(st, 7, 0x03);            // play + repeat, already playing
+    CHECK((st.status & MSU1_FLAG_AUDIO_PLAYING) != 0);
+    CHECK((st.status & MSU1_FLAG_AUDIO_REPEAT) != 0);
+    CHECK(st.audio_play_pos == 36);          // not rewound
+    REQUIRE(msu1_read_audio(st, frame, 4) == 4);
+    memcpy(&l, frame, 2);
+    CHECK(l == 9);                           // the next frame, not frame 0
+
+    msu1_write_port(st, 7, 0x01);            // play without repeat: repeat bit drops, still no rewind
+    CHECK((st.status & MSU1_FLAG_AUDIO_REPEAT) == 0);
+    CHECK(st.audio_play_pos == 40);
+
+    msu1_shutdown(st);
+}
+
 TEST_CASE("$2007 resume with a mismatched track plays that track from the start")
 {
     std::string dir;

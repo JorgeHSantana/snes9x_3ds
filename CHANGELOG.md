@@ -3,6 +3,12 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+- **Glow Source defaults to "Whole screen"** (new games and new profiles).
+### Fixes
+- **MSU-1: the music no longer restarts when a sound effect plays.** A
+  control-register write of "play" while the track was already playing
+  rewound it to the start; per the MSU-1 spec only a track load rewinds,
+  the write just sets the play and repeat bits (field log 2026-10-16).
 - **Shadows and Glow switches** at the head of each Effects block, saved
   with the game (`SHADOWS`, `GLOWMODE`): Shadows Off/On; Glow Off, 3D only
   (only while the 3D slider is up) or Always. Off hides the block's options.

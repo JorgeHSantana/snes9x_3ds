@@ -3055,7 +3055,7 @@ void settingsResetStereo3D()
     settings3DS.StereoHaze = 0;
     settings3DS.StereoBlur = 0;
     settings3DS.StereoShadowRows = 0; settings3DS.StereoShadowX = 2; settings3DS.StereoShadowY = 2; settings3DS.StereoShadowColor = 0; settings3DS.StereoShadowAlpha = 4; settings3DS.StereoShadowFade = 0; settings3DS.StereoShadowSoft = 0; settings3DS.StereoShadowQuality = 1;
-    settings3DS.StereoGlowRows = 0; settings3DS.StereoGlowThresh = 8; settings3DS.StereoGlowStrength = 4; settings3DS.StereoGlowSoft = 1; settings3DS.StereoGlowColor = 0; settings3DS.StereoGlowPal = 255; settings3DS.StereoGlowSpread = 0; settings3DS.StereoGlowSource = 0; settings3DS.StereoGlowPersist = 0;
+    settings3DS.StereoGlowRows = 0; settings3DS.StereoGlowThresh = 8; settings3DS.StereoGlowStrength = 4; settings3DS.StereoGlowSoft = 1; settings3DS.StereoGlowColor = 0; settings3DS.StereoGlowPal = 255; settings3DS.StereoGlowSpread = 0; settings3DS.StereoGlowSource = 1; settings3DS.StereoGlowPersist = 0;
     settings3DS.StereoFocusBack = -1;
     settings3DS.StereoFocusFront = 1;
     settings3DS.StereoEdgeMode = 1;   // Trim
@@ -3123,7 +3123,7 @@ void settingsLoadStereo3D()
                 p->Fade = p->Haze = p->Blur = 0;
                 p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1; p->Mode7Persp = 8; p->Mode7Fx = 1;
                 p->ShadowRows = 0; p->ShadowX = 2; p->ShadowY = 2; p->ShadowColor = 0; p->ShadowAlpha = 4; p->ShadowFade = 0; p->ShadowSoft = 0; p->ShadowQuality = 1;
-                p->GlowRows = 0; p->GlowThresh = 8; p->GlowStrength = 4; p->GlowSoft = 1; p->GlowColor = 0; p->GlowPal = 255; p->GlowSpread = 0; p->GlowSource = 0; p->GlowPersist = 0;
+                p->GlowRows = 0; p->GlowThresh = 8; p->GlowStrength = 4; p->GlowSoft = 1; p->GlowColor = 0; p->GlowPal = 255; p->GlowSpread = 0; p->GlowSource = 1; p->GlowPersist = 0;
                 tDepth = p->Depth; tDepthP1 = p->DepthP1; tObjHi = p->DepthOBJHi;
                 tShRows = &p->ShadowRows; tShX = &p->ShadowX; tShY = &p->ShadowY; tShColor = &p->ShadowColor; tShAlpha = &p->ShadowAlpha; tShFade = &p->ShadowFade; tShSoft = &p->ShadowSoft; tShQual = &p->ShadowQuality;
                 tGlRows = &p->GlowRows; tGlThresh = &p->GlowThresh; tGlStr = &p->GlowStrength; tGlSoft = &p->GlowSoft; tGlColor = &p->GlowColor; tGlPal = &p->GlowPal; tGlSpread = &p->GlowSpread; tGlSrc = &p->GlowSource; tGlPersist = &p->GlowPersist;

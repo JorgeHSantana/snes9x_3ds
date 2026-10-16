@@ -507,6 +507,16 @@ void msu1_write_port(Msu1State& state, uint8_t port, uint8_t value)
                 msu1_audio_notify(state);
                 return;
             }
+            // play while ALREADY playing: only the repeat bit changes, the
+            // position stays. A game's sound engine re-asserts "play + loop"
+            // whenever a sound effect fires (Jorge's log, 2026-10-16: control
+            // write 03 every second with status=31, each one restarting the
+            // music); the MSU-1 rewinds on a track load, never on this write.
+            if (was_playing) {
+                state.status |= MSU1_FLAG_AUDIO_PLAYING;
+                msu1_audio_notify(state);
+                return;
+            }
             // play: bit 2 resumes the stored position when it belongs to this
             // track and is still inside the file; otherwise play from the start.
             uint32_t start_pos = 0;
