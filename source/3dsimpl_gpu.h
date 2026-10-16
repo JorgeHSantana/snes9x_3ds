@@ -210,6 +210,9 @@ typedef struct
     float           shadowAlphaMul;  // ...and the fade multiplier on the shadow's alpha (1 = as set)
     int             glowLoadDrop;    // Glow Quality (glow_auto.h): levels taken off the Halo/Spread this frame
     float           glowGainMul;     // ...and the crossfade multiplier on the glow's gain (1 = as set)
+    int             glowRelRef;      // Threshold Relative (glow_relative.h): this frame's alpha-test reference
+    float           glowRelGain;     // ...and its gain multiplier (1 in a bright scene)
+    int             glowRelBright;   // the tracked scene bright, for the perf line
     bool            blurAutoOff;    // Blur Quality "Auto, Off under load": the ghost passes are skipped
     bool            blurAutoLight;  // Blur Quality Auto verdict (issue #71): true while
                                     // the frame loop reports load - fed per emulated

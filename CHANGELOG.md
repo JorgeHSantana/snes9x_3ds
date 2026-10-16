@@ -3,6 +3,11 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+- **Glow Threshold Mode: Relative** (default for new profiles, `GLOWREL`):
+  the cut is Threshold/16 of the scene's own bright - the SNES palette's
+  90th-percentile luma, read on the CPU each frame and tracked over 20
+  frames - and weak lights add up to 2x more, so the glow lives in dark
+  scenes instead of vanishing (Jorge). Absolute keeps the old fixed cut.
 - **Effects tab**: the full scene-profile block (New / Rename / Delete /
   Capture / Release This Screen) is there too, shared with 3D Stereo; the
   Shadows and Glow switches are named "Enabled"; **Glow Quality** Full /

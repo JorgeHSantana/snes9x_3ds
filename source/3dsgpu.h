@@ -336,6 +336,7 @@ typedef struct
     int                         stereoGlowSpread;   // 0..3 (stereo_glow.h)
     int                         stereoGlowSource;   // 0 marked rows, 1 whole screen
     int                         stereoGlowQuality;  // 0 Full, 1 Auto
+    int                         stereoGlowRelative; // 0 absolute threshold, 1 relative to the palette bright
     int                         stereoGlowPersist;  // 0..3 quarters of the last glow kept
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
     float                       glowPalSet[2];      // (mask, enable) the tile shader holds; (255, 0) = no-op

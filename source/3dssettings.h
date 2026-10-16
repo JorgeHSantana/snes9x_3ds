@@ -326,6 +326,7 @@ typedef struct {
     int                 StereoGlowPal;         // 8-bit mask of sprite palettes that glow (255 = all)
     int                 StereoGlowSpread;      // 0 = halo copies; 1..3 = quarter-res spread with 1/3/5 taps
     int                 StereoGlowSource;      // 0 = marked rows; 1 = whole screen (everything above the threshold)
+    int                 StereoGlowRelative;    // 0 absolute threshold, 1 relative to the scene's palette bright (glow_relative.h)
     int                 StereoGlowQuality;     // 0 Full, 1 Auto (glow_auto.h: halo/spread drop per load tier, crossfaded)
     int                 StereoGlowPersist;     // 0..3: quarters of the last frame's glow kept (needs Spread)
     int                 StereoEdgeMode;        // parallax edge cleanup: 0 = Off, 1 = Trim
@@ -362,6 +363,7 @@ typedef struct {
         int  GlowPal;                                                    // sprite palettes that glow, 8-bit mask
         int  GlowSpread;                                                 // 0..3
         int  GlowSource;                                                 // 0 rows, 1 whole screen
+        int  GlowRelative;                                               // 0 absolute, 1 relative
         int  GlowQuality;                                                // 0 Full, 1 Auto
         int  GlowPersist;                                                // 0..3
     };

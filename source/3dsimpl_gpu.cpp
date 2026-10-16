@@ -900,9 +900,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 const int taps = stereo_glow_spread_taps(spread);
                 const int soft = taps > 0 ? 0 : stereo_glow_clamp_soft(GPU3DS.stereoGlowSoft - tierDrop);
                 const int copies = stereo_glow_copies(soft);
-                const float gain = stereo_glow_copy_gain(GPU3DS.stereoGlowStrength, soft) * GPU3DSExt.glowGainMul;
+                // Threshold Relative (glow_relative.h): the cut and the gain follow the scene's palette bright
+                const bool rel = GPU3DS.stereoGlowRelative != 0 && GPU3DSExt.glowRelRef > 0;
+                const float gain = stereo_glow_copy_gain(GPU3DS.stereoGlowStrength, soft) * GPU3DSExt.glowGainMul * (rel ? GPU3DSExt.glowRelGain : 1.0f);
                 const uint32_t tint = stereo_glow_color_rgb(GPU3DS.stereoGlowColor);
-                const int ref = stereo_glow_alpha_ref(GPU3DS.stereoGlowThresh);
+                const int ref = rel ? GPU3DSExt.glowRelRef : stereo_glow_alpha_ref(GPU3DS.stereoGlowThresh);
                 bool anyGlow = false;
                 // one tier at a time: the glow is depth-tested GEQUAL at the
                 // tier's own plane (a layer in front - larger plane - covers it,

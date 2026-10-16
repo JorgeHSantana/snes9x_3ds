@@ -987,7 +987,7 @@ static int *stereoEditField(int which) {
             case 4: return &p->FocusFront; case 6: return &p->Mode7Persp;
             case 7: return &p->Mode7Fx;
             case 8: return &p->ShadowRows;  case 9: return &p->ShadowX;  case 10: return &p->ShadowY;  case 11: return &p->ShadowColor;  case 13: return &p->ShadowAlpha;  case 14: return &p->ShadowFade;  case 12: return &p->ShadowSoft;  case 15: return &p->ShadowQuality;
-            case 16: return &p->GlowRows;  case 17: return &p->GlowThresh;  case 18: return &p->GlowStrength;  case 19: return &p->GlowSoft;  case 20: return &p->GlowColor;  case 21: return &p->GlowPal;  case 22: return &p->GlowSpread;  case 23: return &p->GlowSource;  case 24: return &p->GlowPersist;  case 26: return &p->GlowQuality;
+            case 16: return &p->GlowRows;  case 17: return &p->GlowThresh;  case 18: return &p->GlowStrength;  case 19: return &p->GlowSoft;  case 20: return &p->GlowColor;  case 21: return &p->GlowPal;  case 22: return &p->GlowSpread;  case 23: return &p->GlowSource;  case 24: return &p->GlowPersist;  case 26: return &p->GlowQuality;  case 27: return &p->GlowRelative;
             default: return &p->EdgeMode;
         }
     }
@@ -997,7 +997,7 @@ static int *stereoEditField(int which) {
         case 4: return &settings3DS.StereoFocusFront; case 6: return &settings3DS.StereoMode7Persp;
         case 7: return &settings3DS.StereoMode7Fx;
         case 8: return &settings3DS.StereoShadowRows;  case 9: return &settings3DS.StereoShadowX;  case 10: return &settings3DS.StereoShadowY;  case 11: return &settings3DS.StereoShadowColor;  case 13: return &settings3DS.StereoShadowAlpha;  case 14: return &settings3DS.StereoShadowFade;  case 12: return &settings3DS.StereoShadowSoft;  case 15: return &settings3DS.StereoShadowQuality;
-        case 16: return &settings3DS.StereoGlowRows;  case 17: return &settings3DS.StereoGlowThresh;  case 18: return &settings3DS.StereoGlowStrength;  case 19: return &settings3DS.StereoGlowSoft;  case 20: return &settings3DS.StereoGlowColor;  case 21: return &settings3DS.StereoGlowPal;  case 22: return &settings3DS.StereoGlowSpread;  case 23: return &settings3DS.StereoGlowSource;  case 24: return &settings3DS.StereoGlowPersist;  case 26: return &settings3DS.StereoGlowQuality;
+        case 16: return &settings3DS.StereoGlowRows;  case 17: return &settings3DS.StereoGlowThresh;  case 18: return &settings3DS.StereoGlowStrength;  case 19: return &settings3DS.StereoGlowSoft;  case 20: return &settings3DS.StereoGlowColor;  case 21: return &settings3DS.StereoGlowPal;  case 22: return &settings3DS.StereoGlowSpread;  case 23: return &settings3DS.StereoGlowSource;  case 24: return &settings3DS.StereoGlowPersist;  case 26: return &settings3DS.StereoGlowQuality;  case 27: return &settings3DS.StereoGlowRelative;
         default: return &settings3DS.StereoEdgeMode;
     }
 }
@@ -1911,7 +1911,7 @@ static void addSceneProfileItems(std::vector<SMenuItem>& items, std::vector<SMen
                             p->Fade = settings3DS.StereoFade; p->Haze = settings3DS.StereoHaze;
                             p->Blur = settings3DS.StereoBlur;
                             p->ShadowRows = settings3DS.StereoShadowRows; p->ShadowX = settings3DS.StereoShadowX; p->ShadowY = settings3DS.StereoShadowY; p->ShadowColor = settings3DS.StereoShadowColor; p->ShadowAlpha = settings3DS.StereoShadowAlpha; p->ShadowFade = settings3DS.StereoShadowFade; p->ShadowSoft = settings3DS.StereoShadowSoft; p->ShadowQuality = settings3DS.StereoShadowQuality;
-                            p->GlowRows = settings3DS.StereoGlowRows; p->GlowThresh = settings3DS.StereoGlowThresh; p->GlowStrength = settings3DS.StereoGlowStrength; p->GlowSoft = settings3DS.StereoGlowSoft; p->GlowColor = settings3DS.StereoGlowColor; p->GlowPal = settings3DS.StereoGlowPal; p->GlowSpread = settings3DS.StereoGlowSpread; p->GlowSource = settings3DS.StereoGlowSource; p->GlowPersist = settings3DS.StereoGlowPersist; p->GlowQuality = settings3DS.StereoGlowQuality;
+                            p->GlowRows = settings3DS.StereoGlowRows; p->GlowThresh = settings3DS.StereoGlowThresh; p->GlowStrength = settings3DS.StereoGlowStrength; p->GlowSoft = settings3DS.StereoGlowSoft; p->GlowColor = settings3DS.StereoGlowColor; p->GlowPal = settings3DS.StereoGlowPal; p->GlowSpread = settings3DS.StereoGlowSpread; p->GlowSource = settings3DS.StereoGlowSource; p->GlowPersist = settings3DS.StereoGlowPersist; p->GlowQuality = settings3DS.StereoGlowQuality; p->GlowRelative = settings3DS.StereoGlowRelative;
                             p->FocusBack = settings3DS.StereoFocusBack;
                             p->FocusFront = settings3DS.StereoFocusFront;
                             p->EdgeMode = settings3DS.StereoEdgeMode;
@@ -2141,6 +2141,9 @@ void makeEffectsMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuT
         AddMenuGauge(items, "  Threshold"_s, 0, STEREO_GLOW_THRESH_MAX, *stereoEditField(17),
             []( int val ) { if (CheckAndUpdate(*stereoEditField(17), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
         stereoHelp(items, "How bright a texel must be to glow (0 = everything,\n15 = only near-white). Luminance of the texel, like\na bloom's bright pass.");
+        AddMenuPicker(items, "  Threshold Mode"_s, "Absolute: the cut is Threshold/16 of white, the same in\nevery scene - a dark scene has nothing above it.\nRelative: the cut is Threshold/16 of the scene's own bright\n(the palette's 90th-percentile luma, tracked over 20 frames),\nand weak lights add more, so the glow lives in dark scenes."_s,
+            makePickerOptions({"Absolute", "Relative"}), *stereoEditField(27), DIALOG_TYPE_INFO, true,
+            []( int val ) { if (CheckAndUpdate(*stereoEditField(27), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } });
         AddMenuGauge(items, "  Strength"_s, 1, STEREO_GLOW_STRENGTH_MAX, *stereoEditField(18),
             []( int val ) { if (CheckAndUpdate(*stereoEditField(18), val)) { settings3dsStereoApplyDefault(); s_stereoPreviewDirty = true; } }, true, true);
         stereoHelp(items, "How much is added, in quarters (4 = the texel's own\ncolour once more).");
@@ -3057,7 +3060,7 @@ void settingsResetStereo3D()
     settings3DS.StereoHaze = 0;
     settings3DS.StereoBlur = 0;
     settings3DS.StereoShadowRows = 0; settings3DS.StereoShadowX = 3; settings3DS.StereoShadowY = -1; settings3DS.StereoShadowColor = 0; settings3DS.StereoShadowAlpha = 3; settings3DS.StereoShadowFade = 0; settings3DS.StereoShadowSoft = 0; settings3DS.StereoShadowQuality = 1;
-    settings3DS.StereoGlowRows = 0; settings3DS.StereoGlowThresh = 12; settings3DS.StereoGlowStrength = 2; settings3DS.StereoGlowSoft = 1; settings3DS.StereoGlowColor = 0; settings3DS.StereoGlowPal = 255; settings3DS.StereoGlowSpread = 1; settings3DS.StereoGlowSource = 1; settings3DS.StereoGlowPersist = 1; settings3DS.StereoGlowQuality = 1;
+    settings3DS.StereoGlowRows = 0; settings3DS.StereoGlowThresh = 12; settings3DS.StereoGlowStrength = 2; settings3DS.StereoGlowSoft = 1; settings3DS.StereoGlowColor = 0; settings3DS.StereoGlowPal = 255; settings3DS.StereoGlowSpread = 1; settings3DS.StereoGlowSource = 1; settings3DS.StereoGlowPersist = 1; settings3DS.StereoGlowQuality = 1; settings3DS.StereoGlowRelative = 1;
     settings3DS.StereoFocusBack = -1;
     settings3DS.StereoFocusFront = 1;
     settings3DS.StereoEdgeMode = 1;   // Trim
@@ -3097,7 +3100,7 @@ void settingsLoadStereo3D()
     int *tHaze = &settings3DS.StereoHaze;
     int *tBlur = &settings3DS.StereoBlur;
     int *tShRows = &settings3DS.StereoShadowRows, *tShX = &settings3DS.StereoShadowX, *tShY = &settings3DS.StereoShadowY, *tShColor = &settings3DS.StereoShadowColor, *tShAlpha = &settings3DS.StereoShadowAlpha, *tShFade = &settings3DS.StereoShadowFade, *tShSoft = &settings3DS.StereoShadowSoft, *tShQual = &settings3DS.StereoShadowQuality;
-    int *tGlRows = &settings3DS.StereoGlowRows, *tGlThresh = &settings3DS.StereoGlowThresh, *tGlStr = &settings3DS.StereoGlowStrength, *tGlSoft = &settings3DS.StereoGlowSoft, *tGlColor = &settings3DS.StereoGlowColor, *tGlPal = &settings3DS.StereoGlowPal, *tGlSpread = &settings3DS.StereoGlowSpread, *tGlSrc = &settings3DS.StereoGlowSource, *tGlPersist = &settings3DS.StereoGlowPersist, *tGlQual = &settings3DS.StereoGlowQuality;
+    int *tGlRows = &settings3DS.StereoGlowRows, *tGlThresh = &settings3DS.StereoGlowThresh, *tGlStr = &settings3DS.StereoGlowStrength, *tGlSoft = &settings3DS.StereoGlowSoft, *tGlColor = &settings3DS.StereoGlowColor, *tGlPal = &settings3DS.StereoGlowPal, *tGlSpread = &settings3DS.StereoGlowSpread, *tGlSrc = &settings3DS.StereoGlowSource, *tGlPersist = &settings3DS.StereoGlowPersist, *tGlQual = &settings3DS.StereoGlowQuality, *tGlRel = &settings3DS.StereoGlowRelative;
     int *tFB = &settings3DS.StereoFocusBack;
     int *tFF = &settings3DS.StereoFocusFront;
     int *tEdge = &settings3DS.StereoEdgeMode;
@@ -3125,10 +3128,10 @@ void settingsLoadStereo3D()
                 p->Fade = p->Haze = p->Blur = 0;
                 p->FocusBack = -1; p->FocusFront = 1; p->EdgeMode = 1; p->Mode7Persp = 8; p->Mode7Fx = 1;
                 p->ShadowRows = 0; p->ShadowX = 3; p->ShadowY = -1; p->ShadowColor = 0; p->ShadowAlpha = 3; p->ShadowFade = 0; p->ShadowSoft = 0; p->ShadowQuality = 1;
-                p->GlowRows = 0; p->GlowThresh = 12; p->GlowStrength = 2; p->GlowSoft = 1; p->GlowColor = 0; p->GlowPal = 255; p->GlowSpread = 1; p->GlowSource = 1; p->GlowPersist = 1; p->GlowQuality = 1;
+                p->GlowRows = 0; p->GlowThresh = 12; p->GlowStrength = 2; p->GlowSoft = 1; p->GlowColor = 0; p->GlowPal = 255; p->GlowSpread = 1; p->GlowSource = 1; p->GlowPersist = 1; p->GlowQuality = 1; p->GlowRelative = 1;
                 tDepth = p->Depth; tDepthP1 = p->DepthP1; tObjHi = p->DepthOBJHi;
                 tShRows = &p->ShadowRows; tShX = &p->ShadowX; tShY = &p->ShadowY; tShColor = &p->ShadowColor; tShAlpha = &p->ShadowAlpha; tShFade = &p->ShadowFade; tShSoft = &p->ShadowSoft; tShQual = &p->ShadowQuality;
-                tGlRows = &p->GlowRows; tGlThresh = &p->GlowThresh; tGlStr = &p->GlowStrength; tGlSoft = &p->GlowSoft; tGlColor = &p->GlowColor; tGlPal = &p->GlowPal; tGlSpread = &p->GlowSpread; tGlSrc = &p->GlowSource; tGlPersist = &p->GlowPersist; tGlQual = &p->GlowQuality;
+                tGlRows = &p->GlowRows; tGlThresh = &p->GlowThresh; tGlStr = &p->GlowStrength; tGlSoft = &p->GlowSoft; tGlColor = &p->GlowColor; tGlPal = &p->GlowPal; tGlSpread = &p->GlowSpread; tGlSrc = &p->GlowSource; tGlPersist = &p->GlowPersist; tGlQual = &p->GlowQuality; tGlRel = &p->GlowRelative;
                 tFade = &p->Fade; tHaze = &p->Haze;
                 tBlur = &p->Blur; tFB = &p->FocusBack; tFF = &p->FocusFront;
                 tEdge = &p->EdgeMode; tM7 = &p->Mode7Persp; tM7Fx = &p->Mode7Fx;
@@ -3243,6 +3246,8 @@ void settingsLoadStereo3D()
             *tGlPersist = v < 0 ? 0 : (v > STEREO_GLOW_PERSIST_MAX ? STEREO_GLOW_PERSIST_MAX : v);
         if (sscanf(line, "GLOWQUALITY=%d", &v) == 1)
             *tGlQual = v != 0;
+        if (sscanf(line, "GLOWREL=%d", &v) == 1)
+            *tGlRel = v != 0;
     }
     fclose(f);
 }
@@ -3277,7 +3282,7 @@ static void settingsWriteStereo3DGlobals(FILE *f)
     fprintf(f, "# drop shadows: 12-bit mask of Depth rows that cast one (BG1P0=1 BG1P1=2 ... OBJP3=2048), offset in px\n");
     fprintf(f, "SHADOW=%d\nSHADOWX=%d\nSHADOWY=%d\nSHADOWCOLOR=%d\nSHADOWALPHA=%d\nSHADOWFADE=%d\nSHADOWSOFT=%d\nSHADOWQUALITY=%d\n", settings3DS.StereoShadowRows, settings3DS.StereoShadowX, settings3DS.StereoShadowY, settings3DS.StereoShadowColor, settings3DS.StereoShadowAlpha, settings3DS.StereoShadowFade, settings3DS.StereoShadowSoft, settings3DS.StereoShadowQuality);
     fprintf(f, "# glow: 12-bit mask of Depth rows whose bright texels glow, threshold 0-15, strength quarters, halo 0-2, tint\n");
-    fprintf(f, "GLOW=%d\nGLOWTHRESH=%d\nGLOWSTRENGTH=%d\nGLOWSOFT=%d\nGLOWCOLOR=%d\nGLOWPAL=%d\nGLOWSPREAD=%d\nGLOWSRC=%d\nGLOWPERSIST=%d\nGLOWQUALITY=%d\n", settings3DS.StereoGlowRows, settings3DS.StereoGlowThresh, settings3DS.StereoGlowStrength, settings3DS.StereoGlowSoft, settings3DS.StereoGlowColor, settings3DS.StereoGlowPal, settings3DS.StereoGlowSpread, settings3DS.StereoGlowSource, settings3DS.StereoGlowPersist, settings3DS.StereoGlowQuality);
+    fprintf(f, "GLOW=%d\nGLOWTHRESH=%d\nGLOWSTRENGTH=%d\nGLOWSOFT=%d\nGLOWCOLOR=%d\nGLOWPAL=%d\nGLOWSPREAD=%d\nGLOWSRC=%d\nGLOWPERSIST=%d\nGLOWQUALITY=%d\nGLOWREL=%d\n", settings3DS.StereoGlowRows, settings3DS.StereoGlowThresh, settings3DS.StereoGlowStrength, settings3DS.StereoGlowSoft, settings3DS.StereoGlowColor, settings3DS.StereoGlowPal, settings3DS.StereoGlowSpread, settings3DS.StereoGlowSource, settings3DS.StereoGlowPersist, settings3DS.StereoGlowQuality, settings3DS.StereoGlowRelative);
 }
 
 // Writes the current game's LOOK (depths/focus/effects/edge) as the global
@@ -3320,7 +3325,7 @@ void settingsSaveStereo3D()
         fprintf(f, "FOCUSBACK=%d\nFOCUSFRONT=%d\nEDGEMODE=%d\nM7PERSP=%d\nM7FX=%d\n",
             p->FocusBack, p->FocusFront, p->EdgeMode, p->Mode7Persp, p->Mode7Fx);
         fprintf(f, "SHADOW=%d\nSHADOWX=%d\nSHADOWY=%d\nSHADOWCOLOR=%d\nSHADOWALPHA=%d\nSHADOWFADE=%d\nSHADOWSOFT=%d\nSHADOWQUALITY=%d\n", p->ShadowRows, p->ShadowX, p->ShadowY, p->ShadowColor, p->ShadowAlpha, p->ShadowFade, p->ShadowSoft, p->ShadowQuality);
-        fprintf(f, "GLOW=%d\nGLOWTHRESH=%d\nGLOWSTRENGTH=%d\nGLOWSOFT=%d\nGLOWCOLOR=%d\nGLOWPAL=%d\nGLOWSPREAD=%d\nGLOWSRC=%d\nGLOWPERSIST=%d\nGLOWQUALITY=%d\n", p->GlowRows, p->GlowThresh, p->GlowStrength, p->GlowSoft, p->GlowColor, p->GlowPal, p->GlowSpread, p->GlowSource, p->GlowPersist, p->GlowQuality);
+        fprintf(f, "GLOW=%d\nGLOWTHRESH=%d\nGLOWSTRENGTH=%d\nGLOWSOFT=%d\nGLOWCOLOR=%d\nGLOWPAL=%d\nGLOWSPREAD=%d\nGLOWSRC=%d\nGLOWPERSIST=%d\nGLOWQUALITY=%d\nGLOWREL=%d\n", p->GlowRows, p->GlowThresh, p->GlowStrength, p->GlowSoft, p->GlowColor, p->GlowPal, p->GlowSpread, p->GlowSource, p->GlowPersist, p->GlowQuality, p->GlowRelative);
     }
     if (settings3DS.StereoWatchAddr >= 0)
         fprintf(f, "WATCH=%X\n", settings3DS.StereoWatchAddr);
@@ -4432,7 +4437,7 @@ void emulatorLoop()
                 // submission, the shadow/glow phase inside it - the rest is
                 // input, audio, the blit and the pacer
                 const u64 N = (u64)s_frameLoadN, TPU = 268111856ull / 1000000ull;   // ticks per us (SYSCLOCK_ARM11)
-                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d sh=%d gm=%d src=%d spread=%d halo=%d persist=%d | us/frame core=%u (ppu=%u) draw=%u fx=%u",
+                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d sh=%d gm=%d src=%d spread=%d halo=%d persist=%d rel=%d bright=%d | us/frame core=%u (ppu=%u) draw=%u fx=%u",
                     s_frameLoadN,
                     (int)(s_frameLoad.average_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
                     (int)(s_frameLoad.maximum_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
@@ -4440,7 +4445,7 @@ void emulatorLoop()
                     GPU3DSExt.shadowDraws / (unsigned)s_frameLoadN, GPU3DSExt.shadowSoftLevel, (unsigned)GPU3DS.stereoShadowRows,
                     GPU3DSExt.glowDraws / (unsigned)s_frameLoadN, (unsigned)GPU3DS.stereoGlowRows,
                     GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.StereoEdgeMode, settings3DS.ShadowsMode, settings3DS.GlowMode,
-                    GPU3DS.stereoGlowSource, GPU3DS.stereoGlowSpread, GPU3DS.stereoGlowSoft, GPU3DS.stereoGlowPersist,
+                    GPU3DS.stereoGlowSource, GPU3DS.stereoGlowSpread, GPU3DS.stereoGlowSoft, GPU3DS.stereoGlowPersist, GPU3DS.stereoGlowRelative, GPU3DSExt.glowRelBright,
                     (unsigned)(GPU3DSExt.coreTicks / N / TPU), (unsigned)(GPU3DSExt.ppuTicks / N / TPU), (unsigned)(GPU3DSExt.drawTicks / N / TPU), (unsigned)(GPU3DSExt.fxTicks / N / TPU));
                 s_frameLoad.reset(); s_frameLoadN = 0; s_frameOver = 0; s_frameSkips = 0; GPU3DSExt.shadowDraws = 0; GPU3DSExt.glowDraws = 0;
                 GPU3DSExt.coreTicks = GPU3DSExt.ppuTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = 0;

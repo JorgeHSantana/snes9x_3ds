@@ -37,6 +37,7 @@
 #include "3dsblurauto.h"
 #include "shadow_auto.h"
 #include "glow_auto.h"
+#include "glow_relative.h"
 #include "screen_grade.h"
 #include "sram_save.h"
 #include "3dssram.h"
@@ -992,6 +993,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 static BlurAutoState s_blurAuto;   // zero-init == blurAutoReset
 static ShadowAutoState s_shadowAuto;   // Shadow Quality (shadow_auto.h)
 static GlowAutoState s_glowAuto;       // Glow Quality (glow_auto.h)
+static GlowRelState s_glowRel;         // Glow Threshold Relative (glow_relative.h)
 
 #ifdef PROBE_FBDUMP
 int g_probeFrames = 0;   // frames since the ROM loaded (the probes above/below read it)
@@ -1032,6 +1034,12 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		GPU3DSExt.glowGainMul = s_glowAuto.gainMul;
 		if (s_glowAuto.drop != wasDrop)
 			log3dsWrite("[glow] auto drop -> %d", s_glowAuto.drop);
+		// Threshold Relative: the palette's bright, tracked
+		if (firstFrame) glowRelReset(&s_glowRel);
+		glowRelStep(&s_glowRel, glow_rel_bright(PPU.CGDATA, 256));
+		GPU3DSExt.glowRelBright = (int)s_glowRel.bright;
+		GPU3DSExt.glowRelRef = glow_rel_ref(GPU3DS.stereoGlowThresh, s_glowRel.bright);
+		GPU3DSExt.glowRelGain = glow_rel_gain(s_glowRel.bright);
 	}
 
 	// per-scene 3D profiles (issue #23): match the PPU scene signature and
