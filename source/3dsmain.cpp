@@ -1833,9 +1833,15 @@ static void stereo3dIdleTick()
         return;
     }
 
+    // the slider is an analogue read that jitters on the console: compared
+    // raw it re-rendered the scene (two eyes, two framebuffers, shadows and
+    // glow) on EVERY menu frame with the cursor on a row - "the menu is
+    // slow" (Jorge, 2026-10-17). A move smaller than 1/32 of its travel is
+    // noise, not a nudge.
+    const float sliderDelta = slider > s_stereoPrevSlider ? slider - s_stereoPrevSlider : s_stereoPrevSlider - slider;
     bool redraw = s_stereoPreviewDirty
         || wantKey != s_stereoPrevHighlight
-        || slider != s_stereoPrevSlider;
+        || sliderDelta > (1.0f / 32.0f);
     if (!redraw)
         return;
 
