@@ -17,7 +17,9 @@ static const MenuHelpProbeCase MENU_HELP_PROBE_CASES[] = {
     {TAB_EFFECTS, "  Source"},
     {TAB_EFFECTS, "  Rename Profile"},
     {TAB_EFFECTS, "  Quality"},
-    {TAB_EFFECTS, "  Enabled"}
+    {TAB_EFFECTS, "  Enabled"},
+    {TAB_EFFECTS, "  Threshold Mode"},
+    {TAB_EFFECTS, "  Saturation"}
 };
 static size_t menu_help_probe_case = 0;
 

@@ -18,6 +18,9 @@ Feedback and bug reports are welcome.
 * Stereoscopic 3D with per-layer **and per-priority** depth: each BG's two tile priorities and each of the four sprite priorities get their own gauge, plus a focus zone with distance effects (fade, haze, depth-of-field blur), Edge Cleanup, and Enhanced Resolution rendering — all with zero extra draw calls (Old 3DS friendly)
 * **Mode 7 perspective**: the ground plane of Mode 7 games (Mario Kart, F-Zero, Pilotwings) recedes in 3D scanline by scanline instead of standing up like a wall - automatic on Mode 7 screens, a top-down map stays flat; a gauge in the 3D tab sets the strength, and with Effects by Distance the fade, haze and blur grow towards the horizon
 * **Sprites follow the Mode 7 ground**: a kart or an item standing on the plane takes the depth of the row under its feet, between Ground Near and Ground Far; hardware sprites that touch count as one character, and anything not on the ground (a flying enemy, a HUD item) can be unticked in the editor's sprite list, saved per game
+* **Effects** tab: **drop shadows** per depth row (a silhouette of the row cast onto the layer behind it in 3D, with offset, opacity, fade by distance, soft edge and an automatic quality controller), a **glow** (bright-pass bloom: the whole screen or chosen rows and sprite palettes, with threshold - absolute or relative to the scene's own brightness -, strength, spread, halo, persistence and tint) and an output **colour grade** (saturation, contrast, brightness)
+* Shadows and glow are saved per scene profile, so a title screen and a stage can light differently; each block has an Enabled switch (glow: Off / 3D only / Always)
+* **Send Screenshot to GitHub**: both eyes as PNGs in a comment of your log issue, with the effect settings in the title, for remote diagnosis
 * Live 3D editor in a dedicated **3D Stereo** tab: focusing a gauge spotlights exactly its tiles on the top screen, values move the paused frame in real time, and holding X previews the full scene
 * Scene Profiles (experimental): capture a screen and its own 3D configuration is applied automatically whenever that screen shows up
 * Self-updater: check and install new builds (Stable or Nightly channel) from inside the emulator, with optional check-on-boot
@@ -286,6 +289,40 @@ that only one eye can see). **Trim** (default) crops those columns; **Zoom**
 hides them by slightly enlarging the image; **Off** leaves them visible.
 The setting lives in the tab's Settings section and applies to the whole
 game — every layer, every Scene Profile.
+
+### The Effects tab: shadows, glow and colour
+
+The **Effects** tab shares the Scene Profiles block with 3D Stereo (the
+same profiles, the same Capture / Release) and adds three blocks. Every
+gauge previews live on the top screen while you move it.
+
+* **Shadows** (needs the 3D slider up). Set **Enabled** to On and check the
+  rows that should cast: each checked row draws a silhouette of itself
+  onto the row behind it in depth, offset by **Offset X / Y**, as dark as
+  **Opacity** says. **Fade by Distance** lightens a shadow the further its
+  row sits from the receiver; **Soft Edge** blurs the edge (Light: four
+  passes, Full: nine); **Quality** Auto lets the Soft Edge step down when
+  the game drops frames, and "Auto, Off under load" fades the shadow out
+  entirely on a heavy screen. Defaults: off, offset 3 / -1, opacity 3.
+* **Glow**. **Enabled** is Off, 3D only or Always (the glow works in 2D
+  too). **Source** "Whole screen" is the default: everything brighter than
+  the **Threshold** glows, HUD included. **Threshold Mode** Relative
+  (default) measures the cut against the scene's own brightness, read from
+  the SNES palette every frame, so a dark stage still glows; Absolute is a
+  fixed cut. **Strength** is how much light is added, **Spread** how far
+  it leaks (a quarter-resolution blur), **Halo** the cheaper in-place
+  alternative, **Persistence** keeps part of the last frame's glow (a
+  flash blinks alike in both eyes), **Tint** colours it. **Quality** Auto
+  drops the Halo and the Spread one level per load tier with a smooth
+  crossfade. "Marked rows" instead glows only the checked rows and sprite
+  palettes, hidden by layers in front of them.
+* **Color**: saturation, contrast and brightness of the final image,
+  -4..+4 each, saved per game (default saturation 1, brightness -1).
+
+Everything is stored in the game's `.3d` file next to the depths
+(`SHADOW*`, `GLOW*`, `SHADOWS`, `GLOWMODE`, `COLOR*`); see
+[docs/effects.md](docs/effects.md) for how the shadows and the glow are
+drawn and what they cost.
 
 ### Scene Profiles: the exceptions
 

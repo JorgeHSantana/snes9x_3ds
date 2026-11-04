@@ -44,6 +44,15 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   appearance-only invalidation, snapshot workspace (#78, #79); crash
   fixes (post-update exit, caching indicator on an empty list); dead
   ground-sprite code and the redundant Mode 7 Depth Mode removed.
+* **Stable v2.6 (2026-11-04)** — The Effects tab (#77 closed): glow as a
+  bright-pass bloom (whole screen or marked rows/palettes, quarter-res
+  Spread target with per-eye Persistence, Threshold Relative to the
+  palette's bright, Quality Auto crossfaded), output colour grade, Shadows
+  and Glow Enabled switches, Jorge's defaults, the scene-profile block
+  shared with 3D Stereo, Send Screenshot to GitHub, a `[perf][frame]` line
+  with per-phase CPU time (the field answer: the core is the cost, not the
+  effects). MSU-1: a play write while playing no longer restarts the
+  track. Menu: the preview no longer re-renders on slider jitter.
 * **Stable v2.5 (2026-10-15)** — Drop shadows per depth row in 3D (#77, the
   shadow part): the caster drawn once more at the receiver's depth plane
   with an EQUAL depth test before colour math (the depth buffer already
@@ -169,10 +178,11 @@ and pending hardware evidence. These deliveries do not close #78/#79/#63.
 | 81 | Envio GitHub: log inteiro e escolha do arquivo | ABERTA | continuação da #80: vários comentários ou Gist; logs de sessões anteriores; confirmação com tamanho |
 | 82 | Verificar o certificado TLS da api.github.com | ABERTA | updater e envio rodam com VERIFYPEER=0; embutir a cadeia raiz (CAINFO_BLOB) ou pinning; medir handshake no Old |
 | 83 | Envio de log para servidor próprio (LAN/nuvem) | ABERTA | proposta original da #80; POST cru para URL configurável, receptor em tools/ |
-| 77 | 3D: sombra por linha de profundidade (e glow) | ABERTA (sombra na Stable v2.5) | v4 por depth EQUAL no plano do receptor; Opacity, Fade, Soft Edge, Shadow Quality; Stretch e Small Sprites Only removidos; glow por luminância na nightly 2026-10-15; falta a cor na saída e o experimento de bloom no New |
+| 77 | 3D: sombra por linha de profundidade (e glow) | FECHADA (Stable v2.6) | v4 por depth EQUAL no plano do receptor; Opacity, Fade, Soft Edge, Shadow Quality; Stretch e Small Sprites Only removidos; glow por luminância, Spread a 1/4 de resolução, Persistence por olho, Threshold Relative, Quality Auto com crossfade; cor na saída (sat/con/bri); aba Effects com perfis; Send Screenshot; chaves Enabled por bloco; defaults do Jorge |
 | 84 | Mostrar o changelog no emulador (opção após atualizar) | ABERTA | pedido 2026-09-27 |
 | 85 | Editor 3D: prévia do blur em Full, não no tier do Auto | ABERTA | pedido 2026-09-27 |
 | 86 | Sincronizar com o upstream matbo87 | ABERTA | vblank pacer, tile cache 2 bancos, rcheevos, SuperFX ASM; plano de merge na issue; próximo depois do bloom |
 | 87 | 3D: sombra achatada ao horizonte no plano de Mode 7 | ABERTA | quarta melhoria da lista do #77; uniform (h, k) no shader, só receptor Mode 7 |
 | 88 | 3D: perfil de cena por modelo (New / Old) | ABERTA | fallback para perfil sem modelo; critério pelo clock efetivo, não pelo modelo; depois do bloom e do #86 |
+| 90 | Widescreen hack: BGs e Mode 7 até 373 px | ABERTA | desenho opt-in por jogo, limitações do bsnes-hd; decidir antes/depois da estável |
 | 89 | 3D: sombra "sempre" (tudo atrás) ou só na camada anterior | ABERTA | modo "sempre" = uma passada com depth LESS no plano do caster; picker Shadow Lands On |

@@ -2,6 +2,8 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+
+## Stable v2.6 (2026-11-04)
 ### Features
 - **Glow Threshold Mode: Relative** (default for new profiles, `GLOWREL`):
   the cut is Threshold/16 of the scene's own bright - the SNES palette's

@@ -9,7 +9,7 @@
     "AutoSaveLoad": "0"
   },
   "probe": "PROBE_MENU_HELP",
-  "cases": 14,
+  "cases": 16,
   "regions": {
     "menu_body": [
       0,

@@ -13,6 +13,7 @@ Generated 2026-08-08 from source analysis of the codebase at version **v1.61** (
 | [Platform Layer](platform-layer.md) | `3dsmain`, `3dsimpl`, `3dsgpu`, input, files, config, and the other `3ds*` modules |
 | [Emulation Core](emulation-core.md) | Snes9x 1.43 provenance, 65c816 CPU, APU/SPC700, PPU, memory map, DMA/HDMA |
 | [Rendering Pipeline](rendering.md) | GPU-accelerated PPU: tile cache, shaders, layer batching, Mode 7, composition |
+| [Effects](effects.md) | Drop shadows, glow and colour grade: how they are drawn, costs, `.3d` keys, diagnostics |
 | [Mode 7 in 3D](mode7-3d.md) | The Mode 7 work in full: perspective, sprites on the ground, editor, proofs, decisions, open items |
 | [Audio and Timing](audio-and-timing.md) | NDSP pipeline, mixing thread, LCD refresh retuning, frame pacing |
 | [Settings and Storage](settings-and-storage.md) | Global vs per-game settings, config file format, SD card layout |
@@ -29,7 +30,7 @@ Generated 2026-08-08 from source analysis of the codebase at version **v1.61** (
 
 * **What**: SNES emulator for Nintendo 3DS/2DS (all models); the SNES PPU runs on the 3DS GPU (PICA200).
 * **Lineage**: Snes9x 1.43 core → bubble2k16/snes9x_3ds → matbo87/snes9x_3ds (upstream) → this fork.
-* **Current version**: Stable v2.4 (2026-09-27; app metadata `2.4.0`, product code `CTR-P-SNSX`); see CHANGELOG.md and docs/journal/HISTORY.md.
+* **Current version**: Stable v2.6 (2026-11-04; app metadata `2.6.0`, product code `CTR-P-SNSX`); see CHANGELOG.md and docs/journal/HISTORY.md.
 * **Language/toolchain**: C++17 (gnu++17), devkitARM, libctru, patched citro3d v1.7.1.
 * **ROM formats**: `.smc`, `.sfc`, `.fig`, `.bs`, `.bsx`, and `.zip` (one ROM inside; MSU-1 packs as virtual entries).
 * **Data root on console**: `sd:/3ds/snes9x_3ds/`.
