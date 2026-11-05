@@ -526,9 +526,15 @@ uint32_t msu3dsAudioReadaheadRead(uint32_t pos, uint8_t* dst, uint32_t count, bo
     return got;
 }
 
+// read by the read-ahead thread to pace itself: 8 ms with an MSU-1 game,
+// 50 ms otherwise (it woke and took ra_lock on syscore every 8 ms for nothing)
+static std::atomic<bool> g_audio_ra_active{false};
+bool msu3dsAudioReadaheadActive(void) { return g_audio_ra_active.load(); }
+
 void msu3dsAudioReadaheadTick(void)
 {
     if (!g_audio_ra.ring.valid()) { return; }
+    g_audio_ra_active = MSU1.enabled;
 
     ra_lock();
     bool adopt = g_audio_ra.adopt_pending;

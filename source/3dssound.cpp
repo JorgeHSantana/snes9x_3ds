@@ -48,7 +48,7 @@ static void msuRaThreadFn(void*)
     while (!terminateMsuRaThread)
     {
         msu3dsAudioReadaheadTick();
-        svcSleepThread(8 * 1000 * 1000LL);
+        svcSleepThread((msu3dsAudioReadaheadActive() ? 8 : 50) * 1000 * 1000LL);
     }
 }
 

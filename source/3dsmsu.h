@@ -48,6 +48,7 @@ void     msu3dsFillAudio(void);                 // mixing thread, under snesAcce
 void     msu3dsAudioReadaheadInit(uint8_t* storage, uint32_t capacity);
 void     msu3dsAudioReadaheadLocks(void (*lock)(void), void (*unlock)(void));
 void     msu3dsAudioReadaheadTick(void);
+bool     msu3dsAudioReadaheadActive(void);   // an MSU-1 game is loaded: poll fast
 void     msu3dsAudioReadaheadStop(void);
 uint32_t msu3dsAudioReadaheadRead(uint32_t pos, uint8_t* dst, uint32_t count, bool* alive);
 uint32_t msu3dsGetUnderrunCount(void);
