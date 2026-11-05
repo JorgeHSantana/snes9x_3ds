@@ -4,6 +4,17 @@
 #ifndef _apu_h_
 #define _apu_h_
 
+// SPC700 idle skip (the 1.43 SPC700_SHUTDOWN): a read of the CPU ports
+// $F4-$F7 or the timer outputs $FD-$FF records the reading instruction
+// (WaitAddress1/2); a branch back onto it with nothing else going on
+// (WaitCounter == 0: no INC/DEC in the loop, no timer tick or port write
+// since the last pass) jumps APU.Cycles to the end of the current run,
+// which is the next timer tick or the CPU's current cycle - exactly where
+// the polled value can change. Shares Settings.Shutdown with the CPU skip.
+#define SPC700_SHUTDOWN
+extern int32 g_apuNextEvent;   // S9xUpdateAPUTimer's current run limit
+extern uint32 g_apuSkips;      // skips taken, perf line aidle=
+
 #include "spc700.h"
 
 

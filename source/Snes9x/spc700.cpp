@@ -48,15 +48,14 @@ long Int32 = 0;
 #define OP2 (*(IAPU.PC + 2))
 
 #ifdef SPC700_SHUTDOWN
+// see apu.h: the skip lands one cycle past the run limit so the execute
+// loop's "APU.Cycles > nextEventCycles" breaks out
 #define APUShutdown() \
 if (Settings.Shutdown && (IAPU.PC == IAPU.WaitAddress1 || IAPU.PC == IAPU.WaitAddress2)) \
 { \
 	if (IAPU.WaitCounter == 0) \
 	{ \
-		if (!ICPU.CPUExecuting) \
-			S9xAPUExecute(); \
-		else \
-			IAPU.APUExecuting = FALSE; \
+		if (APU.Cycles <= g_apuNextEvent) { APU.Cycles = g_apuNextEvent + 1; g_apuSkips++; } \
 	} \
 	else \
 	if (IAPU.WaitCounter >= 2) \

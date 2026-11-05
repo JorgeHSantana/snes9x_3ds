@@ -940,12 +940,16 @@ inline void S9xIncrementAPUTimers()
 }
 
 
+int32 g_apuNextEvent = 0;
+uint32 g_apuSkips = 0;
+
 void S9xUpdateAPUTimer (void)
 {
 	//int opcodesExecuted = 0;
 	int32 nextEventCycles = IAPU.NextAPUTimerPosDiv10000;
 	if (nextEventCycles >= CPU.Cycles)
 		nextEventCycles = CPU.Cycles;
+	g_apuNextEvent = nextEventCycles;
 	//printf ("S9xAPUTimer:\n");
 	while (true)
 	{
@@ -990,6 +994,7 @@ void S9xUpdateAPUTimer (void)
 			nextEventCycles = IAPU.NextAPUTimerPosDiv10000;
 			if (nextEventCycles >= CPU.Cycles)
 				nextEventCycles = CPU.Cycles;
+			g_apuNextEvent = nextEventCycles;
 		}
 		else 
 		{
