@@ -358,6 +358,7 @@ struct SSettings{
 
 struct SSNESGameFixes
 {
+    uint8 IdleLoopBlocked;      // memmap.cpp: this title breaks with the idle-loop skip (idle_skip.h)
     uint8 alienVSpredetorFix;
     uint8 cuonpaFix;
     uint8 APU_OutPorts_ReturnValueFix;

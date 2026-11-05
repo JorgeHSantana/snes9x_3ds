@@ -46,6 +46,7 @@ register uint8 *fastCPUPC asm ("r9");
 #endif
 
 
+uint32 g_idleSkips = 0;
 #include "cpuexec-ops.h"
 
 inline void __attribute__ ((always_inline)) S9xHandleFlags()

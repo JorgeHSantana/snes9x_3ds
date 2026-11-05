@@ -3437,6 +3437,7 @@ void CMemory::ApplyROMFixes ()
 		strncmp(ROMName, "WAR 2410", 8)==0)
     {
 		Settings.Shutdown = FALSE;
+		SNESGameFixes.IdleLoopBlocked = 1;
     }
 	
 

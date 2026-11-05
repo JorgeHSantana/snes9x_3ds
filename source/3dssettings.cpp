@@ -94,6 +94,7 @@ void settings3dsResetGameDefaults() {
     settings3DS.FrameSync = Setting::FrameSync::VBlank;
     settings3DS.PaletteFix = 0;
     settings3DS.PaletteDeferBgMask = 0;
+    settings3DS.IdleLoopSkip = 1;
     settings3DS.Mode7BilinearFilter = false;
 
     memset(settings3DS.LayerEnabled, true, sizeof(settings3DS.LayerEnabled));
@@ -214,6 +215,12 @@ void settings3dsUpdate(bool includeGameSettings)
 
         if (settings3DS.PaletteFix == 0)
             settings3DS.PaletteFix = settings3dsGetGameDefaultPaletteFix();
+
+        // idle-loop skip: never with SA-1 (lockstep with the main CPU) nor
+        // for the titles memmap.cpp blocks; the master flag is what the
+        // ROM loader copies at the next load
+        Settings.ShutdownMaster = settings3DS.IdleLoopSkip != 0;
+        Settings.Shutdown = Settings.ShutdownMaster && !Settings.SA1 && !SNESGameFixes.IdleLoopBlocked;
 
         if (settings3DS.PaletteFix == 1)
             SNESGameFixes.PaletteCommitLine = -2;

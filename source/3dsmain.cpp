@@ -40,6 +40,7 @@
 #include "3dsmsu_ndsp.h"
 #include "3dsgpu.h"
 #include "3dsimpl.h"
+extern uint32 g_idleSkips;   // cpuexec.cpp: idle-loop skips (idle_skip.h)
 #include "3dsui.h"
 #include "3dsui_notif.h"
 #include "3dslcd.h"
@@ -1664,6 +1665,10 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     items.back().PickerDescription = "Forces SRAM to be written when pausing.\nSome games, such as Yoshi's Island, require\nthis to save correctly.";
 
+    AddMenuCheckbox(items, "  Skip Idle Loops"_s, settings3DS.IdleLoopSkip,
+        []( int val ) { if (CheckAndUpdate( settings3DS.IdleLoopSkip, (u8)val )) settings3dsUpdate(true); });
+    items.back().PickerDescription = "Jumps ahead while the game only waits for\nthe next frame. Faster. Disable if a game\nhangs, stutters or its music breaks.";
+
     AddMenuDisabledOption(items, ""_s);
 
     // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
@@ -2808,6 +2813,10 @@ bool settingsReadWriteFullListByGame(bool writeMode)
         config3dsReadWriteInt32(stream, writeMode, "Msu1Volume=%d\n", &settings3DS.Msu1Volume, 0, 8);
         if (detectedConfigVersion >= 1.8f)
             settings3DS.Msu1Volume += 4;    // v1.8 scale was 0..4 = 100%..200%
+    }
+
+    if (writeMode || detectedConfigVersion >= 2.0f) {
+        config3dsReadWriteEnum(stream, writeMode, "IdleLoopSkip=%d\n", &settings3DS.IdleLoopSkip, 0, 1);
     }
 
     config3dsReadWriteInt32(stream, writeMode, "Frameskips=%d\n", &settings3DS.MaxFrameSkips, 0, 4);
@@ -4442,7 +4451,7 @@ void emulatorLoop()
                 // submission, the shadow/glow phase inside it - the rest is
                 // input, audio, the blit and the pacer
                 const u64 N = (u64)s_frameLoadN, TPU = 268111856ull / 1000000ull;   // ticks per us (SYSCLOCK_ARM11)
-                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d sh=%d gm=%d src=%d spread=%d halo=%d persist=%d rel=%d bright=%d | us/frame core=%u (ppu=%u) draw=%u fx=%u flush=%u gpuwait=%u",
+                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d sh=%d gm=%d src=%d spread=%d halo=%d persist=%d rel=%d bright=%d | us/frame core=%u (ppu=%u) draw=%u fx=%u flush=%u gpuwait=%u idle=%u",
                     s_frameLoadN,
                     (int)(s_frameLoad.average_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
                     (int)(s_frameLoad.maximum_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
@@ -4452,9 +4461,9 @@ void emulatorLoop()
                     GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.StereoEdgeMode, settings3DS.ShadowsMode, settings3DS.GlowMode,
                     GPU3DS.stereoGlowSource, GPU3DS.stereoGlowSpread, GPU3DS.stereoGlowSoft, GPU3DS.stereoGlowPersist, GPU3DS.stereoGlowRelative, GPU3DSExt.glowRelBright,
                     (unsigned)(GPU3DSExt.coreTicks / N / TPU), (unsigned)(GPU3DSExt.ppuTicks / N / TPU), (unsigned)(GPU3DSExt.drawTicks / N / TPU), (unsigned)(GPU3DSExt.fxTicks / N / TPU),
-                    (unsigned)(GPU3DSExt.flushTicks / N / TPU), (unsigned)(GPU3DSExt.gpuWaitTicks / N / TPU));
+                    (unsigned)(GPU3DSExt.flushTicks / N / TPU), (unsigned)(GPU3DSExt.gpuWaitTicks / N / TPU), (unsigned)(g_idleSkips / (uint32)N));
                 s_frameLoad.reset(); s_frameLoadN = 0; s_frameOver = 0; s_frameSkips = 0; GPU3DSExt.shadowDraws = 0; GPU3DSExt.glowDraws = 0;
-                GPU3DSExt.coreTicks = GPU3DSExt.ppuTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = GPU3DSExt.flushTicks = GPU3DSExt.gpuWaitTicks = 0;
+                GPU3DSExt.coreTicks = GPU3DSExt.ppuTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = GPU3DSExt.flushTicks = GPU3DSExt.gpuWaitTicks = 0; g_idleSkips = 0;
             }
         }
 

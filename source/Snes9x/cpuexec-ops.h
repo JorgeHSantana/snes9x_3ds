@@ -27,6 +27,13 @@ END_EXTERN_C
 #define Int16   OCPU.Int16
 #define Int32   OCPU.Int32
 */
+
+#ifndef SA1_OPCODES
+#define CPU_IDLE_SKIP   // idle_skip.h: the wait mark lives in CPU.WaitAddress
+#endif
+#include "../idle_skip.h"
+extern uint32 g_idleSkips;   // skips taken, read by the perf line (idle=)
+
 uint8 TempAns8;
 uint16 TempAns16;
 uint32 TempAns32;
@@ -213,7 +220,13 @@ INLINE uint8 __attribute__((always_inline)) CpuGetByte (uint32 Address)
     CPU_Cycles += CPU.MemorySpeed [block];
 	
     if (GetAddress >= (uint8 *) CMemory::MAP_LAST)
+    {
+#ifdef CPU_IDLE_SKIP
+        if (Memory.BlockIsRAM [block])
+            CPU.WaitAddress = CPU_PC;   // a flag the NMI handler will set: idle_skip.h
+#endif
         return (*(GetAddress + (Address & 0xffff)));
+    }
     else 
     {
         CpuSaveFastRegisters();
@@ -237,6 +250,10 @@ INLINE uint16 __attribute__((always_inline)) CpuGetWord (uint32 Address)
 
         if (GetAddress >= (uint8 *) CMemory::MAP_LAST)
         {
+#ifdef CPU_IDLE_SKIP
+            if (Memory.BlockIsRAM [block])
+                CPU.WaitAddress = CPU_PC;
+#endif
             return (*(uint16 *) (GetAddress + (Address & 0xffff)));
         }
 
@@ -255,6 +272,9 @@ INLINE uint16 __attribute__((always_inline)) CpuGetWord (uint32 Address)
 
 INLINE void __attribute__((always_inline)) CpuSetByte (uint8 Byte, uint32 Address)
 {
+#ifdef CPU_IDLE_SKIP
+    CPU.WaitAddress = NULL;   // a loop that writes is not idle
+#endif
     int block;
     uint8 *SetAddress = CPU.MemoryWriteMap [block = ((Address >> MEMMAP_SHIFT) & MEMMAP_MASK)];
 
@@ -274,6 +294,9 @@ INLINE void __attribute__((always_inline)) CpuSetByte (uint8 Byte, uint32 Addres
 
 INLINE void __attribute__((always_inline)) CpuSetByteWakeSA1 (uint8 Byte, uint32 Address)
 {
+#ifdef CPU_IDLE_SKIP
+    CPU.WaitAddress = NULL;
+#endif
     int block;
     uint8 *SetAddress = CPU.MemoryWriteMap [block = ((Address >> MEMMAP_SHIFT) & MEMMAP_MASK)];
 
@@ -1558,7 +1581,7 @@ STATIC inline void __attribute__((always_inline)) A_DEC16 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1571,7 +1594,7 @@ STATIC inline void __attribute__((always_inline)) A_DEC8 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1589,7 +1612,7 @@ STATIC inline void __attribute__((always_inline)) DEC16 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1605,7 +1628,7 @@ STATIC inline void __attribute__((always_inline)) DEC8 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1624,7 +1647,7 @@ STATIC inline void __attribute__((always_inline)) DEC16WakeSA1 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1640,7 +1663,7 @@ STATIC inline void __attribute__((always_inline)) DEC8WakeSA1 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1676,7 +1699,7 @@ STATIC inline void __attribute__((always_inline)) A_INC16 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1689,7 +1712,7 @@ STATIC inline void __attribute__((always_inline)) A_INC8 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1707,7 +1730,7 @@ STATIC inline void __attribute__((always_inline)) INC16 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1723,7 +1746,7 @@ STATIC inline void __attribute__((always_inline)) INC8 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1742,7 +1765,7 @@ STATIC inline void __attribute__((always_inline)) INC16WakeSA1 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -1758,7 +1781,7 @@ STATIC inline void __attribute__((always_inline)) INC8WakeSA1 ()
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -5589,8 +5612,24 @@ inline void CPUShutdown()
 }
 #endif
 #else*/
+#ifdef CPU_IDLE_SKIP
+// idle_skip.h: a taken backward branch onto a polling read jumps to the
+// next event. Not with a pending NMI/IRQ (a delayed interrupt flashed Top
+// Gear 3000 in 1.43), and Settings.Shutdown is off for SA-1 games and the
+// ones memmap.cpp marks (the SA-1 runs in lockstep with the loop).
+STATIC inline void __attribute__((always_inline)) CPUShutdown ()
+{
+    if (idle_skip_hit((unsigned long)CPU_PC, (unsigned long)CPU.WaitAddress)
+        && Settings.Shutdown
+        && !(CPU.Flags & (IRQ_PENDING_FLAG | NMI_FLAG)))
+    {
+        CPU_Cycles = CPU.NextEvent;
+        g_idleSkips++;
+    }
+}
+#else
 #define CPUShutdown()
-//#endif
+#endif
 
 /* BCC */
 static void Op90 (void)
@@ -5802,7 +5841,7 @@ static void OpCAX1 (void)
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -5815,7 +5854,7 @@ static void OpCAX0 (void)
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -5828,7 +5867,7 @@ static void Op88X1 (void)
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -5841,7 +5880,7 @@ static void Op88X0 (void)
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -5856,7 +5895,7 @@ static void OpE8X1 (void)
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -5869,7 +5908,7 @@ static void OpE8X0 (void)
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -5882,7 +5921,7 @@ static void OpC8X1 (void)
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -5895,7 +5934,7 @@ static void OpC8X0 (void)
 #ifndef SA1_OPCODES
     CPU_Cycles += ONE_CYCLE;
 #endif
-#ifdef CPU_SHUTDOWN
+#ifdef CPU_IDLE_SKIP
     CPU.WaitAddress = NULL;
 #endif
 
@@ -6620,6 +6659,9 @@ void S9xOpcode_IRQ (void)
     if (CPU.Flags & TRACE_FLAG)
 	S9xTraceMessage ("*** IRQ");
 #endif
+#ifdef CPU_IDLE_SKIP
+    CPU.WaitAddress = NULL;
+#endif
     //SA1.isInIdleLoop = false;
     //SA1.Executing = !SA1.Waiting;
 
@@ -6690,6 +6732,9 @@ void S9xOpcode_NMI (void)
 #ifdef DEBUGGER
     if (CPU.Flags & TRACE_FLAG)
 	S9xTraceMessage ("*** NMI");
+#endif
+#ifdef CPU_IDLE_SKIP
+    CPU.WaitAddress = NULL;
 #endif
     //SA1.isInIdleLoop = false;
     //SA1.Executing = !SA1.Waiting;

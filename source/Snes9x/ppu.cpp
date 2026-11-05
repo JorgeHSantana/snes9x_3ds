@@ -1484,6 +1484,7 @@ uint8 S9xGetPPU (uint16 Address)
 	    IAPU.APUExecuting = Settings.APUEnabled;
 	    IAPU.WaitCounter++;
 #endif
+	    CPU.WaitAddress = CPU.PC;   // idle_skip.h: APU handshake loop
 	    /*if (Settings.APUEnabled)
 	    {
 #ifdef CPU_SHUTDOWN
@@ -1605,10 +1606,8 @@ uint8 S9xGetPPU (uint16 Address)
 	else
 	    byte = Memory.FillRAM [Address];
 
-#ifdef CPU_SHUTDOWN
 	if (Address == 0x3030)
-	    CPU.WaitAddress = CPU.PCAtOpcodeStart;
-#endif	
+	    CPU.WaitAddress = CPU.PC;   // idle_skip.h
 	if (Address == 0x3031)
 	    CLEAR_IRQ_SOURCE (GSU_IRQ_SOURCE);
 #else
@@ -1616,13 +1615,11 @@ uint8 S9xGetPPU (uint16 Address)
 
 //if (Address != 0x3030 && Address != 0x3031)
 //printf ("%04x\n", Address);
-#ifdef CPU_SHUTDOWN
 	if (Address == 0x3030)
 	{
-	    CPU.WaitAddress = CPU.PCAtOpcodeStart;
+	    CPU.WaitAddress = CPU.PC;   // idle_skip.h: GSU-busy loop
 	}
 	else
-#endif
 	if (Address == 0x3031)
 	{
 	    CLEAR_IRQ_SOURCE (GSU_IRQ_SOURCE);
@@ -2306,9 +2303,7 @@ uint8 S9xGetCPU (uint16 Address)
 		return OpenBus;
 
 	  case 0x4210:
-#ifdef CPU_SHUTDOWN
-		CPU.WaitAddress = CPU.PCAtOpcodeStart;
-#endif	
+		CPU.WaitAddress = CPU.PC;   // idle_skip.h: NMI-wait loop
 		byte = Memory.FillRAM[0x4210];
 		Memory.FillRAM[0x4210] = Model->_5A22;
 		//SNEeSe returns 2 for 5A22 version.
@@ -2327,9 +2322,7 @@ uint8 S9xGetCPU (uint16 Address)
 
 	  case 0x4212:
 		// V-blank, h-blank and joypads being read flags (read-only)
-#ifdef CPU_SHUTDOWN
-		CPU.WaitAddress = CPU.PCAtOpcodeStart;
-#endif
+		CPU.WaitAddress = CPU.PC;   // idle_skip.h: vblank/hblank-wait loop
 		return (REGISTER_4212()|(OpenBus&0x3E));
 
 	  case 0x4213:
