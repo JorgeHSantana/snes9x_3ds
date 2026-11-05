@@ -2,6 +2,24 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+### Fixes
+- **Menu speed**: the generic menu loop compared the raw 3D slider every
+  frame (the v2.6 fix only covered the 3D tab's live preview), so with the
+  slider off its detent the jitter re-rendered the paused game screen on
+  most frames in every tab. Now the same 1/32 hysteresis everywhere; the
+  "Press START to resume" caption is not re-rasterized when unchanged; the
+  log is flushed once on menu entry instead of per frame; a ROM without a
+  thumbnail no longer re-searches the index on every redraw; the 3D/Effects
+  live preview draws the scene once instead of twice per cursor move.
+### Performance
+- The right-eye pass is skipped when every layer sits at depth 0 and
+  shadows are off (both eyes read the same texture).
+- MSU-1: the data-track SD read no longer runs under the mixer's lock, so
+  FMV games don't stall the emulation thread behind it.
+- HBLANK_END walks the deferred $212C-$2131 list only on scanlines that
+  saw a write; the SuperFX call is gated at the caller.
+- Release build: `-DNDEBUG` (dr_flac asserts off) and `-fno-math-errno`.
+
 
 ## Stable v2.6 (2026-11-04)
 ### Features
