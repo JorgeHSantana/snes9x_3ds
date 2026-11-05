@@ -320,6 +320,7 @@ END_EXTERN_C
 struct LayerRenderState {
     bool   allowDefer;                  // true only during a REGISTER_2122 FLUSH
     uint16 changedPalette16Mask;        // palette-16 windows mutated since last FLUSH
+    bool   changedOBJ;                  // OAM / OBSEL mutated since last FLUSH: only the OBJ layer needs this section
     uint32 startY[5];                   // per-layer next-line-to-render cursor
     bool   shouldRenderThisSegment[5];  // gate decision this segment
     uint32 resetFrame;                  // last frame the cursors were reset
@@ -373,6 +374,19 @@ STATIC inline void FLUSH_REDRAW ()
     }
 }
 
+// OAM and OBSEL only change what the sprite layer draws: the flush renders
+// OBJ up to this line and lets the BGs defer, like a palette-only flush
+// does (a 3-line section cost ~190 us because the BG tile-row walk is paid
+// per section; Mario Kart had 3 of its 8 sections per frame from OAM).
+STATIC inline void FLUSH_REDRAW_OBJ ()
+{
+    LayerRender.changedOBJ = true;
+    LayerRender.allowDefer = true;
+    FLUSH_REDRAW ();
+    LayerRender.allowDefer = false;
+}
+
+
 // One low-table OAM word (already known to differ), after the flush:
 // the same update REGISTER_2104 makes on its second byte. Shared with the
 // DMA word path (dma.cpp, oam_dma.h).
@@ -412,7 +426,7 @@ STATIC inline void REGISTER_2104 (uint8 byte)
     {
         int addr = ((PPU.OAMAddr & 0x10f) << 1) + (PPU.OAMFlip & 1);
         if (byte != PPU.OAMData [addr]){
-            DEBUG_FLUSH_REDRAW(0x2104, byte); FLUSH_REDRAW ();
+            DEBUG_FLUSH_REDRAW(0x2104, byte); FLUSH_REDRAW_OBJ ();
             PPU.OAMData [addr] = byte;
             IPPU.OBJChanged = TRUE;
 
@@ -456,7 +470,7 @@ STATIC inline void REGISTER_2104 (uint8 byte)
         if (lowbyte != PPU.OAMData [addr] ||
             highbyte != PPU.OAMData [addr+1])
         {
-            DEBUG_FLUSH_REDRAW(0x2104, byte); FLUSH_REDRAW ();
+            DEBUG_FLUSH_REDRAW(0x2104, byte); FLUSH_REDRAW_OBJ ();
             S9xOamWriteLowWord (addr, lowbyte, highbyte);
         }
         PPU.OAMFlip &= ~1;

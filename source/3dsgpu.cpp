@@ -567,11 +567,12 @@ void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
 bool gpu3dsFrameBegin(u8 flags, bool ingame, bool isSecondScreen)
 {
     t3dsStartTimer(TIMER_GPU_WAIT);
-    if (!C3D_FrameBegin(flags)) {
-        t3dsStopTimer(TIMER_GPU_WAIT);
-        return false;
-    }
+    const u64 waitTick0 = svcGetSystemTick();
+    const bool began = C3D_FrameBegin(flags);
+    GPU3DSExt.gpuWaitTicks += svcGetSystemTick() - waitTick0;
     t3dsStopTimer(TIMER_GPU_WAIT);
+    if (!began)
+        return false;
 
     // invalidate so next gpu3dsApplyRenderState re-applies the target
     GPU3DS.appliedRenderState.target = TARGET_UNSET;
@@ -586,7 +587,9 @@ bool gpu3dsFrameBegin(u8 flags, bool ingame, bool isSecondScreen)
 void gpu3dsFrameEnd(u8 flags)
 {
     t3dsStartTimer(TIMER_FLUSH);
+    const u64 flushTick0 = svcGetSystemTick();
     C3D_FrameEnd(flags);
+    GPU3DSExt.flushTicks += svcGetSystemTick() - flushTick0;
     t3dsStopTimer(TIMER_FLUSH);
 #ifdef PROBE_DRAW_STATS
     if (++s_probeFrames == 60) {

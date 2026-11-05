@@ -4043,18 +4043,21 @@ void S9xUpdateScreenHardware ()
 		LayerRender.resetFrame = ICPU.Frame;
 	}
 
-	// Per-layer deferral gate. Only REGISTER_2122 sets allowDefer, so every
-	// other flush force-renders all layers -- deferred ranges catch up before
+	// Per-layer deferral gate. REGISTER_2122 (palette) and the OAM/OBSEL
+	// writes (FLUSH_REDRAW_OBJ) set allowDefer; every other flush
+	// force-renders all layers -- deferred ranges catch up before
 	// non-palette PPU state (e.g. BG scroll $210D..$2114) takes effect.
 	const bool forceAllLayers = !LayerRender.allowDefer || isLastSection;
 	const uint16 changedMask = LayerRender.changedPalette16Mask;
+	const bool changedOBJ = LayerRender.changedOBJ;
 	bool anyLayerDeferred = false;
 	for (int i = 0; i < 5; i++) {
 		if (forceAllLayers) {
 			LayerRender.shouldRenderThisSegment[i] = true;
 		} else {
 			const uint16 used = (i == LAYER_OBJ) ? 0xff00u : S9xComputeBgPalette16UsedMask(i);
-			LayerRender.shouldRenderThisSegment[i] = (changedMask & used) != 0;
+			LayerRender.shouldRenderThisSegment[i] = (changedMask & used) != 0
+				|| (i == LAYER_OBJ && changedOBJ);
 
 			// The used-mask is a conservative over-estimate: it keeps rendering a
 			// BG segment for CGRAM entries the layer never actually samples, so the
@@ -4069,6 +4072,7 @@ void S9xUpdateScreenHardware ()
         	anyLayerDeferred = true;
 	}
 	LayerRender.changedPalette16Mask = 0;
+	LayerRender.changedOBJ = false;
 
 	// Sprite line lists on demand (obj_lines.h): a change rebuilds from
 	// this section's first line, later sections extend the valid range as

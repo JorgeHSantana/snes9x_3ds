@@ -40,6 +40,7 @@ extern uint8 *HDMAMemPointers [8];
 struct LayerRenderState LayerRender = {
     /* allowDefer */                false,
     /* changedPalette16Mask */      0,
+    /* changedOBJ */                false,
     /* startY */                    { 0, 0, 0, 0, 0 },
     /* shouldRenderThisSegment */   { true, true, true, true, true },
     /* resetFrame */                0xFFFFFFFFu,
@@ -226,7 +227,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			// Sprite (OBJ) tile address
 			if (Byte != Memory.FillRAM [0x2101])
 			{
-				DEBUG_FLUSH_REDRAW(Address, Byte); FLUSH_REDRAW ();
+				DEBUG_FLUSH_REDRAW(Address, Byte); FLUSH_REDRAW_OBJ ();
 				PPU.OBJNameBase   = (Byte & 3) << 14;
 				PPU.OBJNameSelect = ((Byte >> 3) & 3) << 13;
 				PPU.OBJSizeSelect = (Byte >> 5) & 7;
