@@ -19,6 +19,8 @@ typedef struct {
     u8 borderSize, paddingX, paddingY;
 
     char text[64];
+    char syncedText[64];   // what the texture currently holds
+    bool syncedBold;
     Notif::Event event;
     Notif::Type type;
     bool dirty;
@@ -212,7 +214,12 @@ void notif3dsTrigger(Notif::Event event, Notif::Type type, gfxScreen_t screen, d
     u64 durationTicks = (u64)(durationInMs * CPU_TICKS_PER_MSEC);
     notifMsg.visibleUntil = svcGetSystemTick() + durationTicks;
 
-    notifMsg.dirty = true;
+    // the texture already holds this text (the menu re-arms "Press START
+    // to resume" on every game-screen redraw): skip the software
+    // rasterize, the cache flush and the blocking display transfer
+    const bool bold = event == Notif::Paused;
+    notifMsg.dirty = bold != notifMsg.syncedBold
+        || strcmp(notifMsg.text, notifMsg.syncedText) != 0;
 }
 
 // basically like notif3dsTrigger but only for the FPS overlay, 
@@ -245,6 +252,8 @@ void notif3dsSync() {
     if (notifMsg.event != Notif::None && notifMsg.dirty) {
         notifMsg.textWidth = notif3dsSyncTexture(UI_NOTIF_MSG, notifMsg.text, notifMsg.textColor,
             notifMsg.event == Notif::Paused);
+        snprintf(notifMsg.syncedText, sizeof(notifMsg.syncedText), "%s", notifMsg.text);
+        notifMsg.syncedBold = notifMsg.event == Notif::Paused;
         notifMsg.dirty = false;
     }
 

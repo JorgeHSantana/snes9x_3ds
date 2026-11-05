@@ -937,9 +937,12 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
         currentTab = &dialogTab;
     }
 
+    // no game runs in the menu, so the tail can go out now - but once:
+    // per iteration it was two context switches with the writer thread
+    // plus an SD write on the UI thread whenever a line had been logged
+    log3dsFlush();
     while (aptMainLoop())
     {
-        log3dsFlush();   // no game runs in the menu: the tail costs nothing here
         if (GPU3DS.emulatorState == EMUSTATE_END)
         {
             returnResult = -1;
@@ -1261,7 +1264,10 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
 
         float iod = gpu3dsGetIOD();
 
-        if (!isDialog && iod != s_prevIOD) {
+        // same 1/32 hysteresis as the 3D tab's idle tick (b6c8272): compared
+        // raw, the jitter re-rendered both eyes plus a blocking caption
+        // transfer on most frames, in every tab
+        if (!isDialog && gpu3dsSliderMoved(s_prevIOD, iod, gpu3dsGetIODBase() / 32.0f)) {
             gameScreenDirty = true;
             s_prevIOD = iod;
         }

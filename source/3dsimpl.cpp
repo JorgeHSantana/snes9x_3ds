@@ -1296,19 +1296,24 @@ void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
     // two passes fill BOTH framebuffers of the double-buffered game
     // screen - a single one shows only on the right swap parity, which
     // read as "sometimes it works" in the field
+    // the scene (both eyes, shadows, glow) is drawn into the SNES_MAIN
+    // textures once; the second pass only composites those again - it
+    // used to redraw everything twice per cursor move
     for (int buf = 0; buf < 2; buf++) {
         gpu3dsFrameBegin(0, true);
         float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
-        GPU3DS.stereoRightPass = false;
-        GPU3DS.stereoEyeIOD = slider;
-        GPU3DS.appliedRenderState.target = TARGET_UNSET;
-        gpu3dsDrawSnesScreen();
-        if (slider != 0.0f) {
-            GPU3DS.stereoRightPass = true;
-            GPU3DS.stereoEyeIOD = -slider;
+        if (buf == 0) {
+            GPU3DS.stereoRightPass = false;
+            GPU3DS.stereoEyeIOD = slider;
             GPU3DS.appliedRenderState.target = TARGET_UNSET;
             gpu3dsDrawSnesScreen();
-            GPU3DS.stereoRightPass = false;
+            if (slider != 0.0f) {
+                GPU3DS.stereoRightPass = true;
+                GPU3DS.stereoEyeIOD = -slider;
+                GPU3DS.appliedRenderState.target = TARGET_UNSET;
+                gpu3dsDrawSnesScreen();
+                GPU3DS.stereoRightPass = false;
+            }
         }
         // pausedLook routes through the same presentation the pause
         // uses - dim and "Press START to resume" - so leaving the

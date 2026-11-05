@@ -674,6 +674,22 @@ bool gpu3dsClearScreen(gfxScreen_t screen, bool isTopStereo = false);
 
 float gpu3dsGetIOD();
 float gpu3dsGetIODBase();
+
+// the 3D slider is an analogue read that jitters on the console: compared
+// raw it re-rendered the game screen on most menu frames (Jorge: the menu
+// is slow). A move under `step` is noise; crossing zero always counts (it
+// toggles the right-eye pass); prev < 0 means never sampled.
+static inline bool gpu3dsSliderMoved(float prev, float now, float step)
+{
+    if (prev < 0.0f)
+        return true;
+    if ((prev == 0.0f) != (now == 0.0f))
+        return true;
+    float d = now - prev;
+    if (d < 0.0f)
+        d = -d;
+    return d > step;
+}
 bool gpu3dsIs3DAvailable();
 bool gpu3dsIsWideAvailable();
 bool gpu3dsSetTopMode(); // Returns true if the applied gfx state changed

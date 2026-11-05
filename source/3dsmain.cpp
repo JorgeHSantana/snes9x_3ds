@@ -1838,10 +1838,9 @@ static void stereo3dIdleTick()
     // glow) on EVERY menu frame with the cursor on a row - "the menu is
     // slow" (Jorge, 2026-10-17). A move smaller than 1/32 of its travel is
     // noise, not a nudge.
-    const float sliderDelta = slider > s_stereoPrevSlider ? slider - s_stereoPrevSlider : s_stereoPrevSlider - slider;
     bool redraw = s_stereoPreviewDirty
         || wantKey != s_stereoPrevHighlight
-        || sliderDelta > (1.0f / 32.0f);
+        || gpu3dsSliderMoved(s_stereoPrevSlider, slider, 1.0f / 32.0f);
     if (!redraw)
         return;
 

@@ -85,6 +85,7 @@ static const size_t thumbPixelBufferSize = thumbMaxWidth * thumbMaxHeight * size
 
 static u16 currentThumbWidth, currentThumbHeight;   // dimensions of whatever currently sits in thumbPixelBuffer
 static u16 cacheThumbWidth, cacheThumbHeight;       // fixed values, read from cache header on load
+static u32 missedThumbID;                           // last id looked up and NOT found (no re-search per redraw)
 static u32 currentThumbID;                          // hash of the image in thumbPixelBuffer; 0 = nothing valid loaded
 static u32 thumbTotalCount;
 
@@ -695,6 +696,7 @@ void img3dsSetThumbMode() {
     cacheThumbHeight = 0;
     thumbTotalCount = 0;
     currentThumbID = 0;
+    missedThumbID = 0;
 
     memset(thumbPixelBuffer, 0, thumbPixelBufferSize);
 
@@ -788,6 +790,12 @@ bool img3dsLoadThumb(const char* romName) {
     if (id == currentThumbID) {
         return true;
     }
+    // a ROM without a thumb: the buffer is already cleared for it. Without
+    // this the file tab repeated the index search and the memset on every
+    // redraw while the cursor sat on it
+    if (id == missedThumbID) {
+        return false;
+    }
 
     u32 fileOffset = 0;
     u16 w = 0, h = 0;
@@ -820,6 +828,7 @@ bool img3dsLoadThumb(const char* romName) {
         currentThumbHeight = cacheThumbHeight;
         memset(thumbPixelBuffer, 0, thumbPixelBufferSize);
         currentThumbID = 0;
+        missedThumbID = id;
         thumbFound = false;
     }
 
