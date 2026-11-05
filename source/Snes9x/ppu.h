@@ -119,6 +119,7 @@ struct InternalPPU {
     // Helps in reducing number of FLUSH_REDRAWs per frame.
     //
     int                             DeferredRegisterWrite[0x100];    
+    bool                            DeferredRegisterPending;   // a write landed this scanline: HBLANK_END walks the list only then
 };
 
 struct SOBJ

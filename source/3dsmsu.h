@@ -33,6 +33,8 @@ void     msu3dsSetUserVolume(float factor);     // MSU-1 balance gauge, v*0.25 (
 void     msu3dsDataPrefetchInit(uint8_t* storage, uint32_t capacity);
 void     msu3dsDataPrefetchLocks(void (*lock)(void), void (*unlock)(void));
 void     msu3dsDataPrefetchFill(void);
+void     msu3dsDataPrefetchTick(void);
+void     msu3dsDataPrefetchProducerLocks(void (*lock)(void), void (*unlock)(void));   // serialises the fill against init/teardown          // mixing thread, OUTSIDE snesAccessLock
 uint32_t msu3dsDataPrefetchRead(uint32_t pos, uint8_t* dst, uint32_t count);
 void     msu3dsFillAudio(void);                 // mixing thread, under snesAccessLock
 

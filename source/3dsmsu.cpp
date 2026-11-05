@@ -101,11 +101,22 @@ void ring_close_producer(void)
 
 constexpr uint32_t PREFETCH_MAX_FILL_PER_TICK = 32 * 1024;
 
+// serialises the producer's file handle between the fill (mixing thread,
+// outside snesAccessLock since the SD read took several ms with the emu
+// thread blocked on port writes behind it) and init/teardown (emu thread)
+// (hooks like the ring lock: null on the host tests)
+void (*g_prod_lock)(void) = nullptr;
+void (*g_prod_unlock)(void) = nullptr;
+inline void prod_lock(void)   { if (g_prod_lock)   { g_prod_lock(); } }
+inline void prod_unlock(void) { if (g_prod_unlock) { g_prod_unlock(); } }
+
 } // namespace
 
 void msu3dsDataPrefetchInit(uint8_t* storage, uint32_t capacity)
 {
+    prod_lock();
     ring_close_producer();
+    prod_unlock();
     g_ring.buf = (capacity > 0) ? storage : nullptr;
     g_ring.cap = (storage != nullptr) ? capacity : 0;
     ring_lock();
@@ -117,6 +128,12 @@ void msu3dsDataPrefetchLocks(void (*lock)(void), void (*unlock)(void))
 {
     g_ring.lock = lock;
     g_ring.unlock = unlock;
+}
+
+void msu3dsDataPrefetchProducerLocks(void (*lock)(void), void (*unlock)(void))
+{
+    g_prod_lock = lock;
+    g_prod_unlock = unlock;
 }
 
 uint32_t msu3dsDataPrefetchRead(uint32_t pos, uint8_t* dst, uint32_t count)
@@ -145,7 +162,23 @@ uint32_t msu3dsDataPrefetchRead(uint32_t pos, uint8_t* dst, uint32_t count)
     return served;
 }
 
+static void msu3dsDataPrefetchFillLocked(void);
+
 void msu3dsDataPrefetchFill(void)
+{
+    prod_lock();
+    msu3dsDataPrefetchFillLocked();
+    prod_unlock();
+}
+
+// mixing thread, after snesAccessLock is released
+void msu3dsDataPrefetchTick(void)
+{
+    if (!g_bridge.initialized || g_bridge.drain_active) { return; }
+    msu3dsDataPrefetchFill();
+}
+
+static void msu3dsDataPrefetchFillLocked(void)
 {
     if (g_ring.buf == nullptr) { return; }
     if (!MSU1.enabled || MSU1.data_size == 0 || MSU1.base_path[0] == '\0') {
@@ -260,7 +293,6 @@ void msu3dsFillAudio(void)
     // (RomUnload / SavestateLoaded) execute inside drain windows, so never
     // concurrently with a backend queue_buffer call.
     if (g_bridge.drain_active) { return; }
-    msu3dsDataPrefetchFill();
     if (!MSU1.enabled) { return; }        // zero-cost path when no MSU-1 game is loaded
     const bool playing = (MSU1.status & MSU1_FLAG_AUDIO_PLAYING) != 0;
     // Menu/APT pause must FREEZE the track position (spec section 6 row 1):

@@ -84,6 +84,9 @@ uint8_t*  g_prefetch_ring = nullptr;
 LightLock g_prefetch_lock;
 void prefetch_lock(void)   { LightLock_Lock(&g_prefetch_lock); }
 void prefetch_unlock(void) { LightLock_Unlock(&g_prefetch_lock); }
+LightLock g_producer_lock;   // the fill's file handle vs init/teardown, now that the fill runs outside snesAccessLock
+void producer_lock(void)   { LightLock_Lock(&g_producer_lock); }
+void producer_unlock(void) { LightLock_Unlock(&g_producer_lock); }
 } // namespace
 
 bool msu3dsNdspInstall(void)
@@ -100,7 +103,9 @@ bool msu3dsNdspInstall(void)
         g_prefetch_ring = (uint8_t*)malloc(PREFETCH_RING_BYTES);
         if (g_prefetch_ring != nullptr) {
             LightLock_Init(&g_prefetch_lock);
+            LightLock_Init(&g_producer_lock);
             msu3dsDataPrefetchLocks(prefetch_lock, prefetch_unlock);
+            msu3dsDataPrefetchProducerLocks(producer_lock, producer_unlock);
             msu3dsDataPrefetchInit(g_prefetch_ring, PREFETCH_RING_BYTES);
         }
         // allocation failure: prefetch stays disabled, phase-A behavior

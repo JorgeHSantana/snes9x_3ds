@@ -160,6 +160,10 @@ void snd3dsMixSamples()
     msu3dsFillAudio();
 
     LightLock_Unlock(&snd3DS.snesAccessLock);
+
+    // the data-track SD read (up to 32 KB) ran under the lock above and the
+    // emu thread waited behind it on every MSU port 3/5/6/7 write
+    msu3dsDataPrefetchTick();
 }
 
 

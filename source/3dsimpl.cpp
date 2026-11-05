@@ -967,7 +967,8 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 	if (stereoActive) {
 		GPU3DS.activeSide = GFX_RIGHT;
 		GPU3DS.appliedRenderState.target = TARGET_UNSET;
-		impl3dsSceneRenderEye(firstFrame, paused, list, vpR, false, balancedFilterEnabled, iod, SNES_MAIN_RIGHT);
+		impl3dsSceneRenderEye(firstFrame, paused, list, vpR, false, balancedFilterEnabled, iod,
+			GPU3DS.stereoRightShared ? SNES_MAIN : SNES_MAIN_RIGHT);
 		GPU3DS.activeSide = GFX_LEFT;
 	}
 #else
@@ -979,7 +980,7 @@ void impl3dsSceneRender(bool firstFrame, bool paused) {
 		GPU3DS.appliedRenderState.target = TARGET_UNSET;
 
 		impl3dsSceneRenderEye(firstFrame, paused, list, gameScreenViewport, drawBackground, balancedFilterEnabled, iod,
-			SNES_MAIN_RIGHT);
+			GPU3DS.stereoRightShared ? SNES_MAIN : SNES_MAIN_RIGHT);
 
 		GPU3DS.activeSide = GFX_LEFT;
 	}
@@ -1145,7 +1146,14 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			GPU3DS.stereoRightPass = false;
 			GPU3DS.stereoEyeIOD = slider;
     		gpu3dsDrawSnesScreen();
-			if (slider != 0.0f) {
+			// every layer at depth 0 and no shadows (the only per-eye
+			// effect, its light side flips): the right eye would be a
+			// pixel-identical redraw, so the composite reads the left
+			// texture twice instead
+			const bool rightNeeded = slider != 0.0f
+				&& (GPU3DS.stereoMaxAbs > 0.0f || settings3DS.ShadowsMode != 0);
+			GPU3DS.stereoRightShared = slider != 0.0f && !rightNeeded;
+			if (rightNeeded) {
 				GPU3DS.stereoRightPass = true;
 				GPU3DS.stereoEyeIOD = -slider;
 				GPU3DS.appliedRenderState.target = TARGET_UNSET;
@@ -1303,6 +1311,7 @@ void impl3dsStereoPreviewFrame(int highlightLayer, int highlightPrio,
         gpu3dsFrameBegin(0, true);
         float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
         if (buf == 0) {
+            GPU3DS.stereoRightShared = false;
             GPU3DS.stereoRightPass = false;
             GPU3DS.stereoEyeIOD = slider;
             GPU3DS.appliedRenderState.target = TARGET_UNSET;

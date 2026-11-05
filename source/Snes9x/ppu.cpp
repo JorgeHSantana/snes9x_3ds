@@ -743,6 +743,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			// returns the Open Bus value.
 			// 
 			IPPU.DeferredRegisterWrite[Address - 0x2100] = Byte;
+			IPPU.DeferredRegisterPending = true;
 			return;		
 
 			/*			
@@ -762,6 +763,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			// returns the Open Bus value.
 			// 
 			IPPU.DeferredRegisterWrite[Address - 0x2100] = Byte;
+			IPPU.DeferredRegisterPending = true;
 			return;		
 
 			/*			
@@ -785,6 +787,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			// returns the Open Bus value.
 			// 
 			IPPU.DeferredRegisterWrite[Address - 0x2100] = Byte;
+			IPPU.DeferredRegisterPending = true;
 			return;		
 
 			/*			
@@ -802,6 +805,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			// returns the Open Bus value.
 			// 
 			IPPU.DeferredRegisterWrite[Address - 0x2100] = Byte;
+			IPPU.DeferredRegisterPending = true;
 			return;		
 
 			/*
@@ -819,6 +823,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			// returns the Open Bus value.
 			// 
 			IPPU.DeferredRegisterWrite[Address - 0x2100] = Byte;
+			IPPU.DeferredRegisterPending = true;
 			return;		
 
 /*
@@ -840,6 +845,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			// returns the Open Bus value.
 			// 
 			IPPU.DeferredRegisterWrite[Address - 0x2100] = Byte;
+			IPPU.DeferredRegisterPending = true;
 			return;		
 
 			/*			
@@ -2759,6 +2765,7 @@ void S9xResetPPU ()
 
 	for (int i = 0; i < 0x100; i++)
 		IPPU.DeferredRegisterWrite[i] = 0xff00;	
+	IPPU.DeferredRegisterPending = false;
 		
 	S9xInitializeVerticalSections();
 }
@@ -2978,6 +2985,7 @@ void S9xSoftResetPPU ()
 
 	for (int i = 0; i < 0x100; i++)
 		IPPU.DeferredRegisterWrite[i] = 0xff00;	
+	IPPU.DeferredRegisterPending = false;
 
 	S9xInitializeVerticalSections();
 }

@@ -384,12 +384,19 @@ void S9xDoHBlankProcessing ()
 
 		/*-----------------------------------------------------*/
     	case HBLANK_END_EVENT:
-			S9xSuperFXExec ();
+			if (Settings.SuperFX)
+				S9xSuperFXExec ();
 			
 			S9xUpdateAPUTimer();
 			//APU_EXECUTE();
 
 			static const int addr[] = { 0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31 };
+
+			// the six-entry walk below ran on every scanline; most lines see
+			// no $212C-$2131 write at all
+			if (IPPU.DeferredRegisterPending)
+			{
+			IPPU.DeferredRegisterPending = false;
 
 			// Optimization, for a small number of PPU registers,
 			// we will trigger the FLUSH_REDRAW here instead of
@@ -445,11 +452,7 @@ void S9xDoHBlankProcessing ()
 					IPPU.DeferredRegisterWrite[a] = 0xff00;
 				}
 			}
-
-		#ifndef STORM
-			if (Settings.SoundSync)
-				S9xGenerateSound ();
-		#endif
+			}   // DeferredRegisterPending
 
 			CPU.PrevCycles -= Settings.H_Max;
 			CPU.Cycles -= Settings.H_Max;

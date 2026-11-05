@@ -344,6 +344,7 @@ typedef struct
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
+    bool                        stereoRightShared;   // right pass skipped this frame (flat profile, no shadows): composite reads SNES_MAIN for both eyes
     // false when the optional right-eye VRAM texture failed to allocate;
     // gates the whole stereo path off (gpu3dsGetIOD returns 0)
     bool                        stereoTexAvailable;
