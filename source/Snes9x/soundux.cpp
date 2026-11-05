@@ -3094,7 +3094,7 @@ void S9xGenerateSilenceIntoTempBuffer(int sample_count)
 
 
 inline void __attribute__((always_inline)) S9xApplyMasterAndEchoWithNoFilter(
-	bool echo_write_enabled, int *pJ, signed short *leftBuffer, signed short *rightBuffer, int *finalMasterVolume, int *finalEchoVolume)
+	bool echo_write_enabled, int *pJ, signed short *leftBuffer, signed short *rightBuffer, int *finalMasterVolume, int *finalEchoVolume, bool interleaved)
 {
 	// Left
 	int I;
@@ -3120,7 +3120,7 @@ inline void __attribute__((always_inline)) S9xApplyMasterAndEchoWithNoFilter(
 	I = (MixBuffer[J] * finalMasterVolume[0] + E * finalEchoVolume[0]) >> 7;
 	CLIP16(I);
 
-	((int16 *) leftBuffer) [J >> 1] = I;
+	((int16 *) leftBuffer) [interleaved ? J : (J >> 1)] = I;
 	J++;
 
 	// Right
@@ -3145,7 +3145,7 @@ inline void __attribute__((always_inline)) S9xApplyMasterAndEchoWithNoFilter(
 	I = (MixBuffer[J] * finalMasterVolume[1] + E * finalEchoVolume[1]) >> 7;
 	CLIP16(I);
 
-	((int16 *) rightBuffer) [J >> 1] = I;
+	((int16 *) rightBuffer) [interleaved ? J : (J >> 1)] = I;
 	J++;	
 
 	*pJ = J;
@@ -3153,7 +3153,7 @@ inline void __attribute__((always_inline)) S9xApplyMasterAndEchoWithNoFilter(
 
 
 inline void __attribute__((always_inline)) S9xApplyMasterAndEchoWithFilter(
-	bool echo_write_enabled, int *pJ, signed short *leftBuffer, signed short *rightBuffer, int *finalMasterVolume, int *finalEchoVolume)
+	bool echo_write_enabled, int *pJ, signed short *leftBuffer, signed short *rightBuffer, int *finalMasterVolume, int *finalEchoVolume, bool interleaved)
 {
 	int I;
 	int J = *pJ;
@@ -3186,7 +3186,7 @@ inline void __attribute__((always_inline)) S9xApplyMasterAndEchoWithFilter(
 	I = (MixBuffer[J] * finalMasterVolume[0] + E * finalEchoVolume[0]) >> 7;
 	CLIP16(I);
 
-	((int16 *) leftBuffer) [J >> 1] = I;
+	((int16 *) leftBuffer) [interleaved ? J : (J >> 1)] = I;
 	J++;
 
 	// Right
@@ -3219,13 +3219,16 @@ inline void __attribute__((always_inline)) S9xApplyMasterAndEchoWithFilter(
 	I = (MixBuffer[J] * finalMasterVolume[1] + E * finalEchoVolume[1]) >> 7;
 	CLIP16(I);
 
-	((int16 *) rightBuffer) [J >> 1] = I;
+	((int16 *) rightBuffer) [interleaved ? J : (J >> 1)] = I;
 	J++;	
 
 	*pJ = J;
 }
 
-void S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(signed short *leftBuffer, signed short *rightBuffer, int sample_count)
+// interleaved: leftBuffer == rightBuffer == the stereo output, L at even J
+// and R at odd J - the NDSP wavebuf is written in this one pass instead of
+// two staging streams plus a copy (the 3DS mixer runs on the syscore slice)
+void S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(signed short *leftBuffer, signed short *rightBuffer, int sample_count, bool interleaved)
 {
 	int J;
 
@@ -3235,8 +3238,13 @@ void S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(signed short *leftBuff
 		// 16-bit sound
 		if (so.mute_sound)
 		{
-			memset (leftBuffer, 0, sample_count);
-			memset (rightBuffer, 0, sample_count);
+			if (interleaved)
+				memset (leftBuffer, 0, sample_count * sizeof(int16));
+			else
+			{
+				memset (leftBuffer, 0, (sample_count >> 1) * sizeof(int16));
+				memset (rightBuffer, 0, (sample_count >> 1) * sizeof(int16));
+			}
 		}
 		else
 		{
@@ -3259,8 +3267,8 @@ void S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(signed short *leftBuff
 							// ... but no filter defined.
 							for (J = 0; J < sample_count; )
 							{
-								S9xApplyMasterAndEchoWithNoFilter(true, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume);
-								S9xApplyMasterAndEchoWithNoFilter(true, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume);
+								S9xApplyMasterAndEchoWithNoFilter(true, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume, interleaved);
+								S9xApplyMasterAndEchoWithNoFilter(true, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume, interleaved);
 							}
 						}
 						else
@@ -3268,8 +3276,8 @@ void S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(signed short *leftBuff
 							// ... with filter defined.
 							for (J = 0; J < sample_count; )
 							{
-								S9xApplyMasterAndEchoWithFilter(true, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume);
-								S9xApplyMasterAndEchoWithFilter(true, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume);
+								S9xApplyMasterAndEchoWithFilter(true, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume, interleaved);
+								S9xApplyMasterAndEchoWithFilter(true, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume, interleaved);
 							}
 						}
 					}
@@ -3282,8 +3290,8 @@ void S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(signed short *leftBuff
 							// ... but no filter defined.
 							for (J = 0; J < sample_count; )
 							{
-								S9xApplyMasterAndEchoWithNoFilter(false, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume);
-								S9xApplyMasterAndEchoWithNoFilter(false, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume);
+								S9xApplyMasterAndEchoWithNoFilter(false, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume, interleaved);
+								S9xApplyMasterAndEchoWithNoFilter(false, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume, interleaved);
 							}
 						}
 						else
@@ -3291,8 +3299,8 @@ void S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(signed short *leftBuff
 							// ... with filter defined.
 							for (J = 0; J < sample_count; )
 							{
-								S9xApplyMasterAndEchoWithFilter(false, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume);
-								S9xApplyMasterAndEchoWithFilter(false, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume);
+								S9xApplyMasterAndEchoWithFilter(false, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume, interleaved);
+								S9xApplyMasterAndEchoWithFilter(false, &J, leftBuffer, rightBuffer, finalMasterVolume, finalEchoVolume, interleaved);
 							}
 						}
 					}

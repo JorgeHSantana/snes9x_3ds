@@ -192,6 +192,6 @@ EXTERN_C void S9xMixSamplesO (uint8 *buffer, int sample_count, int byte_offset);
 
 void S9xMixSamplesIntoTempBuffer(int sample_count);
 void S9xGenerateSilenceIntoTempBuffer(int sample_count);
-void S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(signed short *leftBuffer, signed short *rightBuffer, int sample_count);
+void S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(signed short *leftBuffer, signed short *rightBuffer, int sample_count, bool interleaved = false);
 
 #endif

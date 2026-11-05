@@ -14,7 +14,7 @@
 #include "3dslog.h"
 
 #define ANIMATE_TAB_STEPS 3
-#define ANIMATE_DIALOG_STEPS 8
+#define ANIMATE_DIALOG_STEPS 4   // was 8: open + close cost 16 full-screen alpha blends (270 ms)
 
 static bool swapBuffer = true;
 
@@ -754,7 +754,7 @@ void menu3dsDrawEverything(SMenuTab& dialogTab, bool& isDialog, int& currentMenu
         } else {
             menu3dsDrawMenu(menuTabs, currentMenuTab, 0, 0);
         }
-        ui3dsDrawRect(0, 0, settings3DS.SecondScreenWidth, y, 0x000000, (float)(ANIMATE_DIALOG_STEPS - dialogFrame) / 10);
+        ui3dsDrawRect(0, 0, settings3DS.SecondScreenWidth, y, 0x000000, (float)(ANIMATE_DIALOG_STEPS - dialogFrame) * 0.8f / ANIMATE_DIALOG_STEPS);   // 0.8 dim when open, whatever the step count
 
         ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, SCREEN_HEIGHT);
         ui3dsSetTranslate(0, y);
@@ -781,7 +781,7 @@ static void menu3dsDrawLoadingDialog(
     ui3dsSetViewport(0, 0, settings3DS.SecondScreenWidth, SCREEN_HEIGHT);
     ui3dsSetTranslate(0, 0);
     menu3dsDrawMenu(menuTabs, currentMenuTab, 0, 0);
-    ui3dsDrawRect(0, 0, settings3DS.SecondScreenWidth, yDialog, 0x000000, (float)(loadingDialogSteps - dialogFrame) / 10);
+    ui3dsDrawRect(0, 0, settings3DS.SecondScreenWidth, yDialog, 0x000000, (float)(loadingDialogSteps - dialogFrame) * 0.8f / loadingDialogSteps);
     ui3dsSetTranslate(0, yDialog);
 
     bool ra = settings3DS.Theme == Setting::Theme::RetroArch;
@@ -1356,19 +1356,19 @@ void menu3dsShowSplashMessage(const char *message) {
 }
 
 
-void menu3dsAddTab(std::vector<SMenuTab>& menuTabs, const char *title, const std::vector<SMenuItem>& menuItems)
+void menu3dsAddTab(std::vector<SMenuTab>& menuTabs, const char *title, std::vector<SMenuItem> menuItems)
 {
     menuTabs.emplace_back();
     SMenuTab *currentTab = &menuTabs.back();
 
     currentTab->SetTitle(title);
-    currentTab->MenuItems = menuItems;
+    currentTab->MenuItems = std::move(menuItems);   // by value + move: the caller's vector is a temporary
 
     currentTab->FirstItemIndex = 0;
     currentTab->SelectedItemIndex = 0;
     for (size_t i = 0; i < currentTab->MenuItems.size(); i++)
     {
-        if (menuItems[i].IsHighlightable())
+        if (currentTab->MenuItems[i].IsHighlightable())
         {
             currentTab->SelectedItemIndex = static_cast<int>(i);
             currentTab->MakeSureSelectionIsOnScreen(MENU_HEIGHT, 2);

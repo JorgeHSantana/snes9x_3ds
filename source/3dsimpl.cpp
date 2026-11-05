@@ -484,6 +484,13 @@ void impl3dsOutputSoundSamples(short *leftSamples, short *rightSamples)
 
 }
 
+// stereo interleaved straight into the NDSP wavebuf (one pass, no staging)
+void impl3dsOutputSoundSamplesInterleaved(short *stereoSamples)
+{
+	S9xApplyMasterVolumeOnTempBufferIntoLeftRightBuffers(
+		stereoSamples, stereoSamples, SND3DS_SAMPLES_PER_LOOP * 2, true);
+}
+
 void impl3dsUpdateUiAssets() {
     const struct UiAssetConfig {
         SGPU_TEXTURE_ID id;

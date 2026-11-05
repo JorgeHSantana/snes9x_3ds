@@ -1,4 +1,5 @@
 #include "copyright.h"
+extern void cache3dsClearPaletteStamps();   // 3dsimpl_tilecache.cpp
 
 
 #include "snes9x.h"
@@ -2694,7 +2695,7 @@ void S9xResetPPU ()
 			GFX.PaletteFrame4BG[bg][i] = 1;
 	}
 	GFX.PaletteFrame256[0] = 1;
-	ZeroMemory (GFX.VRAMPaletteFrame, 8192 * 16 * 4);
+	cache3dsClearPaletteStamps();
 	IPPU.HiresFlip = 0;
 
 #ifdef CORRECT_VRAM_READS
@@ -2926,7 +2927,7 @@ void S9xSoftResetPPU ()
 			GFX.PaletteFrame4BG[bg][i] = 1;
 	}
 	GFX.PaletteFrame256[0] = 1;
-	ZeroMemory (GFX.VRAMPaletteFrame, 8192 * 16 * 4);
+	cache3dsClearPaletteStamps();
 	IPPU.HiresFlip = 0;
 
 #ifdef CORRECT_VRAM_READS

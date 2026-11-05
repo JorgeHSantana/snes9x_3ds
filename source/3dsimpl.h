@@ -68,6 +68,7 @@ void impl3dsGenerateSoundSamples();
 // output buffer.
 //---------------------------------------------------------
 void impl3dsOutputSoundSamples(short *leftSamples, short *rightSamples);
+void impl3dsOutputSoundSamplesInterleaved(short *stereoSamples);
 
 
 //---------------------------------------------------------

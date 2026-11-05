@@ -84,9 +84,8 @@ struct SGFX{
             { 1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1 } 
         };   // Mode 1 4-color BGs
     
-    // Memory Usage = 0.50 MB    for the frame the palette was changed for the given Tile.
-    //
-    uint32 VRAMPaletteFrame[8192][16];
+    // the per-tile palette stamps live with the atlas positions in
+    // GPU3DSExt.tileCache (one cache line per lookup, see 3dsimpl_gpu.h)
     bool   Use3DSHardware = true;
 
 };

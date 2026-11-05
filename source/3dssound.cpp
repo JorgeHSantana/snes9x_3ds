@@ -85,10 +85,6 @@ void snd3dsApplyOutputVolume()
     ndspChnSetMix(0, mix);
 }
 
-// Staging buffers for the SNES9x mixer — it writes separate L/R streams
-// and we interleave into the NDSP wavebuf.
-static short stagingL[SND3DS_SAMPLES_PER_LOOP];
-static short stagingR[SND3DS_SAMPLES_PER_LOOP];
 
 
 //---------------------------------------------------------
@@ -129,13 +125,10 @@ void snd3dsMixSamples()
             }
             else
             {
-                impl3dsOutputSoundSamples(stagingL, stagingR);
-
-                for (int i = 0; i < frames; i++)
-                {
-                    dst[i * 2]     = stagingL[i];
-                    dst[i * 2 + 1] = stagingR[i];
-                }
+                // one pass into the wavebuf: the staging L/R streams plus
+                // the interleave loop were two more passes per block on
+                // the syscore slice the FLAC decode shares
+                impl3dsOutputSoundSamplesInterleaved(dst);
             }
         }
         else

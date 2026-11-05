@@ -11,6 +11,10 @@
 //---------------------------------------------------------
 void cache3dsInit();
 
+// every tile re-decodes on its next use (PPU reset): the palette stamps
+// go to 0, the atlas positions stay assigned
+void cache3dsClearPaletteStamps();
+
 
 //---------------------------------------------------------
 // Computes and returns the texture position (Non-Mode 7) 
@@ -19,7 +23,7 @@ void cache3dsInit();
 inline int cache3dsGetTexturePositionFast(int tileAddr, int pal)
 {
     int hash = COMPOSE_HASH(tileAddr, pal);
-    int pos = GPU3DSExt.vramCacheHashToTexturePosition[hash];
+    int pos = GPU3DSExt.tileCache[hash].pos;
 
     if (pos == 0)
     {
@@ -27,11 +31,11 @@ inline int cache3dsGetTexturePositionFast(int tileAddr, int pal)
 
         //vramCacheFrameNumber[hash] = 0;
 
-        GPU3DSExt.vramCacheTexturePositionToHash[GPU3DSExt.vramCacheHashToTexturePosition[hash] & 0xFFFE] = 0;
+        GPU3DSExt.vramCacheTexturePositionToHash[GPU3DSExt.tileCache[hash].pos & 0xFFFE] = 0;
 
-        GPU3DSExt.vramCacheHashToTexturePosition[GPU3DSExt.vramCacheTexturePositionToHash[pos]] = 0;
+        GPU3DSExt.tileCache[GPU3DSExt.vramCacheTexturePositionToHash[pos]].pos = 0;
 
-        GPU3DSExt.vramCacheHashToTexturePosition[hash] = pos;
+        GPU3DSExt.tileCache[hash].pos = pos;
         GPU3DSExt.vramCacheTexturePositionToHash[pos] = hash;
 
         GPU3DSExt.newCacheTexturePosition += 2;
@@ -41,7 +45,7 @@ inline int cache3dsGetTexturePositionFast(int tileAddr, int pal)
         // Force this tile to re-decode. This fixes the tile corruption
         // problems when playing a game for too long.
         //
-        GFX.VRAMPaletteFrame[tileAddr][pal] = 0;
+        GPU3DSExt.tileCache[hash].stamp = 0;
     }
 
     return pos;
@@ -57,8 +61,8 @@ inline int cache3dsGetTexturePositionFast(int tileAddr, int pal)
 inline int cacheGetSwapTexturePositionForAltFrameFast(int tileAddr, int pal)
 {
     int hash = COMPOSE_HASH(tileAddr, pal);
-    int pos = GPU3DSExt.vramCacheHashToTexturePosition[hash] ^ 1;
-    GPU3DSExt.vramCacheHashToTexturePosition[hash] = pos;
+    int pos = GPU3DSExt.tileCache[hash].pos ^ 1;
+    GPU3DSExt.tileCache[hash].pos = pos;
     return pos;
 }
 

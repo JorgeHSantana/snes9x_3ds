@@ -1,4 +1,6 @@
 #include "../layer_defer.h"
+// palette stamp of a decoded (tile, palette): one entry with its atlas position
+#define TILE_STAMP(tileAddrDiv8, pal)   GPU3DSExt.tileCache[COMPOSE_HASH((tileAddrDiv8), (pal))].stamp
 #include "../m7map_index.h"
 #include "copyright.h"
 
@@ -777,14 +779,14 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
         if (BG.Buffered [TileNumber] == BLANK_TILE)
             return;
 
-		GFX.VRAMPaletteFrame[tileAddrDiv8][0] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][1] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][2] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][3] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][4] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][5] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][6] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][7] = 0;
+		TILE_STAMP(tileAddrDiv8, 0) = 0;
+		TILE_STAMP(tileAddrDiv8, 1) = 0;
+		TILE_STAMP(tileAddrDiv8, 2) = 0;
+		TILE_STAMP(tileAddrDiv8, 3) = 0;
+		TILE_STAMP(tileAddrDiv8, 4) = 0;
+		TILE_STAMP(tileAddrDiv8, 5) = 0;
+		TILE_STAMP(tileAddrDiv8, 6) = 0;
+		TILE_STAMP(tileAddrDiv8, 7) = 0;
     }
 
     if (BG.Buffered [TileNumber] == BLANK_TILE)
@@ -833,10 +835,10 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
 			pCache,
 			screenColors);
     }
-    else if (GFX.VRAMPaletteFrame[tileAddrDiv8][pal] != paletteFrame[pal])
+    else if (TILE_STAMP(tileAddrDiv8, pal) != paletteFrame[pal])
     {
         texturePos = cacheGetSwapTexturePositionForAltFrameFast(tileAddrDiv8, pal);
-        GFX.VRAMPaletteFrame[tileAddrDiv8][pal] = paletteFrame[pal];
+        TILE_STAMP(tileAddrDiv8, pal) = paletteFrame[pal];
         cache3dsCacheSnesTileToTexturePosition(pCache, screenColors, texturePos);
     }
 
@@ -890,14 +892,14 @@ inline void __attribute__((always_inline)) S9xDrawHiresBGFullTileHardwareInline 
         if (BG.Buffered [TileNumber] == BLANK_TILE)
             return;
 
-		GFX.VRAMPaletteFrame[tileAddrDiv8][0] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][1] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][2] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][3] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][4] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][5] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][6] = 0;
-		GFX.VRAMPaletteFrame[tileAddrDiv8][7] = 0;
+		TILE_STAMP(tileAddrDiv8, 0) = 0;
+		TILE_STAMP(tileAddrDiv8, 1) = 0;
+		TILE_STAMP(tileAddrDiv8, 2) = 0;
+		TILE_STAMP(tileAddrDiv8, 3) = 0;
+		TILE_STAMP(tileAddrDiv8, 4) = 0;
+		TILE_STAMP(tileAddrDiv8, 5) = 0;
+		TILE_STAMP(tileAddrDiv8, 6) = 0;
+		TILE_STAMP(tileAddrDiv8, 7) = 0;
     }
 
     if (BG.Buffered [TileNumber] == BLANK_TILE)
@@ -947,10 +949,10 @@ inline void __attribute__((always_inline)) S9xDrawHiresBGFullTileHardwareInline 
 			pCache,
 			screenColors);
     }
-    else if (GFX.VRAMPaletteFrame[tileAddrDiv8][pal] != paletteFrame[pal])
+    else if (TILE_STAMP(tileAddrDiv8, pal) != paletteFrame[pal])
     {
         texturePos = cacheGetSwapTexturePositionForAltFrameFast(tileAddrDiv8, pal);
-        GFX.VRAMPaletteFrame[tileAddrDiv8][pal] = paletteFrame[pal];
+        TILE_STAMP(tileAddrDiv8, pal) = paletteFrame[pal];
         cache3dsCacheSnesTileToTexturePosition(pCache, screenColors, texturePos);
     }
 
@@ -2217,14 +2219,14 @@ void S9xDrawBackgroundMosaicHardware(
                 BG.Buffered[TileNumber] = S9xConvertTileTo8Bit(pCache, TileAddr);
                 if (BG.Buffered[TileNumber] == BLANK_TILE)
                     continue;
-                GFX.VRAMPaletteFrame[tileAddrDiv8][0] = 0;
-                GFX.VRAMPaletteFrame[tileAddrDiv8][1] = 0;
-                GFX.VRAMPaletteFrame[tileAddrDiv8][2] = 0;
-                GFX.VRAMPaletteFrame[tileAddrDiv8][3] = 0;
-                GFX.VRAMPaletteFrame[tileAddrDiv8][4] = 0;
-                GFX.VRAMPaletteFrame[tileAddrDiv8][5] = 0;
-                GFX.VRAMPaletteFrame[tileAddrDiv8][6] = 0;
-                GFX.VRAMPaletteFrame[tileAddrDiv8][7] = 0;
+                TILE_STAMP(tileAddrDiv8, 0) = 0;
+                TILE_STAMP(tileAddrDiv8, 1) = 0;
+                TILE_STAMP(tileAddrDiv8, 2) = 0;
+                TILE_STAMP(tileAddrDiv8, 3) = 0;
+                TILE_STAMP(tileAddrDiv8, 4) = 0;
+                TILE_STAMP(tileAddrDiv8, 5) = 0;
+                TILE_STAMP(tileAddrDiv8, 6) = 0;
+                TILE_STAMP(tileAddrDiv8, 7) = 0;
             }
 
             if (BG.Buffered[TileNumber] == BLANK_TILE)
@@ -2255,10 +2257,10 @@ void S9xDrawBackgroundMosaicHardware(
                 screenColors = &IPPU.ScreenColors[(pal << paletteShift) + startPalette];
             }
 
-            if (GFX.VRAMPaletteFrame[tileAddrDiv8][pal] != paletteFrame[pal])
+            if (TILE_STAMP(tileAddrDiv8, pal) != paletteFrame[pal])
             {
                 texturePos = cacheGetSwapTexturePositionForAltFrameFast(tileAddrDiv8, pal);
-                GFX.VRAMPaletteFrame[tileAddrDiv8][pal] = paletteFrame[pal];
+                TILE_STAMP(tileAddrDiv8, pal) = paletteFrame[pal];
                 cache3dsCacheSnesTileToTexturePosition(pCache, screenColors, texturePos);
             }
 
@@ -2742,14 +2744,14 @@ inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
         if (BG.Buffered [TileNumber] == BLANK_TILE)
             return;
 
-        GFX.VRAMPaletteFrame[tileAddrDiv8][8] = 0;
-        GFX.VRAMPaletteFrame[tileAddrDiv8][9] = 0;
-        GFX.VRAMPaletteFrame[tileAddrDiv8][10] = 0;
-        GFX.VRAMPaletteFrame[tileAddrDiv8][11] = 0;
-        GFX.VRAMPaletteFrame[tileAddrDiv8][12] = 0;
-        GFX.VRAMPaletteFrame[tileAddrDiv8][13] = 0;
-        GFX.VRAMPaletteFrame[tileAddrDiv8][14] = 0;
-        GFX.VRAMPaletteFrame[tileAddrDiv8][15] = 0;
+        TILE_STAMP(tileAddrDiv8, 8) = 0;
+        TILE_STAMP(tileAddrDiv8, 9) = 0;
+        TILE_STAMP(tileAddrDiv8, 10) = 0;
+        TILE_STAMP(tileAddrDiv8, 11) = 0;
+        TILE_STAMP(tileAddrDiv8, 12) = 0;
+        TILE_STAMP(tileAddrDiv8, 13) = 0;
+        TILE_STAMP(tileAddrDiv8, 14) = 0;
+        TILE_STAMP(tileAddrDiv8, 15) = 0;
     }
 
     if (BG.Buffered [TileNumber] == BLANK_TILE)
@@ -2758,10 +2760,10 @@ inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
     uint8 pal = (snesTile >> 10) & 7;
     int texturePos = cache3dsGetTexturePositionFast(tileAddrDiv8, pal + 8);
 
-	if (GFX.VRAMPaletteFrame[tileAddrDiv8][pal + 8] != GFX.PaletteFrame[pal + 8])
+	if (TILE_STAMP(tileAddrDiv8, pal + 8) != GFX.PaletteFrame[pal + 8])
     {
         texturePos = cacheGetSwapTexturePositionForAltFrameFast(tileAddrDiv8, pal + 8);
-        GFX.VRAMPaletteFrame[tileAddrDiv8][pal + 8] = GFX.PaletteFrame[pal + 8];
+        TILE_STAMP(tileAddrDiv8, pal + 8) = GFX.PaletteFrame[pal + 8];
 
         uint16 *screenColors = &IPPU.ScreenColors[(pal << 4) + 128];
         cache3dsCacheSnesTileToTexturePosition(pCache, screenColors, texturePos);
@@ -2843,7 +2845,9 @@ void S9xDrawOBJSHardware (bool8 sub, int depth = 0, int priority = 0)
 	GFX.PixSize = 1;
 
 	// Wonder what is the best value for this to get the optimal performance? 
-	if (PPU.PriorityDrawFromSprite >= 0 && GFX.EndY - LayerRender.startY[LAYER_OBJ] >= 16)
+	// whole-sprite path from 4 lines up (was 16): below that every sprite
+	// column became an 8x1 quad per line, 8x the vertices and tile lookups
+	if (PPU.PriorityDrawFromSprite >= 0 && GFX.EndY - LayerRender.startY[LAYER_OBJ] >= 4)
 	{
 		//printf ("Fast OBJ draw %d\n", PPU.PriorityDrawFromSprite);
 		// Clear all heights

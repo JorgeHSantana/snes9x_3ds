@@ -7,11 +7,17 @@
 // Initializes the Hash to Texture Position look-up (and
 // the reverse look-up table as well)
 //---------------------------------------------------------
+void cache3dsClearPaletteStamps()
+{
+    for (int i = 0; i <= MAX_HASH; i++)
+        GPU3DSExt.tileCache[i].stamp = 0;
+}
+
 void cache3dsInit()
 {
     //printf ("Cache %8x\n", &vramCacheFrameNumber);
     //memset(&vramCacheFrameNumber, 0, MAX_HASH * 4);
-    memset(&GPU3DSExt.vramCacheHashToTexturePosition, 0, (MAX_HASH + 1) * 2);
+    memset(&GPU3DSExt.tileCache, 0, sizeof(GPU3DSExt.tileCache));
 
     // Fixes issue in Thunder Spirits where the tileaddr + pal
     // gives the texturePos of 0, but gets overwritten by other tiles

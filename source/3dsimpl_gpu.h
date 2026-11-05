@@ -185,7 +185,19 @@ typedef struct
 
 typedef struct
 {
-    u16             vramCacheHashToTexturePosition[MAX_HASH + 1]; // 262146 bytes
+    u32             stamp;      // GFX.PaletteFrame* value at decode time (0 = never decoded)
+    u16             pos;        // atlas texture position (0 = unassigned)
+    u16             _pad;
+} STileCacheEntry;
+
+typedef struct
+{
+    // one entry per (VRAM tile, palette): the atlas position the tile was
+    // decoded into and the palette stamp it was decoded with. They used to
+    // be two tables (u16 positions here, u32 stamps in GFX.VRAMPaletteFrame)
+    // and every tile lookup touched a cache line in each; now it is one
+    // 8-byte entry, one line. 1 MB.
+    STileCacheEntry tileCache[MAX_HASH + 1];
     int             vramCacheTexturePositionToHash[MAX_TEXTURE_HASH_POSITIONS]; // 4*MAX_TEXTURE_HASH_POSITIONS bytes
 
     SLayerList      layerList;
