@@ -1,5 +1,13 @@
 # Backlog de performance: estratégia por item
 
+> **Estado em 2026-11-05 (noite):** feitos A1, A2, B2, B3, B4, C3, D1 e a
+> parte barata de C2 (move do vetor de itens); B1 tem a medição no lugar
+> (`flush=`/`gpuwait=` na linha de perf), falta o flush parcial depois do
+> número do console. Ficam A3 (só medir), B1, B5 (não vale o risco de
+> trava), C1 (a tela inferior é double-buffered: redraw parcial precisa de
+> dois frames ou flicker) e o resto de C2 (reconstrução das abas). O texto
+> abaixo é o plano original, mantido como registro do raciocínio.
+
 Levantamento de 2026-11-05 (quatro auditorias de leitura: menu, core,
 renderização, plataforma). O que já entrou está no CHANGELOG (Unreleased) e
 no journal do mesmo dia. Este documento cobre o que FALTA, com a estratégia

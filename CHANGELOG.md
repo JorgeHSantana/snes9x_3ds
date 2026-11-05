@@ -2,6 +2,15 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+### Features
+- **Skip Idle Loops** (Emulator tab, per game, default on, `IdleLoopSkip`,
+  game cfg v2.0): the CPU jumps to the next event when it sits in a loop
+  that only polls `$4210`/`$4212`, the APU ports, the SuperFX status or a
+  RAM flag, and the SPC700 does the same on its port and timer polls (the
+  Snes9x 1.43 idle detection, re-done). Off for SA-1 games and the titles
+  the core already blocks. Disable it for a game that hangs, stutters or
+  loses its music. In Azahar: Zelda ALTTP 347 CPU + 532 APU skips per
+  frame, core time -30%; MMX3 0 (its driver never idles).
 ### Fixes
 - **Menu speed**: the generic menu loop compared the raw 3D slider every
   frame (the v2.6 fix only covered the 3D tab's live preview), so with the
@@ -19,6 +28,17 @@ Notable changes to this project will be documented in this file.
 - HBLANK_END walks the deferred $212C-$2131 list only on scanlines that
   saw a write; the SuperFX call is gated at the caller.
 - Release build: `-DNDEBUG` (dr_flac asserts off) and `-fno-math-errno`.
+- OAM and OBSEL writes flush with per-layer deferral: only the sprite
+  layer renders the section, the BGs catch up at the next full flush
+  (Mario Kart had 3 of its 8 sections per frame from OAM).
+- The tile cache keeps the atlas position and the palette stamp in one
+  8-byte entry per (tile, palette): one cache line per tile lookup
+  instead of two (the 512 KB `VRAMPaletteFrame` table is gone).
+- Sprites take the whole-sprite path from 4-line sections (was 16).
+- The mixer writes stereo straight into the NDSP buffer in one pass.
+- Dialogs open and close in 4 steps instead of 8.
+- Perf line: `flush=` (the end-of-frame cache flush), `gpuwait=`,
+  `idle=` and `aidle=` (CPU / SPC700 skips per frame).
 
 
 ## Stable v2.6 (2026-11-04)

@@ -8,7 +8,7 @@ Everything under `source/Snes9x/`. Special chips have [their own page](special-c
 
 * Base: **Snes9x 1.43** (`snes9x.h:7`). Copyright block: Gary Henderson, Jerremy Koot, John Weidman, Brad Jorsch, Matthew Kendora, Nach, zones, et al.
 * Back-ports: `spc700.cpp` from **1.51**; `BSXItself`/`BSXBootup` settings, `CMemory::BIOSROM` and essentially the whole `bsx.cpp` from **1.52**.
-* Compiled-out legacy features (defines absent): `CPU_SHUTDOWN`, `SPC700_SHUTDOWN`, `DEBUGGER`, `ZSNES_FX`, `MK_APU`, `CORRECT_VRAM_READS`, `UNZIP_SUPPORT`. Audio is therefore the **old 1.43-era APU**, not Blargg's — the main source of audio inaccuracy (see [Project Meta / Known Issues](project-meta.md)).
+* Compiled-out legacy features (defines absent): `CPU_SHUTDOWN` (replaced by the idle-loop skip below), `DEBUGGER`, `ZSNES_FX`, `MK_APU`, `CORRECT_VRAM_READS`, `UNZIP_SUPPORT`. Audio is therefore the **old 1.43-era APU**, not Blargg's — the main source of audio inaccuracy (see [Project Meta / Known Issues](project-meta.md)).
 * `port.h`: `__3DS__` selects `LSB_FIRST` + `FAST_LSB_WORD_ACCESS`.
 
 ## 65c816 CPU (`cpuexec.cpp`, `cpuexec-ops.h`, `getset.h`)
@@ -44,6 +44,10 @@ Everything under `source/Snes9x/`. Special chips have [their own page](special-c
 * **HBLANK_START** → `S9xDoHDMA()`.
 * **HBLANK_END** → SuperFX slice, `S9xUpdateAPUTimer()`, the **deferred `$212C-$2131` register optimization** (writes latched during the line; flush only if the end-of-line value differs), cycle rebase, `V_Counter++`, `S9xStartHDMA()` on wrap, V-timer IRQ, palette commit line, V-blank start (NMI arm, `$4210`), joypad update, `RenderLine()`.
 * **HTIMER_BEFORE/AFTER** → H-beam IRQ.
+
+### Idle-loop skip (`idle_skip.h`, `CPU_IDLE_SKIP`, `SPC700_SHUTDOWN`)
+
+The 1.43 `CPU_SHUTDOWN` idea without its per-opcode PC store. A read of `$4210`/`$4212`, the APU ports `$2140-$2143`, the SuperFX status `$3030` or plain RAM (`CpuGetByte`/`CpuGetWord`, `Memory.BlockIsRAM`) records the **end** of the reading instruction in `CPU.WaitAddress`. A taken backward branch whose target lies within 4 bytes before that mark (so the read is the loop's first instruction: `LDA abs` = 3 bytes, long = 4) is a polling loop and `CPUShutdown()` jumps `CPU_Cycles` to `CPU.NextEvent`, unless an NMI/IRQ is pending. Every write (`CpuSetByte`), every INC/DEC-family op and interrupt entry clear the mark, so a countdown or a loop with side effects never qualifies. `Settings.Shutdown` gates it: off with SA-1 (lockstep), off for the titles `memmap.cpp` marks (`SNESGameFixes.IdleLoopBlocked`), and per game via `settings3DS.IdleLoopSkip` ("Skip Idle Loops", default on). The SPC700 side is 1.43's own `SPC700_SHUTDOWN` (port/timer reads record `IAPU.WaitAddress1/2`, INC/DEC and timer ticks arm `WaitCounter`), with the skip action replaced: `APUShutdown()` moves `APU.Cycles` one past `g_apuNextEvent`, the current run's limit in `S9xUpdateAPUTimer` (next timer tick or the CPU's cycle). The perf line reports both as `idle=` and `aidle=` skips per frame. `WAI` already skipped on its own (`OpCB`).
 
 ### Speed hacks
 
