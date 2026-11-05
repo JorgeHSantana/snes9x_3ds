@@ -217,6 +217,7 @@ typedef struct
     u64             coreTicks;       // ...in the SNES core (S9xMainLoop)
     u64             ppuTicks;        // ...of which the PPU layer walk (S9xUpdateScreenHardware: tiles to vertices)
     u64             flushTicks;      // ...inside C3D_FrameEnd (the linear-heap cache flush, perf line flush=)
+    u64             gpuWaitLast;     // the last C3D_FrameBegin's wait alone (gpu_pressure.h)
     u64             gpuWaitTicks;    // ...inside C3D_FrameBegin waiting for the previous frame's GPU work (gpuwait=)
     u64             drawTicks;       // ...submitting the eyes' layer passes (gpu3dsDrawSnesScreen, both eyes)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame

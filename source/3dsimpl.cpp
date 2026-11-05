@@ -37,6 +37,7 @@
 #include "3dsblurauto.h"
 #include "shadow_auto.h"
 #include "glow_auto.h"
+#include "gpu_pressure.h"
 #include "glow_relative.h"
 #include "screen_grade.h"
 #include "sram_save.h"
@@ -1017,12 +1018,15 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		if (firstFrame)
 			blurAutoReset(&s_blurAuto);   // warm-up: a load's first frames skip for non-load reasons
 		int wasTier = GPU3DSExt.blurAutoOff ? 2 : (GPU3DSExt.blurAutoLight ? 1 : 0);
-		blurAutoStep(&s_blurAuto, skipDrawingFrame);
+		// a GPU-bound frame (the previous frame's render still running when
+		// this one wanted to start) counts as a skip: the tiers shed GPU work
+		const bool gpuBound = gpu_pressure(GPU3DSExt.gpuWaitLast, (u64)settings3DS.TicksPerFrame);
+		blurAutoStep(&s_blurAuto, skipDrawingFrame || gpuBound);
 		int tier = blurAutoTier(&s_blurAuto, settings3DS.StereoBlurQuality == 3);
 		GPU3DSExt.blurAutoLight = tier >= 1;
 		GPU3DSExt.blurAutoOff = tier == 2;
 		if (tier != wasTier)
-			log3dsWrite("[blur] auto -> %s", tier == 2 ? "off" : (tier == 1 ? "light" : "full"));
+			log3dsWrite("[blur] auto -> %s%s", tier == 2 ? "off" : (tier == 1 ? "light" : "full"), gpuBound ? " (gpu)" : "");
 		// Shadow Quality (issue #77): the same verdict, Off tier included
 		// whatever Blur Quality is, drives the Soft Edge level and the fade
 		if (firstFrame)

@@ -569,7 +569,8 @@ bool gpu3dsFrameBegin(u8 flags, bool ingame, bool isSecondScreen)
     t3dsStartTimer(TIMER_GPU_WAIT);
     const u64 waitTick0 = svcGetSystemTick();
     const bool began = C3D_FrameBegin(flags);
-    GPU3DSExt.gpuWaitTicks += svcGetSystemTick() - waitTick0;
+    GPU3DSExt.gpuWaitLast = svcGetSystemTick() - waitTick0;
+    GPU3DSExt.gpuWaitTicks += GPU3DSExt.gpuWaitLast;
     t3dsStopTimer(TIMER_GPU_WAIT);
     if (!began)
         return false;

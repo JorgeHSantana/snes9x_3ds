@@ -11,6 +11,12 @@ Notable changes to this project will be documented in this file.
   the core already blocks. Disable it for a game that hangs, stutters or
   loses its music. In Azahar: Zelda ALTTP 347 CPU + 532 APU skips per
   frame, core time -30%; MMX3 0 (its driver never idles).
+- **Auto quality reacts to the GPU.** Blur, Shadow and Glow Auto only
+  dropped a tier when a frame was skipped; a New 3DS finishes the CPU work
+  in 5 ms and then waits up to 9 ms for the GPU (Jorge's log: 100 of 300
+  frames over budget), so they sat at Full. A frame whose GPU wait exceeds
+  20% of the budget now counts as a skip (`gpu_pressure.h`, `[blur] auto ->
+  light (gpu)` in the log).
 ### Fixes
 - **Menu speed**: the generic menu loop compared the raw 3D slider every
   frame (the v2.6 fix only covered the 3D tab's live preview), so with the
