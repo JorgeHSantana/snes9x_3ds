@@ -346,6 +346,8 @@ typedef struct
     float                       stereoFogSet[4];    // per-tier fade/haze amount the tile shader holds (stereo_fog.h); 0 = no-op
     float                       stereoGhostSet[4];  // per-tier blur ghost alpha the tile shader holds; read only in a ghost pass
     float                       ghostPassFlag;      // glowPal.z: 1 while a ghost pass draws
+    float                       tierCascadeFlag;    // glowPal.w: 1 when the four stereo tiers differ (shift, dim, fog or ghost),
+                                                    // 0 when tier 0 fits every vertex and the shader skips the cascade
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
@@ -512,6 +514,7 @@ void gpu3dsSetStereoPreviewHighlight(int layerId, int prio);
 // priority-1 shift, z = the layer's plane boundary. The tile shader
 // picks x or y by comparing its decoded depth plane against z.
 // w = the drop shadow's y offset (issue #77), 0 outside the shadow phase
+void gpu3dsSyncTierCascade();
 static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary, float shadowY = 0.0f)
 {
     GPU3DS.stereoParallax = p0;
@@ -525,6 +528,7 @@ static inline void gpu3dsSetStereoParallax3(float p0, float p1, float boundary, 
         return;
     C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD], p0, p1, boundary, shadowY);
     ap[0] = p0; ap[1] = p1; ap[2] = boundary; ap[3] = shadowY;
+    gpu3dsSyncTierCascade();
 }
 
 // a boundary no decoded depth plane (max 16/32 = 0.5) can ever reach:
@@ -545,6 +549,7 @@ static inline void gpu3dsSetStereoParallaxHi(float t2, float t3,
         return;
     C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_IOD2], t2, t3, bnd12, bnd23);
     GPU3DS.stereoParallaxHiApplied = key;
+    gpu3dsSyncTierCascade();
 }
 
 // (k ramp, gain, fog amount, ghost offset) for the Mode 7 plane's draw;
@@ -569,6 +574,7 @@ void gpu3dsShadowPassEnd();
 void gpu3dsGlowPassState(int alphaRef, int plane);   // plane >= 0: depth GEQUAL at that plane (covered by layers in front), -1: no depth test
 void gpu3dsGlowPassEnd();
 void gpu3dsSetGlowPalette(int mask, bool enable);   // sprite palettes that draw in the tile shader; (255, false) = no-op
+void gpu3dsSyncTierCascade();                       // glowPal.w: recompute tierCascadeFlag from the per-tier sets (each setter calls it)
 void gpu3dsSetGhostPass(bool on);                   // glowPal.z: the tile shader puts each tier's ghost alpha in colour.r
 // Output colour grade (screen_grade.h) in the blit's TexEnv stages 1-5; no extra pass
 struct ScreenGrade;
@@ -594,6 +600,7 @@ static inline void gpu3dsSetStereoFog4(float f0, float f1, float f2, float f3)
         f2 * STEREO_FOG_VERTEX_SCALE, f3 * STEREO_FOG_VERTEX_SCALE);
     GPU3DS.stereoFogSet[0] = f0; GPU3DS.stereoFogSet[1] = f1;
     GPU3DS.stereoFogSet[2] = f2; GPU3DS.stereoFogSet[3] = f3;
+    gpu3dsSyncTierCascade();
 }
 
 // per-priority blur ghost alphas (stereo_fog.h): one ghost pass pair per
@@ -609,6 +616,7 @@ static inline void gpu3dsSetStereoGhost4(float g0, float g1, float g2, float g3)
         g2 * STEREO_FOG_VERTEX_SCALE, g3 * STEREO_FOG_VERTEX_SCALE);
     GPU3DS.stereoGhostSet[0] = g0; GPU3DS.stereoGhostSet[1] = g1;
     GPU3DS.stereoGhostSet[2] = g2; GPU3DS.stereoGhostSet[3] = g3;
+    gpu3dsSyncTierCascade();
 }
 
 // per-priority spotlight alphas for the editor (1.0 = visible, 0.0 =
@@ -625,6 +633,7 @@ static inline void gpu3dsSetStereoPrioDim4(float d0, float d1, float d2, float d
     GPU3DS.stereoPrioDimP1 = d1;
     GPU3DS.stereoPrioDimP2 = d2;
     GPU3DS.stereoPrioDimP3 = d3;
+    gpu3dsSyncTierCascade();
 }
 
 static inline void gpu3dsSetStereoPrioDim(float dimP0, float dimP1)

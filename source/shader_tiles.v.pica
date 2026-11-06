@@ -17,7 +17,9 @@
                                  ;       palettes that draw, y = 1 to enforce it (0 = no-op);
                                  ;       z = 1 while a blur ghost pass draws: colour.r becomes
                                  ;       the tier's ghost alpha (stereoGhost) instead of the
-                                 ;       vertex's own red
+                                 ;       vertex's own red;
+                                 ;       w = 1 while the four tiers differ (gpu3dsSyncTierCascade):
+                                 ;       0 skips the tier cascade, tier 0 fitting every vertex
 .fvec       stereoGhost          ; #12 - (ghost0..ghost3) x 248: each tier's blur ghost alpha
 .fvec       stereoFog            ; #11 - (fog0..fog3) x 248: each tier's fade/haze tint amount,
                                  ;       written into colour.b (the TexEnv interpolates towards
@@ -151,6 +153,16 @@ draw:
     mov     r4.y, r2.x                  ; ...and its spotlight alpha
     mov     r4.z, r8.x                  ; ...and its fog amount
     mov     r4.w, r9.x                  ; ...and its ghost alpha
+    ; the cascade itself only when the tiers differ (glowPal.w, set by
+    ; gpu3dsSyncTierCascade): in 2D and for a layer with one depth every
+    ; tier equals tier 0, and the 3 compares + 12 moves are paid for nothing.
+    ; A jump, not an enclosing ifc: with the tier-3 block's .end on the same
+    ; address as an outer block's .end the PICA mis-popped (Azahar 2026-11-06:
+    ; a 2 px column at the left eye's edge lost its shifted layer)
+    mov     r13, glowPal                ; x = mask, y = enable, z = ghost pass, w = tiers differ (copied: a swizzled uniform operand mis-encodes)
+    mov     r7.y, c_m7.w                ; 0
+    cmp     r13.w, le, le, r7.y         ; tiers all equal ?
+    jmpc    cmp.x, tier_cascade_done
     cmp     r0.z, ge, ge, r1.z          ; plane >= b01 -> tier 1
     ifc     cmp.x
         mov     r4.x, r1.y
@@ -172,6 +184,7 @@ draw:
         mov     r4.z, r8.w
         mov     r4.w, r9.w
     .end
+tier_cascade_done:
     add     r11.z, r11.z, r4.z          ; fade/haze per tier (stereo_fog.h): colour.b = the tier's amount
     ; Mode 7 perspective (issue #62): a scanline vertex carries
     ; w = 256 * (nearest span / its span); tiles carry the loader's w.
@@ -200,7 +213,7 @@ draw:
     ; glow by palette (issue #77): bit = floor(mask / 2^pal) mod 2; a tile
     ; whose palette is not in the mask parks off-screen (+4096) while the
     ; enable flag is 1. (255, 0) outside the glow pass = exact no-op.
-    mov     r13, glowPal                ; x = mask, y = enable, z = ghost pass (copied: a swizzled uniform operand mis-encodes)
+    ; (r13 = glowPal, loaded before the tier cascade)
     ; blur ghost alpha per tier (stereo_fog.h): in a ghost pass colour.r = the
     ; tier's alpha (the ghost TexEnv reads it); otherwise the vertex's red stays
     add     r14.w, c_base.y, -r13.z     ; 1 - ghost pass

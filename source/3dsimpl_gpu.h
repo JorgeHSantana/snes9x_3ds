@@ -228,6 +228,10 @@ typedef struct
     u64             gpuBusyLast;     // the previous frame's busy span
     u64             gpuBusyTicks;    // summed over the drawn frames of the perf window
     u32             gpuBusyFrames;   // ...and how many
+    u32             drawCallsLast;   // the last frame's draw calls (gpu3dsDraw) and vertices submitted
+    u32             drawVertsLast;
+    u32             drawCalls;       // ...summed over the perf window (draws=/verts= per frame)
+    u32             drawVerts;
     u64             drawTicks;       // ...submitting the eyes' layer passes (gpu3dsDrawSnesScreen, both eyes)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame

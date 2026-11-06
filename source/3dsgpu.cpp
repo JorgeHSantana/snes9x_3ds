@@ -146,14 +146,30 @@ void gpu3dsSetGlowPalette(int mask, bool enable)
     const float m = (float)(mask & 0xFF), e = enable ? 1.0f : 0.0f;
     if (GPU3DS.glowPalSet[0] == m && GPU3DS.glowPalSet[1] == e) return;
     GPU3DS.glowPalSet[0] = m; GPU3DS.glowPalSet[1] = e;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL], m, e, GPU3DS.ghostPassFlag, 0.0f);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL], m, e, GPU3DS.ghostPassFlag, GPU3DS.tierCascadeFlag);
 }
 void gpu3dsSetGhostPass(bool on)
 {
     const float f = on ? 1.0f : 0.0f;
     if (GPU3DS.ghostPassFlag == f) return;
     GPU3DS.ghostPassFlag = f;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL], GPU3DS.glowPalSet[0], GPU3DS.glowPalSet[1], f, 0.0f);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL], GPU3DS.glowPalSet[0], GPU3DS.glowPalSet[1], f, GPU3DS.tierCascadeFlag);
+}
+// The tile shader's tier cascade (3 compares, 12 moves) only matters
+// when the tiers hold different values; in 2D, and for any layer with a
+// single depth, tier 0 fits every vertex and glowPal.w = 0 skips it.
+void gpu3dsSyncTierCascade()
+{
+    const float s0 = GPU3DS.stereoParallax, d0 = GPU3DS.stereoPrioDimP0, f0 = GPU3DS.stereoFogSet[0], g0 = GPU3DS.stereoGhostSet[0];
+    const bool same =
+        GPU3DS.stereoParallaxP1 == s0 && GPU3DS.stereoParallaxT2 == s0 && GPU3DS.stereoParallaxT3 == s0 &&
+        GPU3DS.stereoPrioDimP1 == d0 && GPU3DS.stereoPrioDimP2 == d0 && GPU3DS.stereoPrioDimP3 == d0 &&
+        GPU3DS.stereoFogSet[1] == f0 && GPU3DS.stereoFogSet[2] == f0 && GPU3DS.stereoFogSet[3] == f0 &&
+        GPU3DS.stereoGhostSet[1] == g0 && GPU3DS.stereoGhostSet[2] == g0 && GPU3DS.stereoGhostSet[3] == g0;
+    const float flag = same ? 0.0f : 1.0f;
+    if (GPU3DS.tierCascadeFlag == flag) return;
+    GPU3DS.tierCascadeFlag = flag;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL], GPU3DS.glowPalSet[0], GPU3DS.glowPalSet[1], GPU3DS.ghostPassFlag, flag);
 }
 void gpu3dsGlowPassEnd()
 {
@@ -534,7 +550,7 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
             GPU3DS.mode7PerspSet[0], GPU3DS.mode7PerspSet[1],
             -GPU3DS.mode7PerspSet[2], -GPU3DS.mode7PerspSet[3]);
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL],
-            GPU3DS.glowPalSet[0], GPU3DS.glowPalSet[1], GPU3DS.ghostPassFlag, 0.0f);
+            GPU3DS.glowPalSet[0], GPU3DS.glowPalSet[1], GPU3DS.ghostPassFlag, GPU3DS.tierCascadeFlag);
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_GHOST],
             GPU3DS.stereoGhostSet[0] * STEREO_FOG_VERTEX_SCALE, GPU3DS.stereoGhostSet[1] * STEREO_FOG_VERTEX_SCALE,
             GPU3DS.stereoGhostSet[2] * STEREO_FOG_VERTEX_SCALE, GPU3DS.stereoGhostSet[3] * STEREO_FOG_VERTEX_SCALE);
@@ -550,19 +566,15 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
 }
 
 
-#ifdef PROBE_DRAW_STATS
-// PROBE build (issue #71 numbers): per-frame draw-call and vertex counts,
-// split base vs ghost, logged every 60 frames. Host GPU time means
-// nothing for the 3DS, but submitted draws/vertices scale its cost.
-static u32 s_probeDraws, s_probeVerts, s_probeGhostDraws, s_probeGhostVerts, s_probeFrames;
-#endif
+// draw calls and vertices this frame (perf line draws=/verts=, GPU Cost
+// Probe): with the PICA vertex-bound on a plain 2D frame these say
+// whether a change moved the work or only the shader
+static u32 s_frameDraws, s_frameVerts;
 
 void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
     t3dsStartTimer(TIMER_DRAW);
-#ifdef PROBE_DRAW_STATS
-    if (GPU3DS.stereoGhostPass) { s_probeGhostDraws++; s_probeGhostVerts += (u32)count; }
-    else                        { s_probeDraws++;      s_probeVerts += (u32)count; }
-#endif
+    s_frameDraws++;
+    s_frameVerts += (u32)(indices != NULL || from >= 0 ? count : list->count);
     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
     gpu3dsSetAttributeBuffers(list);
 
@@ -643,14 +655,9 @@ void gpu3dsFrameEnd(u8 flags)
     C3D_FrameEnd(flags);
     GPU3DSExt.flushTicks += svcGetSystemTick() - flushTick0;
     t3dsStopTimer(TIMER_FLUSH);
-#ifdef PROBE_DRAW_STATS
-    if (++s_probeFrames == 60) {
-        log3dsWrite("[drawstats] per-frame avg over 60: base %u draws / %u verts, ghost %u draws / %u verts, total %u draws / %u verts",
-            s_probeDraws / 60, s_probeVerts / 60, s_probeGhostDraws / 60, s_probeGhostVerts / 60,
-            (s_probeDraws + s_probeGhostDraws) / 60, (s_probeVerts + s_probeGhostVerts) / 60);
-        s_probeDraws = s_probeVerts = s_probeGhostDraws = s_probeGhostVerts = s_probeFrames = 0;
-    }
-#endif
+    GPU3DSExt.drawCallsLast = s_frameDraws; GPU3DSExt.drawVertsLast = s_frameVerts;
+    GPU3DSExt.drawCalls += s_frameDraws;    GPU3DSExt.drawVerts += s_frameVerts;
+    s_frameDraws = s_frameVerts = 0;
 }
 
 bool gpu3dsSetTopMode()
@@ -719,6 +726,7 @@ bool gpu3dsInitialize()
     GPU3DSExt.shadowSoftLevel = 0; GPU3DSExt.shadowAlphaMul = 1.0f;   // until the frame loop steps the controller
     GPU3DS.stereoShadowOffY = 0.0f;
     GPU3DS.glowPalSet[0] = 255.0f; GPU3DS.glowPalSet[1] = 0.0f;
+    GPU3DS.tierCascadeFlag = 0.0f;
     GPU3DS.mode7PerspApplied = -1.0f;
     GPU3DS.mode7PerspSet[0] = GPU3DS.mode7PerspSet[2] = GPU3DS.mode7PerspSet[3] = 0.0f;
     GPU3DS.mode7PerspSet[1] = 1.0f;

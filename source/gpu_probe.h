@@ -31,6 +31,7 @@ struct GpuProbeState {
     int frame;              // frames into the current step
     int counted;            // frames measured (after the settle)
     unsigned long long waitTicks, loadTicks, busyTicks;
+    unsigned long long draws, verts;   // draw calls and vertices submitted, summed
     int overBudget, skipped;
 };
 
@@ -74,13 +75,14 @@ static inline void gpu_probe_start(GpuProbeState *s)
     s->active = true;
     s->step = 0; s->frame = 0; s->counted = 0;
     s->waitTicks = s->loadTicks = s->busyTicks = 0;
+    s->draws = s->verts = 0;
     s->overBudget = s->skipped = 0;
 }
 
 // One frame of the current step. Returns true when the step just filled:
 // the caller logs the accumulators (still holding that step's totals and
 // s->step naming it), then gpu_probe_next moves on.
-static inline bool gpu_probe_frame(GpuProbeState *s, unsigned long long waitTicks, unsigned long long loadTicks, unsigned long long busyTicks, bool overBudget, bool skipped)
+static inline bool gpu_probe_frame(GpuProbeState *s, unsigned long long waitTicks, unsigned long long loadTicks, unsigned long long busyTicks, unsigned draws, unsigned verts, bool overBudget, bool skipped)
 {
     if (!s->active) return false;
     s->frame++;
@@ -89,6 +91,8 @@ static inline bool gpu_probe_frame(GpuProbeState *s, unsigned long long waitTick
         s->waitTicks += waitTicks;
         s->loadTicks += loadTicks;
         s->busyTicks += busyTicks;
+        s->draws += draws;
+        s->verts += verts;
         if (overBudget) s->overBudget++;
         if (skipped) s->skipped++;
     }
@@ -101,6 +105,7 @@ static inline void gpu_probe_next(GpuProbeState *s)
     s->step++;
     s->frame = 0; s->counted = 0;
     s->waitTicks = s->loadTicks = s->busyTicks = 0;
+    s->draws = s->verts = 0;
     s->overBudget = s->skipped = 0;
     if (s->step >= GPU_PROBE_STEPS) s->active = false;
 }

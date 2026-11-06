@@ -47,7 +47,7 @@ extern uint32 g_apuSkips;    // apu.cpp: SPC700 idle skips
 #include "gpu_probe.h"
 
 GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false };
-static GpuProbeState s_gpuProbe = { false, 0, 0, 0, 0, 0, 0, 0, 0 };
+static GpuProbeState s_gpuProbe = { false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 #include "3dslcd.h"
 #include "3dsui_img.h"
 #include "3dsmenu.h"
@@ -4458,12 +4458,13 @@ void emulatorLoop()
             // Load is input + core + render submission, not the vsync
             // wait; a frame over 100% is one the pacer may skip drawing.
             // GPU cost probe (gpu_probe.h): one step per 5 s, each logged
-            if (s_gpuProbe.active && gpu_probe_frame(&s_gpuProbe, GPU3DSExt.gpuWaitLast, (u64)ticksSoFar, GPU3DSExt.gpuBusyLast, frameLoadPercent >= 100, skipDrawing)) {
+            if (s_gpuProbe.active && gpu_probe_frame(&s_gpuProbe, GPU3DSExt.gpuWaitLast, (u64)ticksSoFar, GPU3DSExt.gpuBusyLast, GPU3DSExt.drawCallsLast, GPU3DSExt.drawVertsLast, frameLoadPercent >= 100, skipDrawing)) {
                 const u64 n = s_gpuProbe.counted ? (u64)s_gpuProbe.counted : 1, tpu = 268111856ull / 1000000ull;
-                log3dsWrite("[probe][gpu] step %d %s: gpu=%u us gpuwait=%u us load=%u us (%d%%) over-budget=%d skipped-draws=%d of %d",
+                log3dsWrite("[probe][gpu] step %d %s: gpu=%u us gpuwait=%u us load=%u us (%d%%) draws=%u verts=%u over-budget=%d skipped-draws=%d of %d",
                     s_gpuProbe.step, gpu_probe_name(s_gpuProbe.step),
                     (unsigned)(s_gpuProbe.busyTicks / n / tpu), (unsigned)(s_gpuProbe.waitTicks / n / tpu), (unsigned)(s_gpuProbe.loadTicks / n / tpu),
                     (int)(s_gpuProbe.loadTicks / n * 100 / (u64)settings3DS.TicksPerFrame),
+                    (unsigned)(s_gpuProbe.draws / n), (unsigned)(s_gpuProbe.verts / n),
                     s_gpuProbe.overBudget, s_gpuProbe.skipped, s_gpuProbe.counted);
                 gpu_probe_next(&s_gpuProbe);
                 g_gpuProbeMask = gpu_probe_current_mask(&s_gpuProbe);
@@ -4482,7 +4483,7 @@ void emulatorLoop()
                 // submission, the shadow/glow phase inside it - the rest is
                 // input, audio, the blit and the pacer
                 const u64 N = (u64)s_frameLoadN, TPU = 268111856ull / 1000000ull;   // ticks per us (SYSCLOCK_ARM11)
-                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d sh=%d gm=%d src=%d spread=%d halo=%d persist=%d rel=%d bright=%d | us/frame core=%u (ppu=%u) draw=%u fx=%u flush=%u gpuwait=%u gpu=%u idle=%u aidle=%u",
+                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d sh=%d gm=%d src=%d spread=%d halo=%d persist=%d rel=%d bright=%d | us/frame core=%u (ppu=%u) draw=%u fx=%u flush=%u gpuwait=%u gpu=%u draws=%u verts=%u idle=%u aidle=%u",
                     s_frameLoadN,
                     (int)(s_frameLoad.average_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
                     (int)(s_frameLoad.maximum_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
@@ -4492,9 +4493,9 @@ void emulatorLoop()
                     GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.StereoEdgeMode, settings3DS.ShadowsMode, settings3DS.GlowMode,
                     GPU3DS.stereoGlowSource, GPU3DS.stereoGlowSpread, GPU3DS.stereoGlowSoft, GPU3DS.stereoGlowPersist, GPU3DS.stereoGlowRelative, GPU3DSExt.glowRelBright,
                     (unsigned)(GPU3DSExt.coreTicks / N / TPU), (unsigned)(GPU3DSExt.ppuTicks / N / TPU), (unsigned)(GPU3DSExt.drawTicks / N / TPU), (unsigned)(GPU3DSExt.fxTicks / N / TPU),
-                    (unsigned)(GPU3DSExt.flushTicks / N / TPU), (unsigned)(GPU3DSExt.gpuWaitTicks / N / TPU), (unsigned)(GPU3DSExt.gpuBusyFrames ? GPU3DSExt.gpuBusyTicks / GPU3DSExt.gpuBusyFrames / TPU : 0), (unsigned)(g_idleSkips / (uint32)N), (unsigned)(g_apuSkips / (uint32)N));
+                    (unsigned)(GPU3DSExt.flushTicks / N / TPU), (unsigned)(GPU3DSExt.gpuWaitTicks / N / TPU), (unsigned)(GPU3DSExt.gpuBusyFrames ? GPU3DSExt.gpuBusyTicks / GPU3DSExt.gpuBusyFrames / TPU : 0), GPU3DSExt.drawCalls / (unsigned)N, GPU3DSExt.drawVerts / (unsigned)N, (unsigned)(g_idleSkips / (uint32)N), (unsigned)(g_apuSkips / (uint32)N));
                 s_frameLoad.reset(); s_frameLoadN = 0; s_frameOver = 0; s_frameSkips = 0; GPU3DSExt.shadowDraws = 0; GPU3DSExt.glowDraws = 0;
-                GPU3DSExt.coreTicks = GPU3DSExt.ppuTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = GPU3DSExt.flushTicks = GPU3DSExt.gpuWaitTicks = GPU3DSExt.gpuBusyTicks = 0; GPU3DSExt.gpuBusyFrames = 0; g_idleSkips = 0; g_apuSkips = 0;
+                GPU3DSExt.coreTicks = GPU3DSExt.ppuTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = GPU3DSExt.flushTicks = GPU3DSExt.gpuWaitTicks = GPU3DSExt.gpuBusyTicks = 0; GPU3DSExt.gpuBusyFrames = 0; GPU3DSExt.drawCalls = GPU3DSExt.drawVerts = 0; g_idleSkips = 0; g_apuSkips = 0;
             }
         }
 
