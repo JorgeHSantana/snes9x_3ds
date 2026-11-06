@@ -3,6 +3,7 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+- **GPU Cost Probe** (Emulator tab, Others, with logging on): switches one piece of the render off every 5 s - colour grade, glow, shadows, depth effects, the right eye's pass, 3D - and logs each step's GPU wait, so a single Send Log says where the PICA's time goes.
 - **Skip Idle Loops** (Emulator tab, per game, default on, `IdleLoopSkip`,
   game cfg v2.0): the CPU jumps to the next event when it sits in a loop
   that only polls `$4210`/`$4212`, the APU ports, the SuperFX status or a

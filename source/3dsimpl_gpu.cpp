@@ -12,6 +12,7 @@ bool S9xLayerUsedLastFrame(int layer, int prio);   // gfxhw.cpp: the rows the la
 #include "3dsimpl_gpu.h"
 #include "3dsmode7persp.h"
 #include "3dslog.h"
+#include "gpu_probe.h"
 
 SGPU3DSExtended GPU3DSExt;
 
@@ -716,9 +717,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
             if (shadowPhaseDone) return;
             shadowPhaseDone = true;
             // the per-block switches (Jorge): Shadows Off/On, Glow Off / 3D only / Always
-            const bool shadowsOn = settings3DS.ShadowsMode != 0 && GPU3DS.stereoShadowRows != 0 && GPU3DS.stereoEyeIOD != 0.0f;
+            const bool shadowsOn = settings3DS.ShadowsMode != 0 && GPU3DS.stereoShadowRows != 0 && GPU3DS.stereoEyeIOD != 0.0f && !g_gpuProbeMask.noShadows;
             const bool glowWhole = GPU3DS.stereoGlowSource == 1 && GPU3DS.glowTexAvailable;
-            const bool glowAllowed = settings3DS.GlowMode == 2 || (settings3DS.GlowMode == 1 && GPU3DS.stereoEyeIOD != 0.0f);
+            const bool glowAllowed = (settings3DS.GlowMode == 2 || (settings3DS.GlowMode == 1 && GPU3DS.stereoEyeIOD != 0.0f)) && !g_gpuProbeMask.noGlow;
             const bool glowOn = glowAllowed && (GPU3DS.stereoGlowRows != 0 || glowWhole) && !sub;   // never into the sub screen: subtractive colour math would darken it
             if (!shadowsOn && !glowOn) return;
             const u64 fxTick0 = svcGetSystemTick();

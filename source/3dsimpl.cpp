@@ -38,6 +38,7 @@
 #include "shadow_auto.h"
 #include "glow_auto.h"
 #include "gpu_pressure.h"
+#include "gpu_probe.h"
 #include "glow_relative.h"
 #include "screen_grade.h"
 #include "sram_save.h"
@@ -754,7 +755,8 @@ static void impl3dsSceneRenderEye(bool firstFrame, bool paused, SVertexList *lis
 	// output colour grade (issue #77): stages 1-5 of this very blit, set
 	// after the state applied (the apply only touches stage 0) and
 	// cleared right after the draw so nothing else inherits them
-	const ScreenGrade grade = screen_grade_compute(settings3DS.ColorSat, settings3DS.ColorCon, settings3DS.ColorBri);
+	ScreenGrade grade = screen_grade_compute(settings3DS.ColorSat, settings3DS.ColorCon, settings3DS.ColorBri);
+	if (g_gpuProbeMask.noGrade) grade.active = false;   // GPU cost probe
 	gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
 	if (grade.active) gpu3dsSetScreenGrade(grade, false);
 	gpu3dsDraw(list, NULL, list->count);
@@ -1052,6 +1054,13 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		GPU3DSExt.glowRelBright = (int)s_glowRel.bright;
 		GPU3DSExt.glowRelRef = glow_rel_ref(GPU3DS.stereoGlowThresh, s_glowRel.bright);
 		GPU3DSExt.glowRelGain = glow_rel_gain(s_glowRel.bright);
+		// GPU cost probe: every Auto tier held at Full, so a step measures the
+		// piece it removed and not the controllers' reaction to the load
+		if (g_gpuProbeMask.on) {
+			GPU3DSExt.blurAutoLight = GPU3DSExt.blurAutoOff = false;
+			GPU3DSExt.shadowSoftLevel = GPU3DS.stereoShadowSoft; GPU3DSExt.shadowAlphaMul = 1.0f;
+			GPU3DSExt.glowLoadDrop = 0; GPU3DSExt.glowGainMul = 1.0f;
+		}
 	}
 
 	// per-scene 3D profiles (issue #23): match the PPU scene signature and
@@ -1154,6 +1163,9 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
 			GPU3DSExt.stereoOnLastFrame = slider != 0.0f;
 			const u64 drawTick0 = svcGetSystemTick();
+			// GPU cost probe: fade / haze / depth blur off for this frame's passes
+			const float probeFade = GPU3DS.stereoFade, probeHaze = GPU3DS.stereoHaze, probeBlur = GPU3DS.stereoBlur;
+			if (g_gpuProbeMask.noAtmos) GPU3DS.stereoFade = GPU3DS.stereoHaze = GPU3DS.stereoBlur = 0.0f;
 			GPU3DS.stereoRightPass = false;
 			GPU3DS.stereoEyeIOD = slider;
     		gpu3dsDrawSnesScreen();
@@ -1162,7 +1174,8 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			// pixel-identical redraw, so the composite reads the left
 			// texture twice instead
 			const bool rightNeeded = slider != 0.0f
-				&& (GPU3DS.stereoMaxAbs > 0.0f || settings3DS.ShadowsMode != 0);
+				&& (GPU3DS.stereoMaxAbs > 0.0f || settings3DS.ShadowsMode != 0)
+				&& !g_gpuProbeMask.sharedRight;   // GPU cost probe: the right pass's cost
 			GPU3DS.stereoRightShared = slider != 0.0f && !rightNeeded;
 			if (rightNeeded) {
 				GPU3DS.stereoRightPass = true;
@@ -1171,6 +1184,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 				gpu3dsDrawSnesScreen();
 				GPU3DS.stereoRightPass = false;
 			}
+			if (g_gpuProbeMask.noAtmos) { GPU3DS.stereoFade = probeFade; GPU3DS.stereoHaze = probeHaze; GPU3DS.stereoBlur = probeBlur; }
 			GPU3DSExt.drawTicks += svcGetSystemTick() - drawTick0;
 			t3dsStopTimer(TIMER_DRAW_SNES_SCREEN);
 		}

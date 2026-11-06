@@ -44,6 +44,10 @@ extern uint32 g_idleSkips;   // cpuexec.cpp: idle-loop skips (idle_skip.h)
 extern uint32 g_apuSkips;    // apu.cpp: SPC700 idle skips
 #include "3dsui.h"
 #include "3dsui_notif.h"
+#include "gpu_probe.h"
+
+GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false };
+static GpuProbeState s_gpuProbe = { false, 0, 0, 0, 0, 0, 0, 0 };
 #include "3dslcd.h"
 #include "3dsui_img.h"
 #include "3dsmenu.h"
@@ -683,6 +687,17 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             }, MenuItemType::Action, "  Send Screenshot to GitHub"_s, ""_s);
             items.back().PickerDescription = "Posts the paused top screen, left and\nright eye, as PNG (base64) comments on\nthe issue named in github.env.";
         }
+    }
+    if (settings3DS.isRomLoaded && settings3DS.LogFileEnabled && !s_gpuProbe.active) {
+        items.emplace_back([](int val) {
+            gpu_probe_start(&s_gpuProbe);
+            g_gpuProbeMask = gpu_probe_current_mask(&s_gpuProbe);
+            log3dsWrite("[probe][gpu] start: %d steps x %d frames (%d settle), 3d=%s shadows=%d glow=%d", GPU_PROBE_STEPS, GPU_PROBE_STEP_FRAMES, GPU_PROBE_SETTLE_FRAMES,
+                GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.ShadowsMode, settings3DS.GlowMode);
+            notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen, NOTIF_DEFAULT_DURATION, "GPU cost probe: 40 s, keep playing the heavy part");
+            GPU3DS.emulatorState = EMUSTATE_EMULATE;
+        }, MenuItemType::Action, "  GPU Cost Probe (40 s, to the log)"_s, ""_s);
+        items.back().PickerDescription = "Measures what each part of the render costs the\nGPU: back in the game, switches one piece off\nevery 5 s (colour grade, glow, shadows, depth\neffects, the right eye, 3D) and logs each step.\nSend the log afterwards.";
     }
     AddMenuDisabledOption(items, ""_s);
 
@@ -4442,6 +4457,21 @@ void emulatorLoop()
             // emulation thread's share of the frame budget, every 5 s.
             // Load is input + core + render submission, not the vsync
             // wait; a frame over 100% is one the pacer may skip drawing.
+            // GPU cost probe (gpu_probe.h): one step per 5 s, each logged
+            if (s_gpuProbe.active && gpu_probe_frame(&s_gpuProbe, GPU3DSExt.gpuWaitLast, (u64)ticksSoFar, frameLoadPercent >= 100, skipDrawing)) {
+                const u64 n = s_gpuProbe.counted ? (u64)s_gpuProbe.counted : 1, tpu = 268111856ull / 1000000ull;
+                log3dsWrite("[probe][gpu] step %d %s: gpuwait=%u us load=%u us (%d%%) over-budget=%d skipped-draws=%d of %d",
+                    s_gpuProbe.step, gpu_probe_name(s_gpuProbe.step),
+                    (unsigned)(s_gpuProbe.waitTicks / n / tpu), (unsigned)(s_gpuProbe.loadTicks / n / tpu),
+                    (int)(s_gpuProbe.loadTicks / n * 100 / (u64)settings3DS.TicksPerFrame),
+                    s_gpuProbe.overBudget, s_gpuProbe.skipped, s_gpuProbe.counted);
+                gpu_probe_next(&s_gpuProbe);
+                g_gpuProbeMask = gpu_probe_current_mask(&s_gpuProbe);
+                if (!s_gpuProbe.active) {
+                    log3dsWrite("[probe][gpu] done");
+                    notif3dsTrigger(Notif::Misc, Notif::Type::Success, settings3DS.GameScreen, NOTIF_DEFAULT_DURATION, "GPU cost probe done: send the log");
+                }
+            }
             static TimingStats s_frameLoad; static int s_frameLoadN = 0, s_frameOver = 0, s_frameSkips = 0;
             s_frameLoad.record((uint64_t)ticksSoFar);
             if (frameLoadPercent >= 100) s_frameOver++;

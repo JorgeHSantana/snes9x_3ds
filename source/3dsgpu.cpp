@@ -16,6 +16,7 @@
 #include "3dsimpl.h"
 #include "3dssettings.h"
 #include "3dslog.h"
+#include "gpu_probe.h"
 #include "3dslcd.h"
 
 SGPU3DS GPU3DS;
@@ -57,6 +58,8 @@ static SGPU_TOP_MODE gpu3dsGetTopMode()
 float gpu3dsGetIOD()
 {
     if (GPU3DS.topMode != TOP_MODE_3D || !GPU3DS.stereoTexAvailable)
+        return 0.0f;
+    if (g_gpuProbeMask.flat2D)   // GPU cost probe step "3D off"
         return 0.0f;
 
     return osGet3DSliderState() * gpu3dsGetIODBase();
