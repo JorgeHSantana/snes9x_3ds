@@ -96,6 +96,7 @@ typedef enum {
     ULOC_MODE7_PERSP,
     ULOC_GLOW_PAL,
     ULOC_STEREO_FOG,
+    ULOC_STEREO_GHOST,
     ULOC_COUNT
 } SGPU_SHADER_ULOC;
 
@@ -341,8 +342,10 @@ typedef struct
     int                         stereoGlowRelative; // 0 absolute threshold, 1 relative to the palette bright
     int                         stereoGlowPersist;  // 0..3 quarters of the last glow kept
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
-    float                       glowPalSet[2];      // (mask, enable) the tile shader holds; (255, 0) = no-op
+    float                       glowPalSet[2];      // (mask, enable) the tile shader holds; (255, 0) = no-op (z = ghostPassFlag)
     float                       stereoFogSet[4];    // per-tier fade/haze amount the tile shader holds (stereo_fog.h); 0 = no-op
+    float                       stereoGhostSet[4];  // per-tier blur ghost alpha the tile shader holds; read only in a ghost pass
+    float                       ghostPassFlag;      // glowPal.z: 1 while a ghost pass draws
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
@@ -566,6 +569,7 @@ void gpu3dsShadowPassEnd();
 void gpu3dsGlowPassState(int alphaRef, int plane);   // plane >= 0: depth GEQUAL at that plane (covered by layers in front), -1: no depth test
 void gpu3dsGlowPassEnd();
 void gpu3dsSetGlowPalette(int mask, bool enable);   // sprite palettes that draw in the tile shader; (255, false) = no-op
+void gpu3dsSetGhostPass(bool on);                   // glowPal.z: the tile shader puts each tier's ghost alpha in colour.r
 // Output colour grade (screen_grade.h) in the blit's TexEnv stages 1-5; no extra pass
 struct ScreenGrade;
 void gpu3dsSetScreenGrade(const ScreenGrade &g, bool vertexAlpha);
@@ -590,6 +594,21 @@ static inline void gpu3dsSetStereoFog4(float f0, float f1, float f2, float f3)
         f2 * STEREO_FOG_VERTEX_SCALE, f3 * STEREO_FOG_VERTEX_SCALE);
     GPU3DS.stereoFogSet[0] = f0; GPU3DS.stereoFogSet[1] = f1;
     GPU3DS.stereoFogSet[2] = f2; GPU3DS.stereoFogSet[3] = f3;
+}
+
+// per-priority blur ghost alphas (stereo_fog.h): one ghost pass pair per
+// layer whatever the tiers' depths; a tier with 0 draws no ghost (its
+// quads are parked off-screen by the caller). Pre-scaled like the fog.
+static inline void gpu3dsSetStereoGhost4(float g0, float g1, float g2, float g3)
+{
+    if (GPU3DS.stereoGhostSet[0] == g0 && GPU3DS.stereoGhostSet[1] == g1 &&
+        GPU3DS.stereoGhostSet[2] == g2 && GPU3DS.stereoGhostSet[3] == g3)
+        return;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_GHOST],
+        g0 * STEREO_FOG_VERTEX_SCALE, g1 * STEREO_FOG_VERTEX_SCALE,
+        g2 * STEREO_FOG_VERTEX_SCALE, g3 * STEREO_FOG_VERTEX_SCALE);
+    GPU3DS.stereoGhostSet[0] = g0; GPU3DS.stereoGhostSet[1] = g1;
+    GPU3DS.stereoGhostSet[2] = g2; GPU3DS.stereoGhostSet[3] = g3;
 }
 
 // per-priority spotlight alphas for the editor (1.0 = visible, 0.0 =

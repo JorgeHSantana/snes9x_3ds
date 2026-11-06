@@ -146,7 +146,14 @@ void gpu3dsSetGlowPalette(int mask, bool enable)
     const float m = (float)(mask & 0xFF), e = enable ? 1.0f : 0.0f;
     if (GPU3DS.glowPalSet[0] == m && GPU3DS.glowPalSet[1] == e) return;
     GPU3DS.glowPalSet[0] = m; GPU3DS.glowPalSet[1] = e;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL], m, e, 0.0f, 0.0f);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL], m, e, GPU3DS.ghostPassFlag, 0.0f);
+}
+void gpu3dsSetGhostPass(bool on)
+{
+    const float f = on ? 1.0f : 0.0f;
+    if (GPU3DS.ghostPassFlag == f) return;
+    GPU3DS.ghostPassFlag = f;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL], GPU3DS.glowPalSet[0], GPU3DS.glowPalSet[1], f, 0.0f);
 }
 void gpu3dsGlowPassEnd()
 {
@@ -527,7 +534,10 @@ void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpd
             GPU3DS.mode7PerspSet[0], GPU3DS.mode7PerspSet[1],
             -GPU3DS.mode7PerspSet[2], -GPU3DS.mode7PerspSet[3]);
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_GLOW_PAL],
-            GPU3DS.glowPalSet[0], GPU3DS.glowPalSet[1], 0.0f, 0.0f);
+            GPU3DS.glowPalSet[0], GPU3DS.glowPalSet[1], GPU3DS.ghostPassFlag, 0.0f);
+        C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_GHOST],
+            GPU3DS.stereoGhostSet[0] * STEREO_FOG_VERTEX_SCALE, GPU3DS.stereoGhostSet[1] * STEREO_FOG_VERTEX_SCALE,
+            GPU3DS.stereoGhostSet[2] * STEREO_FOG_VERTEX_SCALE, GPU3DS.stereoGhostSet[3] * STEREO_FOG_VERTEX_SCALE);
         C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_FOG],
             GPU3DS.stereoFogSet[0] * STEREO_FOG_VERTEX_SCALE, GPU3DS.stereoFogSet[1] * STEREO_FOG_VERTEX_SCALE,
             GPU3DS.stereoFogSet[2] * STEREO_FOG_VERTEX_SCALE, GPU3DS.stereoFogSet[3] * STEREO_FOG_VERTEX_SCALE);
@@ -1055,6 +1065,7 @@ bool gpu3dsInitializeShaderUniformLocations()
     GPU3DS.shaderULocs[ULOC_MODE7_PERSP] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "mode7Persp");
     GPU3DS.shaderULocs[ULOC_GLOW_PAL] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "glowPal");
     GPU3DS.shaderULocs[ULOC_STEREO_FOG] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoFog");
+    GPU3DS.shaderULocs[ULOC_STEREO_GHOST] = shaderInstanceGetUniformLocation(GPU3DS.shaders[SPROGRAM_TILES].shaderProgram.vertexShader, "stereoGhost");
 
 	bool uLocsInvalid = false;
 

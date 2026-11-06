@@ -379,6 +379,22 @@ static void gpu3dsSetGhostAlpha(float a)
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
 }
 
+// the tiled layers' ghost: alpha = texture alpha x the vertex colour's RED,
+// which the tile shader fills with the tier's ghost alpha while
+// gpu3dsSetGhostPass is on (stereo_fog.h) - one pass pair per layer
+// whatever the tiers' depths, where the per-group passes each paid the
+// whole layer's fill (Jorge's GPU Cost Probe, 2026-11-06)
+static void gpu3dsSetGhostAlphaPerTier(bool on)
+{
+    C3D_TexEnv *env = C3D_GetTexEnv(3);
+    C3D_TexEnvInit(env);
+    if (!on)
+        return;
+    C3D_TexEnvSrc(env, C3D_Alpha, GPU_TEXTURE0, GPU_PRIMARY_COLOR);
+    C3D_TexEnvOpAlpha(env, GPU_TEVOP_A_SRC_ALPHA, GPU_TEVOP_A_SRC_R);
+    C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
+}
+
 // Stage 3 for the drop shadow pass (issue #77): RGB = the constant colour,
 // alpha = texture alpha x constant. a <= 0 restores passthrough.
 static void gpu3dsSetShadowEnv(float a, uint32_t rgb)
@@ -1234,21 +1250,17 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // passes do nothing here. Tiers outside the group are instead
             // shifted clean off the screen - the parallax is per tier and
             // the clipper drops them for free. NULL = every tier.
-            auto drawGhostPasses = [&](float ghost, const float *tierMask) {
+            // the blur ghost passes (stereo_fog.h): EVERY tier in one pass
+            // pair, each tier with its own shift (the parallax cascade) and
+            // its own alpha (colour.r, via stereoGhost). A tier with alpha 0
+            // is parked off-screen - the clipper drops it for free. The
+            // composed shift rounds in BOTH slider modes (a smear distance
+            // gains nothing from a fraction, only the #65 tear).
+            auto drawGhostPasses = [&](const float *ghostA, const float *ghostO) {
                 if (GPU3DSExt.blurAutoOff) return;   // "Auto, Off under load" engaged
                 const float offscreen = 4096.0f;
-                float ghostShift[4][2];
-                for (int t = 0; t < 4; t++) {
-                    if (tierMask != nullptr && tierMask[t] <= 0.0f) {
-                        ghostShift[t][0] = ghostShift[t][1] = offscreen;
-                        continue;
-                    }
-                    ghostShift[t][0] = roundf(tierShift[t] + s_atmosGhostOffset);
-                    ghostShift[t][1] = roundf(tierShift[t] - s_atmosGhostOffset);
-                    // never collapse onto the crisp base pass
-                    if (ghostShift[t][0] == tierShift[t]) ghostShift[t][0] += 1.0f;
-                    if (ghostShift[t][1] == tierShift[t]) ghostShift[t][1] -= 1.0f;
-                }
+                float ghostShift[4][2], alpha[4];
+                bool any = false;
                 // Light quality (issue #71): ONE ghost instead of two,
                 // half the blur's draw cost. The ghost sits on opposite
                 // sides in the two eyes - steady in time - so the smear
@@ -1261,16 +1273,36 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 // weight close to Full.
                 bool light = settings3DS.StereoBlurQuality == 2 ||
                     ((settings3DS.StereoBlurQuality == 0 || settings3DS.StereoBlurQuality == 3) && GPU3DSExt.blurAutoLight);
+                for (int t = 0; t < 4; t++) {
+                    if (ghostA[t] <= 0.0f) {
+                        ghostShift[t][0] = ghostShift[t][1] = offscreen;
+                        alpha[t] = 0.0f;
+                        continue;
+                    }
+                    any = true;
+                    ghostShift[t][0] = roundf(tierShift[t] + ghostO[t]);
+                    ghostShift[t][1] = roundf(tierShift[t] - ghostO[t]);
+                    // never collapse onto the crisp base pass
+                    if (ghostShift[t][0] == tierShift[t]) ghostShift[t][0] += 1.0f;
+                    if (ghostShift[t][1] == tierShift[t]) ghostShift[t][1] -= 1.0f;
+                    if (light) {
+                        const float a = ghostA[t] * 1.4f;
+                        alpha[t] = a > 0.55f ? 0.55f : a;
+                    } else {
+                        alpha[t] = ghostA[t];
+                    }
+                }
+                if (!any) return;
                 int lightSide = GPU3DS.stereoRightPass ? 1 : 0;
                 GPU3DS.stereoGhostPass = true;
+                gpu3dsSetStereoGhost4(alpha[0], alpha[1], alpha[2], alpha[3]);
+                gpu3dsSetGhostPass(true);
+                gpu3dsSetGhostAlphaPerTier(true);
                 if (light) {
-                    float a = ghost * 1.4f;
-                    gpu3dsSetGhostAlpha(a > 0.55f ? 0.55f : a);
                     gpu3dsSetStereoParallax3(ghostShift[0][lightSide], ghostShift[1][lightSide], tierBnd01);
                     gpu3dsSetStereoParallaxHi(ghostShift[2][lightSide], ghostShift[3][lightSide], tierBnd12, tierBnd23);
                     drawPass();
                 } else {
-                    gpu3dsSetGhostAlpha(ghost);
                     gpu3dsSetStereoParallax3(ghostShift[0][0], ghostShift[1][0], tierBnd01);
                     gpu3dsSetStereoParallaxHi(ghostShift[2][0], ghostShift[3][0], tierBnd12, tierBnd23);
                     drawPass();
@@ -1279,7 +1311,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     drawPass();
                 }
                 GPU3DS.stereoGhostPass = false;
-                gpu3dsSetGhostAlpha(0.0f);
+                gpu3dsSetGhostAlphaPerTier(false);
+                gpu3dsSetGhostPass(false);
                 // the base parallax comes back for whoever draws next
                 gpu3dsSetStereoParallax3(tierShift[0], tierShift[1], tierBnd01);
                 gpu3dsSetStereoParallaxHi(tierShift[2], tierShift[3], tierBnd12, tierBnd23);
@@ -1288,8 +1321,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
             auto drawLayerContent = [&]() {
             drawPass();
-            if (id < LAYER_BACKDROP && s_atmosGhostAlpha > 0.0f)
-                drawGhostPasses(s_atmosGhostAlpha, nullptr);
+            if (id < LAYER_BACKDROP && s_atmosGhostAlpha > 0.0f) {
+                const float ga[4] = { s_atmosGhostAlpha, s_atmosGhostAlpha, s_atmosGhostAlpha, s_atmosGhostAlpha };
+                const float go[4] = { s_atmosGhostOffset, s_atmosGhostOffset, s_atmosGhostOffset, s_atmosGhostOffset };
+                drawGhostPasses(ga, go);
+            }
             };
 
             // spotlighting one PRIORITY (issue #61 polish): the whole
@@ -1376,33 +1412,22 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // by it, so the base pass carries every tier's own tint. Only
             // the blur ghosts still group: tiers sharing a ghost strength
             // and offset share their ghost passes, the others shifted off.
-            float grpGhostA[4], grpGhostO[4];
-            float grpDim[4][4];
-            int grpCount = 0;
             float tierFog[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            float tierGhostA[4] = { 0.0f, 0.0f, 0.0f, 0.0f }, tierGhostO[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
             float maxFog = 0.0f;
+            bool anyGhost = false;
             bool effectsOn = GPU3DS.stereoFade > 0.0f || GPU3DS.stereoHaze > 0.0f ||
                 GPU3DS.stereoBlur > 0.0f;
             if (!spotlight && s_previewHighlightLayer < 0 && effectsOn &&
                 GPU3DS.stereoEyeIOD != 0.0f && nTiers > 0) {
                 for (int t = 0; t < nTiers; t++) {
-                    u32 col; float ga, go;
-                    gpu3dsComputeAtmosphereForDepth(tierDepth[t], &col, &ga, &go);
+                    u32 col;
+                    gpu3dsComputeAtmosphereForDepth(tierDepth[t], &col, &tierGhostA[t], &tierGhostO[t]);
                     const float backExcess = tierDepth[t] < GPU3DS.stereoFocusBack ? GPU3DS.stereoFocusBack - tierDepth[t] : 0.0f;
                     const float depthIn = GPU3DS.stereoMaxBackExcess > 0.0f ? backExcess / GPU3DS.stereoMaxBackExcess : 0.0f;
                     tierFog[t] = stereo_fog_amount(GPU3DS.stereoFade, GPU3DS.stereoHaze, depthIn, GPU3DS.stereoEyeIOD);
                     if (tierFog[t] > maxFog) maxFog = tierFog[t];
-                    if (ga <= 0.0f) continue;   // no ghost for this tier
-                    int g;
-                    for (g = 0; g < grpCount; g++)
-                        if (grpGhostA[g] == ga && grpGhostO[g] == go) break;
-                    if (g == grpCount) {
-                        grpGhostA[grpCount] = ga;
-                        grpGhostO[grpCount] = go;
-                        for (int k = 0; k < 4; k++) grpDim[grpCount][k] = 0.0f;
-                        grpCount++;
-                    }
-                    grpDim[g][t] = 1.0f;
+                    if (tierGhostA[t] > 0.0f) anyGhost = true;
                 }
                 // the base pass: every tier, each with its own tint
                 gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -1414,13 +1439,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 s_atmosGhostAlpha = 0.0f;
                 s_atmosGhostOffset = 0.0f;
                 drawPass();
-                // the ghosts, per ghost parameter set, masked to their tiers;
-                // the per-vertex tint stage stays set so they tint like the base
-                for (int g = 0; g < grpCount; g++) {
-                    s_atmosGhostOffset = grpGhostO[g];
-                    drawGhostPasses(grpGhostA[g], grpDim[g]);
-                }
-                s_atmosGhostOffset = 0.0f;
+                // the ghosts: one pass pair, every tier at its own alpha and
+                // shift; the per-vertex tint stage stays set so they tint like the base
+                if (anyGhost) drawGhostPasses(tierGhostA, tierGhostO);
                 gpu3dsSetStereoFog4(0.0f, 0.0f, 0.0f, 0.0f);
                 gpu3dsApplyAtmosphereColor(0xFFFFFFFF);   // the per-vertex variant zeroed the dedup key: this re-inits the stage
                 continue;

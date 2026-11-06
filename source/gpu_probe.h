@@ -12,13 +12,14 @@
 
 #define GPU_PROBE_STEP_FRAMES   300   // 5 s at 60 Hz
 #define GPU_PROBE_SETTLE_FRAMES  60   // the Auto crossfades and the pacer settle: not counted
-#define GPU_PROBE_STEPS           8
+#define GPU_PROBE_STEPS           9
 
 struct GpuProbeMask {
     bool noGrade;       // the output colour grade (stages 1-5 of the blit)
     bool noGlow;        // the glow phase
     bool noShadows;     // the shadow phase
-    bool noAtmos;       // fade / haze / depth blur (the ghost passes)
+    bool noBlur;        // the depth blur (the ghost passes)
+    bool noFog;         // fade / haze (the per-tier tint)
     bool sharedRight;   // the right eye's layer pass skipped: composite reads the left texture twice
     bool flat2D;        // the slider reads 0: one pass, one composite
     bool on;            // a probe is running: the Auto tiers hold Full so the steps compare like with like
@@ -40,26 +41,28 @@ static inline const char *gpu_probe_name(int step)
     case 1: return "no grade";
     case 2: return "no glow";
     case 3: return "no shadows";
-    case 4: return "no fade/haze/blur";
-    case 5: return "plain stereo (1-4 off)";
-    case 6: return "plain stereo, right pass shared";
-    case 7: return "3D off";
+    case 4: return "no blur";
+    case 5: return "no fade/haze";
+    case 6: return "plain stereo (1-5 off)";
+    case 7: return "plain stereo, right pass shared";
+    case 8: return "3D off";
     default: return "?";
     }
 }
 
 static inline GpuProbeMask gpu_probe_mask(int step)
 {
-    GpuProbeMask m = { false, false, false, false, false, false, false };
+    GpuProbeMask m = { false, false, false, false, false, false, false, false };
     switch (step) {
     case 1: m.noGrade = true; break;
     case 2: m.noGlow = true; break;
     case 3: m.noShadows = true; break;
-    case 4: m.noAtmos = true; break;
-    case 5: case 6: case 7:
-        m.noGrade = m.noGlow = m.noShadows = m.noAtmos = true;
-        m.sharedRight = step >= 6;
-        m.flat2D = step == 7;
+    case 4: m.noBlur = true; break;
+    case 5: m.noFog = true; break;
+    case 6: case 7: case 8:
+        m.noGrade = m.noGlow = m.noShadows = m.noBlur = m.noFog = true;
+        m.sharedRight = step >= 7;
+        m.flat2D = step == 8;
         break;
     default: break;
     }

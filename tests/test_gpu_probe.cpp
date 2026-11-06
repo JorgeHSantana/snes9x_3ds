@@ -1,24 +1,27 @@
 #include "doctest.h"
 #include "gpu_probe.h"
 
-GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false };
+GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false };
 
 TEST_CASE("gpu_probe: the masks remove one piece per step, then stack") {
     const GpuProbeMask base = gpu_probe_mask(0);
     CHECK_FALSE(base.noGrade); CHECK_FALSE(base.noGlow); CHECK_FALSE(base.noShadows);
-    CHECK_FALSE(base.noAtmos); CHECK_FALSE(base.sharedRight); CHECK_FALSE(base.flat2D);
+    CHECK_FALSE(base.noBlur); CHECK_FALSE(base.noFog); CHECK_FALSE(base.sharedRight); CHECK_FALSE(base.flat2D);
     CHECK(gpu_probe_mask(1).noGrade);
     CHECK_FALSE(gpu_probe_mask(1).noGlow);
     CHECK(gpu_probe_mask(2).noGlow);
     CHECK(gpu_probe_mask(3).noShadows);
-    CHECK(gpu_probe_mask(4).noAtmos);
-    const GpuProbeMask plain = gpu_probe_mask(5);
-    CHECK(plain.noGrade); CHECK(plain.noGlow); CHECK(plain.noShadows); CHECK(plain.noAtmos);
+    CHECK(gpu_probe_mask(4).noBlur);
+    CHECK_FALSE(gpu_probe_mask(4).noFog);
+    CHECK(gpu_probe_mask(5).noFog);
+    CHECK_FALSE(gpu_probe_mask(5).noBlur);
+    const GpuProbeMask plain = gpu_probe_mask(6);
+    CHECK(plain.noGrade); CHECK(plain.noGlow); CHECK(plain.noShadows); CHECK(plain.noBlur); CHECK(plain.noFog);
     CHECK_FALSE(plain.sharedRight); CHECK_FALSE(plain.flat2D);
-    CHECK(gpu_probe_mask(6).sharedRight);
-    CHECK_FALSE(gpu_probe_mask(6).flat2D);
-    CHECK(gpu_probe_mask(7).flat2D);
     CHECK(gpu_probe_mask(7).sharedRight);
+    CHECK_FALSE(gpu_probe_mask(7).flat2D);
+    CHECK(gpu_probe_mask(8).flat2D);
+    CHECK(gpu_probe_mask(8).sharedRight);
 }
 
 TEST_CASE("gpu_probe: every step has a name") {
@@ -59,11 +62,11 @@ TEST_CASE("gpu_probe: next resets the accumulators and ends after the last step"
 }
 
 TEST_CASE("gpu_probe: the current mask is neutral while idle") {
-    GpuProbeState s = { false, 7, 0, 0, 0, 0, 0, 0 };
+    GpuProbeState s = { false, 8, 0, 0, 0, 0, 0, 0 };
     CHECK_FALSE(gpu_probe_current_mask(&s).flat2D);
     CHECK_FALSE(gpu_probe_current_mask(&s).on);
     gpu_probe_start(&s);
     CHECK(gpu_probe_current_mask(&s).on);
-    s.step = 7;
+    s.step = 8;
     CHECK(gpu_probe_current_mask(&s).flat2D);
 }

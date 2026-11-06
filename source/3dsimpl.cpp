@@ -1027,7 +1027,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		int tier = blurAutoTier(&s_blurAuto, settings3DS.StereoBlurQuality == 3);
 		GPU3DSExt.blurAutoLight = tier >= 1;
 		GPU3DSExt.blurAutoOff = tier == 2;
-		if (tier != wasTier)
+		if (tier != wasTier && !g_gpuProbeMask.on)
 			log3dsWrite("[blur] auto -> %s%s", tier == 2 ? "off" : (tier == 1 ? "light" : "full"), gpuBound ? " (gpu)" : "");
 		// Shadow Quality (issue #77): the same verdict, Off tier included
 		// whatever Blur Quality is, drives the Soft Edge level and the fade
@@ -1038,7 +1038,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		shadowAutoStep(&s_shadowAuto, GPU3DS.stereoShadowQuality, GPU3DSExt.shadowLoadTier, GPU3DS.stereoShadowSoft);
 		GPU3DSExt.shadowSoftLevel = s_shadowAuto.level;
 		GPU3DSExt.shadowAlphaMul = s_shadowAuto.alphaMul;
-		if (s_shadowAuto.level != wasLevel && GPU3DS.stereoShadowRows != 0)
+		if (s_shadowAuto.level != wasLevel && GPU3DS.stereoShadowRows != 0 && !g_gpuProbeMask.on)
 			log3dsWrite("[shadow] auto soft edge -> %d", s_shadowAuto.level);
 		// Glow Quality: the same tier drops the Halo/Spread, crossfaded
 		if (firstFrame) glowAutoReset(&s_glowAuto);
@@ -1046,7 +1046,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		glowAutoStep(&s_glowAuto, GPU3DS.stereoGlowQuality, GPU3DSExt.shadowLoadTier);
 		GPU3DSExt.glowLoadDrop = s_glowAuto.drop;
 		GPU3DSExt.glowGainMul = s_glowAuto.gainMul;
-		if (s_glowAuto.drop != wasDrop)
+		if (s_glowAuto.drop != wasDrop && !g_gpuProbeMask.on)
 			log3dsWrite("[glow] auto drop -> %d", s_glowAuto.drop);
 		// Threshold Relative: the palette's bright, tracked
 		if (firstFrame) glowRelReset(&s_glowRel);
@@ -1165,7 +1165,8 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			const u64 drawTick0 = svcGetSystemTick();
 			// GPU cost probe: fade / haze / depth blur off for this frame's passes
 			const float probeFade = GPU3DS.stereoFade, probeHaze = GPU3DS.stereoHaze, probeBlur = GPU3DS.stereoBlur;
-			if (g_gpuProbeMask.noAtmos) GPU3DS.stereoFade = GPU3DS.stereoHaze = GPU3DS.stereoBlur = 0.0f;
+			if (g_gpuProbeMask.noFog) GPU3DS.stereoFade = GPU3DS.stereoHaze = 0.0f;
+			if (g_gpuProbeMask.noBlur) GPU3DS.stereoBlur = 0.0f;
 			GPU3DS.stereoRightPass = false;
 			GPU3DS.stereoEyeIOD = slider;
     		gpu3dsDrawSnesScreen();
@@ -1184,7 +1185,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 				gpu3dsDrawSnesScreen();
 				GPU3DS.stereoRightPass = false;
 			}
-			if (g_gpuProbeMask.noAtmos) { GPU3DS.stereoFade = probeFade; GPU3DS.stereoHaze = probeHaze; GPU3DS.stereoBlur = probeBlur; }
+			if (g_gpuProbeMask.noFog || g_gpuProbeMask.noBlur) { GPU3DS.stereoFade = probeFade; GPU3DS.stereoHaze = probeHaze; GPU3DS.stereoBlur = probeBlur; }
 			GPU3DSExt.drawTicks += svcGetSystemTick() - drawTick0;
 			t3dsStopTimer(TIMER_DRAW_SNES_SCREEN);
 		}
