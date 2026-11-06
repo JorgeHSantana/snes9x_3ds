@@ -706,6 +706,7 @@ static inline void gpu3dsSetAttributeBuffers(SVertexList *list)
 }
 
 void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from = -1);
+void gpu3dsFrameSplit();   // C3D_FrameSplit(0) that stamps the frame's first submission (gpu=)
 bool gpu3dsFrameBegin(u8 flags = 0, bool ingame = false, bool isSecondScreen = false);
 void gpu3dsFrameEnd(u8 flags = 0);
 bool gpu3dsClearScreen(gfxScreen_t screen, bool isTopStereo = false);

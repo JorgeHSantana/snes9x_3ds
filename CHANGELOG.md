@@ -3,6 +3,7 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+- **`gpu=` in the perf line and the probe**: the PICA's actual busy time per drawn frame (first command-list submission to the last P3D event, stamped by a thread waiting on it). `gpuwait` only showed what spilled past the CPU's frame; in New mode the CPU is done in 4 ms, so a 12 ms GPU frame read as zero wait.
 - **Blur ghosts in one pass pair**: the tile shader also carries each tier's ghost alpha (colour red while a ghost pass draws), so a layer's two blur ghosts draw once each whatever the depths, instead of once per depth group. GPU Cost Probe, MMX3 ZP heavy phase with the Auto tiers held at Full: the ghost groups were the remaining 11 ms of GPU wait. The probe now has separate "no blur" and "no fade/haze" steps (9 steps, 45 s) and the Auto controllers stay quiet in the log while it runs.
 - **Fade / Haze in one pass**: the tile shader now carries each priority tier's fade/haze tint amount (a 4-float uniform, like the parallax), so a layer with split depths draws its base pass ONCE instead of once per depth group. Jorge's GPU Cost Probe on MMX3 Zero Project's heavy phase: the per-group redraws were the whole 12.6 ms GPU wait; only the Blur ghosts still add passes.
 - **GPU Cost Probe** (Emulator tab, Others, with logging on): switches one piece of the render off every 5 s - colour grade, glow, shadows, depth effects, the right eye's pass, 3D - and logs each step's GPU wait, so a single Send Log says where the PICA's time goes.

@@ -580,6 +580,31 @@ void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
     t3dsStopTimer(TIMER_DRAW);
 }
 
+// GPU busy time: a thread that only waits for the P3D event (command list
+// processed) and stamps the tick. citro3d itself waits on its GX queue
+// callback, not on this LightEvent, so nothing is taken from it.
+static void gpu3dsP3DThread(void *)
+{
+    for (;;) {
+        gspWaitForEvent(GSPGPU_EVENT_P3D, false);
+        GPU3DSExt.gpuDoneTick = svcGetSystemTick();
+    }
+}
+
+static void gpu3dsStartP3DThread()
+{
+    s32 prio = 0x30;
+    svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
+    threadCreate(gpu3dsP3DThread, NULL, 0x800, prio - 2, -2, true);   // above the main thread: stamps before it resumes
+}
+
+// our FrameSplit: stamps the frame's first submission (gpu=)
+void gpu3dsFrameSplit()
+{
+    if (GPU3DSExt.gpuSubmitTick == 0) GPU3DSExt.gpuSubmitTick = svcGetSystemTick();
+    C3D_FrameSplit(0);
+}
+
 bool gpu3dsFrameBegin(u8 flags, bool ingame, bool isSecondScreen)
 {
     t3dsStartTimer(TIMER_GPU_WAIT);
@@ -590,6 +615,15 @@ bool gpu3dsFrameBegin(u8 flags, bool ingame, bool isSecondScreen)
     t3dsStopTimer(TIMER_GPU_WAIT);
     if (!began)
         return false;
+    // the previous frame's GPU is done here (C3D_FrameBegin waited for it):
+    // its busy span is submit -> the P3D thread's last stamp
+    if (GPU3DSExt.gpuSubmitTick != 0) {
+        const u64 done = GPU3DSExt.gpuDoneTick;
+        GPU3DSExt.gpuBusyLast = done > GPU3DSExt.gpuSubmitTick ? done - GPU3DSExt.gpuSubmitTick : 0;
+        GPU3DSExt.gpuBusyTicks += GPU3DSExt.gpuBusyLast;
+        GPU3DSExt.gpuBusyFrames++;
+        GPU3DSExt.gpuSubmitTick = 0;
+    }
 
     // invalidate so next gpu3dsApplyRenderState re-applies the target
     GPU3DS.appliedRenderState.target = TARGET_UNSET;
@@ -605,6 +639,7 @@ void gpu3dsFrameEnd(u8 flags)
 {
     t3dsStartTimer(TIMER_FLUSH);
     const u64 flushTick0 = svcGetSystemTick();
+    if (GPU3DSExt.gpuSubmitTick == 0) GPU3DSExt.gpuSubmitTick = flushTick0;
     C3D_FrameEnd(flags);
     GPU3DSExt.flushTicks += svcGetSystemTick() - flushTick0;
     t3dsStopTimer(TIMER_FLUSH);
@@ -710,6 +745,7 @@ bool gpu3dsInitialize()
     C3D_CullFace(GPU_CULL_NONE);
 
     log3dsWrite("C3D_Init v");
+    gpu3dsStartP3DThread();
 
     GPU_COLORBUF colorBufFmt = (GPU_COLORBUF)gpu3dsGetTransferFmt((GPU_TEXCOLOR)DISPLAY_TRANSFER_FMT);
 

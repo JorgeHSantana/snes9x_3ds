@@ -219,6 +219,15 @@ typedef struct
     u64             flushTicks;      // ...inside C3D_FrameEnd (the linear-heap cache flush, perf line flush=)
     u64             gpuWaitLast;     // the last C3D_FrameBegin's wait alone (gpu_pressure.h)
     u64             gpuWaitTicks;    // ...inside C3D_FrameBegin waiting for the previous frame's GPU work (gpuwait=)
+    // GPU busy time (gpu=): from the frame's first command-list submission
+    // (a FrameSplit or the FrameEnd) to the last P3D event, timestamped by a
+    // small thread waiting on it - the wait above only shows what spills
+    // past the CPU's frame, this is the PICA's actual duration
+    u64             gpuSubmitTick;   // this frame's first submission (0 = none yet)
+    volatile u64    gpuDoneTick;     // the latest P3D event's tick (the P3D thread writes it)
+    u64             gpuBusyLast;     // the previous frame's busy span
+    u64             gpuBusyTicks;    // summed over the drawn frames of the perf window
+    u32             gpuBusyFrames;   // ...and how many
     u64             drawTicks;       // ...submitting the eyes' layer passes (gpu3dsDrawSnesScreen, both eyes)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
