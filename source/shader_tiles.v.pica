@@ -176,14 +176,26 @@ draw:
     ; Mode 7 perspective (issue #62): a scanline vertex carries
     ; w = 256 * (nearest span / its span); tiles carry the loader's w.
     ; With mode7Persp.x = 0 outside Mode 7 draws this is 1 + 0 = exact no-op.
-    mov     r5, c_m7                            ; (-1, 1/256, 1, 0): mad's src3 must be a temp
-    mad     r6.x, r0.w, r5.y, r5.x              ; d = w/256 - 1  (0 at the nearest row, -1 at the horizon)
-    mad     r5.x, r6.x, mode7Persp.x, r5.z      ; 1 + k * d
-    mul     r5.x, mode7Persp.y, r5.x            ; * near-row gain (a uniform must be src1 in mul)
-    mul     r4.x, r4.x, r5.x
-    mad     r4.x, r6.x, mode7Persp.w, r4.x      ; + d * (-ghost) = ghost * (1 - w/256): blur by distance
-    mad     r11.z, r6.x, mode7Persp.z, r11.z    ; color.b += d * (-fog) = fog * (1 - w/256): fog by
-                                                ; distance (a line's b is 0; every other draw has z = 0)
+    ; The whole block is skipped when k, fog and ghost are all 0 (every
+    ; draw outside the Mode 7 plane): the GPU Cost Probe (2026-11-06) put
+    ; a plain 2D frame of MMX3 at 5.5 ms of GPU with Enhanced Resolution
+    ; off - vertex-bound, ~3000 quads a pass through this shader - so
+    ; every instruction here is paid ~6000 times per pass.
+    mov     r6, mode7Persp                      ; (k, gain, -fog, -ghost)
+    add     r7.x, r6.x, -r6.z                   ; k + fog + ghost (fog, ghost are negated): 0 iff all three are 0
+    add     r7.x, r7.x, -r6.w
+    mov     r7.y, c_m7.w                        ; 0 (a cmp's second operand must be a register)
+    cmp     r7.x, gt, gt, r7.y                  ; > 0 ?
+    ifc     cmp.x
+        mov     r5, c_m7                            ; (-1, 1/256, 1, 0): mad's src3 must be a temp
+        mad     r6.x, r0.w, r5.y, r5.x              ; d = w/256 - 1  (0 at the nearest row, -1 at the horizon)
+        mad     r5.x, r6.x, mode7Persp.x, r5.z      ; 1 + k * d
+        mul     r5.x, mode7Persp.y, r5.x            ; * near-row gain (a uniform must be src1 in mul)
+        mul     r4.x, r4.x, r5.x
+        mad     r4.x, r6.x, mode7Persp.w, r4.x      ; + d * (-ghost) = ghost * (1 - w/256): blur by distance
+        mad     r11.z, r6.x, mode7Persp.z, r11.z    ; color.b += d * (-fog) = fog * (1 - w/256): fog by
+                                                    ; distance (a line's b is 0; every other draw has z = 0)
+    .end
     add     r0.x, r4.x, r0.x
     ; glow by palette (issue #77): bit = floor(mask / 2^pal) mod 2; a tile
     ; whose palette is not in the mask parks off-screen (+4096) while the
@@ -194,17 +206,23 @@ draw:
     add     r14.w, c_base.y, -r13.z     ; 1 - ghost pass
     mul     r11.x, r11.x, r14.w
     mad     r11.x, r4.w, r13.z, r11.x
-    mov     r14.x, -r12.y
-    ex2     r14.x, r14.x                ; 2^-pal
-    mul     r14.y, r13.x, r14.x         ; mask / 2^pal
-    flr     r14.y, r14.y
-    mov     r15, c_pal                  ; (1/1024, 1/2, 2, 4096)
-    mul     r14.z, r14.y, r15.y         ; / 2
-    flr     r14.z, r14.z
-    mad     r14.y, r14.z, -r15.z, r14.y ; bit = v - 2 floor(v/2)
-    mul     r14.y, r14.y, r13.y         ; bit and enable
-    add     r14.y, r14.y, -r13.y        ; 0 when it draws, -1 when enabled and not in the mask
-    mad     r0.x, r14.y, -r15.w, r0.x   ; park: x += 4096
+    ; only while the glow pass enforces a palette mask (y = 1): the ex2
+    ; chain is 11 instructions a vertex otherwise spent for nothing
+    mov     r7.y, c_m7.w                ; 0
+    cmp     r13.y, gt, gt, r7.y         ; enable > 0 ?
+    ifc     cmp.x
+        mov     r14.x, -r12.y
+        ex2     r14.x, r14.x                ; 2^-pal
+        mul     r14.y, r13.x, r14.x         ; mask / 2^pal
+        flr     r14.y, r14.y
+        mov     r15, c_pal                  ; (1/1024, 1/2, 2, 4096)
+        mul     r14.z, r14.y, r15.y         ; / 2
+        flr     r14.z, r14.z
+        mad     r14.y, r14.z, -r15.z, r14.y ; bit = v - 2 floor(v/2)
+        mul     r14.y, r14.y, r13.y         ; bit and enable
+        add     r14.y, r14.y, -r13.y        ; 0 when it draws, -1 when enabled and not in the mask
+        mad     r0.x, r14.y, -r15.w, r0.x   ; park: x += 4096
+    .end
     mov     r7, stereoIOD               ; drop shadow y offset in w (issue #77; 0 outside the shadow pass)
     add     r0.y, r7.w, r0.y
     mul     r11.w, r4.y, r11.w          ; editor spotlight: other priorities'
