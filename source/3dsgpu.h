@@ -2,6 +2,7 @@
 #ifndef _3DSGPU_H_
 #define _3DSGPU_H_
 
+#include "stereo_fog.h"
 #include <3ds.h>
 #include <citro3d.h>
 #include <tex3ds.h>
@@ -94,6 +95,7 @@ typedef enum {
     ULOC_STEREO_IOD2,
     ULOC_MODE7_PERSP,
     ULOC_GLOW_PAL,
+    ULOC_STEREO_FOG,
     ULOC_COUNT
 } SGPU_SHADER_ULOC;
 
@@ -340,6 +342,7 @@ typedef struct
     int                         stereoGlowPersist;  // 0..3 quarters of the last glow kept
     float                       stereoShadowOffY;   // the y offset the stereoIOD uniform's w holds (0 outside the shadow phase)
     float                       glowPalSet[2];      // (mask, enable) the tile shader holds; (255, 0) = no-op
+    float                       stereoFogSet[4];    // per-tier fade/haze amount the tile shader holds (stereo_fog.h); 0 = no-op
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
@@ -572,6 +575,21 @@ static inline void gpu3dsSetStereoParallax(float v)
 {
     gpu3dsSetStereoParallax3(v, v, 0.0f);
     gpu3dsSetStereoParallaxHi(v, v, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
+}
+
+// per-priority fade/haze tint amounts (stereo_fog.h), tier-selected by
+// the tile shader like the parallax; pre-scaled for the geometry shader's
+// 1/248 colour scale. All 0 outside the effects pass = exact no-op.
+static inline void gpu3dsSetStereoFog4(float f0, float f1, float f2, float f3)
+{
+    if (GPU3DS.stereoFogSet[0] == f0 && GPU3DS.stereoFogSet[1] == f1 &&
+        GPU3DS.stereoFogSet[2] == f2 && GPU3DS.stereoFogSet[3] == f3)
+        return;
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_STEREO_FOG],
+        f0 * STEREO_FOG_VERTEX_SCALE, f1 * STEREO_FOG_VERTEX_SCALE,
+        f2 * STEREO_FOG_VERTEX_SCALE, f3 * STEREO_FOG_VERTEX_SCALE);
+    GPU3DS.stereoFogSet[0] = f0; GPU3DS.stereoFogSet[1] = f1;
+    GPU3DS.stereoFogSet[2] = f2; GPU3DS.stereoFogSet[3] = f3;
 }
 
 // per-priority spotlight alphas for the editor (1.0 = visible, 0.0 =

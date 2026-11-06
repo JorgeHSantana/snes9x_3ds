@@ -1369,28 +1369,34 @@ void gpu3dsDrawLayers(SLayerList *list) {
             tierDepth[3] = (id == LAYER_OBJ) ? GPU3DS.stereoLayerDepthOBJHi[1] : tierDepth[1];
             int nTiers = (id == LAYER_OBJ) ? 4 : ((int)id < LAYER_OBJ ? 2 : 0);
 
-            u32 grpColor[4];
+            // fade/haze per tier in ONE pass (stereo_fog.h; Jorge's GPU Cost
+            // Probe 2026-11-06: the per-group redraws were the whole GPU
+            // overrun in MMX3's heavy phase): the tile shader picks each
+            // tier's tint amount from a uniform and the TexEnv interpolates
+            // by it, so the base pass carries every tier's own tint. Only
+            // the blur ghosts still group: tiers sharing a ghost strength
+            // and offset share their ghost passes, the others shifted off.
             float grpGhostA[4], grpGhostO[4];
             float grpDim[4][4];
             int grpCount = 0;
+            float tierFog[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            float maxFog = 0.0f;
             bool effectsOn = GPU3DS.stereoFade > 0.0f || GPU3DS.stereoHaze > 0.0f ||
                 GPU3DS.stereoBlur > 0.0f;
             if (!spotlight && s_previewHighlightLayer < 0 && effectsOn &&
                 GPU3DS.stereoEyeIOD != 0.0f && nTiers > 0) {
-                // merge by the effect's RESULT, not the raw depth: two
-                // depths inside the focus zone produce the same no-op
-                // tint and no ghosts - one pass covers both (issue #71:
-                // Butoden's split screen paid a doubled section-heavy
-                // pass for exactly that no-op)
                 for (int t = 0; t < nTiers; t++) {
                     u32 col; float ga, go;
                     gpu3dsComputeAtmosphereForDepth(tierDepth[t], &col, &ga, &go);
+                    const float backExcess = tierDepth[t] < GPU3DS.stereoFocusBack ? GPU3DS.stereoFocusBack - tierDepth[t] : 0.0f;
+                    const float depthIn = GPU3DS.stereoMaxBackExcess > 0.0f ? backExcess / GPU3DS.stereoMaxBackExcess : 0.0f;
+                    tierFog[t] = stereo_fog_amount(GPU3DS.stereoFade, GPU3DS.stereoHaze, depthIn, GPU3DS.stereoEyeIOD);
+                    if (tierFog[t] > maxFog) maxFog = tierFog[t];
+                    if (ga <= 0.0f) continue;   // no ghost for this tier
                     int g;
                     for (g = 0; g < grpCount; g++)
-                        if (grpColor[g] == col && grpGhostA[g] == ga &&
-                            grpGhostO[g] == go) break;
+                        if (grpGhostA[g] == ga && grpGhostO[g] == go) break;
                     if (g == grpCount) {
-                        grpColor[grpCount] = col;
                         grpGhostA[grpCount] = ga;
                         grpGhostO[grpCount] = go;
                         for (int k = 0; k < 4; k++) grpDim[grpCount][k] = 0.0f;
@@ -1398,46 +1404,25 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     }
                     grpDim[g][t] = 1.0f;
                 }
-            }
-
-            if (!spotlight && grpCount > 0) {
-                // base passes first, one per DISTINCT TINT: groups that
-                // differ only in ghost strength share their crisp draw
-                // (issue #71: split-but-blur-only layers were paying an
-                // extra full base pass). Ghost passes then run per ghost
-                // parameter set, masked to their own tiers.
+                // the base pass: every tier, each with its own tint
+                gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
+                gpu3dsSetStereoFog4(tierFog[0], tierFog[1], tierFog[2], tierFog[3]);
+                if (maxFog >= STEREO_FOG_MIN)
+                    gpu3dsApplyAtmosphereColorPerVertex(stereo_fog_color(stereo_fog_share(GPU3DS.stereoFade, GPU3DS.stereoHaze)));
+                else
+                    gpu3dsApplyAtmosphereColor(0xFFFFFFFF);
                 s_atmosGhostAlpha = 0.0f;
                 s_atmosGhostOffset = 0.0f;
+                drawPass();
+                // the ghosts, per ghost parameter set, masked to their tiers;
+                // the per-vertex tint stage stays set so they tint like the base
                 for (int g = 0; g < grpCount; g++) {
-                    float d0 = grpDim[g][0], d1 = grpDim[g][1];
-                    float d2 = grpDim[g][2], d3 = grpDim[g][3];
-                    bool merged = false;
-                    for (int h = 0; h < g; h++) {
-                        if (grpColor[h] == grpColor[g]) { merged = true; break; }
-                    }
-                    if (merged)
-                        continue;   // its base already drew with an earlier group
-                    for (int h = g + 1; h < grpCount; h++) {
-                        if (grpColor[h] != grpColor[g])
-                            continue;
-                        d0 = d0 > grpDim[h][0] ? d0 : grpDim[h][0];
-                        d1 = d1 > grpDim[h][1] ? d1 : grpDim[h][1];
-                        d2 = d2 > grpDim[h][2] ? d2 : grpDim[h][2];
-                        d3 = d3 > grpDim[h][3] ? d3 : grpDim[h][3];
-                    }
-                    gpu3dsSetStereoPrioDim4(d0, d1, d2, d3);
-                    gpu3dsApplyAtmosphereColor(grpColor[g]);
-                    drawPass();
-                }
-                for (int g = 0; g < grpCount; g++) {
-                    if (grpGhostA[g] <= 0.0f)
-                        continue;
-                    gpu3dsSetStereoPrioDim4(grpDim[g][0], grpDim[g][1],
-                                            grpDim[g][2], grpDim[g][3]);
-                    gpu3dsApplyAtmosphereColor(grpColor[g]);
                     s_atmosGhostOffset = grpGhostO[g];
                     drawGhostPasses(grpGhostA[g], grpDim[g]);
                 }
+                s_atmosGhostOffset = 0.0f;
+                gpu3dsSetStereoFog4(0.0f, 0.0f, 0.0f, 0.0f);
+                gpu3dsApplyAtmosphereColor(0xFFFFFFFF);   // the per-vertex variant zeroed the dedup key: this re-inits the stage
                 continue;
             }
 

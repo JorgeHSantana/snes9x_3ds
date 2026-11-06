@@ -15,6 +15,9 @@
                                  ;      w = -ghost offset (blur grows with distance)
 .fvec       glowPal              ; #10 - glow by sprite palette (issue #77): x = 8-bit mask of
                                  ;       palettes that draw, y = 1 to enforce it (0 = no-op)
+.fvec       stereoFog            ; #11 - (fog0..fog3) x 248: each tier's fade/haze tint amount,
+                                 ;       written into colour.b (the TexEnv interpolates towards
+                                 ;       the fog colour by it); 0 = exact no-op
 .fvec       stereoIOD2           ; #8 - (tier2 shift, tier3 shift, boundary 1/2,
                                  ;      boundary 2/3). BG layers park both boundaries
                                  ;      far above any plane so only tiers 0/1 exist;
@@ -138,23 +141,29 @@ draw:
     mov     r1.xyz, stereoIOD.xyz       ; s0, s1, b01
     mov     r3, stereoIOD2              ; s2, s3, b12, b23
     mov     r2, stereoDim               ; d0, d1, d2, d3
+    mov     r8, stereoFog               ; f0, f1, f2, f3
     mov     r4.x, r1.x                  ; tier 0 shift
     mov     r4.y, r2.x                  ; ...and its spotlight alpha
+    mov     r4.z, r8.x                  ; ...and its fog amount
     cmp     r0.z, ge, ge, r1.z          ; plane >= b01 -> tier 1
     ifc     cmp.x
         mov     r4.x, r1.y
         mov     r4.y, r2.y
+        mov     r4.z, r8.y
     .end
     cmp     r0.z, ge, ge, r3.z          ; plane >= b12 -> tier 2
     ifc     cmp.x
         mov     r4.x, r3.x
         mov     r4.y, r2.z
+        mov     r4.z, r8.z
     .end
     cmp     r0.z, ge, ge, r3.w          ; plane >= b23 -> tier 3
     ifc     cmp.x
         mov     r4.x, r3.y
         mov     r4.y, r2.w
+        mov     r4.z, r8.w
     .end
+    add     r11.z, r11.z, r4.z          ; fade/haze per tier (stereo_fog.h): colour.b = the tier's amount
     ; Mode 7 perspective (issue #62): a scanline vertex carries
     ; w = 256 * (nearest span / its span); tiles carry the loader's w.
     ; With mode7Persp.x = 0 outside Mode 7 draws this is 1 + 0 = exact no-op.

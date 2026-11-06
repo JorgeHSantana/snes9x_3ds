@@ -1,0 +1,15 @@
+{
+  "title": "MMX3 fade+haze+blur with split depths (slider forced): the per-tier fog path",
+  "rom": "sdmc:/snes/vanilla/Mega Man X3.smc",
+  "state": "states/mmx3-pillar.frz",
+  "stereo3d": [
+    {
+      "file": "MEGAMAN X3",
+      "content": "BG1=-6\nBG1P1=-3\nBG2=-4\nBG3=-2\nBG4=0\nOBJ=0\nOBJP1=2\nOBJP2=4\nOBJP3=6\nFADE=6\nHAZE=6\nBLUR=4\nFOCUSBACK=-1\nFOCUSFRONT=1\nEDGEMODE=0\nSHADOW=0\nGLOW=0\nSHADOWS=0\nGLOWMODE=0"
+    }
+  ],
+  "wait": 32,
+  "log_expect": [
+    "ROM loaded: MEGAMAN X3"
+  ]
+}

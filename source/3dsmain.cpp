@@ -694,7 +694,7 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             g_gpuProbeMask = gpu_probe_current_mask(&s_gpuProbe);
             log3dsWrite("[probe][gpu] start: %d steps x %d frames (%d settle), 3d=%s shadows=%d glow=%d", GPU_PROBE_STEPS, GPU_PROBE_STEP_FRAMES, GPU_PROBE_SETTLE_FRAMES,
                 GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.ShadowsMode, settings3DS.GlowMode);
-            notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen, NOTIF_DEFAULT_DURATION, "GPU cost probe: 40 s, keep playing the heavy part");
+            notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen, 5000, "GPU cost probe: 40 s, keep playing the heavy part");
             GPU3DS.emulatorState = EMUSTATE_EMULATE;
         }, MenuItemType::Action, "  GPU Cost Probe (40 s, to the log)"_s, ""_s);
         items.back().PickerDescription = "Measures what each part of the render costs the\nGPU: back in the game, switches one piece off\nevery 5 s (colour grade, glow, shadows, depth\neffects, the right eye, 3D) and logs each step.\nSend the log afterwards.";
@@ -4469,7 +4469,7 @@ void emulatorLoop()
                 g_gpuProbeMask = gpu_probe_current_mask(&s_gpuProbe);
                 if (!s_gpuProbe.active) {
                     log3dsWrite("[probe][gpu] done");
-                    notif3dsTrigger(Notif::Misc, Notif::Type::Success, settings3DS.GameScreen, NOTIF_DEFAULT_DURATION, "GPU cost probe done: send the log");
+                    notif3dsTrigger(Notif::Misc, Notif::Type::Success, settings3DS.GameScreen, 6000, "GPU cost probe done: send the log");
                 }
             }
             static TimingStats s_frameLoad; static int s_frameLoadN = 0, s_frameOver = 0, s_frameSkips = 0;

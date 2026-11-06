@@ -3,6 +3,7 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Features
+- **Fade / Haze in one pass**: the tile shader now carries each priority tier's fade/haze tint amount (a 4-float uniform, like the parallax), so a layer with split depths draws its base pass ONCE instead of once per depth group. Jorge's GPU Cost Probe on MMX3 Zero Project's heavy phase: the per-group redraws were the whole 12.6 ms GPU wait; only the Blur ghosts still add passes.
 - **GPU Cost Probe** (Emulator tab, Others, with logging on): switches one piece of the render off every 5 s - colour grade, glow, shadows, depth effects, the right eye's pass, 3D - and logs each step's GPU wait, so a single Send Log says where the PICA's time goes.
 - **Skip Idle Loops** (Emulator tab, per game, default on, `IdleLoopSkip`,
   game cfg v2.0): the CPU jumps to the next event when it sits in a loop
