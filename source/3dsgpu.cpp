@@ -669,6 +669,7 @@ void gpu3dsFrameEnd(u8 flags)
         GPU3DSExt.bgTilesLast[b] = GPU3DSExt.bgTiles[b]; GPU3DSExt.bgOpaqueLast[b] = GPU3DSExt.bgOpaque[b];
         GPU3DSExt.bgTiles[b] = GPU3DSExt.bgOpaque[b] = 0;
     }
+    GPU3DSExt.culledTilesLast = GPU3DSExt.culledTiles; GPU3DSExt.culledTilesWin += GPU3DSExt.culledTiles; GPU3DSExt.culledTiles = 0;
     GPU3DSExt.probeDumpDraws = false;
 }
 

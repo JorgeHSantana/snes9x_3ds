@@ -1,7 +1,7 @@
 #include "doctest.h"
 #include "gpu_probe.h"
 
-GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false };
+GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false, false };
 
 TEST_CASE("gpu_probe: the masks remove one piece per step, then stack") {
     const GpuProbeMask base = gpu_probe_mask(0);
@@ -22,6 +22,9 @@ TEST_CASE("gpu_probe: the masks remove one piece per step, then stack") {
     CHECK_FALSE(gpu_probe_mask(7).flat2D);
     CHECK(gpu_probe_mask(8).flat2D);
     CHECK(gpu_probe_mask(8).sharedRight);
+    CHECK(gpu_probe_mask(9).noCull);
+    CHECK_FALSE(gpu_probe_mask(9).noGrade);
+    CHECK_FALSE(gpu_probe_mask(8).noCull);
 }
 
 TEST_CASE("gpu_probe: every step has a name") {

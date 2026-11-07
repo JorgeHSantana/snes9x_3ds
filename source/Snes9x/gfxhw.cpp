@@ -651,7 +651,31 @@ inline void __attribute__((always_inline)) S9xCommitLayerSection(bool reuseVerti
 	renderState.stencilTest = S9xComputeAndEnableStencilFunction(layer, sub);
 	renderState.alphaTest = ALPHA_TEST_NE_ZERO;
 
+	// the section's occlusion attributes (occlusion_cull.h) from this walk:
+	// full-screen opaque only in the plain tile modes (0, 1, 3: no
+	// offset-per-tile, no hires; mosaic and Mode 7 walk elsewhere and count 0)
+	bool s_secFullOpaque = false; int s_secPlane0 = 0, s_secPlane1 = 0; u16 s_secSegY0 = 0, s_secSegY1 = 0;
+	if (!reuseVertices) {
+		const bool plainMode = PPU.BGMode == 0 || PPU.BGMode == 1 || PPU.BGMode == 3;
+		s_secFullOpaque = plainMode && GPU3DSExt.bgWalkTiles > 0 && GPU3DSExt.bgWalkBlank == 0 &&
+			GPU3DSExt.bgWalkSliced == 0 && GPU3DSExt.bgWalkOpaque == GPU3DSExt.bgWalkTiles;
+		s_secPlane0 = (int)GPU3DS.stereoBgPlane[layer * 2]; s_secPlane1 = (int)GPU3DS.stereoBgPlane[layer * 2 + 1];
+		s_secSegY0 = (u16)GFX.StartY; s_secSegY1 = (u16)GFX.EndY;
+		GPU3DSExt.bgTiles[layer & 3] += GPU3DSExt.bgWalkTiles;
+		GPU3DSExt.bgOpaque[layer & 3] += GPU3DSExt.bgWalkOpaque;
+		GPU3DSExt.bgWalkTiles = GPU3DSExt.bgWalkOpaque = GPU3DSExt.bgWalkBlank = GPU3DSExt.bgWalkSliced = 0;
+	}
 	gpu3dsCommitLayerSection(VBO_SCENE_TILE, (LAYER_ID)layer, &renderState, sub, reuseVertices);
+	if (!reuseVertices) {
+		SLayer *ly = &GPU3DSExt.layerList.layers[layer];
+		if (ly->sectionsTotal > 0 && !GPU3DSExt.layerList.hasSkippedSections) {
+			SLayerSection *sec = &GPU3DSExt.layerList.sections[ly->sectionsOffset + ly->sectionsTotal - 1];
+			sec->fullOpaque = s_secFullOpaque;
+			sec->planeMin = (s8)(s_secPlane0 < s_secPlane1 ? s_secPlane0 : s_secPlane1);
+			sec->planeMax = (s8)(s_secPlane0 > s_secPlane1 ? s_secPlane0 : s_secPlane1);
+			sec->segY0 = s_secSegY0; sec->segY1 = s_secSegY1;
+		}
+	}
 }
 
 inline void __attribute__((always_inline)) S9xCommitObjLayerSection(bool reuseVertices, bool sub) {
@@ -782,7 +806,10 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
     {
 	    BG.Buffered[TileNumber] = S9xConvertTileTo8Bit (pCache, TileAddr);
         if (BG.Buffered [TileNumber] == BLANK_TILE)
+        {
+            GPU3DSExt.bgWalkBlank++;
             return;
+        }
 
 		TILE_STAMP(tileAddrDiv8, 0) = 0;
 		TILE_STAMP(tileAddrDiv8, 1) = 0;
@@ -795,13 +822,19 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
     }
 
     if (BG.Buffered [TileNumber] == BLANK_TILE)
+    {
+        GPU3DSExt.bgWalkBlank++;
 	    return;
+    }
 
-	// GPU Cost Probe: tiles this BG emits, and how many are fully opaque
-	// (the bound of what an occlusion cull behind them could save)
-	GPU3DSExt.bgTiles[s_layerUseBg & 3]++;
+	// this BG walk's tiles: how many are fully opaque, blank, or a slice
+	// (the occlusion cull needs the walk to have covered its segment with
+	// opaque tiles only; the probe logs the per-frame totals)
+	GPU3DSExt.bgWalkTiles++;
 	if (BG.Buffered [TileNumber] == OPAQUE_TILE)
-		GPU3DSExt.bgOpaque[s_layerUseBg & 3]++;
+		GPU3DSExt.bgWalkOpaque++;
+	if (sliceX0 != 0 || sliceX1 != 8)
+		GPU3DSExt.bgWalkSliced++;
 
 	uint8 pal = (snesTile >> 10) & paletteMask;
 	int texturePos = cache3dsGetTexturePositionFast(tileAddrDiv8, pal);
@@ -901,7 +934,10 @@ inline void __attribute__((always_inline)) S9xDrawHiresBGFullTileHardwareInline 
     {
 	    BG.Buffered[TileNumber] = S9xConvertTileTo8Bit (pCache, TileAddr);
         if (BG.Buffered [TileNumber] == BLANK_TILE)
+        {
+            GPU3DSExt.bgWalkBlank++;
             return;
+        }
 
 		TILE_STAMP(tileAddrDiv8, 0) = 0;
 		TILE_STAMP(tileAddrDiv8, 1) = 0;
@@ -2753,7 +2789,10 @@ inline void __attribute__((always_inline)) S9xDrawOBJTileHardware2 (
     {
 	    BG.Buffered[TileNumber] = S9xConvertTileTo8Bit (pCache, TileAddr);
         if (BG.Buffered [TileNumber] == BLANK_TILE)
+        {
+            GPU3DSExt.bgWalkBlank++;
             return;
+        }
 
         TILE_STAMP(tileAddrDiv8, 8) = 0;
         TILE_STAMP(tileAddrDiv8, 9) = 0;

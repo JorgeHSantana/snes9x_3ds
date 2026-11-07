@@ -12,7 +12,7 @@
 
 #define GPU_PROBE_STEP_FRAMES   300   // 5 s at 60 Hz
 #define GPU_PROBE_SETTLE_FRAMES  60   // the Auto crossfades and the pacer settle: not counted
-#define GPU_PROBE_STEPS           9
+#define GPU_PROBE_STEPS          10
 
 struct GpuProbeMask {
     bool noGrade;       // the output colour grade (stages 1-5 of the blit)
@@ -22,6 +22,7 @@ struct GpuProbeMask {
     bool noFog;         // fade / haze (the per-tier tint)
     bool sharedRight;   // the right eye's layer pass skipped: composite reads the left texture twice
     bool flat2D;        // the slider reads 0: one pass, one composite
+    bool noCull;        // the BG occlusion cull off (occlusion_cull.h): every hidden tile drawn again
     bool on;            // a probe is running: the Auto tiers hold Full so the steps compare like with like
 };
 
@@ -47,13 +48,14 @@ static inline const char *gpu_probe_name(int step)
     case 6: return "plain stereo (1-5 off)";
     case 7: return "plain stereo, right pass shared";
     case 8: return "3D off";
+    case 9: return "no occlusion cull";
     default: return "?";
     }
 }
 
 static inline GpuProbeMask gpu_probe_mask(int step)
 {
-    GpuProbeMask m = { false, false, false, false, false, false, false, false };
+    GpuProbeMask m = { false, false, false, false, false, false, false, false, false };
     switch (step) {
     case 1: m.noGrade = true; break;
     case 2: m.noGlow = true; break;
@@ -65,6 +67,7 @@ static inline GpuProbeMask gpu_probe_mask(int step)
         m.sharedRight = step >= 7;
         m.flat2D = step == 8;
         break;
+    case 9: m.noCull = true; break;
     default: break;
     }
     return m;

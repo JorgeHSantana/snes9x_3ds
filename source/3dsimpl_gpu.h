@@ -137,6 +137,10 @@ typedef struct
 
     SGPU_VBO_ID         vboId;
     bool                onSub;
+    // BG occlusion cull (occlusion_cull.h): set for a BG tile section
+    bool                fullOpaque;     // every tile the walk emitted was opaque, none blank or sliced
+    s8                  planeMin, planeMax;   // the BG's two priority planes (gfxhw depth tables)
+    u16                 segY0, segY1;   // the vertical segment the walk covered
 } SLayerSection;
 
 typedef struct 
@@ -235,6 +239,8 @@ typedef struct
     u32             bgTiles[4];      // BG tiles the PPU walk emitted this frame (the 8x8 full-tile path)...
     u32             bgOpaque[4];     // ...and how many of them had no transparent pixel
     u32             bgTilesLast[4], bgOpaqueLast[4];   // the last frame's, for the probe step line
+    u32             bgWalkTiles, bgWalkOpaque, bgWalkBlank, bgWalkSliced;   // one BG walk's counts (reset at its commit)
+    u32             culledTiles, culledTilesLast, culledTilesWin;      // BG tiles the occlusion cull skipped this / last frame (every pass, both eyes)
     u64             drawTicks;       // ...submitting the eyes' layer passes (gpu3dsDrawSnesScreen, both eyes)
     bool            probeDumpDraws;  // GPU Cost Probe: log every gpu3dsDraw of this frame (cleared at FrameEnd)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame

@@ -13,6 +13,11 @@ bool S9xLayerUsedLastFrame(int layer, int prio);   // gfxhw.cpp: the rows the la
 #include "3dsmode7persp.h"
 #include "3dslog.h"
 #include "gpu_probe.h"
+#include "occlusion_cull.h"
+
+// the 3D editor's highlighted layer (-1 = none): its spotlight passes dim the
+// other priorities, so the occlusion cull stays off while it is set
+static int s_previewHighlightLayer = -1;
 
 SGPU3DSExtended GPU3DSExt;
 
@@ -298,10 +303,44 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
     if (GPU3DS.stereoGhostPass)
         GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
 
+    // BG occlusion cull (occlusion_cull.h): in the base pass of a BG, a
+    // section hidden behind another BG's full-screen opaque, unwindowed
+    // section on this target skips every tile inside the coverer's span
+    // this eye. Off in the ghost passes (a ghost is translucent, drawn as
+    // today), in the editor's highlight preview, and under the probe's
+    // "no occlusion cull" step.
+    const bool cullOn = !GPU3DS.stereoGhostPass && !g_gpuProbeMask.noCull && layer->id <= LAYER_BG3 &&
+        s_previewHighlightLayer < 0 && list->sections[from].vboId == VBO_SCENE_TILE;
+    const int target = (int)GPU3DS.currentRenderState.target;
+    const bool onSub = target == TARGET_SNES_SUB;
+
     for (int idx = from; idx < to; idx++) {
         SLayerSection *section = &list->sections[idx];
         u16 sFrom = section->from;
         u16 sCount = section->count;
+
+        // the coverer of this section, if any
+        float coverL = 0.0f, coverR = 0.0f; bool covered = false;
+        if (cullOn) {
+            for (int c = LAYER_BG0; c <= LAYER_BG3 && !covered; c++) {
+                if (c == (int)layer->id || !settings3DS.LayerEnabled[c]) continue;
+                SLayer *cl = &list->layers[c];
+                int cf = cl->sectionsOffset + (onSub ? 0 : cl->sectionsByTarget[TARGET_SNES_SUB]);
+                int ct = cf + cl->sectionsByTarget[target];
+                for (int k = cf; k < ct; k++) {
+                    SLayerSection *cs = &list->sections[k];
+                    if (cs->vboId != VBO_SCENE_TILE) continue;
+                    if (!occl_section_covers(cs->fullOpaque, cs->state.stencilTest == STENCIL_TEST_DISABLED,
+                            cs->planeMin, section->planeMax, cs->segY0, cs->segY1, section->segY0, section->segY1)) continue;
+                    float sc0 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[c] * STEREO_PARALLAX_SCALE;
+                    float sc1 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[c] * STEREO_PARALLAX_SCALE;
+                    if (settings3DS.StereoShiftMode == 0) { sc0 = roundf(sc0); sc1 = roundf(sc1); }
+                    occl_cover_span(sc0, sc1, GPU3DSExt.renderWidth, &coverL, &coverR);
+                    covered = true;
+                    break;
+                }
+            }
+        }
 
         // batch break on state change
         if (idx > from) {
@@ -309,7 +348,7 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
                 || section->vboId != vboId;
 
             if (changed) {
-                gpu3dsDraw(&GPU3DS.vertices[vboId], (void *)(indices + batchFrom), batchCount);
+                if (batchCount > 0) gpu3dsDraw(&GPU3DS.vertices[vboId], (void *)(indices + batchFrom), batchCount);
                 vboId = section->vboId;
                 GPU3DS.currentRenderState.packed =
                     (GPU3DS.currentRenderState.packed & ~layerMask[1]) | (section->state.packed & layerMask[1]);
@@ -322,6 +361,21 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
 
         // build sequential indices
         u16 *dst = indices + batchFrom + batchCount;
+        if (covered) {
+            // one tile = two vertices: keep only the tiles the coverer's span misses
+            const STileVertex *v = (const STileVertex *)GPU3DS.vertices[VBO_SCENE_TILE].data;
+            const float sv0 = GPU3DS.stereoParallax, sv1 = GPU3DS.stereoParallaxP1;   // this layer's shifts, set by the caller
+            int n = 0;
+            for (int i = 0; i + 1 < sCount; i += 2) {
+                if (occl_tile_hidden(v[sFrom + i].Position.x, v[sFrom + i + 1].Position.x, sv0, sv1, coverL, coverR)) {
+                    GPU3DSExt.culledTiles++;
+                    continue;
+                }
+                dst[n] = sFrom + i; dst[n + 1] = sFrom + i + 1; n += 2;
+            }
+            batchCount += (u16)n;
+            continue;
+        }
         int i = 0;
         for (; i <= sCount - 4; i += 4) {
             dst[i]     = sFrom + i;
@@ -337,7 +391,7 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
     }
 
     // draw final batch
-    gpu3dsDraw(&GPU3DS.vertices[vboId], (void *)(indices + batchFrom), batchCount);
+    if (batchCount > 0) gpu3dsDraw(&GPU3DS.vertices[vboId], (void *)(indices + batchFrom), batchCount);
 }
 
 // Atmospheric depth cues (Depth Fade / Depth Haze): texenv stage 2
@@ -514,7 +568,7 @@ static void gpu3dsSetGlowTapEnv(float gain)
 
 // 3D-tab editor preview (issue #61): while >= 0, every layer except
 // this one is dimmed hard so the edited layer reads instantly.
-static int s_previewHighlightLayer = -1;
+
 static int s_previewHighlightPrio = -1;   // -1 = whole layer
 static int s_previewHighlightPal = -1;    // >= 0: only this sprite palette draws (glow by palette)
 
@@ -1676,6 +1730,7 @@ void gpu3dsCommitLayerSection(SGPU_VBO_ID vboId, LAYER_ID id, SGPURenderState *s
         section->count = currentVerticesCount;
         section->vboId = vboId;
         section->onSub = sub;
+        section->fullOpaque = false; section->planeMin = section->planeMax = 0; section->segY0 = section->segY1 = 0;   // BG tile sections: gfxhw fills these after the call
 
         if (state->textureBind == SNES_MODE7_TILE_0) {
             layer->m7Tile0 = true;
