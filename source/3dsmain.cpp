@@ -61,9 +61,13 @@ char romFileName[NAME_MAX + 1];
 // file exists, the emulator does an automatic menu round-trip every ~10s —
 // the full pause/resume path (settings3dsUpdate included) with no input —
 // to reproduce the "layers break after touching settings" bug.
+// A first line "loadslot N" makes the round-trip load savestate slot N
+// the way the Load Slot item does (one shot), to reproduce the MSU-1
+// music going silent after a menu state load (Jorge, 2026-11-07).
 static int  g_menuProbeCountdown = 0;
 static bool g_menuProbeActive = false;
 static bool g_menuProbeArmed = false;
+static int  g_menuProbeLoadSlot = 0;
 
 bool slotLoaded = false;
 
@@ -4125,6 +4129,15 @@ void showMenu() {
     if (g_menuProbeActive) {
         g_menuProbeActive = false;
         g_menuProbeCountdown = 600;          // re-arm the next round-trip
+        if (g_menuProbeLoadSlot > 0) {
+            // the Load Slot item's exact sequence
+            snd3dsDrainMixing();
+            bool result = impl3dsLoadStateSlot(g_menuProbeLoadSlot);
+            snd3dsResumeMixing();
+            log3dsWrite("[menuprobe] load slot %d -> %s", g_menuProbeLoadSlot, result ? "ok" : "failed");
+            g_menuProbeLoadSlot = 0;
+            g_menuProbeArmed = false;        // one shot: the music after it is the test
+        }
         GPU3DS.emulatorState = EMUSTATE_EMULATE;
         log3dsWrite("[menuprobe] leaving menu (instant)");
     }
@@ -4615,10 +4628,16 @@ static bool tryAutoBoot()
     log3dsInitialize();
     FILE* probe = fopen("sdmc:/menuprobe.txt", "r");
     if (probe != NULL) {
+        char line[32] = {};
+        if (fgets(line, sizeof(line), probe) != NULL && sscanf(line, "loadslot %d", &g_menuProbeLoadSlot) == 1 && g_menuProbeLoadSlot > 0)
+            log3dsWrite("[menuprobe] armed: one menu round-trip at ~600 frames loading slot %d", g_menuProbeLoadSlot);
+        else {
+            g_menuProbeLoadSlot = 0;
+            log3dsWrite("[menuprobe] armed: instant menu round-trip every ~600 frames");
+        }
         fclose(probe);
         g_menuProbeArmed = true;
         g_menuProbeCountdown = 600;
-        log3dsWrite("[menuprobe] armed: instant menu round-trip every ~600 frames");
     }
     char path[PATH_MAX] = {};
     bool ok = fgets(path, sizeof(path), f) != NULL;

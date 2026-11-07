@@ -669,6 +669,8 @@ Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap)
 {
     if (g_defer_active) {
         // rewind hold: latch only - the release applies the newest snapshot
+        msu1_diag("restore latched (rewind hold active): track %u pos %u status=%02X",
+                  (unsigned)snap.current_track, (unsigned)snap.audio_play_pos, (unsigned)snap.status);
         g_defer_snap = snap;
         g_defer_state = &state;
         g_defer_pending = true;
@@ -680,6 +682,14 @@ Msu1Result msu1_restore(Msu1State& state, const Msu1Snapshot& snap)
     msu1_lock();
     Msu1Result result = msu1_restore_locked(state, snap);
     msu1_unlock();
+    if (result != Msu1Result::Ok) {
+        msu1_diag("restore failed (%d): enabled=%d track %u -> %u", (int)result,
+                  state.enabled ? 1 : 0, (unsigned)state.current_track, (unsigned)snap.current_track);
+    } else {
+        msu1_diag("restore: track %u pos %u status=%02X (was track %u)",
+                  (unsigned)state.current_track, (unsigned)state.audio_play_pos,
+                  (unsigned)state.status, (unsigned)snap.current_track);
+    }
     return result;
 }
 
@@ -687,6 +697,7 @@ void msu1_set_restore_deferred(bool deferred)
 {
     if (g_defer_active == deferred) { return; }
     g_defer_active = deferred;
+    msu1_diag("restore deferred %s (pending=%d)", deferred ? "on" : "off", g_defer_pending ? 1 : 0);
     if (!deferred && g_defer_pending) {
         g_defer_pending = false;
         if (g_defer_state != nullptr) {
@@ -698,6 +709,9 @@ void msu1_set_restore_deferred(bool deferred)
 
 void msu1_restore_deferred_cancel(void)
 {
+    if (g_defer_active || g_defer_pending) {
+        msu1_diag("restore deferred cancelled (pending=%d dropped)", g_defer_pending ? 1 : 0);
+    }
     g_defer_active = false;
     g_defer_pending = false;
     g_defer_state = nullptr;

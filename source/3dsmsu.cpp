@@ -549,6 +549,7 @@ void msu3dsAudioReadaheadTick(void)
         uint64_t adoptT0 = ra_ticks();
         if (!want) {
             ra_close_decoder();
+            msu1_diag("readahead adopt: no stream (decoder closed)");
             return;
         }
         uint32_t openMs = 0;
