@@ -166,6 +166,7 @@ typedef struct
 
     SLayerSection   *sections;
     void            *ibo;
+    u32             iboUsed;        // index entries the frame's tiled layers may write (partial flush)
 
     u32             sizeInBytes;
 

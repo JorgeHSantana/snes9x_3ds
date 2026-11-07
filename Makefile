@@ -316,6 +316,12 @@ else
 
 DEPENDS	:=	$(OFILES:.o=.d)
 
+# docs/perf-backlog.md A3: CORE_OPT=-O2 compiles the SNES core (source/Snes9x)
+# at that level while the rest keeps OPT_FLAGS, e.g. make 3dsx CORE_OPT=-O2
+ifneq ($(strip $(CORE_OPT)),)
+$(filter Snes9x/%,$(OFILES_SOURCES)): CXXFLAGS := $(subst -O3,$(CORE_OPT),$(CXXFLAGS))
+endif
+
 COMMON_MAKEROM_PARAMS := -rsf $(RSF) -target t -exefslogo -elf $(OUTPUT_FILE).elf -icon $(OUTPUT_FILE).smdh \
 -banner $(TOPDIR)/$(RESOURCES)/banner.bnr -DAPP_TITLE="$(APP_TITLE)" -DAPP_PRODUCT_CODE="$(APP_PRODUCT_CODE)" \
 -DAPP_UNIQUE_ID="$(APP_UNIQUE_ID)" -DAPP_ROMFS="$(APP_ROMFS)" -DAPP_SYSTEM_MODE="64MB" \

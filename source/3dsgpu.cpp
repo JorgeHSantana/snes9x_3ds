@@ -362,9 +362,17 @@ void gpu3dsDeallocVertexList(SVertexList *list)
     linearFree(list->data_base);
 }
 
+void gpu3dsFlushListWrites(SVertexList *list)
+{
+    const u32 vertices = (u32)list->from + (u32)list->count;
+    if (list->data != NULL && vertices > 0)
+        GSPGPU_FlushDataCache(list->data, vertices * list->vertexSize);
+}
+
 void gpu3dsPrepareListForNextFrame(SVertexList *list, bool swap)
 {
     if (swap) {
+        gpu3dsFlushListWrites(list);   // the half we leave is complete: the GPU reads it this frame
         if (list->flip)
             list->data = (void *)((u32)(list->data_base) + list->sizeInBytes / 2);
         else
@@ -659,7 +667,18 @@ void gpu3dsFrameEnd(u8 flags)
     t3dsStartTimer(TIMER_FLUSH);
     const u64 flushTick0 = svcGetSystemTick();
     if (GPU3DSExt.gpuSubmitTick == 0) GPU3DSExt.gpuSubmitTick = flushTick0;
+#ifdef GPU_FULL_FLUSH
+    // diagnostic fallback: citro3d flushes the whole linear heap
     C3D_FrameEnd(flags);
+#else
+    // flush only what this frame wrote (docs/perf-backlog.md B1); the
+    // GX_CMDLIST_FLUSH bit keeps citro3d from the whole-heap flush and
+    // has the GX flush the command list itself
+    for (int i = 0; i < VBO_COUNT; i++)
+        gpu3dsFlushListWrites(&GPU3DS.vertices[i]);
+    gpu3dsFlushFrameWrites();
+    C3D_FrameEnd(flags | GX_CMDLIST_FLUSH);
+#endif
     GPU3DSExt.flushTicks += svcGetSystemTick() - flushTick0;
     t3dsStopTimer(TIMER_FLUSH);
     GPU3DSExt.drawCallsLast = s_frameDraws; GPU3DSExt.drawVertsLast = s_frameVerts;
@@ -1077,6 +1096,7 @@ bool gpu3dsAllocLinearTexture(SGPUTexture *texture, const SGPUTextureConfig *con
     texture->scale[0] = 0; // w
 
     memset(C3D_Tex2DGetImagePtr(&texture->tex, 0, NULL), 0, texture->tex.size);
+    GSPGPU_FlushDataCache(C3D_Tex2DGetImagePtr(&texture->tex, 0, NULL), texture->tex.size);
 
     return true;
 }

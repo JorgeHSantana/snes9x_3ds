@@ -351,6 +351,13 @@ typedef struct
                                                     // 0 when tier 0 fits every vertex and the shader skips the cascade
     float                       mode7PerspApplied;  // composite key of mode7PerspSet
     float                       mode7PerspSet[4];   // (k, gain, fog, ghost) the shader holds
+    // Partial end-of-frame flush (docs/perf-backlog.md B1): the CPU-written
+    // range of the two linear tile caches this frame, in texels of the
+    // atlas (lo > hi = clean). The GPU reads them through the data cache
+    // only after a GSPGPU_FlushDataCache of what changed; citro3d's
+    // default flushes the whole linear heap instead (31 MB, 0.3-1.1 ms).
+    u32                         tileCacheDirtyLo, tileCacheDirtyHi;
+    bool                        mode7CacheDirty;
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
     bool                        stereoRightShared;   // right pass skipped this frame (flat profile, no shadows): composite reads SNES_MAIN for both eyes
@@ -459,6 +466,14 @@ void gpu3dsSetRenderTargetToFrameBuffer(SGPU_TARGET_ID targetId);
 void gpu3dsSetRenderTargetToTexture(SGPU_TARGET_ID textureId);
 
 void gpu3dsPrepareListForNextFrame(SVertexList *list, bool swap = false);
+// Flushes the data cache over what the CPU wrote into the list's current
+// half (from + count vertices from data): called before a half is left
+// behind and at the end of the frame, so the GPU reads every vertex.
+void gpu3dsFlushListWrites(SVertexList *list);
+// Every other CPU-written buffer the frame's draws read (layer and shadow
+// index buffers, the glow scratch, the tile caches' dirty rows): the
+// end-of-frame replacement for citro3d's whole-heap flush (3dsimpl_gpu.cpp).
+void gpu3dsFlushFrameWrites();
 
 void gpu3dsEnableAlphaTestNotEqualsZero();
 void gpu3dsEnableAlphaTestGreaterThanEquals(uint8 alpha);

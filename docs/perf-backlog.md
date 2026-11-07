@@ -90,6 +90,10 @@ dessincronia de áudio). Esforço médio.
 
 ### A3. Experimento -O2 vs -O3 nos arquivos do core
 
+**Builds prontas (2026-11-07):** `make 3dsx OPT_FLAGS="-g -O2"` (tudo em
+-O2) e `make 3dsx CORE_OPT=-O2` (só `source/Snes9x`). Comparar `core=` e
+`ppu=` da linha `[perf][frame]` no console, mesma ROM e savestate.
+
 **Situação.** O ARM11 tem 16 KB de I-cache e, no Old mode, sem L2. `-O3`
 desenrola e inlina agressivamente `cpuexec`/`ppu`/`gfxhw`.
 
@@ -107,6 +111,15 @@ medir, pequeno para manter.
 ## B. Renderização (ppu ≈ 1,5 ms + draw ≈ 1,0 ms por frame)
 
 ### B1. Flush parcial do linear heap no fim do frame
+
+**Feito (2026-11-07).** `gpu3dsFrameEnd` passa `GX_CMDLIST_FLUSH` e flusha
+só o que o frame escreveu: cada `SVertexList` (`from + count` vértices da
+metade atual, também antes de trocar de metade), o IBO das camadas
+(`iboUsed`), o scratch das sombras no ponto de escrita, o ring do glow e
+as linhas tocadas dos dois caches de tile (`tileCacheDirtyLo/Hi`,
+`mode7CacheDirty`). `-DGPU_FULL_FLUSH` volta ao flush total. Medido no
+console pelo `flush=` da linha de perf: antes 264-275 µs (New), 1144 µs
+(Old).
 
 **Situação.** `gpu3dsFrameEnd()` chama `C3D_FrameEnd(0)`
 (`3dsimpl.cpp:1164`, default em `3dsgpu.h:669`). Com flags 0 o citro3d faz

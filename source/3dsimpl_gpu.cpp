@@ -619,6 +619,31 @@ struct GlowScratch
 };
 static GlowScratch s_glowScratch;
 
+// End-of-frame partial flush (docs/perf-backlog.md B1): everything the CPU
+// wrote this frame that the frame's draws read, other than the vertex
+// lists (gpu3dsFrameEnd flushes those). GPU_FULL_FLUSH restores citro3d's
+// whole-heap flush for diagnosis.
+void gpu3dsFlushFrameWrites()
+{
+    SLayerList *list = &GPU3DSExt.layerList;
+    if (list->ibo != NULL && list->iboUsed > 0)
+        GSPGPU_FlushDataCache(list->ibo, list->iboUsed * sizeof(u16));
+    if (s_glowScratch.ready) {
+        GSPGPU_FlushDataCache(s_glowScratch.rect.data_base, s_glowScratch.rect.sizeInBytes);
+        GSPGPU_FlushDataCache(s_glowScratch.quad.data_base, s_glowScratch.quad.sizeInBytes);
+    }
+    if (GPU3DS.tileCacheDirtyLo <= GPU3DS.tileCacheDirtyHi) {
+        u8 *atlas = (u8 *)GPU3DS.textures[SNES_TILE_CACHE].tex.data;
+        const u32 lo = GPU3DS.tileCacheDirtyLo * 2, hi = (GPU3DS.tileCacheDirtyHi + 64) * 2;   // 64 texels of RGBA5551 per tile
+        GSPGPU_FlushDataCache(atlas + lo, hi - lo);
+        GPU3DS.tileCacheDirtyLo = 0xFFFFFFFFu; GPU3DS.tileCacheDirtyHi = 0;
+    }
+    if (GPU3DS.mode7CacheDirty) {
+        GSPGPU_FlushDataCache(GPU3DS.textures[SNES_MODE7_TILE_CACHE].tex.data, GPU3DS.textures[SNES_MODE7_TILE_CACHE].tex.size);
+        GPU3DS.mode7CacheDirty = false;
+    }
+}
+
 // Stage 3 for the glow spread's composite taps: RGB = texel x gain,
 // alpha untouched. gain <= 0 restores passthrough.
 static void gpu3dsSetGlowTapEnv(float gain)
@@ -908,6 +933,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     if (shadowIbo == nullptr || shadowIboUsed + count > SHADOW_IBO_MAX) return;
                     u16 *dst = shadowIbo + shadowIboUsed;
                     for (int k = 0; k < count; k++) dst[k] = (u16)(from + k);
+                    GSPGPU_FlushDataCache(dst, (u32)count * sizeof(u16));   // partial flush: the scratch is read this frame
                     gpu3dsDraw(vbo, (void *)dst, count);
                     shadowIboUsed += count;
                 }
@@ -1081,6 +1107,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                         } else if (shadowIbo != nullptr && shadowIboUsed + sec->count <= SHADOW_IBO_MAX) {
                             u16 *dst = shadowIbo + shadowIboUsed;
                             for (int k2 = 0; k2 < sec->count; k2++) dst[k2] = (u16)(sec->from + k2);
+                            GSPGPU_FlushDataCache(dst, (u32)sec->count * sizeof(u16));
                             gpu3dsDraw(vbo, (void *)dst, sec->count);
                             shadowIboUsed += sec->count;
                         }
@@ -1756,6 +1783,7 @@ void gpu3dsDrawSnesScreen() {
             bufferOffset += verticesTotal;
         }
     }
+    list->iboUsed = bufferOffset;
 
     // the occlusion cull filters tiles through the index buffer: a frame
     // with a covered BG section draws every tiled layer indexed
