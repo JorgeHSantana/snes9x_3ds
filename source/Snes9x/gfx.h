@@ -103,6 +103,7 @@ struct SLineData {
 #define H_FLIP 0x4000
 #define V_FLIP 0x8000
 #define BLANK_TILE 2
+#define OPAQUE_TILE 3   // every one of the 64 pixels non-zero (BG.Buffered; drawn like TRUE)
 
 struct SBG
 {

@@ -665,6 +665,10 @@ void gpu3dsFrameEnd(u8 flags)
     GPU3DSExt.drawCallsLast = s_frameDraws; GPU3DSExt.drawVertsLast = s_frameVerts;
     GPU3DSExt.drawCalls += s_frameDraws;    GPU3DSExt.drawVerts += s_frameVerts;
     s_frameDraws = s_frameVerts = 0;
+    for (int b = 0; b < 4; b++) {
+        GPU3DSExt.bgTilesLast[b] = GPU3DSExt.bgTiles[b]; GPU3DSExt.bgOpaqueLast[b] = GPU3DSExt.bgOpaque[b];
+        GPU3DSExt.bgTiles[b] = GPU3DSExt.bgOpaque[b] = 0;
+    }
     GPU3DSExt.probeDumpDraws = false;
 }
 

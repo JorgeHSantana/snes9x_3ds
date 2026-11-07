@@ -232,6 +232,9 @@ typedef struct
     u32             drawVertsLast;
     u32             drawCalls;       // ...summed over the perf window (draws=/verts= per frame)
     u32             drawVerts;
+    u32             bgTiles[4];      // BG tiles the PPU walk emitted this frame (the 8x8 full-tile path)...
+    u32             bgOpaque[4];     // ...and how many of them had no transparent pixel
+    u32             bgTilesLast[4], bgOpaqueLast[4];   // the last frame's, for the probe step line
     u64             drawTicks;       // ...submitting the eyes' layer passes (gpu3dsDrawSnesScreen, both eyes)
     bool            probeDumpDraws;  // GPU Cost Probe: log every gpu3dsDraw of this frame (cleared at FrameEnd)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame

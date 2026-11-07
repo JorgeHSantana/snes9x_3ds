@@ -367,6 +367,7 @@ uint8 S9xConvertTileTo8Bit (uint8 *pCache, uint32 TileAddr)
     uint8 *tp = &Memory.VRAM[TileAddr];
     uint32 *p = (uint32 *) pCache;
     uint32 non_zero = 0;
+    uint32 any_zero = 0;   // a zero byte in a word: (w - 0x01010101) & ~w & 0x80808080
     uint8 line;
 
 #define TILE_PLANE_PAIR(plane, off) \
@@ -387,6 +388,7 @@ uint8 S9xConvertTileTo8Bit (uint8 *pCache, uint32 TileAddr)
 			*p++ = p1;
 			*p++ = p2;
 			non_zero |= p1 | p2;
+			any_zero |= ((p1 - 0x01010101u) & ~p1) | ((p2 - 0x01010101u) & ~p2);
 		}
 		break;
 
@@ -400,6 +402,7 @@ uint8 S9xConvertTileTo8Bit (uint8 *pCache, uint32 TileAddr)
 			*p++ = p1;
 			*p++ = p2;
 			non_zero |= p1 | p2;
+			any_zero |= ((p1 - 0x01010101u) & ~p1) | ((p2 - 0x01010101u) & ~p2);
 		}
 		break;
 
@@ -412,11 +415,13 @@ uint8 S9xConvertTileTo8Bit (uint8 *pCache, uint32 TileAddr)
 			*p++ = p1;
 			*p++ = p2;
 			non_zero |= p1 | p2;
+			any_zero |= ((p1 - 0x01010101u) & ~p1) | ((p2 - 0x01010101u) & ~p2);
 		}
 		break;
     }
 #undef TILE_PLANE_PAIR
-    return (non_zero ? TRUE : BLANK_TILE);
+    if (!non_zero) return BLANK_TILE;
+    return (any_zero & 0x80808080u) ? TRUE : OPAQUE_TILE;
 }
 
 
@@ -791,6 +796,12 @@ inline void __attribute__((always_inline)) S9xDrawBGFullTileHardwareInline (
 
     if (BG.Buffered [TileNumber] == BLANK_TILE)
 	    return;
+
+	// GPU Cost Probe: tiles this BG emits, and how many are fully opaque
+	// (the bound of what an occlusion cull behind them could save)
+	GPU3DSExt.bgTiles[s_layerUseBg & 3]++;
+	if (BG.Buffered [TileNumber] == OPAQUE_TILE)
+		GPU3DSExt.bgOpaque[s_layerUseBg & 3]++;
 
 	uint8 pal = (snesTile >> 10) & paletteMask;
 	int texturePos = cache3dsGetTexturePositionFast(tileAddrDiv8, pal);
