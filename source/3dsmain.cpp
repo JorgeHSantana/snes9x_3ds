@@ -4458,6 +4458,10 @@ void emulatorLoop()
             // Load is input + core + render submission, not the vsync
             // wait; a frame over 100% is one the pacer may skip drawing.
             // GPU cost probe (gpu_probe.h): one step per 5 s, each logged
+            // the first counted frame of the baseline and 3D-off steps lists its
+            // draws (where the ~3000 quads a frame come from)
+            if (s_gpuProbe.active && s_gpuProbe.frame == GPU_PROBE_SETTLE_FRAMES && (s_gpuProbe.step == 0 || s_gpuProbe.step == GPU_PROBE_STEPS - 1))
+                GPU3DSExt.probeDumpDraws = true;
             if (s_gpuProbe.active && gpu_probe_frame(&s_gpuProbe, GPU3DSExt.gpuWaitLast, (u64)ticksSoFar, GPU3DSExt.gpuBusyLast, GPU3DSExt.drawCallsLast, GPU3DSExt.drawVertsLast, frameLoadPercent >= 100, skipDrawing)) {
                 const u64 n = s_gpuProbe.counted ? (u64)s_gpuProbe.counted : 1, tpu = 268111856ull / 1000000ull;
                 log3dsWrite("[probe][gpu] step %d %s: gpu=%u us gpuwait=%u us load=%u us (%d%%) draws=%u verts=%u over-budget=%d skipped-draws=%d of %d",

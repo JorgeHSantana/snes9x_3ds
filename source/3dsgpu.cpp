@@ -574,7 +574,14 @@ static u32 s_frameDraws, s_frameVerts;
 void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
     t3dsStartTimer(TIMER_DRAW);
     s_frameDraws++;
-    s_frameVerts += (u32)(indices != NULL || from >= 0 ? count : list->count);
+    const u32 n = (u32)(indices != NULL || from >= 0 ? count : list->count);
+    s_frameVerts += n;
+    if (GPU3DSExt.probeDumpDraws) {
+        const SGPURenderState *rs = &GPU3DS.currentRenderState;
+        log3dsWrite("[probe][draw] #%u vbo=%d n=%u shader=%d target=%d tex=%d env=%d blend=%d atest=%d depth=%d stencil=%u ghost=%d",
+            s_frameDraws, (int)list->id, n, (int)rs->shader, (int)rs->target, (int)rs->textureBind, (int)rs->textureEnv,
+            (int)rs->alphaBlending, (int)rs->alphaTest, (int)rs->depthTest, (unsigned)rs->stencilTest, GPU3DS.stereoGhostPass ? 1 : 0);
+    }
     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
     gpu3dsSetAttributeBuffers(list);
 
@@ -658,6 +665,7 @@ void gpu3dsFrameEnd(u8 flags)
     GPU3DSExt.drawCallsLast = s_frameDraws; GPU3DSExt.drawVertsLast = s_frameVerts;
     GPU3DSExt.drawCalls += s_frameDraws;    GPU3DSExt.drawVerts += s_frameVerts;
     s_frameDraws = s_frameVerts = 0;
+    GPU3DSExt.probeDumpDraws = false;
 }
 
 bool gpu3dsSetTopMode()

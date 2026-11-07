@@ -233,6 +233,7 @@ typedef struct
     u32             drawCalls;       // ...summed over the perf window (draws=/verts= per frame)
     u32             drawVerts;
     u64             drawTicks;       // ...submitting the eyes' layer passes (gpu3dsDrawSnesScreen, both eyes)
+    bool            probeDumpDraws;  // GPU Cost Probe: log every gpu3dsDraw of this frame (cleared at FrameEnd)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
     float           shadowAlphaMul;  // ...and the fade multiplier on the shadow's alpha (1 = as set)
