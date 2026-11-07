@@ -3,6 +3,7 @@
 #define _3DSGPU_H_
 
 #include "stereo_fog.h"
+#include "3dsmode7persp.h"
 #include <3ds.h>
 #include <citro3d.h>
 #include <tex3ds.h>
@@ -559,7 +560,10 @@ static inline void gpu3dsSetMode7Persp(float k, float gain, float fog, float gho
     float key = k + gain * 8.0f + fog * 64.0f + ghost * 4096.0f;
     if (GPU3DS.mode7PerspApplied == key)
         return;
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP], k, gain, -fog, -ghost);
+    // fog lands in colour.b, which the geometry shader scales by 1/248
+    // like every per-vertex tint (stereo_fog.h): pre-multiplied here, or
+    // Effects by Distance stays invisible (it did, from its first build)
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, GPU3DS.shaderULocs[ULOC_MODE7_PERSP], k, gain, mode7FogUniform(fog), -ghost);
     GPU3DS.mode7PerspSet[0] = k; GPU3DS.mode7PerspSet[1] = gain;
     GPU3DS.mode7PerspSet[2] = fog; GPU3DS.mode7PerspSet[3] = ghost;
     GPU3DS.mode7PerspApplied = key;

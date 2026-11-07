@@ -102,3 +102,13 @@ TEST_CASE("mode7 extbg: the BG2 low pass is redundant only under BG1 on the same
     CHECK_FALSE(mode7ExtbgLowPassRedundant(true, true, false, 5, 5));   // nothing to skip
     CHECK_FALSE(mode7ExtbgLowPassRedundant(true, true, true, 5, 6));    // different window masks
 }
+
+TEST_CASE("mode7 persp: the fog uniform is negated and pre-scaled for the geometry shader's 1/248") {
+    CHECK(mode7FogUniform(0.0f) == 0.0f);
+    // the horizon row (d = -1): colour.b = d * z = fog * 248, and the GS's
+    // 1/248 brings the TexEnv blend factor back to the amount
+    const float z = mode7FogUniform(0.5f);
+    CHECK(doctest::Approx(-1.0f * z / STEREO_FOG_VERTEX_SCALE) == 0.5f);
+    // the nearest row (d = 0) stays untouched whatever the amount
+    CHECK(0.0f * mode7FogUniform(0.85f) == 0.0f);
+}

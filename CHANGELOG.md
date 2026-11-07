@@ -2,6 +2,8 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+### Fixes
+- **Mode 7 Effects by Distance**: Fade and Haze on a Mode 7 plane now really fog the rows towards the horizon. The amount was written at 1/248 of its value since the feature's first build (the geometry shader scales every per-vertex tint by that), so the plane never fogged; the nearest row stays untouched as before
 ### Features
 - **BG occlusion cull**: a background whose tiles are all hidden behind another background's full-screen wall of opaque tiles (no transparent texel, no window, every priority above) is no longer drawn there - in 2D the whole layer, in 3D everything but the strip at the screen edge the two layers' parallax leaves bare. MMX3 ZP's heavy phase draws two such full backgrounds, one entirely behind the other: 957 quads of 3,365 per eye gone. Exact by construction (Azahar bit-identical on nine scenes); the GPU Cost Probe has a "no occlusion cull" step and the perf line a `culled=` count. The occlusion cull is per tile priority (Mode 1's BG3 priority bit keeps its priority-1 tiles on top).
 - **BG window cull**: a windowed background's tiles that the window stencil rejects on every pixel are not drawn either, in the base and the blur ghost passes. MMX3 ZP keeps a full-screen BG3 on the high priority and windows it down to the water: 744 of its 928 tiles per pass per eye were drawn to be stenciled away. Exact by construction (the same window sections and stencil test the GPU gets); Azahar bit-identical.

@@ -2,6 +2,7 @@
 #define _3DSMODE7PERSP_H_
 
 #include <stdint.h>
+#include "stereo_fog.h"
 
 // Mode 7 perspective for stereo 3D (issue #62, rcmz's technique made
 // ours). Every Mode 7 scanline already knows how many texels it walks
@@ -98,6 +99,16 @@ static inline float mode7FogAmount(int fade, int haze, float slider)
     float t = (fade / 8.0f) * 0.70f + (haze / 8.0f) * 0.60f;
     t *= slider < 0.0f ? -slider : slider;
     return t > 0.85f ? 0.85f : t;
+}
+
+// The uniform the tile vertex shader reads as mode7Persp.z: the shader
+// adds d * z to colour.b with d = w/256 - 1 (0 at the nearest row, -1 at
+// the horizon), and the geometry shader scales colour by 1/248
+// (STEREO_FOG_VERTEX_SCALE), so the amount goes in negated and
+// pre-multiplied: the horizon row then reads exactly the amount.
+static inline float mode7FogUniform(float fog)
+{
+    return -fog * STEREO_FOG_VERTEX_SCALE;
 }
 
 #endif
