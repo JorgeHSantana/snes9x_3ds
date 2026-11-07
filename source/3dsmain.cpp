@@ -45,6 +45,7 @@ extern uint32 g_apuSkips;    // apu.cpp: SPC700 idle skips
 #include "3dsui.h"
 #include "3dsui_notif.h"
 #include "gpu_probe.h"
+#include "effects_quality.h"
 
 GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false, false };
 static GpuProbeState s_gpuProbe = { false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 0 };
@@ -692,17 +693,6 @@ void makeEmulatorMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menu
             items.back().PickerDescription = "Posts the paused top screen, left and\nright eye, as PNG (base64) comments on\nthe issue named in github.env.";
         }
     }
-    if (settings3DS.isRomLoaded && settings3DS.LogFileEnabled && !s_gpuProbe.active) {
-        items.emplace_back([](int val) {
-            gpu_probe_start(&s_gpuProbe);
-            g_gpuProbeMask = gpu_probe_current_mask(&s_gpuProbe);
-            log3dsWrite("[probe][gpu] start: %d steps x %d frames (%d settle), 3d=%s shadows=%d glow=%d", GPU_PROBE_STEPS, GPU_PROBE_STEP_FRAMES, GPU_PROBE_SETTLE_FRAMES,
-                GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.ShadowsMode, settings3DS.GlowMode);
-            notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen, 5000, "GPU cost probe: 45 s, keep playing the heavy part");
-            GPU3DS.emulatorState = EMUSTATE_EMULATE;
-        }, MenuItemType::Action, "  GPU Cost Probe (45 s, to the log)"_s, ""_s);
-        items.back().PickerDescription = "Measures what each part of the render costs the\nGPU: back in the game, switches one piece off\nevery 5 s (colour grade, glow, shadows, blur,\nfade/haze, the right eye, 3D) and logs each step.\nSend the log afterwards.";
-    }
     AddMenuDisabledOption(items, ""_s);
 
     if (cfgFileAvailable[0] || cfgFileAvailable[1]) {
@@ -999,6 +989,8 @@ static int *stereoEditDepthOBJHi(int which) {
         return &settings3DS.StereoProfiles[s_stereoEditIdx].DepthOBJHi[which];
     return &settings3DS.StereoDepthOBJHi[which];
 }
+static bool s_stereoPreviewDirty = false;   // the 3D tab's preview must re-render (a field changed)
+static void stereo3dRestorePausedLook();
 static int *stereoEditField(int which) {
     if (s_stereoEditIdx >= 0 && s_stereoEditIdx < settings3DS.StereoProfilesCount) {
         S9xSettings3DS::SStereoProfile *p = &settings3DS.StereoProfiles[s_stereoEditIdx];
@@ -1597,17 +1589,54 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
     AddMenuDisabledOption(items, ""_s);
 
     AddMenuHeader1(items, "GAME-SPECIFIC SETTINGS"_s);
-    AddMenuHeader2(items, "Video"_s);
+    // Performance (Jorge, 2026-11-07): everything that trades looks or
+    // accuracy for frame time in one place - the frame pacing, the idle
+    // skip, the three effect Auto controllers behind one picker, and the
+    // GPU cost probe that says what each piece costs
+    AddMenuHeader2(items, "Performance"_s);
     AddMenuPicker(items, "  Frameskip"_s, "Try changing this if the game runs slow. Skipping frames helps it run faster, but less smooth."_s, 
         makePickerOptions({"Disabled", "Enabled (max 1 frame)", "Enabled (max 2 frames)", "Enabled (max 3 frames)", "Enabled (max 4 frames)"}), settings3DS.MaxFrameSkips, DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate( settings3DS.MaxFrameSkips, val ); });
     
-    AddMenuPicker(items, "  Framerate"_s, "PAL games run at 50 FPS by default.\nEnable 60 FPS override if needed."_s, makeOptionsForFrameRate(), static_cast<int>(settings3DS.Framerate), DIALOG_TYPE_INFO, true,
-                  []( int val ) { CheckAndUpdate( settings3DS.Framerate, static_cast<Setting::Framerate>(val) ); });
     AddMenuPicker(items, "  Frame Sync"_s, "VBlank Sync is best for most games. If a game stutters\nor won't hold full speed, try Sleep Sync. On O3DS\nit helps demanding games like DKC2 run smoother."_s,
                   makeOptionsForFrameSync(), static_cast<int>(settings3DS.FrameSync), DIALOG_TYPE_INFO, true,
                   []( int val ) { CheckAndUpdate(settings3DS.FrameSync, static_cast<Setting::FrameSync>(val)); });
 
+    AddMenuCheckbox(items, "  Skip Idle Loops"_s, settings3DS.IdleLoopSkip,
+        []( int val ) { if (CheckAndUpdate( settings3DS.IdleLoopSkip, (u8)val )) settings3dsUpdate(true); });
+    items.back().PickerDescription = "Jumps ahead while the game only waits for\nthe next frame. Faster. Disable if a game\nhangs, stutters or its music breaks.";
+
+    {
+        int shadowQ = *stereoEditField(15), glowQ = *stereoEditField(26);
+        AddMenuPicker(items, "  Effects Quality"_s,
+            "Sets the shadow, glow and blur Quality pickers\nof the 3D tab at once.\nFull: every effect as set, always.\nAuto: each drops a level while a frame is\nmissed, back to Full after clean seconds.\nAuto, Off under load: may switch an effect off.\nLight: one blur ghost, Auto elsewhere.\nMixed: the three differ (see the 3D tab)."_s,
+            makePickerOptions({"Full", "Auto", "Auto, Off under load", "Light", "Mixed"}),
+            effects_quality_preset(shadowQ, glowQ, settings3DS.StereoBlurQuality), DIALOG_TYPE_INFO, true,
+            []( int val ) {
+                int sq, gq, bq;
+                if (!effects_quality_values(val, &sq, &gq, &bq)) return;   // Mixed: nothing to apply
+                bool changed = CheckAndUpdate(*stereoEditField(15), sq);
+                changed |= CheckAndUpdate(*stereoEditField(26), gq);
+                changed |= CheckAndUpdate(settings3DS.StereoBlurQuality, bq);
+                if (changed) { stereo3dRestorePausedLook(); s_stereoPreviewDirty = true; settings3DS.menuTabDirty[TAB_3D] = true; }
+            });
+    }
+    if (settings3DS.isRomLoaded && settings3DS.LogFileEnabled && !s_gpuProbe.active) {
+        items.emplace_back([](int val) {
+            gpu_probe_start(&s_gpuProbe);
+            g_gpuProbeMask = gpu_probe_current_mask(&s_gpuProbe);
+            log3dsWrite("[probe][gpu] start: %d steps x %d frames (%d settle), 3d=%s shadows=%d glow=%d", GPU_PROBE_STEPS, GPU_PROBE_STEP_FRAMES, GPU_PROBE_SETTLE_FRAMES,
+                GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.ShadowsMode, settings3DS.GlowMode);
+            notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen, 5000, "GPU cost probe: 45 s, keep playing the heavy part");
+            GPU3DS.emulatorState = EMUSTATE_EMULATE;
+        }, MenuItemType::Action, "  GPU Cost Probe (45 s, to the log)"_s, ""_s);
+        items.back().PickerDescription = "Measures what each part of the render costs the\nGPU: back in the game, switches one piece off\nevery 5 s (colour grade, glow, shadows, blur,\nfade/haze, the right eye, 3D) and logs each step.\nSend the log afterwards.";
+    }
+    AddMenuDisabledOption(items, ""_s);
+
+    AddMenuHeader2(items, "Video"_s);
+    AddMenuPicker(items, "  Framerate"_s, "PAL games run at 50 FPS by default.\nEnable 60 FPS override if needed."_s, makeOptionsForFrameRate(), static_cast<int>(settings3DS.Framerate), DIALOG_TYPE_INFO, true,
+                  []( int val ) { CheckAndUpdate( settings3DS.Framerate, static_cast<Setting::Framerate>(val) ); });
     AddMenuPicker(items, "  In-Frame Palette Changes"_s, "Try changing this if some colors in the game look off."_s, makeOptionsForInFramePaletteChanges(), settings3DS.PaletteFix, DIALOG_TYPE_INFO, true,
                   []( int val ) {
                       // rebuild the tab: the ADVANCED SETTINGS section
@@ -1685,10 +1714,6 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
 
     items.back().PickerDescription = "Forces SRAM to be written when pausing.\nSome games, such as Yoshi's Island, require\nthis to save correctly.";
 
-    AddMenuCheckbox(items, "  Skip Idle Loops"_s, settings3DS.IdleLoopSkip,
-        []( int val ) { if (CheckAndUpdate( settings3DS.IdleLoopSkip, (u8)val )) settings3dsUpdate(true); });
-    items.back().PickerDescription = "Jumps ahead while the game only waits for\nthe next frame. Faster. Disable if a game\nhangs, stutters or its music breaks.";
-
     AddMenuDisabledOption(items, ""_s);
 
     // Only meaningful while In-Frame Palette Changes is Enabled (the deferral path).
@@ -1756,7 +1781,6 @@ static int  s_stereoFxFirst = -1;       // first item of the Focus/Effects zone
 static int  s_stereoFxLast = -1;        // one past its last item
 static int  s_stereoPlaneGaugeIdx = -1; // the plane's own gauge inside the Mode 7 block (BG1 P0)
 static int  s_stereoExtbgGaugeIdx = -1; // EXTBG priority pixels (BG2 P1), when the game has them
-static bool s_stereoPreviewDirty = false;
 static bool s_stereoPreviewShown = false;
 static int  s_stereoPrevHighlight = -2;
 static float s_stereoPrevSlider = -1.0f;

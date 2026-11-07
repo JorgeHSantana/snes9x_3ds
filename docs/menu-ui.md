@@ -12,6 +12,7 @@
 
 * Data model: `SMenuTab` → `SMenuItem` with types `Header1/2`, `Textarea`, `Action`, `Checkbox`, `Radio`, `Gauge`, `Picker` (nested picker items), each with a `std::function<void(int)>` change callback. 14 visible rows.
 * Menu definitions live in `3dsmain.cpp` (see [Platform Layer](platform-layer.md)); tabs rebuild lazily via `settings3DS.menuTabDirty[]`.
+* **Performance** (Settings tab, first section under GAME-SPECIFIC SETTINGS): Frameskip, Frame Sync, Skip Idle Loops, one **Effects Quality** picker over the three Auto controllers (shadow and glow Quality in the stereo profile, Blur Quality; presets in `effects_quality.h`, a triple no preset owns shows as Mixed) and the GPU Cost Probe action. Everything that trades looks or accuracy for frame time in one place.
 * Input loop (`menu3dsMenuSelectItem`): START resumes the game, B = cancel/parent-dir/tab-left, X = file context menu, L/R or D-pad = tab switch / gauge adjust, Y+Up/Down = page jump, key-repeat after 15 frames. Battery state is queried once per menu entry (not per frame).
 * Chrome: top bar, tab strip with even pixel distribution, cheats-active indicator, hand-drawn battery widget, bottom button hints. Slide-in animations for menus/dialogs and 3-step tab slide transitions.
 * Dialogs: message dialogs, confirmation dialogs, and a ROM-loading dialog that can host a thumbnail.
