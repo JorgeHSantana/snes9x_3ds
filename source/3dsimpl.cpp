@@ -1213,6 +1213,15 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
         GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
     }
 #endif
+#ifdef PROBE_MENU_AT
+    // harness probe: open the menu at this frame and stay (the menu loop's
+    // PROBE_FBDUMP dump then shows what the paused top screen presents)
+    if (g_probeFrames == (PROBE_MENU_AT)) {
+        settings3DS.AutoSaveLoad = false;
+        settings3DS.AutoSavestate = false;
+        GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
+    }
+#endif
 #ifdef PROBE_DMA_PERF
 	{ extern void dma3dsProbeFrame(); dma3dsProbeFrame(); }
 #endif

@@ -253,6 +253,16 @@ void menu3dsSetLastSelectedTabIndex(int index) {
 
 void menu3dsSwapBuffersAndWaitForVBlank()
 {
+#if defined(PROBE_FBDUMP) && defined(PROBE_MENU_AT)
+    // harness probe: the paused top screen as the menu presents it
+    {
+        static int s_menuDumpFrames = 0;
+        if (++s_menuDumpFrames == 60) {
+            bool ok = img3dsSaveScreenRegion("sdmc:/3ds/snes9x_3ds/probe_top_menu.png", 400, 240, 0, 0, GFX_TOP, false);
+            log3dsWrite("[probe] menu top screen dump: %s", ok ? "v" : "x");
+        }
+    }
+#endif
 	if (swapBuffer) {
     	impl3dsFlushScreen(settings3DS.SecondScreen, false, false);
 		gfxScreenSwapBuffers(settings3DS.SecondScreen, false);
