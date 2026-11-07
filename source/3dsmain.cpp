@@ -47,7 +47,7 @@ extern uint32 g_apuSkips;    // apu.cpp: SPC700 idle skips
 #include "gpu_probe.h"
 
 GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false, false };
-static GpuProbeState s_gpuProbe = { false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+static GpuProbeState s_gpuProbe = { false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 0 };
 #include "3dslcd.h"
 #include "3dsui_img.h"
 #include "3dsmenu.h"
@@ -4462,15 +4462,18 @@ void emulatorLoop()
             // draws (where the ~3000 quads a frame come from)
             if (s_gpuProbe.active && s_gpuProbe.frame == GPU_PROBE_SETTLE_FRAMES && (s_gpuProbe.step == 0 || s_gpuProbe.step == GPU_PROBE_STEPS - 1))
                 GPU3DSExt.probeDumpDraws = true;
-            if (s_gpuProbe.active && gpu_probe_frame(&s_gpuProbe, GPU3DSExt.gpuWaitLast, (u64)ticksSoFar, GPU3DSExt.gpuBusyLast, GPU3DSExt.drawCallsLast, GPU3DSExt.drawVertsLast, frameLoadPercent >= 100, skipDrawing)) {
+            if (s_gpuProbe.active && gpu_probe_frame(&s_gpuProbe, GPU3DSExt.gpuWaitLast, (u64)ticksSoFar, GPU3DSExt.gpuBusyLast, GPU3DSExt.drawCallsLast, GPU3DSExt.drawVertsLast, frameLoadPercent >= 100, skipDrawing, GPU3DSExt.bgTilesLast, GPU3DSExt.bgOpaqueLast, GPU3DSExt.culledTilesLast)) {
                 const u64 n = s_gpuProbe.counted ? (u64)s_gpuProbe.counted : 1, tpu = 268111856ull / 1000000ull;
                 log3dsWrite("[probe][gpu] step %d %s: gpu=%u us gpuwait=%u us load=%u us (%d%%) draws=%u verts=%u opaque-tiles=%u/%u,%u/%u,%u/%u,%u/%u culled=%u over-budget=%d skipped-draws=%d of %d",
                     s_gpuProbe.step, gpu_probe_name(s_gpuProbe.step),
                     (unsigned)(s_gpuProbe.busyTicks / n / tpu), (unsigned)(s_gpuProbe.waitTicks / n / tpu), (unsigned)(s_gpuProbe.loadTicks / n / tpu),
                     (int)(s_gpuProbe.loadTicks / n * 100 / (u64)settings3DS.TicksPerFrame),
                     (unsigned)(s_gpuProbe.draws / n), (unsigned)(s_gpuProbe.verts / n),
-                    GPU3DSExt.bgOpaqueLast[0], GPU3DSExt.bgTilesLast[0], GPU3DSExt.bgOpaqueLast[1], GPU3DSExt.bgTilesLast[1],
-                    GPU3DSExt.bgOpaqueLast[2], GPU3DSExt.bgTilesLast[2], GPU3DSExt.bgOpaqueLast[3], GPU3DSExt.bgTilesLast[3], GPU3DSExt.culledTilesLast,
+                    gpu_probe_per_drawn(&s_gpuProbe, s_gpuProbe.opaque[0]), gpu_probe_per_drawn(&s_gpuProbe, s_gpuProbe.tiles[0]),
+                    gpu_probe_per_drawn(&s_gpuProbe, s_gpuProbe.opaque[1]), gpu_probe_per_drawn(&s_gpuProbe, s_gpuProbe.tiles[1]),
+                    gpu_probe_per_drawn(&s_gpuProbe, s_gpuProbe.opaque[2]), gpu_probe_per_drawn(&s_gpuProbe, s_gpuProbe.tiles[2]),
+                    gpu_probe_per_drawn(&s_gpuProbe, s_gpuProbe.opaque[3]), gpu_probe_per_drawn(&s_gpuProbe, s_gpuProbe.tiles[3]),
+                    gpu_probe_per_drawn(&s_gpuProbe, s_gpuProbe.culled),
                     s_gpuProbe.overBudget, s_gpuProbe.skipped, s_gpuProbe.counted);
                 gpu_probe_next(&s_gpuProbe);
                 g_gpuProbeMask = gpu_probe_current_mask(&s_gpuProbe);

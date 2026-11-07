@@ -34,12 +34,13 @@ TEST_CASE("gpu_probe: every step has a name") {
 
 TEST_CASE("gpu_probe: a step fills after STEP_FRAMES, counting only after the settle") {
     GpuProbeState s;
+    const unsigned long T[4] = { 300, 957, 957, 0 }, O[4] = { 100, 957, 900, 0 };
     gpu_probe_start(&s);
     CHECK(s.active);
     CHECK(s.step == 0);
     for (int f = 1; f < GPU_PROBE_STEP_FRAMES; f++)
-        CHECK_FALSE(gpu_probe_frame(&s, 10, 100, 7, 50, 3000, f % 2 == 0, f % 3 == 0));
-    CHECK(gpu_probe_frame(&s, 10, 100, 7, 50, 3000, true, true));
+        CHECK_FALSE(gpu_probe_frame(&s, 10, 100, 7, 50, 3000, f % 2 == 0, f % 3 == 0, T, O, 40));
+    CHECK(gpu_probe_frame(&s, 10, 100, 7, 50, 3000, true, true, T, O, 40));
     CHECK(s.busyTicks == 7ull * s.counted);
     CHECK(s.draws == 50ull * s.counted);
     CHECK(s.verts == 3000ull * s.counted);
@@ -48,28 +49,36 @@ TEST_CASE("gpu_probe: a step fills after STEP_FRAMES, counting only after the se
     CHECK(s.loadTicks == 100ull * s.counted);
     CHECK(s.overBudget > 0);
     CHECK(s.skipped > 0);
+    CHECK(s.drawn == s.counted - s.skipped);   // tile stats only from frames that drew
+    CHECK(s.culled == 40ull * s.drawn);
+    CHECK(s.tiles[1] == 957ull * s.drawn);
+    CHECK(s.opaque[2] == 900ull * s.drawn);
+    CHECK(gpu_probe_per_drawn(&s, s.opaque[0]) == 100);
     CHECK(s.step == 0);   // still naming the step that filled
 }
 
 TEST_CASE("gpu_probe: next resets the accumulators and ends after the last step") {
     GpuProbeState s;
+    const unsigned long T[4] = { 1, 1, 1, 1 }, O[4] = { 1, 1, 1, 1 };
     gpu_probe_start(&s);
     for (int step = 0; step < GPU_PROBE_STEPS; step++) {
         CHECK(s.active);
         CHECK(s.step == step);
-        for (int f = 0; f < GPU_PROBE_STEP_FRAMES; f++) gpu_probe_frame(&s, 1, 1, 1, 1, 1, false, false);
+        for (int f = 0; f < GPU_PROBE_STEP_FRAMES; f++) gpu_probe_frame(&s, 1, 1, 1, 1, 1, false, false, T, O, 0);
         gpu_probe_next(&s);
         CHECK(s.frame == 0);
         CHECK(s.waitTicks == 0);
         CHECK(s.draws == 0);
+        CHECK(s.drawn == 0);
+        CHECK(s.tiles[0] == 0);
     }
     CHECK_FALSE(s.active);
-    CHECK_FALSE(gpu_probe_frame(&s, 1, 1, 1, 1, 1, false, false));   // idle: nothing counted
+    CHECK_FALSE(gpu_probe_frame(&s, 1, 1, 1, 1, 1, false, false, T, O, 0));   // idle: nothing counted
     CHECK(s.frame == 0);
 }
 
 TEST_CASE("gpu_probe: the current mask is neutral while idle") {
-    GpuProbeState s = { false, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    GpuProbeState s = { false, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 0 };
     CHECK_FALSE(gpu_probe_current_mask(&s).flat2D);
     CHECK_FALSE(gpu_probe_current_mask(&s).on);
     gpu_probe_start(&s);

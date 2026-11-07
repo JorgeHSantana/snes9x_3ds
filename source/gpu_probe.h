@@ -34,6 +34,9 @@ struct GpuProbeState {
     unsigned long long waitTicks, loadTicks, busyTicks;
     unsigned long long draws, verts;   // draw calls and vertices submitted, summed
     int overBudget, skipped;
+    int drawn;                                  // counted frames that drew (the tile stats below are per drawn frame)
+    unsigned long long tiles[4], opaque[4];     // BG walk: tiles decoded, fully opaque (per BG), summed over drawn frames
+    unsigned long long culled;                  // tiles the occlusion/window culls skipped, summed over drawn frames
 };
 
 static inline const char *gpu_probe_name(int step)
@@ -73,6 +76,12 @@ static inline GpuProbeMask gpu_probe_mask(int step)
     return m;
 }
 
+static inline void gpu_probe_clear_tiles(GpuProbeState *s)
+{
+    s->drawn = 0; s->culled = 0;
+    for (int b = 0; b < 4; b++) s->tiles[b] = s->opaque[b] = 0;
+}
+
 static inline void gpu_probe_start(GpuProbeState *s)
 {
     s->active = true;
@@ -80,12 +89,16 @@ static inline void gpu_probe_start(GpuProbeState *s)
     s->waitTicks = s->loadTicks = s->busyTicks = 0;
     s->draws = s->verts = 0;
     s->overBudget = s->skipped = 0;
+    gpu_probe_clear_tiles(s);
 }
 
 // One frame of the current step. Returns true when the step just filled:
 // the caller logs the accumulators (still holding that step's totals and
 // s->step naming it), then gpu_probe_next moves on.
-static inline bool gpu_probe_frame(GpuProbeState *s, unsigned long long waitTicks, unsigned long long loadTicks, unsigned long long busyTicks, unsigned draws, unsigned verts, bool overBudget, bool skipped)
+// tiles/opaque: the frame's BG walk counts (4 BGs); culled: tiles the culls
+// skipped. A skipped frame draws nothing, so its tile stats are left out of
+// the per-drawn-frame averages (in Old mode half the frames are skipped).
+static inline bool gpu_probe_frame(GpuProbeState *s, unsigned long long waitTicks, unsigned long long loadTicks, unsigned long long busyTicks, unsigned draws, unsigned verts, bool overBudget, bool skipped, const unsigned long *tiles, const unsigned long *opaque, unsigned culled)
 {
     if (!s->active) return false;
     s->frame++;
@@ -98,6 +111,11 @@ static inline bool gpu_probe_frame(GpuProbeState *s, unsigned long long waitTick
         s->verts += verts;
         if (overBudget) s->overBudget++;
         if (skipped) s->skipped++;
+        else {
+            s->drawn++;
+            s->culled += culled;
+            for (int b = 0; b < 4; b++) { s->tiles[b] += tiles[b]; s->opaque[b] += opaque[b]; }
+        }
     }
     return s->frame >= GPU_PROBE_STEP_FRAMES;
 }
@@ -110,7 +128,14 @@ static inline void gpu_probe_next(GpuProbeState *s)
     s->waitTicks = s->loadTicks = s->busyTicks = 0;
     s->draws = s->verts = 0;
     s->overBudget = s->skipped = 0;
+    gpu_probe_clear_tiles(s);
     if (s->step >= GPU_PROBE_STEPS) s->active = false;
+}
+
+// Per-drawn-frame average of a tile accumulator (0 when nothing drew).
+static inline unsigned gpu_probe_per_drawn(const GpuProbeState *s, unsigned long long sum)
+{
+    return s->drawn ? (unsigned)(sum / (unsigned long long)s->drawn) : 0u;
 }
 
 static inline GpuProbeMask gpu_probe_current_mask(const GpuProbeState *s)
