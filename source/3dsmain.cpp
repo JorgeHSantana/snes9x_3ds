@@ -4080,9 +4080,18 @@ bool rewind3dsConfirmResume()
         "Rewind", "Resume the game from this moment?", true, false);
 }
 
+// Menu-open latency (Jorge, 2026-11-07: ~7 s from the touch to the menu
+// on one session, 0.15 s on another with the same build): stamps from the
+// game loop's exit, logged once the menu is up
+static u64 s_menuEnterTick = 0, s_menuAudioTick = 0;
+static inline unsigned menuMsSince(u64 t0, u64 t1) { return (unsigned)((t1 - t0) / 268123u); }
+
 void showMenu() {
     static std::vector<SMenuItem> emptyCheats;
     int currentMenuTab = menu3dsGetLastSelectedTabIndex();
+    const u64 menuT0 = svcGetSystemTick();
+    if (s_menuEnterTick)
+        log3dsWrite("[menu] open: audio stop %u ms, to showMenu %u ms", menuMsSince(s_menuEnterTick, s_menuAudioTick), menuMsSince(s_menuEnterTick, menuT0));
 
     // opening the menu points 'Editing Profile' at the profile the current
     // screen matches, not whichever one was edited last
@@ -4583,10 +4592,12 @@ void emulatorLoop()
     if (Settings.MSU1)
         log3dsWrite("MSU-1 underruns: %u", (unsigned)msu3dsGetUnderrunCount());
 
+    s_menuEnterTick = svcGetSystemTick();
     msu3dsOnEvent(Msu1Event::MenuEnter);
     snd3dsStopPlaying();
     snd3dsResumeMixing();
     lcd3dsRestoreDefaultRate();
+    s_menuAudioTick = svcGetSystemTick();
 
     gfxSetDoubleBuffering(settings3DS.SecondScreen, true);
 }

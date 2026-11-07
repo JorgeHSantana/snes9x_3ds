@@ -1412,8 +1412,9 @@ bool impl3dsSaveStateAutoFor(const char *reason)
         return true;
     }
 
+    const u64 t0 = svcGetSystemTick();
     bool ok = impl3dsSaveState(path);
-    log3dsWrite("[autosave] %s: %s", reason, ok ? "saved" : "FAILED");
+    log3dsWrite("[autosave] %s: %s (%u ms)", reason, ok ? "saved" : "FAILED", (unsigned)((svcGetSystemTick() - t0) / 268123u));
     log3dsFlush();   // HOME / lid / power-off follow this line
     return ok;
 }
