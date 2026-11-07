@@ -22,7 +22,7 @@ struct GpuProbeMask {
     bool noFog;         // fade / haze (the per-tier tint)
     bool sharedRight;   // the right eye's layer pass skipped: composite reads the left texture twice
     bool flat2D;        // the slider reads 0: one pass, one composite
-    bool noCull;        // the BG occlusion cull off (occlusion_cull.h): every hidden tile drawn again
+    bool noCull;        // the BG occlusion and window culls off (occlusion_cull.h): every hidden tile drawn again
     bool on;            // a probe is running: the Auto tiers hold Full so the steps compare like with like
 };
 
@@ -48,7 +48,7 @@ static inline const char *gpu_probe_name(int step)
     case 6: return "plain stereo (1-5 off)";
     case 7: return "plain stereo, right pass shared";
     case 8: return "3D off";
-    case 9: return "no occlusion cull";
+    case 9: return "no occlusion/window cull";
     default: return "?";
     }
 }

@@ -3,6 +3,7 @@
 #define _3DSIMPL_GPU_H_
 
 #include "3dsgpu.h"
+#include "occlusion_cull.h"
 
 #define COMPOSE_HASH(vramAddr, pal)   ((vramAddr) << 4) + ((pal) & 0xf)
 
@@ -240,7 +241,10 @@ typedef struct
     u32             bgOpaque[4];     // ...and how many of them had no transparent pixel
     u32             bgTilesLast[4], bgOpaqueLast[4];   // the last frame's, for the probe step line
     u32             bgWalkTiles, bgWalkOpaque, bgWalkBlank, bgWalkSliced;   // one BG walk's counts (reset at its commit)
-    u32             culledTiles, culledTilesLast, culledTilesWin;      // BG tiles the occlusion cull skipped this / last frame (every pass, both eyes)
+    u32             culledTiles, culledTilesLast, culledTilesWin;
+    OcclWindow      winSec[64];      // the window sections drawn into the stencil this frame (window cull)
+    int             winSecCount;     // ...how many, -1 when more than fit (no window cull then)
+      // BG tiles the occlusion cull skipped this / last frame (every pass, both eyes)
     u64             drawTicks;       // ...submitting the eyes' layer passes (gpu3dsDrawSnesScreen, both eyes)
     bool            probeDumpDraws;  // GPU Cost Probe: log every gpu3dsDraw of this frame (cleared at FrameEnd)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame

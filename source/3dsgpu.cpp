@@ -671,6 +671,11 @@ void gpu3dsFrameEnd(u8 flags)
     }
     GPU3DSExt.culledTilesLast = GPU3DSExt.culledTiles; GPU3DSExt.culledTilesWin += GPU3DSExt.culledTiles; GPU3DSExt.culledTiles = 0;
     GPU3DSExt.probeDumpDraws = false;
+#ifdef PROBE_FBDUMP
+    // the Azahar build has no probe menu: dump one frame in every 300
+    static u32 s_dumpEvery = 0;
+    if ((++s_dumpEvery % 300) == 0) GPU3DSExt.probeDumpDraws = true;
+#endif
 }
 
 bool gpu3dsSetTopMode()

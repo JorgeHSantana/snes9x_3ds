@@ -253,6 +253,79 @@ void gpu3dsDrawVerticalSectionLayer(SLayer *layer, int from, int to) {
     }
 }
 
+// BG occlusion cull (occlusion_cull.h): the section of another BG on this
+// target that hides `section` of `layer`, if any, and the x span [L, R]
+// that coverer is sure to fill this eye. Only for a BG's base pass: off in
+// the ghost passes (a ghost is translucent, drawn as today), in the editor's
+// highlight preview, and under the probe's "no occlusion cull" step.
+static bool occlFindCoverer(SLayerList *list, SLayer *layer, SLayerSection *section, float *L, float *R, int *cPlaneMin)
+{
+    if (GPU3DS.stereoGhostPass || g_gpuProbeMask.noCull || layer->id > LAYER_BG3 ||
+        s_previewHighlightLayer >= 0 || section->vboId != VBO_SCENE_TILE)
+        return false;
+    const int target = (int)GPU3DS.currentRenderState.target;
+    const bool onSub = target == TARGET_SNES_SUB;
+    for (int c = LAYER_BG0; c <= LAYER_BG3; c++) {
+        if (c == (int)layer->id || !settings3DS.LayerEnabled[c]) continue;
+        SLayer *cl = &list->layers[c];
+        int cf = cl->sectionsOffset + (onSub ? 0 : cl->sectionsByTarget[TARGET_SNES_SUB]);
+        int ct = cf + cl->sectionsByTarget[target];
+        for (int k = cf; k < ct; k++) {
+            SLayerSection *cs = &list->sections[k];
+            if (cs->vboId != VBO_SCENE_TILE) continue;
+            const bool covers = occl_section_covers(cs->fullOpaque, cs->state.stencilTest == STENCIL_TEST_DISABLED,
+                    cs->planeMin, section->planeMin, cs->segY0, cs->segY1, section->segY0, section->segY1);
+            if (GPU3DSExt.probeDumpDraws)
+                log3dsWrite("[probe][occl] layer=%d target=%d by bg=%d: full=%d stencil=%u planes %d/%d vs %d/%d seg %d-%d vs %d-%d -> %s",
+                    (int)layer->id, target, c, cs->fullOpaque ? 1 : 0, (unsigned)cs->state.stencilTest, cs->planeMin, cs->planeMax,
+                    section->planeMin, section->planeMax, cs->segY0, cs->segY1, section->segY0, section->segY1, covers ? "covers" : "no");
+            if (!covers) continue;
+            *cPlaneMin = cs->planeMin;
+            float sc0 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[c] * STEREO_PARALLAX_SCALE;
+            float sc1 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[c] * STEREO_PARALLAX_SCALE;
+            if (settings3DS.StereoShiftMode == 0) { sc0 = roundf(sc0); sc1 = roundf(sc1); }
+            occl_cover_span(sc0, sc1, GPU3DSExt.renderWidth, L, R);
+            return true;
+        }
+    }
+    return false;
+}
+
+// Does any BG section on either target have a coverer this frame? Decided
+// before the draw mode: the cull needs the indexed (DrawElements) path, and
+// the frame must be all one mode (mixing froze the console on SMK).
+static bool occlAnyCoverer(SLayerList *list)
+{
+    if (g_gpuProbeMask.noCull || s_previewHighlightLayer >= 0) return false;
+    const bool windows = GPU3DSExt.winSecCount > 0;
+    for (int t = 0; t < 2; t++) {
+        for (int v = LAYER_BG0; v <= LAYER_BG3; v++) {
+            SLayer *vl = &list->layers[v];
+            int vf = vl->sectionsOffset + (t == TARGET_SNES_SUB ? 0 : vl->sectionsByTarget[TARGET_SNES_SUB]);
+            int vt = vf + vl->sectionsByTarget[t];
+            for (int i = vf; i < vt; i++) {
+                SLayerSection *vs = &list->sections[i];
+                if (vs->vboId != VBO_SCENE_TILE) continue;
+                if (windows && occl_stencil_cullable((unsigned)vs->state.stencilTest)) return true;   // the window cull
+                for (int c = LAYER_BG0; c <= LAYER_BG3; c++) {
+                    if (c == v || !settings3DS.LayerEnabled[c]) continue;
+                    SLayer *cl = &list->layers[c];
+                    int cf = cl->sectionsOffset + (t == TARGET_SNES_SUB ? 0 : cl->sectionsByTarget[TARGET_SNES_SUB]);
+                    int ct = cf + cl->sectionsByTarget[t];
+                    for (int k = cf; k < ct; k++) {
+                        SLayerSection *cs = &list->sections[k];
+                        if (cs->vboId != VBO_SCENE_TILE) continue;
+                        if (occl_section_covers(cs->fullOpaque, cs->state.stencilTest == STENCIL_TEST_DISABLED,
+                                cs->planeMin, vs->planeMin, cs->segY0, cs->segY1, vs->segY0, vs->segY1))
+                            return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 // obj, bg0-bg3 - single section per target.
 // Only used when list->useDrawArraysForTiledLayers holds, because mixing
 // DrawArrays and DrawElements on the OBJ/BG pass seems to freeze real hardware
@@ -272,6 +345,8 @@ void gpu3dsDrawTiledLayerSingleSection(SLayer *layer, SLayerSection *section) {
     if (GPU3DS.stereoGhostPass)
         GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
 
+    // (the occlusion cull lives in the indexed path: gpu3dsDrawSnesScreen
+    // switches the frame to DrawElements whenever a BG section has a coverer)
     gpu3dsDraw(&GPU3DS.vertices[section->vboId], NULL, section->count, section->from);
 }
 
@@ -303,44 +378,18 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
     if (GPU3DS.stereoGhostPass)
         GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
 
-    // BG occlusion cull (occlusion_cull.h): in the base pass of a BG, a
-    // section hidden behind another BG's full-screen opaque, unwindowed
-    // section on this target skips every tile inside the coverer's span
-    // this eye. Off in the ghost passes (a ghost is translucent, drawn as
-    // today), in the editor's highlight preview, and under the probe's
-    // "no occlusion cull" step.
-    const bool cullOn = !GPU3DS.stereoGhostPass && !g_gpuProbeMask.noCull && layer->id <= LAYER_BG3 &&
-        s_previewHighlightLayer < 0 && list->sections[from].vboId == VBO_SCENE_TILE;
-    const int target = (int)GPU3DS.currentRenderState.target;
-    const bool onSub = target == TARGET_SNES_SUB;
-
     for (int idx = from; idx < to; idx++) {
         SLayerSection *section = &list->sections[idx];
         u16 sFrom = section->from;
         u16 sCount = section->count;
 
-        // the coverer of this section, if any
-        float coverL = 0.0f, coverR = 0.0f; bool covered = false;
-        if (cullOn) {
-            for (int c = LAYER_BG0; c <= LAYER_BG3 && !covered; c++) {
-                if (c == (int)layer->id || !settings3DS.LayerEnabled[c]) continue;
-                SLayer *cl = &list->layers[c];
-                int cf = cl->sectionsOffset + (onSub ? 0 : cl->sectionsByTarget[TARGET_SNES_SUB]);
-                int ct = cf + cl->sectionsByTarget[target];
-                for (int k = cf; k < ct; k++) {
-                    SLayerSection *cs = &list->sections[k];
-                    if (cs->vboId != VBO_SCENE_TILE) continue;
-                    if (!occl_section_covers(cs->fullOpaque, cs->state.stencilTest == STENCIL_TEST_DISABLED,
-                            cs->planeMin, section->planeMax, cs->segY0, cs->segY1, section->segY0, section->segY1)) continue;
-                    float sc0 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepth[c] * STEREO_PARALLAX_SCALE;
-                    float sc1 = GPU3DS.stereoEyeIOD * GPU3DS.stereoLayerDepthP1[c] * STEREO_PARALLAX_SCALE;
-                    if (settings3DS.StereoShiftMode == 0) { sc0 = roundf(sc0); sc1 = roundf(sc1); }
-                    occl_cover_span(sc0, sc1, GPU3DSExt.renderWidth, &coverL, &coverR);
-                    covered = true;
-                    break;
-                }
-            }
-        }
+        // the coverer of this section, if any (occlusion cull, per tile here),
+        // and whether its window stencil can hide whole tiles (window cull:
+        // in the ghost passes too, the stencil applies to them as well)
+        float coverL = 0.0f, coverR = 0.0f; int cPlaneMin = 0;
+        const bool covered = occlFindCoverer(list, layer, section, &coverL, &coverR, &cPlaneMin);
+        const bool windowed = !g_gpuProbeMask.noCull && layer->id <= LAYER_BG3 && section->vboId == VBO_SCENE_TILE &&
+            GPU3DSExt.winSecCount > 0 && occl_stencil_cullable((unsigned)section->state.stencilTest);
 
         // batch break on state change
         if (idx > from) {
@@ -361,19 +410,36 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
 
         // build sequential indices
         u16 *dst = indices + batchFrom + batchCount;
-        if (covered) {
-            // one tile = two vertices: keep only the tiles the coverer's span misses
+        if (covered || windowed) {
+            // one tile = two vertices: keep only the tiles the coverer's span
+            // misses and the window stencil lets through somewhere
             const STileVertex *v = (const STileVertex *)GPU3DS.vertices[VBO_SCENE_TILE].data;
             const float sv0 = GPU3DS.stereoParallax, sv1 = GPU3DS.stereoParallaxP1;   // this layer's shifts, set by the caller
+            const float svMin = sv0 < sv1 ? sv0 : sv1, svMax = sv0 > sv1 ? sv0 : sv1;
+            const int hiShift = GPU3DSExt.render2x.enabled ? 1 : 0;
+            const unsigned st = (unsigned)section->state.stencilTest;
             int n = 0;
             for (int i = 0; i + 1 < sCount; i += 2) {
-                if (occl_tile_hidden(v[sFrom + i].Position.x, v[sFrom + i + 1].Position.x, sv0, sv1, coverL, coverR)) {
+                const STileVertex *a = &v[sFrom + i];
+                bool hidden = covered && occl_tile_hidden(a[0].Position.x, a[1].Position.x, occl_vertex_plane(a[0].Position.y), cPlaneMin, sv0, sv1, coverL, coverR);
+                if (!hidden && windowed) {
+                    // the tile's screen rows and its shifted x span in SNES pixels, 1 px wider each side
+                    const int row0 = a[0].Position.y & 0xFF, row1 = row0 + (a[1].Position.y - a[0].Position.y);
+                    const int xa = ((int)floorf((float)a[0].Position.x + svMin) >> hiShift) - 1;
+                    const int xb = ((int)ceilf((float)a[1].Position.x + svMax) >> hiShift) + 1;
+                    hidden = occl_tile_windowed_out(st, row0, row1, xa, xb, GPU3DSExt.winSec, GPU3DSExt.winSecCount);
+                }
+                if (hidden) {
                     GPU3DSExt.culledTiles++;
                     continue;
                 }
                 dst[n] = sFrom + i; dst[n + 1] = sFrom + i + 1; n += 2;
             }
             batchCount += (u16)n;
+            if (GPU3DSExt.probeDumpDraws)
+                log3dsWrite("[probe][occl] layer=%d cull: covered=%d windowed=%d winsecs=%d cPlaneMin=%d L=%.1f R=%.1f sv=%.1f/%.1f iod=%.2f w=%d tiles=%d kept=%d first x=%d..%d y=%d plane=%d",
+                    (int)layer->id, covered ? 1 : 0, windowed ? 1 : 0, GPU3DSExt.winSecCount, cPlaneMin, coverL, coverR, sv0, sv1, GPU3DS.stereoEyeIOD, GPU3DSExt.renderWidth, sCount / 2, n / 2,
+                    (int)v[sFrom].Position.x, (int)v[sFrom + 1].Position.x, (int)v[sFrom].Position.y, occl_vertex_plane(v[sFrom].Position.y));
             continue;
         }
         int i = 0;
@@ -1690,6 +1756,11 @@ void gpu3dsDrawSnesScreen() {
             bufferOffset += verticesTotal;
         }
     }
+
+    // the occlusion cull filters tiles through the index buffer: a frame
+    // with a covered BG section draws every tiled layer indexed
+    if (list->useDrawArraysForTiledLayers && occlAnyCoverer(list))
+        list->useDrawArraysForTiledLayers = false;
 
     gpu3dsDrawMode7Texture();
     gpu3dsDrawLayers(list);

@@ -657,6 +657,14 @@ inline void __attribute__((always_inline)) S9xCommitLayerSection(bool reuseVerti
 	bool s_secFullOpaque = false; int s_secPlane0 = 0, s_secPlane1 = 0; u16 s_secSegY0 = 0, s_secSegY1 = 0;
 	if (!reuseVertices) {
 		const bool plainMode = PPU.BGMode == 0 || PPU.BGMode == 1 || PPU.BGMode == 3;
+		// what the occlusion cull sees of this walk: the probe's dump frame,
+		// and every 300 frames in the Azahar fbdump build (no probe there)
+		const bool walkLog = GPU3DSExt.probeDumpDraws;
+		if (walkLog)
+			log3dsWrite("[probe][walk] bg=%d sub=%d mode=%d bg3prio=%d tiles=%u opaque=%u blank=%u sliced=%u planes=%d/%d seg=%d-%d stencil=%u w1=%d..%d w2=%d..%d tm=%02x ts=%02x",
+				layer, sub ? 1 : 0, (int)PPU.BGMode, PPU.BG3Priority ? 1 : 0, GPU3DSExt.bgWalkTiles, GPU3DSExt.bgWalkOpaque, GPU3DSExt.bgWalkBlank, GPU3DSExt.bgWalkSliced,
+				(int)GPU3DS.stereoBgPlane[layer * 2], (int)GPU3DS.stereoBgPlane[layer * 2 + 1], (int)GFX.StartY, (int)GFX.EndY, (unsigned)renderState.stencilTest,
+				(int)PPU.Window1Left, (int)PPU.Window1Right, (int)PPU.Window2Left, (int)PPU.Window2Right, (unsigned)Memory.FillRAM[0x212c], (unsigned)Memory.FillRAM[0x212d]);
 		s_secFullOpaque = plainMode && GPU3DSExt.bgWalkTiles > 0 && GPU3DSExt.bgWalkBlank == 0 &&
 			GPU3DSExt.bgWalkSliced == 0 && GPU3DSExt.bgWalkOpaque == GPU3DSExt.bgWalkTiles;
 		s_secPlane0 = (int)GPU3DS.stereoBgPlane[layer * 2]; s_secPlane1 = (int)GPU3DS.stereoBgPlane[layer * 2 + 1];
@@ -3850,6 +3858,7 @@ void S9xCommitBrightnessSection(VerticalSections *verticalSections)
 //-----------------------------------------------------------
 void S9xCommitWindowLRSection(VerticalSections *verticalSections)
 {
+	GPU3DSExt.winSecCount = 0;   // the window cull (occlusion_cull.h) sees only what is drawn below
 	if (!verticalSections->Count) 
 		return;
 
@@ -3877,6 +3886,16 @@ void S9xCommitWindowLRSection(VerticalSections *verticalSections)
 		int w2Right = verticalSections->Section[i].V4;
 
 		ComputeClipWindowsForStenciling (w1Left, w1Right, w2Left, w2Right, stencilEndX, stencilMask);
+
+		if (GPU3DSExt.winSecCount >= 0) {
+			if (GPU3DSExt.winSecCount < 64) {
+				OcclWindow *ow = &GPU3DSExt.winSec[GPU3DSExt.winSecCount++];
+				ow->startY = startY; ow->endY = endY;
+				ow->w1L = w1Left; ow->w1R = w1Right; ow->w2L = w2Left; ow->w2R = w2Right;
+			} else {
+				GPU3DSExt.winSecCount = -1;
+			}
+		}
 
 		int startX = 0;
 		for (int s = 0; s < 10; s++)
