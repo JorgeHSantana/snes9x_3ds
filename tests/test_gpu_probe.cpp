@@ -1,7 +1,7 @@
 #include "doctest.h"
 #include "gpu_probe.h"
 
-GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false, false };
+GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false, false, false, false };
 
 TEST_CASE("gpu_probe: the masks remove one piece per step, then stack") {
     const GpuProbeMask base = gpu_probe_mask(0);
@@ -25,6 +25,22 @@ TEST_CASE("gpu_probe: the masks remove one piece per step, then stack") {
     CHECK(gpu_probe_mask(9).noCull);
     CHECK_FALSE(gpu_probe_mask(9).noGrade);
     CHECK_FALSE(gpu_probe_mask(8).noCull);
+}
+
+TEST_CASE("gpu_probe: the tile cost steps run on plain stereo and stack fill, then the geometry shader") {
+    for (int step = 0; step < 10; step++) {
+        CHECK_FALSE(gpu_probe_mask(step).noFill);
+        CHECK_FALSE(gpu_probe_mask(step).vsOnly);
+    }
+    const GpuProbeMask plain = gpu_probe_mask(6), fill = gpu_probe_mask(10), vs = gpu_probe_mask(11);
+    CHECK(fill.noFill); CHECK_FALSE(fill.vsOnly);
+    CHECK(vs.noFill); CHECK(vs.vsOnly);
+    // same effects configuration as step 6: the three read against each other
+    CHECK(fill.noGrade == plain.noGrade); CHECK(fill.noGlow == plain.noGlow); CHECK(fill.noShadows == plain.noShadows);
+    CHECK(fill.noBlur == plain.noBlur); CHECK(fill.noFog == plain.noFog);
+    CHECK(vs.noBlur); CHECK(vs.noFog);
+    CHECK_FALSE(fill.sharedRight); CHECK_FALSE(fill.flat2D); CHECK_FALSE(fill.noCull);
+    CHECK_FALSE(vs.sharedRight); CHECK_FALSE(vs.flat2D); CHECK_FALSE(vs.noCull);
 }
 
 TEST_CASE("gpu_probe: every step has a name") {

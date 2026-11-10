@@ -481,11 +481,19 @@ void gpu3dsSetFragmentOperations(SGPURenderState *state, u64 diff) {
     }
 }
 
+// GPU Cost Probe, step "tiles vertex shader only": the tile program
+// without its geometry shader (same vertex DVLE; its outputs already carry
+// the position / texcoord / colour semantics). Bound only for the tile and
+// sprite lists while that step runs; nothing it draws is meant to be seen.
+static shaderProgram_s s_tilesVsOnlyProgram;
+static bool s_vsOnlyWanted = false, s_vsOnlyBound = false, s_probeScissorOn = false;
+
 void gpu3dsSetShaderAndUniforms(SGPURenderState *state, u64 diff, bool targetUpdated, bool textureUpdated) {
     bool shaderUpdated = diff & PACKED_MASK_SHADER;
 
     if (shaderUpdated) {
-        C3D_BindProgram(&GPU3DS.shaders[state->shader].shaderProgram);
+        s_vsOnlyBound = s_vsOnlyWanted && state->shader == SPROGRAM_TILES;
+        C3D_BindProgram(s_vsOnlyBound ? &s_tilesVsOnlyProgram : &GPU3DS.shaders[state->shader].shaderProgram);
         GPU3DS.currentRenderTargetDim = 0;
         GPU3DS.currentTextureDim = 0;
         GPU3DS.currentVboId = VBO_COUNT;
@@ -590,10 +598,36 @@ void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
             s_frameDraws, (int)list->id, n, (int)rs->shader, (int)rs->target, (int)rs->textureBind, (int)rs->textureEnv,
             (int)rs->alphaBlending, (int)rs->alphaTest, (int)rs->depthTest, (unsigned)rs->stencilTest, GPU3DS.stereoGhostPass ? 1 : 0);
     }
+    // GPU Cost Probe steps 10-11 (gpu_probe.h): the tile and sprite lists
+    // lose their fragments (a one-pixel scissor) and then their geometry
+    // shader too. Idle, both tests are false and nothing here runs.
+    const bool probeTiles = (list->id == VBO_SCENE_TILE || list->id == VBO_SCENE_OBJ) && GPU3DS.currentRenderState.shader == SPROGRAM_TILES;
+    const bool vsOnly = g_gpuProbeMask.vsOnly && probeTiles;
+    if (vsOnly != s_vsOnlyBound) {
+        s_vsOnlyWanted = vsOnly;
+        GPU3DS.appliedRenderState.shader = SPROGRAM_UNSET;   // rebind: the other tile program
+    }
     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
     gpu3dsSetAttributeBuffers(list);
 
-    if (indices != NULL) {
+    const bool cut = g_gpuProbeMask.noFill && probeTiles;
+    if (cut) C3D_SetScissor(GPU_SCISSOR_NORMAL, 0, 0, 1, 1);   // every draw: a target change resets the scissor
+    else if (s_probeScissorOn) C3D_SetScissor(GPU_SCISSOR_DISABLE, 0, 0, 0, 0);
+    s_probeScissorOn = cut;
+
+    if (vsOnly) {
+        // two vertices a tile, read as triangles: the same vertex shader
+        // runs, in whole triangles
+        const int n3 = (indices != NULL || from >= 0 ? count : list->count) / 3 * 3;
+        if (n3 > 0) {
+            if (indices != NULL) C3D_DrawElements(GPU_TRIANGLES, n3, C3D_UNSIGNED_SHORT, indices);
+            else C3D_DrawArrays(GPU_TRIANGLES, from >= 0 ? from : list->from, n3);
+        }
+        if (indices == NULL && from < 0) {
+            list->from += list->count;
+            list->count = 0;
+        }
+    } else if (indices != NULL) {
         C3D_DrawElements(list->primitive, count, C3D_UNSIGNED_SHORT, indices);
     } else if (from >= 0) {
         C3D_DrawArrays(list->primitive, from, count);
@@ -1174,6 +1208,11 @@ void gpu3dsLoadShader(SGPU_SHADER_PROGRAM shaderIndex, u32 *shaderBinary,
     {
 		shaderProgramSetGsh(&GPU3DS.shaders[shaderIndex].shaderProgram,
 			&GPU3DS.shaders[shaderIndex].dvlb->DVLE[1], geometryShaderStride);
+    }
+
+    if (shaderIndex == SPROGRAM_TILES) {
+        shaderProgramInit(&s_tilesVsOnlyProgram);
+        shaderProgramSetVsh(&s_tilesVsOnlyProgram, &GPU3DS.shaders[shaderIndex].dvlb->DVLE[0]);
     }
 }
 

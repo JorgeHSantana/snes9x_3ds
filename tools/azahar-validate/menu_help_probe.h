@@ -22,7 +22,7 @@ static const MenuHelpProbeCase MENU_HELP_PROBE_CASES[] = {
     {TAB_EFFECTS, "  Saturation"},
     {TAB_SETTINGS, "  Frameskip"},                      // Performance section (game tab)
     {TAB_SETTINGS, "  Effects Quality"},
-    {TAB_SETTINGS, "  GPU Cost Probe (45 s, to the log)"}
+    {TAB_SETTINGS, "  GPU Cost Probe (60 s, to the log)"}
 };
 static size_t menu_help_probe_case = 0;
 

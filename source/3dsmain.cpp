@@ -47,7 +47,13 @@ extern uint32 g_apuSkips;    // apu.cpp: SPC700 idle skips
 #include "gpu_probe.h"
 #include "effects_quality.h"
 
-GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false, false };
+// -DPROBE_GPU_STEP=N holds step N's mask from boot (Azahar: that the step
+// draws and survives, not what it costs)
+#ifdef PROBE_GPU_STEP
+GpuProbeMask g_gpuProbeMask = gpu_probe_mask(PROBE_GPU_STEP);
+#else
+GpuProbeMask g_gpuProbeMask = { false, false, false, false, false, false, false, false, false, false, false };
+#endif
 static GpuProbeState s_gpuProbe = { false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 0 };
 #include "3dslcd.h"
 #include "3dsui_img.h"
@@ -1627,9 +1633,9 @@ void makeOptionMenu(std::vector<SMenuItem>& items, std::vector<SMenuTab>& menuTa
             g_gpuProbeMask = gpu_probe_current_mask(&s_gpuProbe);
             log3dsWrite("[probe][gpu] start: %d steps x %d frames (%d settle), 3d=%s shadows=%d glow=%d", GPU_PROBE_STEPS, GPU_PROBE_STEP_FRAMES, GPU_PROBE_SETTLE_FRAMES,
                 GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.ShadowsMode, settings3DS.GlowMode);
-            notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen, 5000, "GPU cost probe: 45 s, keep playing the heavy part");
+            notif3dsTrigger(Notif::Misc, Notif::Type::Info, settings3DS.GameScreen, 5000, "GPU cost probe: 60 s, keep playing (the last 10 s draw no tiles)");
             GPU3DS.emulatorState = EMUSTATE_EMULATE;
-        }, MenuItemType::Action, "  GPU Cost Probe (45 s, to the log)"_s, ""_s);
+        }, MenuItemType::Action, "  GPU Cost Probe (60 s, to the log)"_s, ""_s);
         items.back().PickerDescription = "Measures what each part of the render costs the\nGPU: back in the game, switches one piece off\nevery 5 s (colour grade, glow, shadows, blur,\nfade/haze, the right eye, 3D) and logs each step.\nSend the log afterwards.";
     }
     AddMenuDisabledOption(items, ""_s);
@@ -4506,7 +4512,7 @@ void emulatorLoop()
             // GPU cost probe (gpu_probe.h): one step per 5 s, each logged
             // the first counted frame of the baseline and 3D-off steps lists its
             // draws (where the ~3000 quads a frame come from)
-            if (s_gpuProbe.active && s_gpuProbe.frame == GPU_PROBE_SETTLE_FRAMES && (s_gpuProbe.step == 0 || s_gpuProbe.step == GPU_PROBE_STEPS - 1))
+            if (s_gpuProbe.active && s_gpuProbe.frame == GPU_PROBE_SETTLE_FRAMES && (s_gpuProbe.step == 0 || s_gpuProbe.step == 9))
                 GPU3DSExt.probeDumpDraws = true;
             if (s_gpuProbe.active && gpu_probe_frame(&s_gpuProbe, GPU3DSExt.gpuWaitLast, (u64)ticksSoFar, GPU3DSExt.gpuBusyLast, GPU3DSExt.drawCallsLast, GPU3DSExt.drawVertsLast, frameLoadPercent >= 100, skipDrawing, GPU3DSExt.bgTilesLast, GPU3DSExt.bgOpaqueLast, GPU3DSExt.culledTilesLast)) {
                 const u64 n = s_gpuProbe.counted ? (u64)s_gpuProbe.counted : 1, tpu = 268111856ull / 1000000ull;

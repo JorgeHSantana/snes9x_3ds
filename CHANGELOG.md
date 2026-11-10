@@ -2,6 +2,8 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+### Diagnostics
+- **GPU Cost Probe**: two more steps (60 s in all) that split what a tile costs the GPU on plain stereo: "tiles without fill" (the tile and sprite draws scissored to one pixel) and "tiles vertex shader only" (the same draws without the geometry shader). Fill, geometry shader and vertex shader come out by subtraction; the picture shows no tiles for the last 10 s
 
 ## Stable v2.7 (2026-11-10)
 ### Fixes

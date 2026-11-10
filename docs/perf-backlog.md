@@ -226,6 +226,16 @@ for respeitada, esforço pequeno.
 
 ---
 
+### B6. Quads pela CPU, sem geometry shader
+
+**Estado: medindo.** O GPU Cost Probe ganhou os passos 10 (tiles sem
+fill) e 11 (tiles só com vertex shader) em 2026-11-10. O ganho possível
+é (passo 10 - passo 11) menos dois vertex shaders a mais por quad; só
+vale reescrever a emissão se sobrar pelo menos 1 ms na fase pesada do
+MMX3 ZP. Aguardando log de console.
+
+---
+
 ## C. Menu (restos depois do lote de 2026-11-05)
 
 ### C1. Tela inferior repintada inteira por movimento de cursor
