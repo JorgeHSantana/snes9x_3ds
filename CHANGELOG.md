@@ -2,6 +2,8 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+
+## Stable v2.7 (2026-11-10)
 ### Fixes
 - **Mode 7 Effects by Distance**: Fade and Haze on a Mode 7 plane now really fog the rows towards the horizon. The amount was written at 1/248 of its value since the feature's first build (the geometry shader scales every per-vertex tint by that), so the plane never fogged; the nearest row stays untouched as before
 ### Features

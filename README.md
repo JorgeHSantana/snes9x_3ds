@@ -23,6 +23,7 @@ Feedback and bug reports are welcome.
 * **Send Screenshot to GitHub**: both eyes as PNGs in a comment of your log issue, with the effect settings in the title, for remote diagnosis
 * Live 3D editor in a dedicated **3D Stereo** tab: focusing a gauge spotlights exactly its tiles on the top screen, values move the paused frame in real time, and holding X previews the full scene
 * Scene Profiles (experimental): capture a screen and its own 3D configuration is applied automatically whenever that screen shows up
+* **Performance** section in the game settings: Frameskip, Frame Sync, Skip Idle Loops (the CPU and the sound CPU jump over wait loops, per game) and one **Effects Quality** picker for the shadow, glow and blur quality controllers; a GPU Cost Probe writes what each effect costs on your console to the log
 * Self-updater: check and install new builds (Stable or Nightly channel) from inside the emulator, with optional check-on-boot
 * File browser with instant cached listings that self-refresh in the background when SD contents change
 * Improved rendering for HDMA-heavy games and mosaic effects

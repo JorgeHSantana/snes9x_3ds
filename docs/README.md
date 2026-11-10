@@ -31,7 +31,7 @@ Generated 2026-08-08 from source analysis of the codebase at version **v1.61** (
 
 * **What**: SNES emulator for Nintendo 3DS/2DS (all models); the SNES PPU runs on the 3DS GPU (PICA200).
 * **Lineage**: Snes9x 1.43 core → bubble2k16/snes9x_3ds → matbo87/snes9x_3ds (upstream) → this fork.
-* **Current version**: Stable v2.6 (2026-11-04; app metadata `2.6.0`, product code `CTR-P-SNSX`); see CHANGELOG.md and docs/journal/HISTORY.md.
+* **Current version**: Stable v2.7 (2026-11-10; app metadata `2.7.0`, product code `CTR-P-SNSX`); see CHANGELOG.md and docs/journal/HISTORY.md.
 * **Language/toolchain**: C++17 (gnu++17), devkitARM, libctru, patched citro3d v1.7.1.
 * **ROM formats**: `.smc`, `.sfc`, `.fig`, `.bs`, `.bsx`, and `.zip` (one ROM inside; MSU-1 packs as virtual entries).
 * **Data root on console**: `sd:/3ds/snes9x_3ds/`.

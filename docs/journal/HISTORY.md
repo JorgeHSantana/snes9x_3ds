@@ -44,6 +44,18 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   appearance-only invalidation, snapshot workspace (#78, #79); crash
   fixes (post-update exit, caching indicator on an empty list); dead
   ground-sprite code and the redundant Mode 7 Depth Mode removed.
+* **Stable v2.7 (2026-11-10)** — The performance release, driven by the
+  console's own numbers (the `[perf][frame]` line gained `gpu=`, `flush=`,
+  `gpuwait=`, `draws=`, `verts=`, `culled=`; the GPU Cost Probe switches
+  one piece of the render off every 5 s): Skip Idle Loops (the 1.43 CPU
+  and SPC700 idle detection re-done, per game), fade/haze and the blur
+  ghosts in one pass per layer instead of one per depth group, the tile
+  vertex shader trimmed, BG occlusion and window culls, the Auto quality
+  tiers reacting to GPU pressure, the partial end-of-frame cache flush,
+  OAM writes deferred per layer, the packed tile lookup. A Performance
+  section in the game settings with one Effects Quality picker. Mode 7
+  Effects by Distance fogs the plane for the first time. Menu no longer
+  re-renders the paused screen on slider jitter in every tab.
 * **Stable v2.6 (2026-11-04)** — The Effects tab (#77 closed): glow as a
   bright-pass bloom (whole screen or marked rows/palettes, quarter-res
   Spread target with per-eye Persistence, Threshold Relative to the
