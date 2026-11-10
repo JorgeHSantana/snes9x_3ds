@@ -4,6 +4,7 @@
 
 #include "3dsgpu.h"
 #include "occlusion_cull.h"
+#include "ibo_cursor.h"
 
 #define COMPOSE_HASH(vramAddr, pal)   ((vramAddr) << 4) + ((pal) & 0xf)
 
@@ -167,6 +168,7 @@ typedef struct
     SLayerSection   *sections;
     void            *ibo;
     u32             iboUsed;        // index entries the frame's tiled layers may write (partial flush)
+    unsigned int    iboCursor;      // ibo_cursor.h: the next free entry past the fixed ranges, back to 0 at the frame's end
 
     u32             sizeInBytes;
 

@@ -186,6 +186,7 @@ void gpu3dsInitLayers() {
     // A tile drawn on both sub and main is referenced twice, so worst case is 2x MAX_VERTICES.
     list->sizeInBytes = gpu3dsGetNextPowerOf2(2 * MAX_VERTICES * sizeof(u16));
     list->ibo = linearAlloc(list->sizeInBytes);
+    list->iboCursor = 0;
 
     gpu3dsResetLayers(list);
 
@@ -351,7 +352,9 @@ void gpu3dsDrawTiledLayerSingleSection(SLayer *layer, SLayerSection *section) {
 }
 
 // obj, bg0-bg3
-void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
+// allowCull false: the caller could not give this pass a private index
+// range, so the list written must be the same in every pass (ibo_cursor.h)
+void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to, bool allowCull) {
     SLayerList *list = &GPU3DSExt.layerList;
     u16 batchFrom = 0;
     u16 batchCount = 0;
@@ -387,8 +390,8 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to) {
         // and whether its window stencil can hide whole tiles (window cull:
         // in the ghost passes too, the stencil applies to them as well)
         float coverL = 0.0f, coverR = 0.0f; int cPlaneMin = 0;
-        const bool covered = occlFindCoverer(list, layer, section, &coverL, &coverR, &cPlaneMin);
-        const bool windowed = !g_gpuProbeMask.noCull && layer->id <= LAYER_BG3 && section->vboId == VBO_SCENE_TILE &&
+        const bool covered = allowCull && occlFindCoverer(list, layer, section, &coverL, &coverR, &cPlaneMin);
+        const bool windowed = allowCull && !g_gpuProbeMask.noCull && layer->id <= LAYER_BG3 && section->vboId == VBO_SCENE_TILE &&
             GPU3DSExt.winSecCount > 0 && occl_stencil_cullable((unsigned)section->state.stencilTest);
 
         // batch break on state change
@@ -626,8 +629,9 @@ static GlowScratch s_glowScratch;
 void gpu3dsFlushFrameWrites()
 {
     SLayerList *list = &GPU3DSExt.layerList;
-    if (list->ibo != NULL && list->iboUsed > 0)
-        GSPGPU_FlushDataCache(list->ibo, list->iboUsed * sizeof(u16));
+    const u32 iboWritten = list->iboCursor > list->iboUsed ? (u32)list->iboCursor : list->iboUsed;
+    if (list->ibo != NULL && iboWritten > 0)
+        GSPGPU_FlushDataCache(list->ibo, iboWritten * sizeof(u16));
     if (s_glowScratch.ready) {
         GSPGPU_FlushDataCache(s_glowScratch.rect.data_base, s_glowScratch.rect.sizeInBytes);
         GSPGPU_FlushDataCache(s_glowScratch.quad.data_base, s_glowScratch.quad.sizeInBytes);
@@ -1382,9 +1386,12 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 } else if (list->useDrawArraysForTiledLayers) {
                     gpu3dsDrawTiledLayerSingleSection(layer, &list->sections[from]);
                 } else {
-                    u32 bufferOffset = layer->bufferOffset + (sub ? 0 : layer->verticesByTarget[TARGET_SNES_SUB]);
+                    // a private index range for this pass (ibo_cursor.h); with
+                    // the buffer full, the layer's fixed range and no cull
+                    const int at = ibo_cursor_take(&list->iboCursor, layer->verticesByTarget[i], list->sizeInBytes / sizeof(u16));
+                    u32 bufferOffset = at >= 0 ? (u32)at : layer->bufferOffset + (sub ? 0 : layer->verticesByTarget[TARGET_SNES_SUB]);
                     u16 *indices = (u16 *)list->ibo + bufferOffset;
-                    gpu3dsDrawTiledLayer(layer, indices, from, to);
+                    gpu3dsDrawTiledLayer(layer, indices, from, to, at >= 0);
                 }
             };
 
@@ -1784,6 +1791,7 @@ void gpu3dsDrawSnesScreen() {
         }
     }
     list->iboUsed = bufferOffset;
+    ibo_cursor_floor(&list->iboCursor, (unsigned int)bufferOffset);
 
     // the occlusion cull filters tiles through the index buffer: a frame
     // with a covered BG section draws every tiled layer indexed

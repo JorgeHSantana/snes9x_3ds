@@ -713,6 +713,7 @@ void gpu3dsFrameEnd(u8 flags)
     gpu3dsFlushFrameWrites();
     C3D_FrameEnd(flags | GX_CMDLIST_FLUSH);
 #endif
+    GPU3DSExt.layerList.iboCursor = 0;   // ibo_cursor.h: the frame's index ranges are submitted
     GPU3DSExt.flushTicks += svcGetSystemTick() - flushTick0;
     t3dsStopTimer(TIMER_FLUSH);
     GPU3DSExt.drawCallsLast = s_frameDraws; GPU3DSExt.drawVertsLast = s_frameVerts;
