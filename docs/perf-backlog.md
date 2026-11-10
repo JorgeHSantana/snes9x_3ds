@@ -228,11 +228,13 @@ for respeitada, esforço pequeno.
 
 ### B6. Quads pela CPU, sem geometry shader
 
-**Estado: medindo.** O GPU Cost Probe ganhou os passos 10 (tiles sem
-fill) e 11 (tiles só com vertex shader) em 2026-11-10. O ganho possível
-é (passo 10 - passo 11) menos dois vertex shaders a mais por quad; só
-vale reescrever a emissão se sobrar pelo menos 1 ms na fase pesada do
-MMX3 ZP. Aguardando log de console.
+**Estado: descartado (medido em 2026-11-10).** Passos 10 e 11 do GPU
+Cost Probe no console: o geometry shader mais o setup custam 0,16 us por
+quad; o vertex shader custa 0,3 us por vértice. Emitir quatro vértices
+pela CPU tira o primeiro e paga dois vertex shaders a mais: 0,45 us por
+quad mais caro. Não fazer. O vertex shader é o maior pedaço do custo por
+tile: o que rende é cortar vértices (fantasmas do blur) ou encurtar o
+vertex shader.
 
 ---
 
