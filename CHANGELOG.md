@@ -3,7 +3,11 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Diagnostics
-- **GPU Cost Probe**: two more steps (60 s in all) that split what a tile costs the GPU on plain stereo: "tiles without fill" (the tile and sprite draws scissored to one pixel) and "tiles vertex shader only" (the same draws without the geometry shader). Fill, geometry shader and vertex shader come out by subtraction; the picture shows no tiles for the last 10 s
+- **GPU Cost Probe**: two more steps (60 s in all) that split what a tile costs the GPU on plain stereo: "tiles without fill" (the tile and sprite draws scissored to one pixel) and "tiles vertex shader only" (the same draws without the geometry shader). Fill, geometry shader and vertex shader come out by subtraction; for those 10 s. A last step (65 s in all) turns the layer scratch image on, to read against the baseline
+### Fixes
+- **Blurred layers with split depths**: every pass of a tiled layer (each eye's base pass and its blur ghosts) wrote its culled index list into the same range of the index buffer, and the GPU only reads it when the frame's command list runs, so all of them drew with the last pass's list. Each pass now has its own range. No difference in the scenes tested (the lists agreed there); it could drop or repeat tiles at the screen edge where the passes' parallax differed
+### Experimental
+- **Layer scratch image** (off; GPU Cost Probe step 12, or a `-DLAYER_SCRATCH_ON` build): a background that the frame draws many times (main and sub screen, two eyes, blur ghosts) is drawn once into a 512x256 image and every pass becomes one quad per priority plane, where the cost model says the vertices saved pay for the image's fill. The images live inside the Mode 7 texture (no VRAM left for more), so it stays out of Mode 7 screens. Azahar bit-identical on five scenes with every candidate forced through the images; the gain waits for a console log
 
 ## Stable v2.7 (2026-11-10)
 ### Fixes

@@ -172,6 +172,7 @@ const char* utils3dsTextureIDToString(SGPU_TEXTURE_ID id) {
         case UI_NOTIF_MSG:              return "notif msg";
         case UI_NOTIF_FPS:              return "notif fps";
         case UI_SCANLINE:               return "scanline";
+        case SNES_SCRATCH:              return "layer_scratch";
         default:                        return "invalid";
     }
 }

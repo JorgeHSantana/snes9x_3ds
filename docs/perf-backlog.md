@@ -238,6 +238,40 @@ vertex shader.
 
 ---
 
+### B7. Imagem pronta da camada (layer scratch image)
+
+**Estado: implementado, desligado; falta o número do console.** Um BG
+desenhado muitas vezes no frame (main e sub, dois olhos, fantasmas do
+blur) é desenhado uma vez numa imagem 512x256 e cada passada vira um
+quad por plano de prioridade, com o mesmo shader, então shift, tinta,
+alpha do fantasma, depth, stencil e alpha test valem igual. Lógica pura
+em `source/layer_scratch.h` (varredura, modelo de custo com margem de
+20%, tier), uso em `3dsimpl_gpu.cpp` (`layerScratchDecideAndBuild`,
+`layerScratchDraw`).
+
+- Sem VRAM (186 KB livres): as oito imagens são fatias de 256 KB da
+  textura do Mode 7 (`SNES_SCRATCH`, alias de 512x256 RGBA5551). Fora de
+  telas Mode 7, com um segundo de espera na saída; a volta ao Mode 7
+  redesenha as quatro seções.
+- Entra só quando paga: `passes * (verts * 380 + tilePx * 9)` contra a
+  montagem mais `passes * bbox * 9` ns. Dois planos intercalados em tela
+  cheia não pagam (duas caixas cheias de fill); camada com coverer do
+  occlusion cull fica de fora; shift fracionário (modo Continuous) cai
+  nos tiles.
+- Depois das montagens o frame é flushado e dividido (`gpu3dsFrameSplit`):
+  no console a unidade de textura lê o conteúdo velho de um alvo
+  renderizado na mesma lista de comandos.
+
+**Validação.** Azahar bit-idêntico com `-DLAYER_SCRATCH_FORCE` (todo
+candidato pela imagem) em mmx3zp-dam-light, mmx3-sbs-fx1-full,
+mmx3-pillar-blur6, smk-boot e shadow-smw-on, e sem o force na represa
+(BG2, 1914 vértices, 8 passadas, um plano). Console: passo 12 do GPU
+Cost Probe contra o passo 0.
+**Ganho esperado:** na represa, 7 passadas de 1914 vértices a menos,
+perto de 5 ms de vertex shader. Liga por padrão se o console confirmar.
+
+---
+
 ## C. Menu (restos depois do lote de 2026-11-05)
 
 ### C1. Tela inferior repintada inteira por movimento de cursor

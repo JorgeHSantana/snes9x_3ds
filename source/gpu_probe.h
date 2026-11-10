@@ -12,7 +12,7 @@
 
 #define GPU_PROBE_STEP_FRAMES   300   // 5 s at 60 Hz
 #define GPU_PROBE_SETTLE_FRAMES  60   // the Auto crossfades and the pacer settle: not counted
-#define GPU_PROBE_STEPS          12
+#define GPU_PROBE_STEPS          13
 
 struct GpuProbeMask {
     bool noGrade;       // the output colour grade (stages 1-5 of the blit)
@@ -29,6 +29,8 @@ struct GpuProbeMask {
     // configuration and read against step 6:
     bool noFill;        // the tile and sprite draws are scissored to one pixel: vertex + geometry shader and triangle setup, no fragments
     bool vsOnly;        // the same draws without the geometry shader (and scissored): the vertex shader alone
+    // A/B of a render change on the full configuration: reads against step 0
+    bool layerScratch;  // the layer scratch image on (layer_scratch.h): a BG drawn many times becomes one quad a pass
 };
 
 struct GpuProbeState {
@@ -59,13 +61,14 @@ static inline const char *gpu_probe_name(int step)
     case 9: return "no occlusion/window cull";
     case 10: return "plain stereo, tiles without fill";
     case 11: return "plain stereo, tiles vertex shader only";
+    case 12: return "baseline, layer scratch image";
     default: return "?";
     }
 }
 
 static inline GpuProbeMask gpu_probe_mask(int step)
 {
-    GpuProbeMask m = { false, false, false, false, false, false, false, false, false, false, false };
+    GpuProbeMask m = { false, false, false, false, false, false, false, false, false, false, false, false };
     switch (step) {
     case 1: m.noGrade = true; break;
     case 2: m.noGlow = true; break;
@@ -83,6 +86,7 @@ static inline GpuProbeMask gpu_probe_mask(int step)
         m.noFill = true;
         m.vsOnly = step == 11;
         break;
+    case 12: m.layerScratch = true; break;
     default: break;
     }
     return m;

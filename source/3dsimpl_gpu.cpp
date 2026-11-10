@@ -14,6 +14,7 @@ bool S9xLayerUsedLastFrame(int layer, int prio);   // gfxhw.cpp: the rows the la
 #include "3dslog.h"
 #include "gpu_probe.h"
 #include "occlusion_cull.h"
+#include "layer_scratch.h"
 
 // the 3D editor's highlighted layer (-1 = none): its spotlight passes dim the
 // other priorities, so the occlusion cull stays off while it is set
@@ -621,11 +622,13 @@ struct GlowScratch
     }
 };
 static GlowScratch s_glowScratch;
+static bool layerScratchTakeMode7Dirty();
 
 // End-of-frame partial flush (docs/perf-backlog.md B1): everything the CPU
 // wrote this frame that the frame's draws read, other than the vertex
 // lists (gpu3dsFrameEnd flushes those). GPU_FULL_FLUSH restores citro3d's
 // whole-heap flush for diagnosis.
+static void layerScratchFlush();
 void gpu3dsFlushFrameWrites()
 {
     SLayerList *list = &GPU3DSExt.layerList;
@@ -636,6 +639,7 @@ void gpu3dsFlushFrameWrites()
         GSPGPU_FlushDataCache(s_glowScratch.rect.data_base, s_glowScratch.rect.sizeInBytes);
         GSPGPU_FlushDataCache(s_glowScratch.quad.data_base, s_glowScratch.quad.sizeInBytes);
     }
+    layerScratchFlush();
     if (GPU3DS.tileCacheDirtyLo <= GPU3DS.tileCacheDirtyHi) {
         u8 *atlas = (u8 *)GPU3DS.textures[SNES_TILE_CACHE].tex.data;
         const u32 lo = GPU3DS.tileCacheDirtyLo * 2, hi = (GPU3DS.tileCacheDirtyHi + 64) * 2;   // 64 texels of RGBA5551 per tile
@@ -809,6 +813,312 @@ static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id, bool forceOthers = false
     gpu3dsSetStereoAtmosphereForDepth(GPU3DS.stereoLayerDepth[id]);
 }
 
+// ---------------------------------------------------------------------------
+// Layer scratch image (layer_scratch.h, perf-backlog B7). A BG that the
+// frame draws several times (two eyes, the base pass and the blur ghosts,
+// main and sub screen) has its tiles drawn ONCE, unshifted, into a scratch
+// image - one image a priority plane, each plane has its own shift - and
+// every pass draws one textured quad a plane instead. The quad goes through
+// the same shader with the plane and the alpha bits in its y, so the tier's
+// shift, tint, ghost alpha, depth and the section's stencil and alpha test
+// all apply as they do to the tiles.
+//
+// Decided and built in the left eye's pass, before any layer is drawn; the
+// right eye only samples. Off unless built with -DLAYER_SCRATCH_ON or under
+// the GPU Cost Probe's step 12.
+struct LayerScratchUse
+{
+    u8 nPlanes;                              // 0: the layer draws its tiles
+    u8 slot[LAYER_SCRATCH_MAX_PLANES];
+};
+struct LayerScratchState
+{
+    SVertexList rect, quad;                  // own lists: the GPU reads them when the command list runs
+    bool tried, ready;
+    int ringFrame;
+    static const int RING_FRAMES = 4;        // both eyes of a frame share one set; paused replays and frame splits get room
+    LayerScratchUse use[2][4];               // [target][bg]
+    int slots;
+    s16 quadFrom[LAYER_SCRATCH_SLOTS];
+    u16 *quadIdx[LAYER_SCRATCH_SLOTS];       // the quad's two indices, in an indexed frame
+    int mode7Cooldown;
+    bool mode7Dirty;                         // the Mode 7 texture holds scratch images: it must be redrawn whole
+    void init()
+    {
+        if (tried) return;
+        tried = true;
+        const int n = RING_FRAMES * LAYER_SCRATCH_SLOTS * 2;
+        rect = GPU3DS.vertices[VBO_SCENE_RECT];
+        rect.id = (SGPU_VBO_ID)(VBO_COUNT + 3);
+        rect.sizeInBytes = n * rect.vertexSize;
+        rect.data = rect.data_base = linearAlloc(rect.sizeInBytes);
+        rect.from = 0; rect.count = 0;
+        quad = GPU3DS.vertices[VBO_SCENE_TILE];
+        quad.id = (SGPU_VBO_ID)(VBO_COUNT + 4);
+        quad.sizeInBytes = n * quad.vertexSize;
+        quad.data = quad.data_base = linearAlloc(quad.sizeInBytes);
+        quad.from = 0; quad.count = 0;
+        ready = rect.data != nullptr && quad.data != nullptr;
+    }
+};
+static LayerScratchState s_layerScratch;
+
+static void layerScratchFlush()
+{
+    if (!s_layerScratch.ready) return;
+    GSPGPU_FlushDataCache(s_layerScratch.rect.data_base, s_layerScratch.rect.sizeInBytes);
+    GSPGPU_FlushDataCache(s_layerScratch.quad.data_base, s_layerScratch.quad.sizeInBytes);
+}
+
+// the Mode 7 texture was used for scratch images since it was last drawn:
+// gpu3dsDrawMode7Texture then redraws its four sections from the tile list
+static bool layerScratchTakeMode7Dirty()
+{
+    const bool d = s_layerScratch.mode7Dirty;
+    s_layerScratch.mode7Dirty = false;
+    return d;
+}
+
+// how many blur ghost passes an eye draws for this BG (the effects branch of
+// gpu3dsDrawLayers); an undercount only makes the trade look worse
+static int layerScratchGhostPasses(LAYER_ID id)
+{
+    if (GPU3DSExt.blurAutoOff) return 0;
+    if (!(GPU3DS.stereoFade > 0.0f || GPU3DS.stereoHaze > 0.0f || GPU3DS.stereoBlur > 0.0f)) return 0;
+    u32 col; float a0 = 0.0f, a1 = 0.0f, o = 0.0f;
+    gpu3dsComputeAtmosphereForDepth(GPU3DS.stereoLayerDepth[id], &col, &a0, &o);
+    gpu3dsComputeAtmosphereForDepth(GPU3DS.stereoLayerDepthP1[id], &col, &a1, &o);
+    if (a0 <= 0.0f && a1 <= 0.0f) return 0;
+    const bool light = settings3DS.StereoBlurQuality == 2 ||
+        ((settings3DS.StereoBlurQuality == 0 || settings3DS.StereoBlurQuality == 3) && GPU3DSExt.blurAutoLight);
+    return light ? 1 : 2;
+}
+
+static void layerScratchDecideAndBuild(SLayerList *list)
+{
+    LayerScratchState *ls = &s_layerScratch;
+    memset(ls->use, 0, sizeof(ls->use));
+    ls->slots = 0;
+
+#ifdef LAYER_SCRATCH_ON
+    const bool wanted = true;
+#else
+    const bool wanted = g_gpuProbeMask.layerScratch;
+#endif
+    SGPUTexture *sc = &GPU3DS.textures[SNES_SCRATCH];
+    if (!wanted || g_gpuProbeMask.noFill || g_gpuProbeMask.vsOnly || sc->target == NULL)
+        return;
+    // Mode 7 owns the texture; a game that goes in and out of Mode 7 would
+    // pay the texture's full redraw at every return, so it waits a second
+    if (IPPU.Mode7Prepared) { ls->mode7Cooldown = 60; return; }
+    if (ls->mode7Cooldown > 0) { ls->mode7Cooldown--; return; }
+    if (GPU3DS.stereoEyeIOD == 0.0f || GPU3DSExt.render2x.enabled || GPU3DSExt.renderWidth != 256 ||
+        s_previewHighlightLayer >= 0)
+        return;
+    ls->init();
+    if (!ls->ready) return;
+
+    const bool indexed = !list->useDrawArraysForTiledLayers;
+    const unsigned int iboCap = list->sizeInBytes / sizeof(u16);
+    const int eyes = ((GPU3DS.stereoMaxAbs > 0.0f || settings3DS.ShadowsMode != 0) && !g_gpuProbeMask.sharedRight) ? 2 : 1;
+    const STileVertex *verts = (const STileVertex *)GPU3DS.vertices[VBO_SCENE_TILE].data;
+    const SGPURenderState saved = GPU3DS.currentRenderState;
+    bool built = false;
+
+    for (int b = 0; b < 4; b++) {
+        const LAYER_ID id = (LAYER_ID)(LAYER_BG0 + b);
+        SLayer *layer = &list->layers[id];
+        if (!settings3DS.LayerEnabled[id]) continue;
+        // the BG's section on each target; main and sub must show the same vertices to share the images
+        SLayerSection *sec[2] = { NULL, NULL };
+        const char *why = NULL;
+        for (int t = 0; t < 2 && why == NULL; t++) {
+            const int n = layer->sectionsByTarget[t];
+            if (n == 0) continue;
+            if (n != 1) { why = "sections"; break; }
+            SLayerSection *s = &list->sections[layer->sectionsOffset + (t == TARGET_SNES_SUB ? 0 : layer->sectionsByTarget[TARGET_SNES_SUB])];
+            float cl, cr; int cp;
+            GPU3DS.currentRenderState.target = (SGPU_TARGET_ID)t;
+            if (s->vboId != VBO_SCENE_TILE || s->state.textureBind != SNES_TILE_CACHE) why = "not tiles";
+            else if (s->state.alphaTest == ALPHA_TEST_DISABLED) why = "no alpha test";
+            else if (occlFindCoverer(list, layer, s, &cl, &cr, &cp)) why = "covered";
+            else sec[t] = s;
+        }
+        GPU3DS.currentRenderState.target = saved.target;
+        SLayerSection *s0 = sec[0] != NULL ? sec[0] : sec[1];
+        if (why == NULL && s0 == NULL) continue;
+        if (why == NULL && sec[0] != NULL && sec[1] != NULL &&
+            (sec[0]->from != sec[1]->from || sec[0]->count != sec[1]->count ||
+             sec[0]->state.textureOffset != sec[1]->state.textureOffset))
+            why = "main and sub differ";
+
+        LayerScratchScan scan; scan.nPlanes = 0;
+        unsigned int passes = 0, bboxPx = 0, tilePx = 0;
+        if (why == NULL) {
+            const int perEye = (settings3DS.StereoShiftMode == 0 ? 1 : 0) + layerScratchGhostPasses(id);
+            passes = (unsigned int)(perEye * eyes * ((sec[0] != NULL ? 1 : 0) + (sec[1] != NULL ? 1 : 0)));
+            if (!layer_scratch_scan(&verts[s0->from].Position.x, sizeof(STileVertex), s0->count, &scan)) why = "scan";
+            else if (scan.nPlanes == 2 &&
+                (layer_scratch_tier(scan.p[0].plane, GPU3DS.stereoPrioZBoundary[id]) != 0 ||
+                 layer_scratch_tier(scan.p[1].plane, GPU3DS.stereoPrioZBoundary[id]) != 1)) why = "tiers";
+            else {
+                bboxPx = layer_scratch_bbox_px(&scan); tilePx = layer_scratch_tile_px(&scan);
+#ifdef LAYER_SCRATCH_FORCE      // validation builds: every candidate goes through the images
+                if (passes == 0) why = "does not pay";
+#else
+                if (!layer_scratch_pays(s0->count, passes, (unsigned int)scan.nPlanes, bboxPx, tilePx)) why = "does not pay";
+#endif
+                else if (ls->slots + scan.nPlanes > LAYER_SCRATCH_SLOTS) why = "slots";
+            }
+        }
+        // an indexed frame draws everything indexed (mixing froze the console on SMK)
+        u16 *tileIdx = NULL;
+        if (why == NULL && indexed) {
+            const int at = ibo_cursor_take(&list->iboCursor, (unsigned int)s0->count + 2u * (unsigned int)scan.nPlanes, iboCap);
+            if (at < 0) why = "index buffer";
+            else {
+                tileIdx = (u16 *)list->ibo + at;
+                for (int k = 0; k < s0->count; k++) tileIdx[k] = (u16)(s0->from + k);
+            }
+        }
+#ifdef LAYER_SCRATCH_TRACE
+        static int s_trace = 0;
+        const bool trace = (s_trace++ % 240) < 4;
+#else
+        const bool trace = false;
+#endif
+        if (GPU3DSExt.probeDumpDraws || trace)
+            log3dsWrite("[probe][scratch] bg=%d main=%d sub=%d verts=%d planes=%d passes=%u bbox=%u tiles=%u -> %s",
+                b, sec[0] != NULL ? 1 : 0, sec[1] != NULL ? 1 : 0, s0 != NULL ? (int)s0->count : 0, scan.nPlanes, passes, bboxPx, tilePx,
+                why != NULL ? why : "scratch");
+        if (why != NULL) continue;
+
+        if (!built) {
+            built = true;
+            ls->ringFrame = (ls->ringFrame + 1) % LayerScratchState::RING_FRAMES;
+        }
+        GPU3DS.scratchBuild = true;
+        GPU3DS.currentRenderState.target = TARGET_SNES_SUB;
+        GPU3DS.currentRenderState.shader = SPROGRAM_TILES;
+        GPU3DS.currentRenderState.depthTest = SGPU_STATE_DISABLED;
+        GPU3DS.currentRenderState.stencilTest = STENCIL_TEST_DISABLED;
+        GPU3DS.currentRenderState.alphaBlending = ALPHA_BLENDING_DISABLED;
+        const float bnd = GPU3DS.stereoPrioZBoundary[id];
+        LayerScratchUse u; u.nPlanes = (u8)scan.nPlanes;
+        for (int k = 0; k < scan.nPlanes; k++) {
+            const LayerScratchPlane *p = &scan.p[k];
+            const int slot = ls->slots++;
+            const int vi = (ls->ringFrame * LAYER_SCRATCH_SLOTS + slot) * 2;
+            u.slot[k] = (u8)slot;
+            // from the Mode 7 texture's base: sc->tex.data is left on the last slot sampled
+            sc->target->frameBuf.colorBuf =
+                (void *)((u8 *)GPU3DS.textures[SNES_MODE7_FULL].tex.data + slot * LAYER_SCRATCH_SLOT_BYTES);
+            GPU3DS.appliedRenderState.target = TARGET_UNSET;   // the same target id, another address
+
+            // the plane's box back to transparent
+            SRectVertex *rv = &((SRectVertex *)ls->rect.data)[vi];
+            rv[0].Position = (SVector2i){ (s16)(p->x0 + LAYER_SCRATCH_SHIFT), (s16)p->y0 };
+            rv[1].Position = (SVector2i){ (s16)(p->x1 + LAYER_SCRATCH_SHIFT), (s16)p->y1 };
+            rv[0].Color = rv[1].Color = 0;
+            GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_COLOR;
+            GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_DISABLED;
+            gpu3dsSetStereoParallax(0.0f);
+            gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
+            gpu3dsDraw(&ls->rect, NULL, 2, vi);
+
+            // the plane's tiles, unshifted; the other plane's leave the image.
+            // A dim of 255 saturates the vertex alpha: the image keeps the
+            // texel's own alpha bit, the quad's vertex brings the tile's alpha back
+            GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
+            GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
+            GPU3DS.currentRenderState.textureBind = s0->state.textureBind;
+            GPU3DS.currentRenderState.textureOffset = s0->state.textureOffset;
+            gpu3dsSetStereoPrioDim4(255.0f, 255.0f, 255.0f, 255.0f);
+            const float in = (float)LAYER_SCRATCH_SHIFT, out = 4096.0f;
+            if (scan.nPlanes == 1) {
+                gpu3dsSetStereoParallax(in);
+            } else {
+                gpu3dsSetStereoParallax3(k == 0 ? in : out, k == 1 ? in : out, bnd);
+                gpu3dsSetStereoParallaxHi(k == 1 ? in : out, k == 1 ? in : out, STEREO_TIER_PARKED, STEREO_TIER_PARKED);
+            }
+            if (indexed) gpu3dsDraw(&GPU3DS.vertices[VBO_SCENE_TILE], tileIdx, s0->count);
+            else         gpu3dsDraw(&GPU3DS.vertices[VBO_SCENE_TILE], NULL, s0->count, s0->from);
+
+            // the quad every pass draws in the tiles' place
+            STileVertex *qv = &((STileVertex *)ls->quad.data)[vi];
+            const s16 yBits = (s16)((p->plane << 8) | p->aa);
+            qv[0].Position = (SVector3i){ (s16)p->x0, (s16)(p->y0 | yBits), 0 };
+            qv[1].Position = (SVector3i){ (s16)p->x1, (s16)(p->y1 | yBits), 0 };
+            qv[0].TexCoord = (STexCoord2i){ (s16)(p->x0 + LAYER_SCRATCH_SHIFT), (s16)p->y0 };
+            qv[1].TexCoord = (STexCoord2i){ (s16)(p->x1 + LAYER_SCRATCH_SHIFT), (s16)p->y1 };
+            ls->quadFrom[slot] = (s16)vi;
+            ls->quadIdx[slot] = NULL;
+            if (indexed) {
+                u16 *qi = tileIdx + s0->count + 2 * k;
+                qi[0] = (u16)vi; qi[1] = (u16)(vi + 1);
+                ls->quadIdx[slot] = qi;
+            }
+        }
+        for (int t = 0; t < 2; t++)
+            if (sec[t] != NULL) ls->use[t][b] = u;
+    }
+
+    if (built) {
+        GPU3DS.scratchBuild = false;
+        // The images are sampled in this same frame: on the console the
+        // texture unit reads a target's old content unless the command
+        // list that rendered it is submitted first (developer-gotchas.md).
+        // That list reads what the CPU wrote so far, so it is flushed here
+        // and not only at the frame's end.
+        for (int i = 0; i < VBO_COUNT; i++)
+            gpu3dsFlushListWrites(&GPU3DS.vertices[i]);
+        gpu3dsFlushFrameWrites();
+        gpu3dsFrameSplit();
+        gpu3dsSetStereoParallax(0.0f);
+        gpu3dsSetStereoPrioDim(1.0f, 1.0f);
+        GPU3DS.currentRenderState = saved;
+        GPU3DS.appliedRenderState.target = TARGET_UNSET;
+        ls->mode7Dirty = true;
+    }
+}
+
+// One pass of a BG from its scratch images, with the uniforms the caller
+// set. False when the layer has none, or when this pass shifts by a
+// fraction of a pixel (Continuous shift mode): the image is sampled texel
+// for texel only at whole shifts.
+static bool layerScratchDraw(int target, LAYER_ID id, SLayerSection *section)
+{
+    if ((int)id > LAYER_BG3) return false;
+    const LayerScratchState *ls = &s_layerScratch;
+    const LayerScratchUse *u = &ls->use[target][(int)id - LAYER_BG0];
+    if (u->nPlanes == 0) return false;
+    const float p0 = GPU3DS.stereoParallax, p1 = GPU3DS.stereoParallaxP1;
+    if (p0 != floorf(p0) || p1 != floorf(p1)) return false;
+
+    SGPUTexture *sc = &GPU3DS.textures[SNES_SCRATCH];
+    GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
+    GPU3DS.currentRenderState.alphaBlending =
+        GPU3DS.stereoGhostPass ? ALPHA_BLENDING_GHOST : ALPHA_BLENDING_DISABLED;
+    const u64 mask = gpu3dsGetLayerPackedMask(id, true);
+    GPU3DS.currentRenderState.packed =
+        (GPU3DS.currentRenderState.packed & ~mask) | (section->state.packed & mask);
+    if (GPU3DS.stereoGhostPass)
+        GPU3DS.currentRenderState.alphaTest = ALPHA_TEST_NE_ZERO;
+    GPU3DS.currentRenderState.textureBind = SNES_SCRATCH;
+    GPU3DS.currentRenderState.textureOffset = SGPU_STATE_DISABLED;
+    for (int k = 0; k < u->nPlanes; k++) {
+        const int slot = u->slot[k];
+        sc->tex.data = (u8 *)GPU3DS.textures[SNES_MODE7_FULL].tex.data + slot * LAYER_SCRATCH_SLOT_BYTES;
+        GPU3DS.appliedRenderState.textureBind = TEX_UNSET;   // the same texture id, another address
+        if (ls->quadIdx[slot] != NULL) gpu3dsDraw((SVertexList *)&ls->quad, ls->quadIdx[slot], 2);
+        else                           gpu3dsDraw((SVertexList *)&ls->quad, NULL, 2, ls->quadFrom[slot]);
+    }
+    // whoever draws next finds the tiles' texture state, as after the tiles
+    GPU3DS.currentRenderState.textureBind = section->state.textureBind;
+    GPU3DS.currentRenderState.textureOffset = section->state.textureOffset;
+    return true;
+}
+
 void gpu3dsDrawLayers(SLayerList *list) {
     // draw window_lr into depth buffer first (screen-space: no parallax)
     SLayer *layer = &list->layers[LAYER_WINDOW_LR];
@@ -819,6 +1129,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
     // the previous frame would alpha-discard the window masks
     gpu3dsSetStereoPrioDim(1.0f, 1.0f);
     gpu3dsResetStereoAtmosphere();
+
+    // the layer scratch images (layer_scratch.h): decided and built once a
+    // frame, in the left eye's pass; the right eye samples the same images
+    if (!GPU3DS.stereoRightPass) layerScratchDecideAndBuild(list);
 
     // 3D: each eye's pass starts from a clean depth floor. The depth
     // texture is shared between the eyes and never cleared - identical
@@ -1381,6 +1695,8 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // distance gains nothing from a fraction, only the #65 tear.
             // one raw draw of the layer's sections with the CURRENT uniforms
             auto drawPass = [&]() {
+                if (id <= LAYER_BG3 && layerScratchDraw(i, id, &list->sections[from]))
+                    return;
                 if (id >= LAYER_BACKDROP) {
                     gpu3dsDrawVerticalSectionLayer(layer, from, to);
                 } else if (list->useDrawArraysForTiledLayers) {
@@ -1634,6 +1950,12 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
 void gpu3dsDrawMode7Texture()
 {
+    // the layer scratch images borrowed the texture (layer_scratch.h): every
+    // section is drawn again from the tile list, which is always whole
+    if (IPPU.Mode7Prepared && layerScratchTakeMode7Dirty()) {
+        for (int section = 0; section < 4; section++) GPU3DSExt.mode7SectionsModified[section] = true;
+        GPU3DSExt.mode7TilesModified = true;
+    }
     if (!IPPU.Mode7Prepared || !GPU3DSExt.mode7TilesModified) return;
 
 	t3dsStartTimer(TIMER_DRAW_M7_TEXTURE);

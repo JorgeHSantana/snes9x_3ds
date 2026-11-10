@@ -236,6 +236,34 @@ bool impl3dsInitialize()
 		}
 	}
 
+	// Layer scratch images (layer_scratch.h): a 512x256 RGBA5551 texture and
+	// target with no memory of their own. They slide over the Mode 7
+	// texture's 2 MB, idle outside Mode 7 - there is no VRAM left for more
+	// (about 186 KB free). Only where 3D exists: the trade pays when a
+	// layer is drawn several times a frame.
+	{
+		SGPUTexture *m7 = &GPU3DS.textures[SNES_MODE7_FULL];
+		SGPUTexture *sc = &GPU3DS.textures[SNES_SCRATCH];
+		memset(&sc->tex, 0, sizeof(sc->tex));
+		sc->target = NULL;
+		sc->id = SNES_SCRATCH;
+		if (GPU3DS.stereoTexAvailable && m7->tex.data != NULL) {
+			sc->tex.data = m7->tex.data;
+			sc->tex.fmt = GPU_RGBA5551;
+			sc->tex.size = 512 * 256 * 2;
+			sc->tex.width = 512;
+			sc->tex.height = 256;
+			sc->tex.param = defaultTextureParams;
+			sc->scale[3] = 1.0f / 512.0f;
+			sc->scale[2] = 1.0f / 256.0f;
+			sc->scale[1] = 0;
+			sc->scale[0] = 0;
+			sc->target = C3D_RenderTargetCreateFromTex(&sc->tex, GPU_TEXFACE_2D, 0, -1);
+			if (sc->target == NULL) sc->tex.data = NULL;
+			log3dsWrite("layer scratch images: %s", sc->target != NULL ? "8 x 512x256 over the mode 7 texture" : "UNAVAILABLE");
+		}
+	}
+
 	const SGPUTextureConfig lramTexConfig[] = {
 		{ defaultTextureParams, SNES_TILE_CACHE, GPU_RGBA5551, 1024, 1024 },
 		{ defaultTextureParams, SNES_MODE7_TILE_CACHE, GPU_RGBA5551, 128, 128 }

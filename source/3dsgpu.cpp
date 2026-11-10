@@ -1156,6 +1156,8 @@ void gpu3dsDestroyTexture(SGPUTexture *texture)
     if (texture->target != NULL) {
    	    C3D_RenderTargetDelete(texture->target);
     }
+    // the layer scratch texture borrows the Mode 7 texture's memory
+    if (texture->id == SNES_SCRATCH) texture->tex.data = NULL;
     
     if (texture->tex.data != NULL) {
         C3D_TexDelete(&texture->tex);
@@ -1354,6 +1356,12 @@ void gpu3dsSetRenderTargetToTexture(SGPU_TARGET_ID target)
     // texture. Redirected here (not via a new SGPU_TARGET_ID) so the packed
     // render state keeps its 3-bit target field; same 512x256 dims = same
     // projection, so the state diffing stays correct.
+    // a layer scratch image under construction (layer_scratch.h): the same
+    // 512x256 dims as the sub screen, so its projection applies
+    if (target == TARGET_SNES_SUB && GPU3DS.scratchBuild) {
+        C3D_FrameDrawOn(GPU3DS.textures[SNES_SCRATCH].target);
+        return;
+    }
     if (target == TARGET_SNES_MAIN && GPU3DS.stereoRightPass) {
         C3D_FrameDrawOn(GPU3DS.textures[SNES_MAIN_RIGHT].target);
         return;

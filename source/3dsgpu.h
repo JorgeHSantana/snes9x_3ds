@@ -137,6 +137,10 @@ typedef enum
     UI_NOTIF_FPS,
     UI_SCANLINE,
 
+    // the layer scratch images (layer_scratch.h): no memory of its own, a
+    // 512x256 window that slides over the Mode 7 texture's 2 MB
+    SNES_SCRATCH,
+
     TEX_COUNT,
 } SGPU_TEXTURE_ID;
 
@@ -360,6 +364,9 @@ typedef struct
     bool                        mode7CacheDirty;
     // true while the RIGHT eye's layer pass renders (into SNES_MAIN_RIGHT)
     bool                        stereoRightPass;
+    // true while a layer scratch image is being built (layer_scratch.h):
+    // draws aimed at the sub screen land on SNES_SCRATCH's current slot
+    bool                        scratchBuild;
     bool                        stereoRightShared;   // right pass skipped this frame (flat profile, no shadows): composite reads SNES_MAIN for both eyes
     // false when the optional right-eye VRAM texture failed to allocate;
     // gates the whole stereo path off (gpu3dsGetIOD returns 0)
