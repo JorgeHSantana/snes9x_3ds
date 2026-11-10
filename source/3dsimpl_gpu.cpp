@@ -824,8 +824,8 @@ static void gpu3dsSetStereoLayerAtmosphere(LAYER_ID id, bool forceOthers = false
 // all apply as they do to the tiles.
 //
 // Decided and built in the left eye's pass, before any layer is drawn; the
-// right eye only samples. Off unless built with -DLAYER_SCRATCH_ON or under
-// the GPU Cost Probe's step 12.
+// right eye only samples. -DLAYER_SCRATCH_OFF builds without it; the GPU Cost
+// Probe's step 12 switches it off.
 struct LayerScratchUse
 {
     u8 nPlanes;                              // 0: the layer draws its tiles
@@ -900,10 +900,10 @@ static void layerScratchDecideAndBuild(SLayerList *list)
     memset(ls->use, 0, sizeof(ls->use));
     ls->slots = 0;
 
-#ifdef LAYER_SCRATCH_ON
-    const bool wanted = true;
+#ifdef LAYER_SCRATCH_OFF
+    const bool wanted = false;
 #else
-    const bool wanted = g_gpuProbeMask.layerScratch;
+    const bool wanted = !g_gpuProbeMask.noLayerScratch;
 #endif
     SGPUTexture *sc = &GPU3DS.textures[SNES_SCRATCH];
     if (!wanted || g_gpuProbeMask.noFill || g_gpuProbeMask.vsOnly || sc->target == NULL)

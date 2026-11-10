@@ -240,7 +240,7 @@ vertex shader.
 
 ### B7. Imagem pronta da camada (layer scratch image)
 
-**Estado: implementado, desligado; falta o número do console.** Um BG
+**Estado: ligado por padrão (medido no console em 2026-11-10).** Um BG
 desenhado muitas vezes no frame (main e sub, dois olhos, fantasmas do
 blur) é desenhado uma vez numa imagem 512x256 e cada passada vira um
 quad por plano de prioridade, com o mesmo shader, então shift, tinta,
@@ -265,10 +265,16 @@ em `source/layer_scratch.h` (varredura, modelo de custo com margem de
 **Validação.** Azahar bit-idêntico com `-DLAYER_SCRATCH_FORCE` (todo
 candidato pela imagem) em mmx3zp-dam-light, mmx3-sbs-fx1-full,
 mmx3-pillar-blur6, smk-boot e shadow-smw-on, e sem o force na represa
-(BG2, 1914 vértices, 8 passadas, um plano). Console: passo 12 do GPU
-Cost Probe contra o passo 0.
-**Ganho esperado:** na represa, 7 passadas de 1914 vértices a menos,
-perto de 5 ms de vertex shader. Liga por padrão se o console confirmar.
+(BG2, 1914 vértices, 8 passadas, um plano). 
+**Medido** (New 3DS, MMX3 ZP fase pesada, perfil do Jorge, a cena
+anda): 21.628 vértices por frame para 8.528; carga do frame 15.432 us
+para 13.139 us; frames acima do orçamento 137 para 48; desenhos pulados
+68 de 240 para 26. Ganho de 2,3 ms, menos que os 5 ms estimados: o quad
+de cada passada preenche a caixa inteira da camada. `gpu=` não serve
+para comparar (14.884 contra 15.096 us): com a imagem a lista é
+submetida no começo do frame e a contagem inclui espera pela CPU.
+Imagem limpa no console. O passo 12 do probe agora DESLIGA a imagem;
+`-DLAYER_SCRATCH_OFF` compila sem ela.
 
 ---
 

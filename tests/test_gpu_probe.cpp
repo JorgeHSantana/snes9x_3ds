@@ -43,11 +43,11 @@ TEST_CASE("gpu_probe: the tile cost steps run on plain stereo and stack fill, th
     CHECK_FALSE(vs.sharedRight); CHECK_FALSE(vs.flat2D); CHECK_FALSE(vs.noCull);
 }
 
-TEST_CASE("gpu_probe: the layer scratch step is the baseline plus the scratch image") {
+TEST_CASE("gpu_probe: the layer scratch step is the baseline less the scratch images") {
     for (int step = 0; step < 12; step++)
-        CHECK_FALSE(gpu_probe_mask(step).layerScratch);
+        CHECK_FALSE(gpu_probe_mask(step).noLayerScratch);
     const GpuProbeMask base = gpu_probe_mask(0), m = gpu_probe_mask(12);
-    CHECK(m.layerScratch);
+    CHECK(m.noLayerScratch);
     CHECK(m.noGrade == base.noGrade); CHECK(m.noGlow == base.noGlow); CHECK(m.noShadows == base.noShadows);
     CHECK(m.noBlur == base.noBlur); CHECK(m.noFog == base.noFog); CHECK(m.sharedRight == base.sharedRight);
     CHECK(m.flat2D == base.flat2D); CHECK(m.noCull == base.noCull);
