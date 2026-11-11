@@ -12,6 +12,7 @@
 #include "3dsimpl.h"
 #include "3dsmenu.h"
 #include "3dslog.h"
+#include "3dsstall.h"
 
 bool g_pauseMarks = false;   // set on the way into a pause: the first backdrop logs its steps (freeze hunt, 2026-11-10)
 
@@ -1313,6 +1314,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
             }
             GPU3DS.gameScreenBufferDesync = false;
             if (g_pauseMarks) { log3dsMark("menu: backdrop drawn"); g_pauseMarks = false; }
+            stall3dsArm(false);   // the menu loop has no frame beat
 
             gameScreenDirty = false;
         }

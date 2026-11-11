@@ -50,6 +50,25 @@ the next Send Log carries its last 12 KB first, then deletes it. Its last
 `[mark]` line (sleep, wake, the steps into the pause menu) is where the
 session stopped.
 
+The marks reach the card through the log's writer thread, so a freeze
+that takes that thread along leaves none. The stall watchdog
+(`3dsstall.cpp`, verdict in `stall_watch.h`) does not depend on it: a
+thread above the main one samples a counter the emulation loop bumps once
+a frame and, with the counter still for 2 s, appends to
+`debug_<version>_stall.log`:
+
+```
+[57.501] [stall] no frame ended for 2 s: main='pause key: drain mixing (waits for the mixer's lock)' #81234 | mixer='msu fill (lock held)' #40112 | msu-ra='sleeping' #5120 | log-writer='waiting for work' #57
+```
+
+Each thread's name is the step it last entered and `#n` counts its steps:
+the follow-up line a second later (`still stalled`) shows which threads
+still moved. `frames run again` closes a stall that ended by itself. The
+watch runs from the emulation loop to the pause menu's backdrop and is off
+during sleep and HOME. Send Log carries the file's last 3 KB ahead of
+everything else and deletes it. `-DPROBE_STALL_AT=<frame>` holds the main
+thread 5 s at that frame to exercise it in Azahar.
+
 With `sd:/3ds/snes9x_3ds/github.env` present and complete, the Emulation
 tab shows **Send Log to GitHub** and **Send Crash Dump to GitHub** under
 Enable Logging. The file (`github.env.example` in the repo root):

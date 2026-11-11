@@ -9,6 +9,7 @@
 #include "3ds.h"
 #include "3dsgpu.h"
 #include "3dssound.h"
+#include "3dsstall.h"
 #include "3dstimer.h"
 #include "3dsimpl.h"
 #include "3dslog.h"
@@ -47,7 +48,9 @@ static void msuRaThreadFn(void*)
 {
     while (!terminateMsuRaThread)
     {
+        stall3dsStage(STALL_T_MSURA, "tick (decode into the ring)");
         msu3dsAudioReadaheadTick();
+        stall3dsStage(STALL_T_MSURA, "sleeping");
         svcSleepThread((msu3dsAudioReadaheadActive() ? 8 : 50) * 1000 * 1000LL);
     }
 }
@@ -103,7 +106,9 @@ static void snd3dsNdspFrameCallback(void *user)
 //---------------------------------------------------------
 void snd3dsMixSamples()
 {
+    stall3dsStage(STALL_T_MIXER, "taking the SNES lock");
     LightLock_Lock(&snd3DS.snesAccessLock);
+    stall3dsStage(STALL_T_MIXER, "SNES samples (lock held)");
 
     while (true)
     {
@@ -150,9 +155,11 @@ void snd3dsMixSamples()
         snd3DS.fillBlock = (snd3DS.fillBlock + 1) % snd3DS.waveBufCount;
     }
 
+    stall3dsStage(STALL_T_MIXER, "msu fill (lock held)");
     msu3dsFillAudio();
 
     LightLock_Unlock(&snd3DS.snesAccessLock);
+    stall3dsStage(STALL_T_MIXER, "msu data prefetch");
 
     // the data-track SD read (up to 32 KB) ran under the lock above and the
     // emu thread waited behind it on every MSU port 3/5/6/7 write
@@ -169,6 +176,7 @@ static void snd3dsMixingThread(void *p)
 {
     while (!snd3DS.terminateMixingThread)
     {
+        stall3dsStage(STALL_T_MIXER, "waiting for the NDSP frame");
         LightEvent_Wait(&snd3DS.ndspFrameEvent);
         snd3dsMixSamples();
     }

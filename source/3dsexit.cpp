@@ -9,6 +9,7 @@
 #include "3dsmsu.h"
 #include "3dsimpl.h"
 #include "3dslog.h"
+#include "3dsstall.h"
 
 aptHookCookie hookCookie;
 
@@ -21,6 +22,7 @@ void handleAptHook(APT_HookType hook, void* param)
             break;
         case APTHOOK_ONSUSPEND:
         case APTHOOK_ONSLEEP:
+            stall3dsArm(false);   // no frame ends while suspended or asleep
             log3dsMark(hook == APTHOOK_ONSUSPEND ? "apt: suspend (HOME)" : "apt: sleep (lid)");
             msu3dsOnEvent(Msu1Event::AptSuspend);
             snd3dsRestoreCpuLimit();
@@ -60,6 +62,7 @@ void handleAptHook(APT_HookType hook, void* param)
                 snd3dsStartPlaying();
             }
             log3dsMark("apt: back, hook done");
+            stall3dsArm(GPU3DS.emulatorState == EMUSTATE_EMULATE);
             break;
         default:
             break;

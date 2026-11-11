@@ -5,6 +5,7 @@
 #include "3dsgpu.h"
 #include "3dssettings.h"
 #include "3dsinput.h"
+#include "3dsstall.h"
 #include "3dsui_notif.h"
 #include "3dsutils.h"
 #include "memmap.h"
@@ -113,10 +114,13 @@ u32 input3dsScanInputForEmulation()
         {
             if (settings3DS.ForceSRAMWriteOnPause || CPU.SRAMModified)
             {
+                stall3dsStage(STALL_T_MAIN, "pause key: sram save");
                 S9xSaveSRAMNow();
             }
             GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
+            stall3dsStage(STALL_T_MAIN, "pause key: drain mixing (waits for the mixer's lock)");
             snd3dsDrainMixing();
+            stall3dsStage(STALL_T_MAIN, "pause key: drained");
             notif3dsHide();
         }
     }

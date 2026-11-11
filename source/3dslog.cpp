@@ -5,6 +5,7 @@
 #include <3ds.h>
 #include "3dssettings.h"
 #include "3dslog.h"
+#include "3dsstall.h"
 #include "buffered_log.h"
 #include "log_blackbox.h"
 
@@ -35,15 +36,19 @@ static void logFail()
 static void logWriter(void*)
 {
     for (;;) {
+        stall3dsStage(STALL_T_LOGW, "waiting for work");
         LightEvent_Wait(&s_writerWake);
         if (s_writerQuit.load()) break;
+        stall3dsStage(STALL_T_LOGW, "taking a chunk (log lock)");
         // take under the lock, write with no lock held (producers never
         // wait for the SD), release under the lock
         LightLock_Lock(&LOG_LOCK);
         const int c = READY.load() ? LOG.drain_take() : -1;
         LightLock_Unlock(&LOG_LOCK);
         if (c >= 0) {
+            stall3dsStage(STALL_T_LOGW, "writing to the card");
             const bool ok = LOG.drain_write(c);      // the SD access: no lock held
+            stall3dsStage(STALL_T_LOGW, "releasing the chunk (log lock)");
             LightLock_Lock(&LOG_LOCK);
             LOG.drain_release(c, ok);
             if (!ok) logFail();
@@ -153,7 +158,11 @@ void log3dsUncleanPath(char *out, unsigned int size)
 void log3dsMark(const char *what)
 {
     log3dsWrite("[mark] %s", what);
+    // main-thread callers only (pause path, APT hook): the watchdog names
+    // the flush apart from the code after the mark
+    stall3dsStage(STALL_T_MAIN, "log flush (waits for the SD writer thread)");
     log3dsFlush();
+    stall3dsStage(STALL_T_MAIN, what);
 }
 
 void log3dsFlush()

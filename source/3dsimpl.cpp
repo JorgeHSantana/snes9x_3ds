@@ -21,6 +21,7 @@
 #include "3dsutils.h"
 #include "3dsgithub.h"
 #include "3dslog.h"
+#include "3dsstall.h"
 #include "3dsfiles.h"
 #include "3dsgpu.h"
 #include "3dssound.h"
@@ -1118,6 +1119,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 
 	gpu3dsPrepareSnesScreenForNextFrame();
 
+	stall3dsStage(STALL_T_MAIN, "frame: SNES core");
 	t3dsStartTimer(TIMER_S9X_MAIN_LOOP);
 	const u64 coreTick0 = svcGetSystemTick();
 	if (!Settings.SA1)
@@ -1180,7 +1182,9 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 	if (g_probeFrames >= 170 && g_probeFrames <= 245)
 		log3dsWrite("[inidisp] frame=%u present: skipDrawing=%d renderThisFrame=%d", (unsigned)g_probeFrames, (int)skipDrawingFrame, (int)IPPU.RenderThisFrame);
 #endif
+	stall3dsStage(STALL_T_MAIN, "frame: gpu frame begin (waits for the GPU)");
 	gpu3dsFrameBegin(screenshot.dirty ? C3D_FRAME_SYNCDRAW : 0, !skipDrawingFrame);
+	stall3dsStage(STALL_T_MAIN, "frame: draw and present");
 		if (!firstFrame && !skipDrawingFrame) {
 			t3dsStartTimer(TIMER_DRAW_SNES_SCREEN);
 			// Render both eyes' layer passes into their retained textures.
@@ -1241,6 +1245,14 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
         settings3DS.AutoSaveLoad = false;
         settings3DS.AutoSavestate = false;
         GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
+    }
+#endif
+#ifdef PROBE_STALL_AT
+    // harness probe: hold the main thread 5 s at this frame, so the stall
+    // watchdog (3dsstall.cpp) has something to report
+    if (g_probeFrames == (PROBE_STALL_AT)) {
+        stall3dsStage(STALL_T_MAIN, "probe: held on purpose");
+        svcSleepThread(5000000000LL);
     }
 #endif
 #ifdef PROBE_MENU_AT

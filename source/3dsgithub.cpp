@@ -7,6 +7,8 @@
 
 #include "3dsgithub.h"
 #include "3dslog.h"
+#include "3dsstall.h"
+#include "stall_watch.h"
 #include "3dssettings.h"
 #include "3dsgpu.h"
 #include "3dsupdatenet.h"
@@ -124,6 +126,7 @@ const char* github3dsSend(bool crashDump, char* out, size_t outSize)
     char path[PATH_MAX], name[NAME_MAX + 1];
     size_t payloadLen = 0;
     bool sentUnclean = false;
+    bool sentStall = false;
 
     if (crashDump) {
         if (!newestDump(path, sizeof(path), name, sizeof(name))) { err = "no crash dump in luma/dumps/arm11"; goto done; }
@@ -143,6 +146,22 @@ const char* github3dsSend(bool crashDump, char* out, size_t outSize)
         // a session that never closed its log (freeze, power button) goes first
         size_t pre = 0;
         {
+            // the watchdog's reports (3dsstall.cpp): which step each thread was in
+            char spath[PATH_MAX];
+            stall3dsPath(spath, sizeof(spath));
+            FILE* sf = fopen(spath, "rb");
+            if (sf != NULL) {
+                fseek(sf, 0, SEEK_END); long ssize = ftell(sf);
+                size_t swant = (size_t)ssize > STALL_TAIL_MAX ? STALL_TAIL_MAX : (size_t)ssize;
+                fseek(sf, (long)((size_t)ssize - swant), SEEK_SET);
+                pre = (size_t)snprintf(payload, payloadCap, "==== stall watchdog (last %u of %u bytes) ====\n", (unsigned)swant, (unsigned)ssize);
+                pre += fread(payload + pre, 1, swant, sf);
+                fclose(sf);
+                pre += (size_t)snprintf(payload + pre, payloadCap - pre, "\n");
+                sentStall = true;
+            }
+        }
+        {
             char kept[PATH_MAX];
             log3dsUncleanPath(kept, sizeof(kept));
             FILE* pf = fopen(kept, "rb");
@@ -150,7 +169,7 @@ const char* github3dsSend(bool crashDump, char* out, size_t outSize)
                 fseek(pf, 0, SEEK_END); long psize = ftell(pf);
                 size_t pwant = (size_t)psize > LOG_UNCLEAN_TAIL_MAX ? LOG_UNCLEAN_TAIL_MAX : (size_t)psize;
                 fseek(pf, (long)((size_t)psize - pwant), SEEK_SET);
-                pre = (size_t)snprintf(payload, payloadCap, "==== earlier session that never closed its log (last %u of %u bytes) ====\n", (unsigned)pwant, (unsigned)psize);
+                pre += (size_t)snprintf(payload + pre, payloadCap - pre, "==== earlier session that never closed its log (last %u of %u bytes) ====\n", (unsigned)pwant, (unsigned)psize);
                 pre += fread(payload + pre, 1, pwant, pf);
                 fclose(pf);
                 pre += (size_t)snprintf(payload + pre, payloadCap - pre, "\n==== this session ====\n");
@@ -183,7 +202,8 @@ const char* github3dsSend(bool crashDump, char* out, size_t outSize)
         log3dsWrite("[github] %s: %u bytes posted, http %d", crashDump ? "crash dump" : "log", (unsigned)bodyLen, status);
         if (status == 201) {
             replyUrl(reply, out, outSize);
-            if (sentUnclean) { char kept[PATH_MAX]; log3dsUncleanPath(kept, sizeof(kept)); remove(kept); }   // delivered
+            if (sentUnclean) { char kept[PATH_MAX]; log3dsUncleanPath(kept, sizeof(kept)); remove(kept); }
+            if (sentStall) { char spath[PATH_MAX]; stall3dsPath(spath, sizeof(spath)); remove(spath); }   // delivered
         }
         else if (status < 0) { snprintf(out, outSize, "%s", update3dsNetLastError()); err = "request failed"; }
         else { snprintf(out, outSize, "http %d", status); err = status == 401 || status == 403 ? "token refused (check github.env)" : status == 404 ? "issue not found (check the URL)" : "GitHub refused the comment"; }

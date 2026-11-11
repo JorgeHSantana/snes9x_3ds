@@ -21,6 +21,7 @@
 #include "3dslayeruse.h"
 #include "3dsstereokey.h"
 #include "3dslog.h"
+#include "3dsstall.h"
 #include "3dssram.h"
 #include "3dstimer.h"
 #include "3dsexit.h"
@@ -4254,6 +4255,7 @@ bool emulatorInitialize()
 {
     log3dsInitialize();
     log3dsWrite("==== START Logging (%s, %s) ====", settings3dsGetAppVersion("v"), log3dsGetCurrentDate());
+    stall3dsInitialize();
 
     GSPGPU_FramebufferFormat gpuBufFmt = (GSPGPU_FramebufferFormat)DISPLAY_TRANSFER_FMT;
     gfxInit(gpuBufFmt, gpuBufFmt, false);
@@ -4475,11 +4477,15 @@ void emulatorLoop()
     bool skipDrawing = true; // skip first ingame render to show game screen faster after menu exit
     SGPU_PROFILING_MODE lastProfilingMode = GPU3DS.profilingMode;
 
+    stall3dsArm(true);   // until the pause menu's backdrop is drawn (3dsmenu.cpp)
     while (aptMainLoop() && GPU3DS.emulatorState == EMUSTATE_EMULATE)
     {
         u64 startFrameTick = svcGetSystemTick();
 
+        stall3dsBeat();
+        stall3dsStage(STALL_T_MAIN, "frame: input");
         input3dsScanInputForEmulation();
+        stall3dsStage(STALL_T_MAIN, "frame: before run");
 
         if (GPU3DS.profilingMode != lastProfilingMode) {
             if (lastProfilingMode == PROFILING_OFF) {
@@ -4498,6 +4504,7 @@ void emulatorLoop()
         t3dsStartTimer(TIMER_RUN_ONE_FRAME);
         impl3dsRunOneFrame(firstFrame, skipDrawing);
         t3dsStopTimer(TIMER_RUN_ONE_FRAME);
+        stall3dsStage(STALL_T_MAIN, "frame: rewind tick, perf line");
 
         {
             // frame load feeds the graduated capture patience: a due
@@ -4592,6 +4599,7 @@ void emulatorLoop()
             GPU3DS.emulatorState = EMUSTATE_PAUSEMENU;
             log3dsWrite("[menuprobe] entering menu");        }
 
+        stall3dsStage(STALL_T_MAIN, "frame: pace");
         long actualTicksThisFrame = (long)(svcGetSystemTick() - startFrameTick);
         skipDrawing = paceFrame(actualTicksThisFrame, totalFrames, snesFrameTotalActualTicks, snesFrameTotalAccurateTicks, snesFramesSkipped);
 
@@ -4620,6 +4628,7 @@ void emulatorLoop()
         firstFrame = false;
     }
 
+    stall3dsStage(STALL_T_MAIN, "pause: left the frame loop");
     // underrun visibility for Old-3DS SD-latency diagnosis (docs/msu1.md checklist)
     if (Settings.MSU1)
         log3dsWrite("MSU-1 underruns: %u", (unsigned)msu3dsGetUnderrunCount());
@@ -4627,12 +4636,18 @@ void emulatorLoop()
     s_menuEnterTick = svcGetSystemTick();
     { extern bool g_pauseMarks; g_pauseMarks = true; }
     log3dsMark("pause: left the emulation loop");
+    stall3dsStage(STALL_T_MAIN, "pause: msu menu enter");
     msu3dsOnEvent(Msu1Event::MenuEnter);
+    stall3dsStage(STALL_T_MAIN, "pause: stop playing");
     snd3dsStopPlaying();
+    stall3dsStage(STALL_T_MAIN, "pause: resume mixing");
     snd3dsResumeMixing();
     log3dsMark("pause: audio stopped");
+    stall3dsStage(STALL_T_MAIN, "pause: lcd rate restore");
     lcd3dsRestoreDefaultRate();
     log3dsMark("pause: lcd rate restored");
+    // leaving for the menu the watch stays on until the backdrop is drawn
+    if (GPU3DS.emulatorState != EMUSTATE_PAUSEMENU) stall3dsArm(false);
     s_menuAudioTick = svcGetSystemTick();
 
     gfxSetDoubleBuffering(settings3DS.SecondScreen, true);
