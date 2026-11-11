@@ -664,7 +664,14 @@ void gpu3dsFrameSplit()
 {
     const u64 t0 = svcGetSystemTick();
     if (GPU3DSExt.gpuSubmitTick == 0) GPU3DSExt.gpuSubmitTick = t0;
-    C3D_FrameSplit(0);
+    // GX_CMDLIST_FLUSH: the GX flushes this piece of the command list from
+    // the CPU cache. citro3d does not (only C3D_FrameEnd flushes, the whole
+    // heap, and the partial end-of-frame flush below turned that off), so
+    // without the bit the GPU ran whatever the RAM still held for these
+    // bytes: last frame's list most of the time, a list that never ends
+    // when the frame's shape had just changed (the console froze in the
+    // next C3D_FrameBegin, 2026-11-11)
+    C3D_FrameSplit(GX_CMDLIST_FLUSH);
     GPU3DSExt.splitTicks += svcGetSystemTick() - t0;
 }
 

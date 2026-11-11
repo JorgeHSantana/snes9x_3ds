@@ -2,6 +2,8 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+### Fixed
+- **The console froze whole, mostly on pausing or right after an effect tier changed**: a frame that splits its command list (the layer scratch image, glow) left the first piece in the CPU cache, and the GPU ran what the memory still held. The stall watchdog's first report from the console showed the main thread waiting for a GPU that never finished. The split now has the piece flushed.
 ### Diagnostics
 - **The log of a session that froze survives**: the session log is rewritten at every start, so a freeze that needed the power button left nothing to send. A log that does not end with its close line is now kept at the next start (`debug_<version>_unclean.log`, one file) and **Send Log to GitHub** carries its last 12 KB ahead of the running session's, then deletes it. Sleep, wake and each step of the way into the pause menu write a `[mark]` line straight to the card, and the LCD rate changes log the values they write, so the last line names where it stopped.
 - **Stall watchdog**: a freeze on pausing left no mark, because the marks reach the card through the log's writer thread. A thread above the main one now watches the frame counter; when no frame ends for 2 s it appends one line to `debug_<version>_stall.log` naming the step the main thread, the audio mixer, the MSU-1 read-ahead and the log writer were each in, one more a second later (the step counters tell a blocked thread from a running one) and one when frames return. **Send Log to GitHub** carries the file first and deletes it. Off in the menus and during sleep.
