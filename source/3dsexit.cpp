@@ -8,6 +8,7 @@
 #include "3dsexit.h"
 #include "3dsmsu.h"
 #include "3dsimpl.h"
+#include "3dslog.h"
 
 aptHookCookie hookCookie;
 
@@ -20,6 +21,7 @@ void handleAptHook(APT_HookType hook, void* param)
             break;
         case APTHOOK_ONSUSPEND:
         case APTHOOK_ONSLEEP:
+            log3dsMark(hook == APTHOOK_ONSUSPEND ? "apt: suspend (HOME)" : "apt: sleep (lid)");
             msu3dsOnEvent(Msu1Event::AptSuspend);
             snd3dsRestoreCpuLimit();
             if (GPU3DS.emulatorState == EMUSTATE_EMULATE) {
@@ -47,6 +49,7 @@ void handleAptHook(APT_HookType hook, void* param)
             break;
         case APTHOOK_ONRESTORE:
         case APTHOOK_ONWAKEUP:
+            log3dsWrite("[mark] apt: %s, state %d", hook == APTHOOK_ONRESTORE ? "restore" : "wake", (int)GPU3DS.emulatorState);
             msu3dsOnEvent(Msu1Event::AptResume);
             snd3dsApplyCpuLimit();
             GPU3DS.gameScreenBufferDesync = true;
@@ -56,6 +59,7 @@ void handleAptHook(APT_HookType hook, void* param)
                 lcd3dsSetEmulationRate(settings3DS.TicksPerFrame);
                 snd3dsStartPlaying();
             }
+            log3dsMark("apt: back, hook done");
             break;
         default:
             break;

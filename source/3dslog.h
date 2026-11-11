@@ -7,6 +7,8 @@ void log3dsClose(void);
 void log3dsTick();
 void log3dsStartWriter(int coreId);   // the SD writer thread, once the sound init picked a core
 void log3dsFlush();   // drain now: before an operation a crash report would need the tail of
+void log3dsMark(const char *what);   // a line plus a drain: the last one on the SD names where a freeze happened
+void log3dsUncleanPath(char *out, unsigned int size);   // the log a session that never closed left behind (log_blackbox.h)
 bool log3dsIsReady();
 const char* log3dsGetCurrentDate();
 

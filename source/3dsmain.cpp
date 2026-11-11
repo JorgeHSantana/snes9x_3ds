@@ -4137,6 +4137,7 @@ void showMenu() {
     // Auto Save (issue #72): opening the menu is one of the save points -
     // the game is paused and the mixer idle, so the write costs nothing
     // visible. HOME already saved in the APT hook; this one is cheap.
+    log3dsMark("pause: menu setup");
     if (settings3DS.isRomLoaded && impl3dsAutoSaveActive())
         impl3dsSaveStateAutoFor("menu");
 
@@ -4544,7 +4545,7 @@ void emulatorLoop()
                 // submission, the shadow/glow phase inside it - the rest is
                 // input, audio, the blit and the pacer
                 const u64 N = (u64)s_frameLoadN, TPU = 268111856ull / 1000000ull;   // ticks per us (SYSCLOCK_ARM11)
-                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d sh=%d gm=%d src=%d spread=%d halo=%d persist=%d rel=%d bright=%d | us/frame core=%u (ppu=%u) draw=%u fx=%u flush=%u gpuwait=%u gpu=%u draws=%u verts=%u culled=%u idle=%u aidle=%u",
+                log3dsWrite("[perf][frame] %d frames: load avg=%d%% max=%d%% over-budget=%d skipped-draws=%d blur=%s shadow-draws/frame=%u soft=%d rows=%03x glow-draws/frame=%u glow=%03x | 3d=%s edge=%d sh=%d gm=%d src=%d spread=%d halo=%d persist=%d rel=%d bright=%d | us/frame core=%u (ppu=%u) draw=%u fx=%u flush=%u gpuwait=%u gpu=%u draws=%u verts=%u culled=%u idle=%u aidle=%u drawR=%u scratch=%u split=%u",
                     s_frameLoadN,
                     (int)(s_frameLoad.average_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
                     (int)(s_frameLoad.maximum_ticks() * 100 / (uint64_t)settings3DS.TicksPerFrame),
@@ -4554,9 +4555,10 @@ void emulatorLoop()
                     GPU3DSExt.stereoOnLastFrame ? "on" : "off", settings3DS.StereoEdgeMode, settings3DS.ShadowsMode, settings3DS.GlowMode,
                     GPU3DS.stereoGlowSource, GPU3DS.stereoGlowSpread, GPU3DS.stereoGlowSoft, GPU3DS.stereoGlowPersist, GPU3DS.stereoGlowRelative, GPU3DSExt.glowRelBright,
                     (unsigned)(GPU3DSExt.coreTicks / N / TPU), (unsigned)(GPU3DSExt.ppuTicks / N / TPU), (unsigned)(GPU3DSExt.drawTicks / N / TPU), (unsigned)(GPU3DSExt.fxTicks / N / TPU),
-                    (unsigned)(GPU3DSExt.flushTicks / N / TPU), (unsigned)(GPU3DSExt.gpuWaitTicks / N / TPU), (unsigned)(GPU3DSExt.gpuBusyFrames ? GPU3DSExt.gpuBusyTicks / GPU3DSExt.gpuBusyFrames / TPU : 0), GPU3DSExt.drawCalls / (unsigned)N, GPU3DSExt.drawVerts / (unsigned)N, GPU3DSExt.culledTilesWin / (unsigned)N, (unsigned)(g_idleSkips / (uint32)N), (unsigned)(g_apuSkips / (uint32)N));
+                    (unsigned)(GPU3DSExt.flushTicks / N / TPU), (unsigned)(GPU3DSExt.gpuWaitTicks / N / TPU), (unsigned)(GPU3DSExt.gpuBusyFrames ? GPU3DSExt.gpuBusyTicks / GPU3DSExt.gpuBusyFrames / TPU : 0), GPU3DSExt.drawCalls / (unsigned)N, GPU3DSExt.drawVerts / (unsigned)N, GPU3DSExt.culledTilesWin / (unsigned)N, (unsigned)(g_idleSkips / (uint32)N), (unsigned)(g_apuSkips / (uint32)N),
+                    (unsigned)(GPU3DSExt.drawRightTicks / N / TPU), (unsigned)(GPU3DSExt.scratchTicks / N / TPU), (unsigned)(GPU3DSExt.splitTicks / N / TPU));
                 s_frameLoad.reset(); s_frameLoadN = 0; s_frameOver = 0; s_frameSkips = 0; GPU3DSExt.shadowDraws = 0; GPU3DSExt.glowDraws = 0;
-                GPU3DSExt.coreTicks = GPU3DSExt.ppuTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = GPU3DSExt.flushTicks = GPU3DSExt.gpuWaitTicks = GPU3DSExt.gpuBusyTicks = 0; GPU3DSExt.gpuBusyFrames = 0; GPU3DSExt.drawCalls = GPU3DSExt.drawVerts = GPU3DSExt.culledTilesWin = 0; g_idleSkips = 0; g_apuSkips = 0;
+                GPU3DSExt.coreTicks = GPU3DSExt.ppuTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = GPU3DSExt.flushTicks = GPU3DSExt.gpuWaitTicks = GPU3DSExt.gpuBusyTicks = 0; GPU3DSExt.gpuBusyFrames = 0; GPU3DSExt.drawRightTicks = GPU3DSExt.scratchTicks = GPU3DSExt.splitTicks = 0; GPU3DSExt.drawCalls = GPU3DSExt.drawVerts = GPU3DSExt.culledTilesWin = 0; g_idleSkips = 0; g_apuSkips = 0;
             }
         }
 
@@ -4623,10 +4625,14 @@ void emulatorLoop()
         log3dsWrite("MSU-1 underruns: %u", (unsigned)msu3dsGetUnderrunCount());
 
     s_menuEnterTick = svcGetSystemTick();
+    { extern bool g_pauseMarks; g_pauseMarks = true; }
+    log3dsMark("pause: left the emulation loop");
     msu3dsOnEvent(Msu1Event::MenuEnter);
     snd3dsStopPlaying();
     snd3dsResumeMixing();
+    log3dsMark("pause: audio stopped");
     lcd3dsRestoreDefaultRate();
+    log3dsMark("pause: lcd rate restored");
     s_menuAudioTick = svcGetSystemTick();
 
     gfxSetDoubleBuffering(settings3DS.SecondScreen, true);

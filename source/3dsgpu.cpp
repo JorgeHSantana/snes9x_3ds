@@ -662,8 +662,10 @@ static void gpu3dsStartP3DThread()
 // our FrameSplit: stamps the frame's first submission (gpu=)
 void gpu3dsFrameSplit()
 {
-    if (GPU3DSExt.gpuSubmitTick == 0) GPU3DSExt.gpuSubmitTick = svcGetSystemTick();
+    const u64 t0 = svcGetSystemTick();
+    if (GPU3DSExt.gpuSubmitTick == 0) GPU3DSExt.gpuSubmitTick = t0;
     C3D_FrameSplit(0);
+    GPU3DSExt.splitTicks += svcGetSystemTick() - t0;
 }
 
 bool gpu3dsFrameBegin(u8 flags, bool ingame, bool isSecondScreen)

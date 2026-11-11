@@ -3,6 +3,10 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 ### Diagnostics
+- **The log of a session that froze survives**: the session log is rewritten at every start, so a freeze that needed the power button left nothing to send. A log that does not end with its close line is now kept at the next start (`debug_<version>_unclean.log`, one file) and **Send Log to GitHub** carries its last 12 KB ahead of the running session's, then deletes it. Sleep, wake and each step of the way into the pause menu write a `[mark]` line straight to the card, and the LCD rate changes log the values they write, so the last line names where it stopped.
+- **Perf line**: `drawR=`, `scratch=` and `split=` break the eyes' layer submission down (the right eye's pass, deciding and building the layer scratch images, the mid-frame command list splits).
+### Performance
+- **Built with -O2**: on the console it ran better than -O3. `make 3dsx CORE_OPT=-Os` builds the SNES core at another level for comparisons.
 - **GPU Cost Probe**: two more steps (60 s in all) that split what a tile costs the GPU on plain stereo: "tiles without fill" (the tile and sprite draws scissored to one pixel) and "tiles vertex shader only" (the same draws without the geometry shader). Fill, geometry shader and vertex shader come out by subtraction; for those 10 s. A last step (65 s in all) switches the layer scratch images off
 ### Fixes
 - **Blurred layers with split depths**: every pass of a tiled layer (each eye's base pass and its blur ghosts) wrote its culled index list into the same range of the index buffer, and the GPU only reads it when the frame's command list runs, so all of them drew with the last pass's list. Each pass now has its own range. No difference in the scenes tested (the lists agreed there); it could drop or repeat tiles at the screen edge where the passes' parallax differed

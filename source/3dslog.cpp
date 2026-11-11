@@ -6,6 +6,7 @@
 #include "3dssettings.h"
 #include "3dslog.h"
 #include "buffered_log.h"
+#include "log_blackbox.h"
 
 // Initialize/close are main-thread-only. READY publishes the initialized
 // lock. Every spool access is serialized with background producers; the
@@ -69,6 +70,29 @@ void log3dsInitialize()
     if (count < 0 || static_cast<size_t>(count) >= sizeof(path)) {
         return;
     }
+    // a log without the close marker is a session that froze or crashed:
+    // keep it before the open below truncates it (log_blackbox.h)
+    {
+        char tail[LOG_CLOSE_SCAN_BYTES];
+        size_t got = 0;
+        bool exists = false;
+        FILE* f = fopen(path, "rb");
+        if (f != NULL) {
+            exists = true;
+            fseek(f, 0, SEEK_END);
+            long size = ftell(f);
+            long from = size > (long)sizeof(tail) ? size - (long)sizeof(tail) : 0;
+            fseek(f, from, SEEK_SET);
+            got = fread(tail, 1, sizeof(tail), f);
+            fclose(f);
+        }
+        if (exists && !log_closed_cleanly(tail, got)) {
+            char kept[PATH_MAX];
+            log3dsUncleanPath(kept, sizeof(kept));
+            remove(kept);
+            rename(path, kept);
+        }
+    }
     LightLock_Lock(&LOG_LOCK);
     START_MS = osGetTime();
     LAST_ELAPSED_MS = 0;
@@ -121,6 +145,17 @@ void log3dsWrite(const char* format, ...)
     LightLock_Unlock(&LOG_LOCK);
 }
 
+void log3dsUncleanPath(char *out, unsigned int size)
+{
+    snprintf(out, size, "%s/debug_%s_unclean.log", settings3DS.RootDir, settings3dsGetAppVersion("v"));
+}
+
+void log3dsMark(const char *what)
+{
+    log3dsWrite("[mark] %s", what);
+    log3dsFlush();
+}
+
 void log3dsFlush()
 {
     if (!READY.load()) {
@@ -159,6 +194,7 @@ void log3dsClose()
     if (!LOCK_INITIALIZED) {
         return;
     }
+    log3dsWrite(LOG_CLOSE_MARKER);   // log_blackbox.h: without it the next boot keeps this log
     if (s_writer) {
         s_writerQuit.store(true);
         LightEvent_Signal(&s_writerWake);

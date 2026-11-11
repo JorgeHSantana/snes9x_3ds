@@ -3,6 +3,7 @@
 
 #include "3dslcd.h"
 #include "3dsgpu.h"
+#include "3dslog.h"
 
 static u32 savedVtotalBottom;
 static bool vtotalActive;
@@ -37,6 +38,7 @@ void lcd3dsSetEmulationRate(u32 ticksPerFrame) {
     u32 vtotal = computeVtotal(targetFps, savedVtotalBottom);
 
     vtotalActive = true;
+    log3dsWrite("[lcd] emulation rate: default vtotal %u, writing %u (top mode %d)", (unsigned)savedVtotalBottom, (unsigned)vtotal, (int)GPU3DS.topMode);
     gspWaitForVBlank();
     writeVtotal(vtotal);
 }
@@ -46,6 +48,7 @@ void lcd3dsRestoreDefaultRate() {
         return;
 
     vtotalActive = false;
+    log3dsWrite("[lcd] default rate: restoring vtotal %u (top mode %d)", (unsigned)savedVtotalBottom, (int)GPU3DS.topMode);
     gspWaitForVBlank();
     // Top VTotal depends on top-screen mode (2D, 3D, WIDE): 
     // restoring a stale 3D/Wide value while in 2D can leave the top screen

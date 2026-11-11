@@ -1132,7 +1132,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
 
     // the layer scratch images (layer_scratch.h): decided and built once a
     // frame, in the left eye's pass; the right eye samples the same images
-    if (!GPU3DS.stereoRightPass) layerScratchDecideAndBuild(list);
+    if (!GPU3DS.stereoRightPass) {
+        const u64 t0 = svcGetSystemTick();
+        layerScratchDecideAndBuild(list);
+        GPU3DSExt.scratchTicks += svcGetSystemTick() - t0;
+    }
 
     // 3D: each eye's pass starts from a clean depth floor. The depth
     // texture is shared between the eyes and never cleared - identical

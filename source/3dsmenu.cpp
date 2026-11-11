@@ -13,6 +13,8 @@
 #include "3dsmenu.h"
 #include "3dslog.h"
 
+bool g_pauseMarks = false;   // set on the way into a pause: the first backdrop logs its steps (freeze hunt, 2026-11-10)
+
 #define ANIMATE_TAB_STEPS 3
 #define ANIMATE_DIALOG_STEPS 4   // was 8: open + close cost 16 full-screen alpha blends (270 ms)
 
@@ -1294,6 +1296,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
 
             int passes = GPU3DS.gameScreenBufferDesync ? 2 : 1;
             for (int pass = 0; pass < passes; pass++) {
+                if (g_pauseMarks) log3dsMark(pass == 0 ? "menu: backdrop pass 0" : "menu: backdrop pass 1");
                 gpu3dsFrameBegin();
                     if (settings3DS.isRomLoaded) {
                         // dim ingame screen
@@ -1309,6 +1312,7 @@ int menu3dsMenuSelectItem(SMenuTab& dialogTab, bool& isDialog, int& currentMenuT
                 gpu3dsFrameEnd();
             }
             GPU3DS.gameScreenBufferDesync = false;
+            if (g_pauseMarks) { log3dsMark("menu: backdrop drawn"); g_pauseMarks = false; }
 
             gameScreenDirty = false;
         }

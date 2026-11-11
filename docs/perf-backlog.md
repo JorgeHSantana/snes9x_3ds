@@ -90,6 +90,13 @@ dessincronia de áudio). Esforço médio.
 
 ### A3. Experimento -O2 vs -O3 nos arquivos do core
 
+**Decidido (2026-11-10):** o Jorge rodou as builds -O2 no console e ficaram
+melhores; `-O2` virou o padrão do Makefile (tudo, não só o core). Ele não
+disse qual das duas variantes nem mandou números: falta um log com `core=`
+para registrar o ganho. Próxima comparação: `make 3dsx CORE_OPT=-Os`
+(`output/snes9x_3ds_Oscore.3dsx`). Azahar SBS em três cenas: bit-idêntico
+à base em -O3.
+
 **Builds prontas (2026-11-07):** `make 3dsx OPT_FLAGS="-g -O2"` (tudo em
 -O2) e `make 3dsx CORE_OPT=-O2` (só `source/Snes9x`). Comparar `core=` e
 `ppu=` da linha `[perf][frame]` no console, mesma ROM e savestate.

@@ -68,8 +68,10 @@ APP_ROMFS         := $(TOPDIR)/$(ROMFS)
 # options for code generation
 #---------------------------------------------------------------------------------
 ARCH    	:= -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
-OPT_FLAGS         ?= -g -O3
-RELEASE_OPT_FLAGS ?= -O3 -DNDEBUG
+# -O2 since 2026-11-10: on the console it ran better than -O3 (the ARM11's
+# 16 KB instruction cache pays for -O3's larger code); docs/perf-backlog.md A3
+OPT_FLAGS         ?= -g -O2
+RELEASE_OPT_FLAGS ?= -O2 -DNDEBUG
 
 STRICT_WARNINGS ?= 1
 WARNINGS    := -Wall -Wextra -Wreturn-type -Wwrite-strings -Wno-implicit-fallthrough -Wno-unused-parameter -Wno-missing-field-initializers -Wno-register
@@ -316,10 +318,10 @@ else
 
 DEPENDS	:=	$(OFILES:.o=.d)
 
-# docs/perf-backlog.md A3: CORE_OPT=-O2 compiles the SNES core (source/Snes9x)
-# at that level while the rest keeps OPT_FLAGS, e.g. make 3dsx CORE_OPT=-O2
+# docs/perf-backlog.md A3: CORE_OPT=-Os compiles the SNES core (source/Snes9x)
+# at that level while the rest keeps OPT_FLAGS, e.g. make 3dsx CORE_OPT=-Os
 ifneq ($(strip $(CORE_OPT)),)
-$(filter Snes9x/%,$(OFILES_SOURCES)): CXXFLAGS := $(subst -O3,$(CORE_OPT),$(CXXFLAGS))
+$(filter Snes9x/%,$(OFILES_SOURCES)): CXXFLAGS := $(patsubst -O%,$(CORE_OPT),$(CXXFLAGS))
 endif
 
 COMMON_MAKEROM_PARAMS := -rsf $(RSF) -target t -exefslogo -elf $(OUTPUT_FILE).elf -icon $(OUTPUT_FILE).smdh \

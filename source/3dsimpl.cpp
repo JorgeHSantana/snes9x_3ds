@@ -1210,7 +1210,9 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 				GPU3DS.stereoRightPass = true;
 				GPU3DS.stereoEyeIOD = -slider;
 				GPU3DS.appliedRenderState.target = TARGET_UNSET;
+				const u64 rightTick0 = svcGetSystemTick();
 				gpu3dsDrawSnesScreen();
+				GPU3DSExt.drawRightTicks += svcGetSystemTick() - rightTick0;
 				GPU3DS.stereoRightPass = false;
 			}
 			if (g_gpuProbeMask.noFog || g_gpuProbeMask.noBlur) { GPU3DS.stereoFade = probeFade; GPU3DS.stereoHaze = probeHaze; GPU3DS.stereoBlur = probeBlur; }

@@ -249,6 +249,9 @@ typedef struct
     int             winSecCount;     // ...how many, -1 when more than fit (no window cull then)
       // BG tiles the occlusion cull skipped this / last frame (every pass, both eyes)
     u64             drawTicks;       // ...submitting the eyes' layer passes (gpu3dsDrawSnesScreen, both eyes)
+    u64             drawRightTicks;  // ...of which the right eye's pass (perf line drawR=)
+    u64             scratchTicks;    // ...of which deciding and building the layer scratch images (scratch=)
+    u64             splitTicks;      // ...inside the mid-frame command list splits (split=)
     bool            probeDumpDraws;  // GPU Cost Probe: log every gpu3dsDraw of this frame (cleared at FrameEnd)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
