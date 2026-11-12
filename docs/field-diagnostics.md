@@ -106,6 +106,7 @@ log. Probe builds (`EXTRA_DEFINES`, all `#ifdef`, never in a release):
 | `PROBE_FORCE_SLIDER` | 3D slider forced on |
 | `PROBE_FBDUMP` | the emulator saves its own top screen at frame 600 (and does a savestate round trip) |
 | `PROBE_FBDUMP_EVERY=N` | dumps frames 120..720 every N (needs `PROBE_FBDUMP`) |
+| `PROBE_SYNCDRAW` | every frame waits for its own GPU work (`C3D_FRAME_SYNCDRAW`); use it on both sides of an A/B when the scene has Glow Persistence, or two builds with different CPU timing differ by a few levels in the halos |
 | `PROBE_HOLD_DOWN` | holds D-pad Down for frames 120–599 (needs `PROBE_FBDUMP`) |
 | `PROBE_HOLD_KEY=KEY_X` | holds any libctru key mask for frames 120–599 (needs `PROBE_FBDUMP`); `KEY_DRIGHT` walks a character to look for trails (scenes `mmx3-walk-*`) |
 | `PROBE_INIDISP_LOG` | $2100 writes, black sections, segments, window registers, CGRAM per frame |

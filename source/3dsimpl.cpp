@@ -1183,7 +1183,16 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 		log3dsWrite("[inidisp] frame=%u present: skipDrawing=%d renderThisFrame=%d", (unsigned)g_probeFrames, (int)skipDrawingFrame, (int)IPPU.RenderThisFrame);
 #endif
 	stall3dsStage(STALL_T_MAIN, "frame: gpu frame begin (waits for the GPU)");
+#ifdef PROBE_SYNCDRAW
+	// harness probe: every frame's GPU work ends before the next frame's
+	// emulation starts. Without it the tail of frame N runs while the core
+	// writes frame N+1 (tile cache texels), and an A/B of two builds with
+	// different CPU timing differs by a few levels where the glow keeps
+	// history (Persistence), in Azahar too
+	gpu3dsFrameBegin(C3D_FRAME_SYNCDRAW, !skipDrawingFrame);
+#else
 	gpu3dsFrameBegin(screenshot.dirty ? C3D_FRAME_SYNCDRAW : 0, !skipDrawingFrame);
+#endif
 	stall3dsStage(STALL_T_MAIN, "frame: draw and present");
 		if (!firstFrame && !skipDrawingFrame) {
 			t3dsStartTimer(TIMER_DRAW_SNES_SCREEN);

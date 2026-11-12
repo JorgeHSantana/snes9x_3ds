@@ -1,0 +1,18 @@
+{
+  "title": "MMX3 ZP dam: shadows and glow on over the indexed draw path (culled tiles), Glow and Shadow Quality Full - the other shadow/glow scenes run DrawArrays. For an A/B build both sides with -DPROBE_SYNCDRAW: the glow keeps history (Persistence) and follows CPU timing otherwise",
+  "rom": "sdmc:/snes/Mega Man X3 Zero Project (MSU1)/Mega Man X3 Zero Project (MSU1).sfc",
+  "state": "states/mmx3zp-dam.frz",
+  "stereo3d": [
+    {
+      "file": "MEGAMAN X3 ZERO PROJ.",
+      "content": "BG1=0\nBG2=-3\nBG3=1\nBG4=0\nOBJ=2\nOBJP1=2\nOBJP2=2\nOBJP3=2\nFADE=0\nHAZE=0\nBLUR=6\nFOCUSBACK=-1\nFOCUSFRONT=1\nEDGEMODE=2\nSHADOWS=1\nGLOWMODE=2\nSHADOW=3840\nSHADOWX=3\nSHADOWY=3\nSHADOWCOLOR=0\nGLOW=3840\nGLOWTHRESH=8\nGLOWSTRENGTH=4\nGLOWSOFT=1\nGLOWSPREAD=1\nGLOWSRC=1\nGLOWQUALITY=0\nSHADOWQUALITY=0"
+    }
+  ],
+  "settings": {
+    "StereoBlurQuality": "2"
+  },
+  "wait": 36,
+  "log_expect": [
+    "ROM loaded: MEGAMAN X3 ZERO"
+  ]
+}

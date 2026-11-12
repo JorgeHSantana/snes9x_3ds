@@ -1231,9 +1231,17 @@ void gpu3dsDrawLayers(SLayerList *list) {
             // top. Indexed mode gets its own index scratch: the layers' IBO
             // regions are still owned by the queued base draws, and the
             // hardware dislikes DrawArrays mixed into a DrawElements frame.
-            static u16 *shadowIbo = nullptr; static int shadowIboUsed = 0;
-            const int SHADOW_IBO_MAX = 32768;
-            if (shadowIbo == nullptr) shadowIbo = (u16 *)linearAlloc(SHADOW_IBO_MAX * sizeof(u16));
+            // (ibo_identity.h: a run of consecutive indices is a slice of
+            // one list written and flushed once, so these draws copy and
+            // flush nothing)
+            static u16 *identityIbo = nullptr;
+            if (identityIbo == nullptr) {
+                identityIbo = (u16 *)linearAlloc(IBO_IDENTITY_ENTRIES * sizeof(u16));
+                if (identityIbo != nullptr) {
+                    ibo_identity_fill(identityIbo, IBO_IDENTITY_ENTRIES);
+                    GSPGPU_FlushDataCache(identityIbo, IBO_IDENTITY_ENTRIES * sizeof(u16));
+                }
+            }
             auto drawRange = [&](SLayer *ly, SLayerSection *sec, int from, int count, int plane) {
                 if (sec->vboId == VBO_SCENE_MODE7_LINE) return;   // a Mode 7 plane receives, never casts
                 GPU3DS.currentRenderState.textureEnv = TEX_ENV_REPLACE_TEXTURE0_COLOR_ALPHA;
@@ -1252,12 +1260,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 if (list->useDrawArraysForTiledLayers) {
                     gpu3dsDraw(vbo, NULL, count, from);
                 } else {
-                    if (shadowIbo == nullptr || shadowIboUsed + count > SHADOW_IBO_MAX) return;
-                    u16 *dst = shadowIbo + shadowIboUsed;
-                    for (int k = 0; k < count; k++) dst[k] = (u16)(from + k);
-                    GSPGPU_FlushDataCache(dst, (u32)count * sizeof(u16));   // partial flush: the scratch is read this frame
-                    gpu3dsDraw(vbo, (void *)dst, count);
-                    shadowIboUsed += count;
+                    const u16 *run = ibo_identity_run(identityIbo, IBO_IDENTITY_ENTRIES, from, count);
+                    if (run == nullptr) return;
+                    gpu3dsDraw(vbo, (const void *)run, count);
                 }
             };
             // the tier parallax of one row of a layer, the other tiers parked off-screen
@@ -1275,7 +1280,6 @@ void gpu3dsDrawLayers(SLayerList *list) {
                 float v = GPU3DS.stereoEyeIOD * d * STEREO_PARALLAX_SCALE;
                 return settings3DS.StereoShiftMode == 0 ? roundf(v) : v;
             };
-            if (i == i0) shadowIboUsed = 0;   // first target of the frame: the scratch starts over
 
             gpu3dsSetStereoPrioDim4(1.0f, 1.0f, 1.0f, 1.0f);
             gpu3dsApplyAtmosphereColor(0xFFFFFFFF);
@@ -1426,12 +1430,9 @@ void gpu3dsDrawLayers(SLayerList *list) {
                         SVertexList *vbo = &GPU3DS.vertices[sec->vboId];
                         if (list->useDrawArraysForTiledLayers) {
                             gpu3dsDraw(vbo, NULL, sec->count, sec->from);
-                        } else if (shadowIbo != nullptr && shadowIboUsed + sec->count <= SHADOW_IBO_MAX) {
-                            u16 *dst = shadowIbo + shadowIboUsed;
-                            for (int k2 = 0; k2 < sec->count; k2++) dst[k2] = (u16)(sec->from + k2);
-                            GSPGPU_FlushDataCache(dst, (u32)sec->count * sizeof(u16));
-                            gpu3dsDraw(vbo, (void *)dst, sec->count);
-                            shadowIboUsed += sec->count;
+                        } else {
+                            const u16 *run = ibo_identity_run(identityIbo, IBO_IDENTITY_ENTRIES, sec->from, sec->count);
+                            if (run != nullptr) gpu3dsDraw(vbo, (const void *)run, sec->count);
                         }
                         anyGlow = true;
                     }

@@ -5,6 +5,7 @@
 #include "3dsgpu.h"
 #include "occlusion_cull.h"
 #include "ibo_cursor.h"
+#include "ibo_identity.h"
 
 #define COMPOSE_HASH(vramAddr, pal)   ((vramAddr) << 4) + ((pal) & 0xf)
 
