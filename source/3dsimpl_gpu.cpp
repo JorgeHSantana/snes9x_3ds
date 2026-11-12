@@ -188,6 +188,7 @@ void gpu3dsInitLayers() {
     list->sizeInBytes = gpu3dsGetNextPowerOf2(2 * MAX_VERTICES * sizeof(u16));
     list->ibo = linearAlloc(list->sizeInBytes);
     list->iboCursor = 0;
+    list->iboDirty = false;
 
     gpu3dsResetLayers(list);
 
@@ -579,11 +580,28 @@ static void gpu3dsSetGlowEnv(bool on, float gain, uint32_t rgb)
 // floor write a non-zero depth on the console (artifacts with Spread
 // on). Own buffers, a ring deep enough for both eyes of two frames, and
 // their own VBO ids so the attribute-buffer cache rebinds.
+// A scratch pair (a rect list and a quad list) in one block of linear
+// memory, the quads after the rects: one flush call covers both.
+static void scratchListsAlloc(SVertexList *rect, SVertexList *quad)
+{
+    const u32 quadAt = (rect->sizeInBytes + 15u) & ~15u;
+    u8 *block = (u8 *)linearAlloc(quadAt + quad->sizeInBytes);
+    rect->data = rect->data_base = block;
+    quad->data = quad->data_base = block != nullptr ? block + quadAt : nullptr;
+    rect->from = 0; rect->count = 0;
+    quad->from = 0; quad->count = 0;
+}
+static void scratchListsFlush(SVertexList *rect, SVertexList *quad)
+{
+    gpu3dsFlushCache(rect->data_base, (u32)((u8 *)quad->data_base - (u8 *)rect->data_base) + quad->sizeInBytes);
+}
+
 struct GlowScratch
 {
     SVertexList rect, quad;
     int rectIdx, quadIdx;
     bool ready;
+    bool dirty;                   // written since the last flush
     static const int RING = 64;   // entries of 2 vertices
     void init()
     {
@@ -591,15 +609,18 @@ struct GlowScratch
         rect = GPU3DS.vertices[VBO_SCENE_RECT];
         rect.id = (SGPU_VBO_ID)(VBO_COUNT + 1);
         rect.sizeInBytes = RING * 2 * rect.vertexSize;
-        rect.data = rect.data_base = linearAlloc(rect.sizeInBytes);
-        rect.from = 0; rect.count = 0;
         quad = GPU3DS.vertices[VBO_SCENE_TILE];
         quad.id = (SGPU_VBO_ID)(VBO_COUNT + 2);
         quad.sizeInBytes = RING * 2 * quad.vertexSize;
-        quad.data = quad.data_base = linearAlloc(quad.sizeInBytes);
-        quad.from = 0; quad.count = 0;
+        scratchListsAlloc(&rect, &quad);   // one block: one flush call for both
         rectIdx = quadIdx = 0;
         ready = rect.data != nullptr && quad.data != nullptr;
+    }
+    void flush()
+    {
+        if (!ready || !dirty) return;
+        dirty = false;
+        scratchListsFlush(&rect, &quad);
     }
     // a black rect over the whole target; returns the vertex index to draw from
     int addRect(u32 color)
@@ -611,6 +632,7 @@ struct GlowScratch
         // trails on the console, overexposure in Azahar's still scenes)
         v[0].Position = (SVector2i){ 0, 0 }; v[1].Position = (SVector2i){ 512, 255 };
         v[0].Color = v[1].Color = __builtin_bswap32(color);
+        dirty = true;
         const int from = rectIdx * 2; rectIdx = (rectIdx + 1) % RING; return from;
     }
     int addQuad(s16 x0, s16 y0, s16 x1, s16 y1, s16 tx0, s16 ty0, s16 tx1, s16 ty1)
@@ -618,36 +640,38 @@ struct GlowScratch
         STileVertex *v = &((STileVertex *)quad.data)[quadIdx * 2];
         v[0].Position = (SVector3i){ x0, y0, 0 }; v[1].Position = (SVector3i){ x1, y1, 0 };
         v[0].TexCoord = (STexCoord2i){ tx0, ty0 }; v[1].TexCoord = (STexCoord2i){ tx1, ty1 };
+        dirty = true;
         const int from = quadIdx * 2; quadIdx = (quadIdx + 1) % RING; return from;
     }
 };
 static GlowScratch s_glowScratch;
 static bool layerScratchTakeMode7Dirty();
 
-// End-of-frame partial flush (docs/perf-backlog.md B1): everything the CPU
-// wrote this frame that the frame's draws read, other than the vertex
-// lists (gpu3dsFrameEnd flushes those). GPU_FULL_FLUSH restores citro3d's
-// whole-heap flush for diagnosis.
+// Partial flush (docs/perf-backlog.md B1), before every submission of a
+// frame that drew: everything the CPU wrote that the draws read, other
+// than the vertex lists (gpu3dsFlushListWrites). Each buffer goes out only
+// when written since its last flush: a flush is a call into the GSP
+// service, about 40 us in Old 3DS mode whatever the size.
+// GPU_FULL_FLUSH restores citro3d's whole-heap flush for diagnosis.
 static void layerScratchFlush();
 void gpu3dsFlushFrameWrites()
 {
     SLayerList *list = &GPU3DSExt.layerList;
     const u32 iboWritten = list->iboCursor > list->iboUsed ? (u32)list->iboCursor : list->iboUsed;
-    if (list->ibo != NULL && iboWritten > 0)
-        GSPGPU_FlushDataCache(list->ibo, iboWritten * sizeof(u16));
-    if (s_glowScratch.ready) {
-        GSPGPU_FlushDataCache(s_glowScratch.rect.data_base, s_glowScratch.rect.sizeInBytes);
-        GSPGPU_FlushDataCache(s_glowScratch.quad.data_base, s_glowScratch.quad.sizeInBytes);
+    if (list->ibo != NULL && iboWritten > 0 && list->iboDirty) {
+        gpu3dsFlushCache(list->ibo, iboWritten * sizeof(u16));
+        list->iboDirty = false;
     }
+    s_glowScratch.flush();
     layerScratchFlush();
     if (GPU3DS.tileCacheDirtyLo <= GPU3DS.tileCacheDirtyHi) {
         u8 *atlas = (u8 *)GPU3DS.textures[SNES_TILE_CACHE].tex.data;
         const u32 lo = GPU3DS.tileCacheDirtyLo * 2, hi = (GPU3DS.tileCacheDirtyHi + 64) * 2;   // 64 texels of RGBA5551 per tile
-        GSPGPU_FlushDataCache(atlas + lo, hi - lo);
+        gpu3dsFlushCache(atlas + lo, hi - lo);
         GPU3DS.tileCacheDirtyLo = 0xFFFFFFFFu; GPU3DS.tileCacheDirtyHi = 0;
     }
     if (GPU3DS.mode7CacheDirty) {
-        GSPGPU_FlushDataCache(GPU3DS.textures[SNES_MODE7_TILE_CACHE].tex.data, GPU3DS.textures[SNES_MODE7_TILE_CACHE].tex.size);
+        gpu3dsFlushCache(GPU3DS.textures[SNES_MODE7_TILE_CACHE].tex.data, GPU3DS.textures[SNES_MODE7_TILE_CACHE].tex.size);
         GPU3DS.mode7CacheDirty = false;
     }
 }
@@ -835,6 +859,7 @@ struct LayerScratchState
 {
     SVertexList rect, quad;                  // own lists: the GPU reads them when the command list runs
     bool tried, ready;
+    bool dirty;                              // written since the last flush
     int ringFrame;
     static const int RING_FRAMES = 4;        // both eyes of a frame share one set; paused replays and frame splits get room
     LayerScratchUse use[2][4];               // [target][bg]
@@ -851,13 +876,10 @@ struct LayerScratchState
         rect = GPU3DS.vertices[VBO_SCENE_RECT];
         rect.id = (SGPU_VBO_ID)(VBO_COUNT + 3);
         rect.sizeInBytes = n * rect.vertexSize;
-        rect.data = rect.data_base = linearAlloc(rect.sizeInBytes);
-        rect.from = 0; rect.count = 0;
         quad = GPU3DS.vertices[VBO_SCENE_TILE];
         quad.id = (SGPU_VBO_ID)(VBO_COUNT + 4);
         quad.sizeInBytes = n * quad.vertexSize;
-        quad.data = quad.data_base = linearAlloc(quad.sizeInBytes);
-        quad.from = 0; quad.count = 0;
+        scratchListsAlloc(&rect, &quad);     // one block: one flush call for both
         ready = rect.data != nullptr && quad.data != nullptr;
     }
 };
@@ -865,9 +887,9 @@ static LayerScratchState s_layerScratch;
 
 static void layerScratchFlush()
 {
-    if (!s_layerScratch.ready) return;
-    GSPGPU_FlushDataCache(s_layerScratch.rect.data_base, s_layerScratch.rect.sizeInBytes);
-    GSPGPU_FlushDataCache(s_layerScratch.quad.data_base, s_layerScratch.quad.sizeInBytes);
+    if (!s_layerScratch.ready || !s_layerScratch.dirty) return;
+    s_layerScratch.dirty = false;
+    scratchListsFlush(&s_layerScratch.rect, &s_layerScratch.quad);
 }
 
 // the Mode 7 texture was used for scratch images since it was last drawn:
@@ -978,6 +1000,7 @@ static void layerScratchDecideAndBuild(SLayerList *list)
             if (at < 0) why = "index buffer";
             else {
                 tileIdx = (u16 *)list->ibo + at;
+                list->iboDirty = true;
                 for (int k = 0; k < s0->count; k++) tileIdx[k] = (u16)(s0->from + k);
             }
         }
@@ -995,6 +1018,7 @@ static void layerScratchDecideAndBuild(SLayerList *list)
 
         if (!built) {
             built = true;
+            ls->dirty = true;
             ls->ringFrame = (ls->ringFrame + 1) % LayerScratchState::RING_FRAMES;
         }
         GPU3DS.scratchBuild = true;
@@ -1068,11 +1092,8 @@ static void layerScratchDecideAndBuild(SLayerList *list)
         // The images are sampled in this same frame: on the console the
         // texture unit reads a target's old content unless the command
         // list that rendered it is submitted first (developer-gotchas.md).
-        // That list reads what the CPU wrote so far, so it is flushed here
-        // and not only at the frame's end.
-        for (int i = 0; i < VBO_COUNT; i++)
-            gpu3dsFlushListWrites(&GPU3DS.vertices[i]);
-        gpu3dsFlushFrameWrites();
+        // The split flushes what the build's draws read (the tile list,
+        // these indices and quads, the tile cache's new texels).
         gpu3dsFrameSplit();
         gpu3dsSetStereoParallax(0.0f);
         gpu3dsSetStereoPrioDim(1.0f, 1.0f);
@@ -1712,6 +1733,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
                     const int at = ibo_cursor_take(&list->iboCursor, layer->verticesByTarget[i], list->sizeInBytes / sizeof(u16));
                     u32 bufferOffset = at >= 0 ? (u32)at : layer->bufferOffset + (sub ? 0 : layer->verticesByTarget[TARGET_SNES_SUB]);
                     u16 *indices = (u16 *)list->ibo + bufferOffset;
+                    list->iboDirty = true;
                     gpu3dsDrawTiledLayer(layer, indices, from, to, at >= 0);
                 }
             };

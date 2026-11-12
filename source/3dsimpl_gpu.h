@@ -169,6 +169,7 @@ typedef struct
     SLayerSection   *sections;
     void            *ibo;
     u32             iboUsed;        // index entries the frame's tiled layers may write (partial flush)
+    bool            iboDirty;       // indices written since the buffer was last flushed
     unsigned int    iboCursor;      // ibo_cursor.h: the next free entry past the fixed ranges, back to 0 at the frame's end
 
     u32             sizeInBytes;
@@ -253,6 +254,7 @@ typedef struct
     u64             drawRightTicks;  // ...of which the right eye's pass (perf line drawR=)
     u64             scratchTicks;    // ...of which deciding and building the layer scratch images (scratch=)
     u64             splitTicks;      // ...inside the mid-frame command list splits (split=)
+    u32             flushCalls;      // GSP cache flush calls for the frame's buffers, the whole window (fcalls=)
     bool            probeDumpDraws;  // GPU Cost Probe: log every gpu3dsDraw of this frame (cleared at FrameEnd)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
@@ -272,6 +274,14 @@ typedef struct
 } SGPU3DSExtended;
 
 extern SGPU3DSExtended GPU3DSExt;
+
+// the frame's cache flushes go through here: each is a call into the GSP
+// service and the perf line counts them (fcalls=)
+static inline void gpu3dsFlushCache(const void *data, u32 bytes)
+{
+    GPU3DSExt.flushCalls++;
+    GSPGPU_FlushDataCache(data, bytes);
+}
 
 void gpu3dsDeallocLayers();
 void gpu3dsResetLayerSectionLimits(SLayerList *list);

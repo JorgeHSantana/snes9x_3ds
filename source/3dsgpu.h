@@ -4,6 +4,7 @@
 
 #include "stereo_fog.h"
 #include "3dsmode7persp.h"
+#include "flush_span.h"
 #include <3ds.h>
 #include <citro3d.h>
 #include <tex3ds.h>
@@ -265,6 +266,7 @@ typedef struct
     GPU_Primitive_t     primitive;
     SGPU_VBO_ID         id;
     bool                flip;
+    FlushSpan           flush;      // flush_span.h: what the list still owes the GPU
 } SVertexList;
 
 typedef union {
@@ -474,12 +476,14 @@ void gpu3dsSetRenderTargetToTexture(SGPU_TARGET_ID textureId);
 
 void gpu3dsPrepareListForNextFrame(SVertexList *list, bool swap = false);
 // Flushes the data cache over what the CPU wrote into the list's current
-// half (from + count vertices from data): called before a half is left
-// behind and at the end of the frame, so the GPU reads every vertex.
+// half and a draw can read (flush_span.h: only the bytes no earlier call
+// covered, nothing for a list no draw read): called before a half is left
+// behind and before every submission, so the GPU reads every vertex.
 void gpu3dsFlushListWrites(SVertexList *list);
-// Every other CPU-written buffer the frame's draws read (layer and shadow
-// index buffers, the glow scratch, the tile caches' dirty rows): the
-// end-of-frame replacement for citro3d's whole-heap flush (3dsimpl_gpu.cpp).
+// Every other CPU-written buffer the frame's draws read, where written
+// since its last flush (layer index buffer, the glow and layer scratch
+// lists, the tile caches' dirty rows): with the lists, the replacement
+// for citro3d's whole-heap flush (3dsimpl_gpu.cpp).
 void gpu3dsFlushFrameWrites();
 
 void gpu3dsEnableAlphaTestNotEqualsZero();
@@ -741,7 +745,7 @@ static inline void gpu3dsSetAttributeBuffers(SVertexList *list)
 }
 
 void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from = -1);
-void gpu3dsFrameSplit();   // C3D_FrameSplit(0) that stamps the frame's first submission (gpu=)
+void gpu3dsFrameSplit();   // flushes what the draws so far read, then C3D_FrameSplit; stamps the frame's first submission (gpu=)
 bool gpu3dsFrameBegin(u8 flags = 0, bool ingame = false, bool isSecondScreen = false);
 void gpu3dsFrameEnd(u8 flags = 0);
 bool gpu3dsClearScreen(gfxScreen_t screen, bool isTopStereo = false);

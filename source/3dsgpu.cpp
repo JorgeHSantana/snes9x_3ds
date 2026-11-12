@@ -350,6 +350,7 @@ bool gpu3dsAllocVertexList(SVertexListInfo *info)
     list->count = 0;
     list->from = 0;
     list->flip = 1;
+    flush_span_reset(&list->flush);
 
     return true;
 }
@@ -364,9 +365,18 @@ void gpu3dsDeallocVertexList(SVertexList *list)
 
 void gpu3dsFlushListWrites(SVertexList *list)
 {
-    const u32 vertices = (u32)list->from + (u32)list->count;
-    if (list->data != NULL && vertices > 0)
-        GSPGPU_FlushDataCache(list->data, vertices * list->vertexSize);
+    const u32 written = ((u32)list->from + (u32)list->count) * list->vertexSize;
+    if (list->data == NULL)
+        return;
+    if (list->id == VBO_MODE7_TILE) {
+        // written in place, not front to back: whole, at every call
+        if (written > 0)
+            gpu3dsFlushCache(list->data, written);
+        return;
+    }
+    unsigned int from, bytes;
+    if (flush_span_take(&list->flush, written, &from, &bytes))
+        gpu3dsFlushCache((u8 *)list->data + from, bytes);
 }
 
 void gpu3dsPrepareListForNextFrame(SVertexList *list, bool swap)
@@ -383,6 +393,7 @@ void gpu3dsPrepareListForNextFrame(SVertexList *list, bool swap)
 
     list->count = 0;
     list->from = 0;
+    flush_span_reset(&list->flush);
 }
 
 void gpu3dsSetDefaultRenderState(SGPU_SHADER_PROGRAM shader, bool isSecondScreen) {
@@ -592,6 +603,7 @@ void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
     s_frameDraws++;
     const u32 n = (u32)(indices != NULL || from >= 0 ? count : list->count);
     s_frameVerts += n;
+    flush_span_drawn(&list->flush);
     if (GPU3DSExt.probeDumpDraws) {
         const SGPURenderState *rs = &GPU3DS.currentRenderState;
         log3dsWrite("[probe][draw] #%u vbo=%d n=%u shader=%d target=%d tex=%d env=%d blend=%d atest=%d depth=%d stencil=%u ghost=%d",
@@ -659,11 +671,27 @@ static void gpu3dsStartP3DThread()
     threadCreate(gpu3dsP3DThread, NULL, 0x800, prio - 2, -2, true);   // above the main thread: stamps before it resumes
 }
 
+// Before a submission: everything the CPU wrote that the draws recorded
+// so far read leaves the CPU cache, each byte once (flush_span.h and the
+// written-since marks in gpu3dsFlushFrameWrites). A frame with no draw
+// reads nothing: its lists and tile cache rows wait for one that does.
+static void gpu3dsFlushDrawnWrites()
+{
+    if (s_frameDraws == 0)
+        return;
+    for (int i = 0; i < VBO_COUNT; i++)
+        gpu3dsFlushListWrites(&GPU3DS.vertices[i]);
+    gpu3dsFlushFrameWrites();
+}
+
 // our FrameSplit: stamps the frame's first submission (gpu=)
 void gpu3dsFrameSplit()
 {
     const u64 t0 = svcGetSystemTick();
     if (GPU3DSExt.gpuSubmitTick == 0) GPU3DSExt.gpuSubmitTick = t0;
+    // the piece submitted here runs at once: the vertices, indices and
+    // texels its draws read must be in RAM, as at the frame's end
+    gpu3dsFlushDrawnWrites();
     // GX_CMDLIST_FLUSH: the GX flushes this piece of the command list from
     // the CPU cache. citro3d does not (only C3D_FrameEnd flushes, the whole
     // heap, and the partial end-of-frame flush below turned that off), so
@@ -717,9 +745,7 @@ void gpu3dsFrameEnd(u8 flags)
     // flush only what this frame wrote (docs/perf-backlog.md B1); the
     // GX_CMDLIST_FLUSH bit keeps citro3d from the whole-heap flush and
     // has the GX flush the command list itself
-    for (int i = 0; i < VBO_COUNT; i++)
-        gpu3dsFlushListWrites(&GPU3DS.vertices[i]);
-    gpu3dsFlushFrameWrites();
+    gpu3dsFlushDrawnWrites();
     C3D_FrameEnd(flags | GX_CMDLIST_FLUSH);
 #endif
     GPU3DSExt.layerList.iboCursor = 0;   // ibo_cursor.h: the frame's index ranges are submitted

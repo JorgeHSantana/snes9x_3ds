@@ -128,6 +128,12 @@ as linhas tocadas dos dois caches de tile (`tileCacheDirtyLo/Hi`,
 console pelo `flush=` da linha de perf: antes 264-275 µs (New), 1144 µs
 (Old).
 
+**Seguimento (2026-11-12).** No modo Old o parcial ficou em 740 µs: o
+custo é por chamada (uns 40 µs), não por byte. `flush_span.h` e as marcas
+de escrita em `gpu3dsFlushFrameWrites` descarregam cada buffer uma vez, só
+o que um desenho lê, e nada num frame sem desenho: de 21 chamadas por
+frame desenhado para 7 a 13 (`fcalls=` na linha de perf).
+
 **Situação.** `gpu3dsFrameEnd()` chama `C3D_FrameEnd(0)`
 (`3dsimpl.cpp:1164`, default em `3dsgpu.h:669`). Com flags 0 o citro3d faz
 `GSPGPU_FlushDataCache` do linear heap INTEIRO
