@@ -72,6 +72,9 @@ ARCH    	:= -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 # 16 KB instruction cache pays for -O3's larger code); docs/perf-backlog.md A3
 OPT_FLAGS         ?= -g -O2
 RELEASE_OPT_FLAGS ?= -O2 -DNDEBUG
+# the SNES core (source/Snes9x) at -Os: experiment of 2026-11-12, console
+# number pending (docs/perf-backlog.md A3). CORE_OPT=-O2 puts it back
+CORE_OPT          ?= -Os
 
 STRICT_WARNINGS ?= 1
 WARNINGS    := -Wall -Wextra -Wreturn-type -Wwrite-strings -Wno-implicit-fallthrough -Wno-unused-parameter -Wno-missing-field-initializers -Wno-register
