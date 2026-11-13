@@ -97,6 +97,12 @@ para registrar o ganho. Próxima comparação: `make 3dsx CORE_OPT=-Os`
 (`output/snes9x_3ds_Oscore.3dsx`). Azahar SBS em três cenas: bit-idêntico
 à base em -O3.
 
+**`-Os` no core (2026-11-12): quebra.** O GCC 16.1 em `-Os` perde a escrita no
+registrador global do PC (r9, `fastCPUPC`) nos opcodes de desvio de
+cpuexec.cpp; o console dá data abort no primeiro desvio tomado (dump em
+#80, log de sessão por console). Não medido. Para tentar de novo: `-Os` em
+tudo do core menos cpuexec.cpp, ou PC fora do registrador global.
+
 **Builds prontas (2026-11-07):** `make 3dsx OPT_FLAGS="-g -O2"` (tudo em
 -O2) e `make 3dsx CORE_OPT=-O2` (só `source/Snes9x`). Comparar `core=` e
 `ppu=` da linha `[perf][frame]` no console, mesma ROM e savestate.
