@@ -59,6 +59,7 @@ static GpuProbeState s_gpuProbe = { false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, { 0,
 #include "3dslcd.h"
 #include "3dsui_img.h"
 #include "3dsmenu.h"
+#include "probecore.h"
 
 inline std::string operator "" _s(const char* s, size_t length) {
     return std::string(s, length);
@@ -4564,6 +4565,9 @@ void emulatorLoop()
                     (unsigned)(GPU3DSExt.coreTicks / N / TPU), (unsigned)(GPU3DSExt.ppuTicks / N / TPU), (unsigned)(GPU3DSExt.drawTicks / N / TPU), (unsigned)(GPU3DSExt.fxTicks / N / TPU),
                     (unsigned)(GPU3DSExt.flushTicks / N / TPU), (unsigned)(GPU3DSExt.gpuWaitTicks / N / TPU), (unsigned)(GPU3DSExt.gpuBusyFrames ? GPU3DSExt.gpuBusyTicks / GPU3DSExt.gpuBusyFrames / TPU : 0), GPU3DSExt.drawCalls / (unsigned)N, GPU3DSExt.drawVerts / (unsigned)N, GPU3DSExt.culledTilesWin / (unsigned)N, (unsigned)(g_idleSkips / (uint32)N), (unsigned)(g_apuSkips / (uint32)N),
                     (unsigned)(GPU3DSExt.drawRightTicks / N / TPU), (unsigned)(GPU3DSExt.scratchTicks / N / TPU), (unsigned)(GPU3DSExt.splitTicks / N / TPU), (unsigned)GPU3DSExt.flushCalls);
+#ifdef PROBE_CORE
+                probeCoreReport((unsigned)s_frameLoadN);
+#endif
                 s_frameLoad.reset(); s_frameLoadN = 0; s_frameOver = 0; s_frameSkips = 0; GPU3DSExt.shadowDraws = 0; GPU3DSExt.glowDraws = 0;
                 GPU3DSExt.coreTicks = GPU3DSExt.ppuTicks = GPU3DSExt.drawTicks = GPU3DSExt.fxTicks = GPU3DSExt.flushTicks = GPU3DSExt.gpuWaitTicks = GPU3DSExt.gpuBusyTicks = 0; GPU3DSExt.gpuBusyFrames = 0; GPU3DSExt.drawRightTicks = GPU3DSExt.scratchTicks = GPU3DSExt.splitTicks = 0; GPU3DSExt.flushCalls = 0; GPU3DSExt.drawCalls = GPU3DSExt.drawVerts = GPU3DSExt.culledTilesWin = 0; g_idleSkips = 0; g_apuSkips = 0;
             }

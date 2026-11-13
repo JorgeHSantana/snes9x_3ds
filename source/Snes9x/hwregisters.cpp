@@ -7,9 +7,11 @@
 #include "hwregisters.h"
 #include "apu.h"
 #include "bsx.h"
+#include "probecore.h"
 
 uint8 S9xGetByteFromRegister (uint8 *GetAddress, uint32 Address)
 {
+    PROBE_CORE_COUNT(slowReads);
     switch ((int) GetAddress)
     {
 		case CMemory::MAP_PPU:
@@ -199,6 +201,7 @@ uint16 S9xGetWordFromRegister (uint8 *GetAddress, uint32 Address)
 
 void S9xSetByteToRegister (uint8 Byte, uint8* SetAddress, uint32 Address)
 {
+    PROBE_CORE_COUNT(slowWrites);
     switch ((int) SetAddress)
     {
 		case CMemory::MAP_PPU:

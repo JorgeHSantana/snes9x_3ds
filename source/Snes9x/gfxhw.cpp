@@ -26,6 +26,7 @@ extern int g_probeFrames;
 #include "3dsimpl_tilecache.h"
 #include "3dsimpl_gpu.h"
 #include "3dssettings.h"
+#include "probecore.h"
 
 
 extern uint8 Depths[8][4];
@@ -4044,7 +4045,11 @@ void S9xUpdateScreenHardware ()
 {	
 	t3dsStartTimer(TIMER_S9X_UPDATE_SCREEN);
 	const u64 ppuTick0 = svcGetSystemTick();
+#ifdef PROBE_CORE
+	struct PpuTicks { u64 t0; ~PpuTicks() { const u64 d = svcGetSystemTick() - t0; GPU3DSExt.ppuTicks += d; g_probeCore.ppuTicks += d; } } ppuTicks{ ppuTick0 };
+#else
 	struct PpuTicks { u64 t0; ~PpuTicks() { GPU3DSExt.ppuTicks += svcGetSystemTick() - t0; } } ppuTicks{ ppuTick0 };
+#endif
 
     GFX.S = GFX.Screen;
     GFX.r2131 = Memory.FillRAM [0x2131];

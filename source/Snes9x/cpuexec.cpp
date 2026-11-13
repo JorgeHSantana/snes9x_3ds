@@ -48,6 +48,45 @@ register uint8 *fastCPUPC asm ("r9");
 
 uint32 g_idleSkips = 0;
 #include "cpuexec-ops.h"
+#include "probecore.h"
+
+#ifdef PROBE_CORE_HIST
+#define PROBE_CPU_HIST \
+	{ \
+		const int probeRow = fastOpcodes == S9xOpcodesM1X1 ? 0 : fastOpcodes == S9xOpcodesE1 ? 1 : \
+			fastOpcodes == S9xOpcodesM1X0 ? 2 : fastOpcodes == S9xOpcodesM0X0 ? 3 : 4; \
+		g_probeCore.ops++; g_probeCore.cpuHist[probeRow][*CPU_PC]++; \
+		if (*CPU_PC == 0xF0 && ++g_probeCore.beqHist[(CPU_PC - CPU.PCBase) & 0xFFF] >= g_probeCore.beqMax) \
+		{ \
+			g_probeCore.beqMax = g_probeCore.beqHist[(CPU_PC - CPU.PCBase) & 0xFFF]; \
+			g_probeCore.beqTaken = (ICPU._Zero == 0); \
+			g_probeCore.beqFlags = CPU.Flags; \
+			g_probeCore.beqPC = ((uint32)Registers.PB << 16) | (uint32)(CPU_PC - CPU.PCBase); \
+			for (int probeI = 0; probeI < 8; probeI++) g_probeCore.beqBytes[probeI] = CPU_PC[probeI - 4]; \
+			g_probeCore.beqWaitDelta = CPU.WaitAddress ? (s32)(CPU.WaitAddress - CPU_PC) : 0x7fffffff; \
+			g_probeCore.beqShutdown = Settings.Shutdown; \
+		} \
+	}
+#else
+#define PROBE_CPU_HIST
+#endif
+
+#ifdef PROBE_CORE
+// the line event's own time: what it spends in the APU, the PPU and HDMA is
+// reported in their own fields
+struct SProbeHBlank
+{
+	u64 t0, apu0, ppu0, hdma0;
+	SProbeHBlank() : apu0(g_probeCore.apuTicks), ppu0(g_probeCore.ppuTicks), hdma0(g_probeCore.hdmaTicks) { t0 = svcGetSystemTick(); }
+	~SProbeHBlank()
+	{
+		const u64 all = svcGetSystemTick() - t0;
+		const u64 inner = (g_probeCore.apuTicks - apu0) + (g_probeCore.ppuTicks - ppu0) + (g_probeCore.hdmaTicks - hdma0);
+		g_probeCore.hbTicks += all > inner ? all - inner : 0;
+		g_probeCore.hbCalls++;
+	}
+};
+#endif
 
 inline void __attribute__ ((always_inline)) S9xHandleFlags()
 {
@@ -172,6 +211,7 @@ void S9xDoHBlankProcessingWithRegisters()
 	CPU_Cycles += CPU.MemSpeed; \
 	if (!SupportSA1) \
 	{ \
+		PROBE_CPU_HIST \
 		(*fastOpcodes [*CPU_PC++].S9xOpcode) (); \
 		if (CPU.Flags) goto S9xMainLoop_HandleFlags; \
 	} \
@@ -371,6 +411,9 @@ int debugFrameCounter = 0;
 
 void S9xDoHBlankProcessing ()
 {
+#ifdef PROBE_CORE
+	SProbeHBlank probeHBlank;
+#endif
 #ifdef CPU_SHUTDOWN
     CPU.WaitCounter++;
 #endif

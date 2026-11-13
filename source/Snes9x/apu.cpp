@@ -6,6 +6,7 @@
 #include "apu.h"
 #include "soundux.h"
 #include "cpuexec.h"
+#include "probecore.h"
 
 /* For note-triggered SPC dump support */
 #include "snapshot.h"
@@ -940,11 +941,80 @@ inline void S9xIncrementAPUTimers()
 }
 
 
+#ifdef PROBE_CORE
+#include "3dslog.h"
+#include <stdlib.h>
+
+SProbeCore g_probeCore;
+
+#ifdef PROBE_CORE_HIST
+// the `top` largest entries of a cumulative histogram, eight to a log line,
+// as "index=count" (cpu index: table * 256 + opcode byte, in hex)
+static void probeCoreLogTop(const char *tag, const u32 *hist, int n, int top)
+{
+	static u8 used[5 * 256];
+	memset(used, 0, sizeof(used));
+	char line[200];
+	int len = 0;
+	for (int k = 0; k < top; k++)
+	{
+		int best = -1;
+		for (int i = 0; i < n; i++)
+			if (!used[i] && hist[i] && (best < 0 || hist[i] > hist[best])) best = i;
+		if (best < 0) break;
+		used[best] = 1;
+		len += snprintf(line + len, sizeof(line) - len, " %03x=%u", best, (unsigned)hist[best]);
+		if ((k & 7) == 7) { log3dsWrite("[perf][hist] %s%s", tag, line); len = 0; }
+	}
+	if (len) log3dsWrite("[perf][hist] %s%s", tag, line);
+}
+#endif
+
+void probeCoreReport(unsigned frames)
+{
+	// cost of one tick pair, measured once: subtract it by hand from the
+	// fields below (calls a frame = acalls + hbcalls + the DMA/HDMA calls)
+	static u32 pairNs = 0;
+	if (!pairNs)
+	{
+		u64 acc = 0;
+		for (int i = 0; i < 1000; i++) { SProbeCoreScope s(&acc); }
+		pairNs = (u32)(acc * 1000000ull / 268111856ull);   // ticks of 1000 pairs to ns of one
+		if (!pairNs) pairNs = 1;
+	}
+	if (!frames) frames = 1;
+	const u64 N = frames, TPU = 268111856ull / 1000000ull;
+	log3dsWrite("[perf][core] us/frame apu=%u hb=%u hdma=%u dma=%u | per frame acalls=%u hbcalls=%u slowr=%u sloww=%u | tickpair=%u ns",
+		(unsigned)(g_probeCore.apuTicks / N / TPU), (unsigned)(g_probeCore.hbTicks / N / TPU),
+		(unsigned)(g_probeCore.hdmaTicks / N / TPU), (unsigned)(g_probeCore.dmaTicks / N / TPU),
+		(unsigned)(g_probeCore.apuCalls / frames), (unsigned)(g_probeCore.hbCalls / frames),
+		(unsigned)(g_probeCore.slowReads / frames), (unsigned)(g_probeCore.slowWrites / frames), (unsigned)pairNs);
+#ifdef PROBE_CORE_HIST
+	log3dsWrite("[perf][hist] per frame ops=%u aops=%u (timers above are not valid in a HIST build)",
+		(unsigned)(g_probeCore.ops / frames), (unsigned)(g_probeCore.aops / frames));
+	log3dsWrite("[perf][hist] hottest BEQ at %06x (%u times, taken=%d, flags=%x), code from 4 before: %02x %02x %02x %02x %02x %02x %02x %02x, wait mark %+d, shutdown=%d",
+		(unsigned)g_probeCore.beqPC, (unsigned)g_probeCore.beqMax, (int)g_probeCore.beqTaken, (unsigned)g_probeCore.beqFlags, g_probeCore.beqBytes[0], g_probeCore.beqBytes[1], g_probeCore.beqBytes[2], g_probeCore.beqBytes[3],
+		g_probeCore.beqBytes[4], g_probeCore.beqBytes[5], g_probeCore.beqBytes[6], g_probeCore.beqBytes[7],
+		(int)g_probeCore.beqWaitDelta, (int)g_probeCore.beqShutdown);
+	log3dsWrite("[perf][hist] taken branches %u: no mark %u, mark far %u, interrupt due %u (flags %x: nmi %u, irq %u), skipped %u (%u with a masked irq pending)",
+		(unsigned)g_probeCore.sdCalls, (unsigned)g_probeCore.sdNoMark, (unsigned)g_probeCore.sdFar,
+		(unsigned)g_probeCore.sdFlags, (unsigned)g_probeCore.sdFlagsOr, (unsigned)g_probeCore.sdNmi, (unsigned)g_probeCore.sdIrqOpen, (unsigned)g_probeCore.sdTaken, (unsigned)g_probeCore.sdIrqMasked);
+	probeCoreLogTop("cpu", &g_probeCore.cpuHist[0][0], 5 * 256, 64);
+	probeCoreLogTop("apu", g_probeCore.apuHist, 256, 40);
+	g_probeCore.ops = g_probeCore.aops = 0;
+#endif
+	g_probeCore.apuTicks = g_probeCore.hbTicks = g_probeCore.hdmaTicks = g_probeCore.dmaTicks = 0;
+	g_probeCore.apuCalls = g_probeCore.hbCalls = g_probeCore.slowReads = g_probeCore.slowWrites = 0;
+}
+#endif
+
 int32 g_apuNextEvent = 0;
 uint32 g_apuSkips = 0;
 
 void S9xUpdateAPUTimer (void)
 {
+	PROBE_CORE_SCOPE(apuTicks);
+	PROBE_CORE_COUNT(apuCalls);
 	//int opcodesExecuted = 0;
 	int32 nextEventCycles = IAPU.NextAPUTimerPosDiv10000;
 	if (nextEventCycles >= CPU.Cycles)
@@ -960,8 +1030,14 @@ void S9xUpdateAPUTimer (void)
 
 #endif
 
+#ifdef PROBE_CORE_HIST
+		#define PROBE_APU_HIST g_probeCore.aops++; g_probeCore.apuHist[*IAPU.PC]++;
+#else
+		#define PROBE_APU_HIST
+#endif
 		#define EXECUTE_ONE_APU_OPCODE \
 			if (APU.Cycles > nextEventCycles) break; \
+			PROBE_APU_HIST \
 			APU.Cycles += APU.S9xAPUCycles [*IAPU.PC]; \
 			(*S9xApuOpcodes[*IAPU.PC]) (); \
 			DEBUG_OUTPUT

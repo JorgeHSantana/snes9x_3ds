@@ -20,6 +20,7 @@
 #include "msu1.h"
 #include "../vram_dma.h"
 #include "../oam_dma.h"
+#include "probecore.h"
 
 #ifdef PROBE_DMA_PERF
 // measurement probe (issue #79 item 3): ticks and bytes of every DMA into
@@ -138,6 +139,7 @@ void S9xDoDMA (uint8 Channel)
 	
     if (Channel > 7 || CPU.InDMA)
 		return;
+    PROBE_CORE_SCOPE(dmaTicks);
 		
     CPU.InDMA = TRUE;
     bool8 in_sa1_dma = FALSE;
@@ -1358,6 +1360,7 @@ void S9xTraceSoundDSP (const char *s, int i1 = 0, int i2 = 0, int i3 = 0,
 
 uint8 S9xDoHDMA (uint8 byte)
 {
+    PROBE_CORE_SCOPE(hdmaTicks);
     struct SDMA *p = &DMA [0];
     
     int d = 0;

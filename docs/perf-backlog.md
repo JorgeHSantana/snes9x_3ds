@@ -443,6 +443,25 @@ folgado, o E2 vale pouco).
 
 **Risco.** Nenhum para o produto: é build de sonda, não vai para nightly.
 
+**Resultado (2026-11-13, Azahar, cena `mmx3zp-dam-light`, build
+`-DPROBE_CORE_HIST`).** Por frame: `ops=` 13.736, `aops=` 4.441, `acalls=`
+265, `hbcalls=` 525, `slowr=` 14, `sloww=` 197. O caminho lento de
+registradores é desprezível nesta cena. O histograma mostrou que 61% dos
+opcodes do 65816 eram dois: `LDA $09CE` (0xAD) e `BEQ` (0xF0) em 80:8103,
+o laço em que o jogo espera o NMI, cerca de 4,2 mil voltas por frame. O
+idle skip (A1) reconhecia o laço e não agia: 87,5% dos desvios tomados
+eram barrados porque havia um IRQ pendente, e em todos esses casos o IRQ
+estava mascarado pelo flag I (o jogo deixa um IRQ sem reconhecer atrás de
+SEI). Corrigido em `idle_skip_interrupt_due` (source/idle_skip.h): só barra
+o IRQ que a CPU iria atender. Depois: `ops=` 6.406 por frame (53% a menos),
+258 pulos por frame. Tempo no console ainda não medido; a sonda de tempo
+(`-DPROBE_CORE`, sem HIST) é a que vai para o console.
+
+O SPC700 continua em laço de espera sem pulo (`aidle=` 0, cerca de 10
+instruções por volta com CALL/RET: f0, e5, d0, 6f, 3f, 60, 65, 84, c4,
+fd). É o próximo a investigar, antes do E1: se o A2 passar a pegar esse
+laço, o E1 perde parte do motivo.
+
 ### E1. SPC700 em lotes de N linhas
 
 **Situação.** O SPC700 é chamado 262 vezes por frame para rodar cerca de 20

@@ -33,6 +33,7 @@ END_EXTERN_C
 #endif
 #include "../idle_skip.h"
 extern uint32 g_idleSkips;   // skips taken, read by the perf line (idle=)
+#include "probecore.h"
 
 uint8 TempAns8;
 uint16 TempAns16;
@@ -5619,6 +5620,15 @@ inline void CPUShutdown()
 // ones memmap.cpp marks (the SA-1 runs in lockstep with the loop).
 STATIC inline void __attribute__((always_inline)) CPUShutdown ()
 {
+#ifdef PROBE_CORE_HIST
+    g_probeCore.sdCalls++;
+    if (CPU.WaitAddress == NULL) g_probeCore.sdNoMark++;
+    else if (!idle_skip_hit((unsigned long)CPU_PC, (unsigned long)CPU.WaitAddress)) g_probeCore.sdFar++;
+    else if (idle_skip_interrupt_due((CPU.Flags & NMI_FLAG) != 0, (CPU.Flags & IRQ_PENDING_FLAG) != 0, CheckFlag (IRQ) != 0))
+    { g_probeCore.sdFlags++; g_probeCore.sdFlagsOr |= CPU.Flags; if (CPU.Flags & NMI_FLAG) g_probeCore.sdNmi++; else g_probeCore.sdIrqOpen++; }
+    else if (CPU.Flags & IRQ_PENDING_FLAG) { g_probeCore.sdIrqMasked++; g_probeCore.sdTaken++; }
+    else g_probeCore.sdTaken++;
+#endif
     if (idle_skip_hit((unsigned long)CPU_PC, (unsigned long)CPU.WaitAddress)
         && Settings.Shutdown
         && !idle_skip_interrupt_due((CPU.Flags & NMI_FLAG) != 0, (CPU.Flags & IRQ_PENDING_FLAG) != 0, CheckFlag (IRQ) != 0))
