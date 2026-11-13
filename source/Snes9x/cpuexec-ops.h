@@ -5621,7 +5621,7 @@ STATIC inline void __attribute__((always_inline)) CPUShutdown ()
 {
     if (idle_skip_hit((unsigned long)CPU_PC, (unsigned long)CPU.WaitAddress)
         && Settings.Shutdown
-        && !(CPU.Flags & (IRQ_PENDING_FLAG | NMI_FLAG)))
+        && !idle_skip_interrupt_due((CPU.Flags & NMI_FLAG) != 0, (CPU.Flags & IRQ_PENDING_FLAG) != 0, CheckFlag (IRQ) != 0))
     {
         CPU_Cycles = CPU.NextEvent;
         g_idleSkips++;

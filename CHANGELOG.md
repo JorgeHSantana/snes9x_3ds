@@ -3,6 +3,10 @@ Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
 
+### Performance
+
+- The idle-loop skip now also acts when an IRQ is pending behind the I flag. Megaman X3 (and the Zero Project hack) waits for its NMI in a two-instruction loop with an unacknowledged IRQ masked by SEI, and the skip refused to act for as long as the pending bit was set: in the dam scene that loop was 61% of the 65816 instructions of a frame (13.7k a frame, now 6.4k, counted in Azahar). An IRQ the CPU would actually take still blocks the skip, as does a due NMI. Console time not measured yet.
+
 ## Stable v2.7.1 (2026-11-12)
 ### Fixed
 - **The console froze whole, mostly on pausing or right after an effect tier changed**: a frame that splits its command list (the layer scratch image, glow) left the first piece in the CPU cache, and the GPU ran what the memory still held. The stall watchdog's first report from the console showed the main thread waiting for a GPU that never finished. The split now has the piece flushed.
