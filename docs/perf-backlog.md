@@ -8,6 +8,9 @@
 > dois frames ou flicker) e o resto de C2 (reconstrução das abas). O texto
 > abaixo é o plano original, mantido como registro do raciocínio.
 
+> **2026-11-13:** a seção E levanta as oportunidades do core para o Old
+> 3DS (nada medido ainda; começa pelo E0).
+
 Levantamento de 2026-11-05 (quatro auditorias de leitura: menu, core,
 renderização, plataforma). O que já entrou está no CHANGELOG (Unreleased) e
 no journal do mesmo dia. Este documento cobre o que FALTA, com a estratégia
@@ -365,6 +368,206 @@ fatia de 30% do syscore que o FLAC divide. Risco baixo, esforço pequeno.
 
 ---
 
+## E. Core no Old 3DS: levantamento de 2026-11-13
+
+Leitura de código e de disassembly (build release `-O2`, GCC 16.1), sem
+nenhuma mudança de código. **Nada aqui foi medido**: os ganhos são
+estimativas e o E0 existe para trocá-las por número. Um item por commit,
+como no resto deste documento.
+
+### Fatos (base para todos os itens)
+
+- Régua: Old mode, MMX3 Zero Project (MSU-1), represa, build 46a12c1:
+  `core=` 12,7 ms (dos quais `ppu=` 1,9 a 2,1), carga 107%, 124 draws
+  pulados de 300. Para a carga cair a 100% falta cerca de 1,2 ms.
+- `core=` mede só `S9xMainLoop` (`source/3dsimpl.cpp`, `coreTick0`): 65816 +
+  SPC700 + eventos de linha + DMA/HDMA + `ppu=`. O mixer do DSP roda em
+  outra thread (core 1, fatia do syscore) e não entra. `S9xSyncSpeed` é
+  vazio. É tempo de relógio: preempção da thread principal também conta.
+- Nessa cena `idle=` é cerca de 0,5 por frame e `aidle=0`: nem o skip do
+  65816 (A1) nem o do SPC700 (A2) atuam. O core roda cheio.
+- Conta de padeiro: 10,6 ms fora do PPU = 2,85 M de ciclos do ARM por frame
+  = cerca de 10,9 mil ciclos por linha do SNES (262 linhas). Uma linha tem
+  1364 master cycles: de 50 a 75 instruções do 65816 e cerca de 20 do
+  SPC700. O caminho rápido de uma instrução (`OpA5M1`, LDA dp) tem 28
+  instruções ARM mais 11 do laço. Ou cada instrução ARM custa uns 3 ciclos
+  (cache miss, salto indireto sem previsão), ou existe custo fixo por linha
+  que ninguém mediu. A leitura não separa as duas coisas.
+- Tamanho de código contra 16 KB de I-cache (4 vias, sem L2 no Old mode):
+  `cpuexec.o` 212.772 B em 564 funções (handlers de 24 a 600 B),
+  `S9xDoHBlankProcessing` 1.972 B, `S9xMainLoop` 1.680 B, `spc700.o`
+  23.256 B, `soundux.o` 33.773 B. A cada linha o fluxo alterna três regiões
+  de código: handlers do 65816, evento de linha, handlers do SPC700.
+- Laço do 65816 por opcode (`EXECUTE_ONE_OPCODE` em `cpuexec.cpp`, 20
+  cópias): `ldrb` do opcode, `ldr` do handler, `blx`, depois `ldr
+  CPU.Flags` + `cmp` + `bne`, `ldr CPU.NextEvent` + `cmp` + salto, `ldr
+  CPU.MemSpeed` + `add`. Registradores globais: r11 tabela de opcodes, r10
+  ciclos, r9 PC. O r8 é salvo no prólogo e está livre.
+- Laço do SPC700 por opcode (`S9xUpdateAPUTimer` em `apu.cpp`, 10 cópias):
+  11 instruções com 5 loads e 1 store, todo o estado em memória
+  (`APU.Cycles`, `IAPU.PC`), o byte do opcode lido duas vezes, a tabela
+  `APU.S9xAPUCycles` com 4 bytes por entrada (1 KB). Os handlers ficam em
+  outra unidade (`spc700.cpp`) e cada um recarrega os ponteiros de literal.
+- `S9xUpdateAPUTimer` roda em todo `HBLANK_END_EVENT` (262 vezes por frame)
+  e em todo acesso da CPU a $2140-$217F (`ppu.cpp`, leitura e escrita), que
+  sincroniza o SPC700 até o ciclo atual antes de ler ou escrever a porta.
+- Escritas do SPC700 no DSP não têm carimbo de tempo: entram numa fila
+  (`S9xSetAPUDSPLater`) que o mixer esvazia a cada bloco de áudio.
+
+### E0. Medir antes de mexer (obrigatório, primeiro)
+
+**Estratégia.** Build de sonda (`EXTRA_DEFINES=-DPROBE_CORE`, com
+`make clean` antes e depois) que acrescenta à linha `[perf][frame]`:
+
+- `apu=` us por frame dentro de `S9xUpdateAPUTimer` (par de
+  `svcGetSystemTick` dentro da função, cobre todos os chamadores);
+- `hb=` us por frame em `S9xDoHBlankProcessing`, descontados `apu=` e
+  `ppu=`; `dma=` us por frame em `S9xDoDMA` e `S9xDoHDMA`;
+- contadores por frame: `ops=` (opcodes do 65816), `aops=` (opcodes do
+  SPC700), `acalls=` (chamadas de `S9xUpdateAPUTimer`), `slow=` (acessos
+  que caem em `S9xGetByteFromRegister`/`S9xSetByteToRegister`);
+- `svc=` custo de um par de ticks, calibrado uma vez no boot com mil pares
+  seguidos, para descontar a própria sonda (são mais de 500 pares por
+  frame).
+
+Segunda sonda, só para o Azahar (contagem é lógica, não depende de tempo):
+histograma de opcodes do 65816 (por byte e por tabela M/X) e do SPC700 ao
+longo de 600 frames da cena, escrito no log na saída. Cruzar com os
+tamanhos de `nm -S --size-sort build/Snes9x/cpuexec.o` para saber quantos
+bytes somam os handlers que cobrem 95% das execuções.
+
+**Como ler.** `ops=` × custo plausível por opcode contra o tempo que sobra
+depois de `apu=`, `hb=`, `dma=` e `ppu=` diz se o gasto é por instrução ou
+por linha. O histograma diz se o conjunto quente cabe em 16 KB (se couber
+folgado, o E2 vale pouco).
+
+**Risco.** Nenhum para o produto: é build de sonda, não vai para nightly.
+
+### E1. SPC700 em lotes de N linhas
+
+**Situação.** O SPC700 é chamado 262 vezes por frame para rodar cerca de 20
+opcodes de cada vez. Cada chamada troca a região de código quente e os dados
+(RAM do APU, tabelas) e depois volta para o 65816.
+
+**Estratégia.** No `HBLANK_END_EVENT`, chamar `S9xUpdateAPUTimer` só quando
+`(CPU.V_Counter & (N-1)) == 0`, com N = 4 e N = 8 para comparar. O rebase
+por linha (`CPU.Cycles`, `APU.Cycles`, `IAPU.NextAPUTimerPos`) continua em
+toda linha. Os acessos da CPU às portas já sincronizam até o ciclo exato,
+então a conversa CPU/APU não muda; os timers do SPC700 avançam dentro do
+próprio laço. Sem estado novo (a decisão sai do `V_Counter`), o que mantém
+savestate e rewind como estão.
+
+**Cuidados.** (1) `IAPU.NextAPUTimerPosDiv10000 = NextAPUTimerPos / 1000`
+passa a ver valores negativos e a divisão do C trunca para zero: usar piso,
+senão o tick do timer anda um ciclo. (2) Com o idle skip do SPC700 ativo
+(`aidle>0`) o salto vai até o limite da chamada, que muda com N: o estado
+final é equivalente, não necessariamente idêntico. (3) O atraso máximo das
+escritas no DSP sobe de 1 para N linhas emuladas (0,5 ms com N = 8), bem
+abaixo do bloco do mixer.
+
+**Validação.** Cenas douradas idênticas no Azahar (o vídeo não pode mudar);
+contagem de escritas no DSP e hash do estado do APU iguais à base depois de
+600 frames numa cena com `aidle=0`; ouvir MMX3 (MSU-1 e normal), um jogo
+com A2 ativo e um jogo de handshake pesado (Star Ocean ou Tales). No
+console: `apu=` e `core=` contra a base.
+
+**Ganho / risco.** Se a hipótese de cache estiver certa, de 0,3 a 1 ms; se
+estiver errada, perto de zero, e isso também é resposta. Esforço pequeno,
+risco médio (áudio). Por isso vem logo depois do E0.
+
+### E2. Conjunto quente contíguo e caminho lento fora de linha
+
+**Situação.** Todo handler que acessa memória carrega, inline, o caminho
+lento de registrador (`CpuSaveFastRegisters`, chamada, `CpuLoadFastRegisters`):
+cerca de 50 dos 164 B de `OpA5M1` (com o literal pool), bem mais nos indiretos (`OpB7M1` 600 B, `OpB1M1`
+512 B). Os handlers ficam na ordem do fonte, quentes misturados com frios.
+
+**Estratégia.** Duas partes, commits separados:
+
+1. Caminho lento em funções `noinline` do próprio `cpuexec.cpp` (uma para
+   cada acesso: byte e word, leitura e escrita), chamadas pelo ramo
+   improvável de `CpuGetByte`/`CpuGetWord`/`CpuSetByte`/`CpuSetWord` em
+   `cpuexec-ops.h`. **Não usar o atributo `cold`**: ele compila a função
+   como `-Os`, e o GCC 16.1 em `-Os` perde escrita em registrador global
+   (A3). Conferir no disassembly que r9/r10 são recarregados na volta.
+2. Com o histograma do E0, marcar os handlers que cobrem 95% das execuções,
+   mais `S9xMainLoop`, `S9xDoHBlankProcessingWithRegisters`,
+   `S9xDoHBlankProcessing` e `S9xUpdateAPUTimer`, com
+   `__attribute__((section(".text.core_hot")))`. O `3dsx.ld` usa
+   `*(.text.*)`, então funções com a mesma seção ficam contíguas dentro de
+   cada objeto, sem mexer no linker script. Conferir no `.map` o tamanho e
+   a contiguidade de cada bloco. Não usar o atributo `hot` (muda a
+   otimização da função).
+
+**Validação.** Bit-idêntico por construção: cenas douradas do Azahar,
+testes de host, `size` de `cpuexec.o` antes e depois. Console: `core=`.
+
+**Ganho / risco.** Depende do E0: grande se o conjunto quente hoje passa de
+16 KB, pequeno se já cabe. Esforço médio, risco baixo.
+
+### E3. Base do estado em registrador (r8)
+
+**Situação.** Cada handler abre carregando o endereço do struct da CPU do
+literal pool (e o de `Memory` para `BlockIsRAM`): um ou dois loads por
+opcode, e o literal pool de cada handler quente ocupa linha do D-cache.
+
+**Estratégia.** `register ... asm("r8")` com o endereço do struct que já
+junta `CPU`/`ICPU`/`Registers`, carregado em `CpuLoadFastRegisters`.
+Constante, e r8 é callee-saved: não precisa de save/load em chamada para
+fora. `BlockIsRAM` vira ponteiro dentro desse struct, como já são
+`MemoryMap` e `MemorySpeed`.
+
+**Ganho / risco.** 1 a 2 instruções por opcode de umas 40: de 0,1 a 0,3 ms.
+Risco médio: é mais um registrador global num compilador que já errou com
+eles; conferir o disassembly dos desvios (`OpF0`, `OpD0`, `Op80`) e rodar o
+Azahar. Fazer depois do E2, que mexe nos mesmos arquivos.
+
+### E4. Um limite só no laço principal
+
+**Situação.** Depois de cada opcode o laço testa `CPU.Flags` e, em
+seguida, `CPU.NextEvent`: dois loads, dois compares, dois saltos.
+
+**Estratégia.** Um campo `CPU.EventLimit` = `NextEvent` quando `Flags` é
+zero e um valor que sempre dispara quando não é; o laço compara só com ele
+e o caminho de evento decide entre `S9xHandleFlags` e o HBlank. O campo é
+recalculado em `S9xReschedule` e em todo ponto que escreve `CPU.Flags`
+(levantar todos com grep antes de começar; um ponto esquecido é um NMI ou
+IRQ perdido).
+
+**Ganho / risco.** 3 instruções por opcode: cerca de 0,2 ms. Risco médio,
+falha silenciosa (interrupção atrasada). Só depois de E1 a E3.
+
+### E5. Custo fixo do laço do SPC700
+
+**Estratégia.** No `EXECUTE_ONE_APU_OPCODE`: ler o byte do opcode uma vez;
+`S9xAPUCycles` em `uint8` (256 B em vez de 1 KB) se os valores couberem.
+Manter `APU.Cycles` e `IAPU.PC` em registrador exigiria levar os handlers
+do SPC700 para a mesma unidade e usar registrador global: não vale antes
+de o `apu=` do E0 mostrar que o SPC700 passa de 2 ms.
+
+**Ganho / risco.** Cerca de 0,1 ms. Risco baixo, bit-idêntico.
+
+### E6. Ganchos do idle skip em todo acesso (micro)
+
+Toda leitura faz `ldrb BlockIsRAM[bloco]` e um store condicional em
+`CPU.WaitAddress`; toda escrita faz `CPU.WaitAddress = NULL`. São 2 a 4
+instruções das 28 do caminho rápido, pagas mesmo em jogo sem idle skip.
+Possível: só armar os ganchos quando o A1 está ligado para o jogo (segunda
+tabela de opcodes sem eles). Dobra o código, o que briga com o E2. Deixar
+para o fim e só se o E0 mostrar que o gasto é por instrução.
+
+### Não fazer agora
+
+- **Despacho encadeado por tail call (`musttail`)**: economiza o retorno,
+  mas põe o teste de evento em 564 handlers e apoia tudo num recurso novo
+  do GCC junto com registradores globais. Só com o E0 provando que o
+  retorno pesa.
+- **SPC700 em outra thread**: o syscore do Old 3DS já é disputado pelo
+  mixer e pelo FLAC, e a sincronia de portas viraria trava.
+- **`-Os`, `-flto`, `-ffast-math`**: ver A3 e a lista abaixo.
+
+---
+
 ## O que NÃO fazer (verificado)
 
 - Divisão por 1000 no timer da APU: `-O3` já gera multiplicação; zero
@@ -386,3 +589,7 @@ fatia de 30% do syscore que o FLAC divide. Risco baixo, esforço pequeno.
 4. A1, a única mudança com chance de alterar a sensação de velocidade, com
    toggle por jogo e começando OFF.
 5. O resto conforme a vontade.
+
+**Core no Old 3DS (2026-11-13):** E0 (medir) primeiro e sozinho; depois E1,
+E2 parte 1, E2 parte 2, E3, E4, E5, nessa ordem, reavaliando a cada número
+do console. E6 só se o E0 apontar custo por instrução.
