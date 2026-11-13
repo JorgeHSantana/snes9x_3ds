@@ -44,6 +44,14 @@ Upstream (matbo87) history ends at v1.61 — see CHANGELOG.md. The fork's own li
   appearance-only invalidation, snapshot workspace (#78, #79); crash
   fixes (post-update exit, caching indicator on an empty list); dead
   ground-sprite code and the redundant Mode 7 Depth Mode removed.
+* **Stable v2.7.1 (2026-11-12)** — Follow-up to the performance release,
+  again from console logs. Fix for a whole-console freeze (a split
+  command list stayed in the CPU cache), found by a new stall watchdog;
+  the log of a frozen session now survives the restart. Layer scratch
+  image (a background drawn many times a frame is drawn once and reused),
+  shadow and glow draws through one identity index list, cache flush
+  calls only for what a submitted draw reads, built with -O2. Blurred
+  layers with split depths no longer share one index range.
 * **Stable v2.7 (2026-11-10)** — The performance release, driven by the
   console's own numbers (the `[perf][frame]` line gained `gpu=`, `flush=`,
   `gpuwait=`, `draws=`, `verts=`, `culled=`; the GPU Cost Probe switches

@@ -2,6 +2,8 @@
 Notable changes to this project will be documented in this file.
 
 ## Unreleased (nightly)
+
+## Stable v2.7.1 (2026-11-12)
 ### Fixed
 - **The console froze whole, mostly on pausing or right after an effect tier changed**: a frame that splits its command list (the layer scratch image, glow) left the first piece in the CPU cache, and the GPU ran what the memory still held. The stall watchdog's first report from the console showed the main thread waiting for a GPU that never finished. The split now has the piece flushed.
 ### Diagnostics
@@ -11,7 +13,7 @@ Notable changes to this project will be documented in this file.
 ### Performance
 - **Fewer cache flush calls a frame**: before the GPU runs a frame, what the CPU wrote for it has to leave the CPU cache, and each flush is a system call that costs about the same whatever the size (around 40 us in Old 3DS mode). Every vertex list was flushed whole three times a frame, and the index and scratch lists twice, written or not: 21 calls on a drawn frame, 12 on a frame that drew nothing. Each buffer is now flushed once, only the part a draw reads, and a frame with no draw flushes nothing: 7 to 13 calls on a drawn frame. The mid-frame submissions of the glow now flush their vertices too (they did not). The perf line gains `fcalls=`.
 - **Shadow and glow draws stop copying indices**: every shadow caster and glow source was drawn through a list of indices copied on the spot and flushed from the CPU cache with a system call, per draw and per eye (about 13 calls a drawn frame in the Mega Man X3 Zero Project dam). They now point into one fixed list written once at start. Same picture; the console numbers are pending.
-- **Built with -O2**: on the console it ran better than -O3. `make 3dsx CORE_OPT=-Os` builds the SNES core at another level for comparisons.
+- **Built with -O2**: on the console it ran better than -O3. `make 3dsx CORE_OPT=-O3` builds the SNES core at another level for comparisons. Not `-Os`: GCC 16.1 loses the write to the CPU loop's pinned PC register there and the console crashes at the first taken branch.
 - **GPU Cost Probe**: two more steps (60 s in all) that split what a tile costs the GPU on plain stereo: "tiles without fill" (the tile and sprite draws scissored to one pixel) and "tiles vertex shader only" (the same draws without the geometry shader). Fill, geometry shader and vertex shader come out by subtraction; for those 10 s. A last step (65 s in all) switches the layer scratch images off
 ### Fixes
 - **Blurred layers with split depths**: every pass of a tiled layer (each eye's base pass and its blur ghosts) wrote its culled index list into the same range of the index buffer, and the GPU only reads it when the frame's command list runs, so all of them drew with the last pass's list. Each pass now has its own range. No difference in the scenes tested (the lists agreed there); it could drop or repeat tiles at the screen edge where the passes' parallax differed

@@ -322,7 +322,7 @@ else
 DEPENDS	:=	$(OFILES:.o=.d)
 
 # docs/perf-backlog.md A3: CORE_OPT=-Os compiles the SNES core (source/Snes9x)
-# at that level while the rest keeps OPT_FLAGS, e.g. make 3dsx CORE_OPT=-Os
+# at that level while the rest keeps OPT_FLAGS, e.g. make 3dsx CORE_OPT=-O3
 ifneq ($(strip $(CORE_OPT)),)
 $(filter Snes9x/%,$(OFILES_SOURCES)): CXXFLAGS := $(patsubst -O%,$(CORE_OPT),$(CXXFLAGS))
 endif
