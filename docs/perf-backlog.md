@@ -462,6 +462,35 @@ instruções por volta com CALL/RET: f0, e5, d0, 6f, 3f, 60, 65, 84, c4,
 fd). É o próximo a investigar, antes do E1: se o A2 passar a pegar esse
 laço, o E1 perde parte do motivo.
 
+**Console (2026-11-14, nightly e580574, Old mode, represa do MMX3 ZP,
+log em #80, log de sessão por console).** `core=` médio 11,5 ms em 17
+janelas (10,3 a 12,9), contra 12,7 ms da base f5f2ac3 (12,3 a 13,2): cerca
+de 1,2 ms a menos, 9%. Carga média perto de 100% (93 a 108), contra 106%.
+`idle=` foi de cerca de 150 para cerca de 220 por frame; `skipped-draws`
+não mudou (cerca de 130 de 300). O trecho jogado não é idêntico ao da
+base, então o número vale como ordem de grandeza.
+
+**O laço do SPC700 (Azahar, mesma sonda, histograma por endereço).** 93%
+dos opcodes do SPC700 são 12 instruções do laço principal do driver de som
+da Capcom, cerca de 345 voltas por frame:
+
+    02f9 CALL $046a      046a MOV A,$00F4   0470 BNE $046a   048c RET
+    02fc MOV A,$00FD     046d CMP A,$00F4   0472 MOV Y,A
+    02ff CLRC            0300 ADC A,$B1     0473 BEQ $048c
+    0302 MOV $B1,A       0304 BEQ $02f9
+
+Lê a porta 0 (sem comando), lê o timer 0 (sem tique), soma em `$B1` e
+grava o mesmo valor. O A2 não pega por dois motivos: o desvio volta para o
+CALL, que não é a instrução de leitura marcada, e uma volta dura cerca de
+40 ciclos do SPC contra 65 por linha, então mesmo pulando sobraria uma
+volta por chamada de `S9xUpdateAPUTimer` (265 por frame). O que resolve é
+dormir: provar que a volta é um ponto fixo (mesmo desvio tomado duas vezes
+seguidas com os mesmos registradores, nenhuma escrita que mude RAM,
+nenhuma escrita em $F0-$FF, nenhuma leitura do DSP, nenhum timer lido
+diferente de zero) e não executar mais nada até um tique de timer ou uma
+escrita da CPU nas portas, que já marcam `IAPU.APUExecuting = TRUE`. Vira
+o item E1a, antes do E1.
+
 ### E1. SPC700 em lotes de N linhas
 
 **Situação.** O SPC700 é chamado 262 vezes por frame para rodar cerca de 20

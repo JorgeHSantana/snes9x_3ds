@@ -42,6 +42,7 @@ struct SProbeCore
     u32 sdNmi, sdIrqOpen;    // sdFlags split: NMI due, IRQ pending with I clear
     u32 sdIrqMasked;         // skipped with an IRQ pending behind the I flag (part of sdTaken)
     u32 beqHist[4096];       // by PC offset & 0xFFF
+    u32 apuPcHist[65536];    // SPC700 opcodes by address, cumulative
 #endif
 };
 

@@ -1001,6 +1001,22 @@ void probeCoreReport(unsigned frames)
 		(unsigned)g_probeCore.sdFlags, (unsigned)g_probeCore.sdFlagsOr, (unsigned)g_probeCore.sdNmi, (unsigned)g_probeCore.sdIrqOpen, (unsigned)g_probeCore.sdTaken, (unsigned)g_probeCore.sdIrqMasked);
 	probeCoreLogTop("cpu", &g_probeCore.cpuHist[0][0], 5 * 256, 64);
 	probeCoreLogTop("apu", g_probeCore.apuHist, 256, 40);
+	// the SPC700 code that runs at least a tenth as often as its hottest
+	// address, with the bytes of each instruction start
+	{
+		u32 top = 0;
+		for (int i = 0; i < 65536; i++) if (g_probeCore.apuPcHist[i] > top) top = g_probeCore.apuPcHist[i];
+		int shown = 0;
+		for (int i = 0; i < 65536 && shown < 48; i++)
+			if (top && g_probeCore.apuPcHist[i] >= top / 10)
+			{
+				log3dsWrite("[perf][hist] spc %04x x%u: %02x %02x %02x", i, (unsigned)g_probeCore.apuPcHist[i],
+					IAPU.RAM[i], IAPU.RAM[(i + 1) & 0xFFFF], IAPU.RAM[(i + 2) & 0xFFFF]);
+				shown++;
+			}
+		log3dsWrite("[perf][hist] spc wait marks %04x %04x counter %d", (unsigned)(IAPU.WaitAddress1 ? IAPU.WaitAddress1 - IAPU.RAM : 0),
+			(unsigned)(IAPU.WaitAddress2 ? IAPU.WaitAddress2 - IAPU.RAM : 0), (int)IAPU.WaitCounter);
+	}
 	g_probeCore.ops = g_probeCore.aops = 0;
 #endif
 	g_probeCore.apuTicks = g_probeCore.hbTicks = g_probeCore.hdmaTicks = g_probeCore.dmaTicks = 0;
@@ -1031,7 +1047,7 @@ void S9xUpdateAPUTimer (void)
 #endif
 
 #ifdef PROBE_CORE_HIST
-		#define PROBE_APU_HIST g_probeCore.aops++; g_probeCore.apuHist[*IAPU.PC]++;
+		#define PROBE_APU_HIST g_probeCore.aops++; g_probeCore.apuHist[*IAPU.PC]++; g_probeCore.apuPcHist[(IAPU.PC - IAPU.RAM) & 0xFFFF]++;
 #else
 		#define PROBE_APU_HIST
 #endif
