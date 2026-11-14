@@ -520,6 +520,21 @@ imagem (captura falhou, tela bloqueada), som de ouvido, tempo no console.
 Por que a fase 1 só cai pela metade: com música o driver trabalha a cada
 tique e o sono recomeça depois de cada um; o resto é trabalho de verdade.
 
+Console (2026-11-14, nightly 742ed94 contra e580574, New 3DS em modo Old,
+represa do MMX3 ZP, média das janelas de 300 frames sem a primeira):
+
+| | e580574 | 742ed94 |
+|---|---|---|
+| `core=` | 11,5 ms | 9,6 ms |
+| carga média | 100% | 95% |
+| `skipped-draws` por 300 | 132 | 109 |
+| `over-budget` por 300 | 168 | 181 |
+| `draw=` | 3,9 ms | 4,5 ms |
+
+`asleep=2` em todas as janelas. O ganho no core (1,8 ms) é maior que o
+palpite de 1 ms. `draw=` sobe porque menos frames pulam o desenho; os frames
+acima do orçamento não caem: o frame desenhado continua acima de 16,7 ms.
+
 ### E1. SPC700 em lotes de N linhas
 
 **Situação.** O SPC700 é chamado 262 vezes por frame para rodar cerca de 20
