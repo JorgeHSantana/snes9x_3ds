@@ -22,6 +22,7 @@ static INLINE uint8 apu_get_reg (uint8 Address)
 			return (IAPU.RAM[Address]);
 
 		case 0xf3:	// rw DSPDATA
+			APU_SLEEP_NOTE_CHANGE();	// the DSP moves on its own
 			return (S9xGetAPUDSP());
 
 		case 0xf4:	// r- CPUI0
@@ -51,6 +52,7 @@ static INLINE uint8 apu_get_reg (uint8 Address)
 			IAPU.WaitAddress1 = IAPU.PC;
 		#endif
 			uint8 t = IAPU.RAM[Address] & 0xF;
+			APU_SLEEP_NOTE_WRITE(t, 0);
 			IAPU.RAM[Address] = 0;
 			return (t);
 	}
@@ -67,14 +69,17 @@ static INLINE void apu_set_reg (uint8 byte, uint8 Address)
 			return;
 
 		case 0xf1:	// -w CONTROL
+			APU_SLEEP_NOTE_CHANGE();
 			S9xSetAPUControl(byte);
 			return;
 
 		case 0xf2:	// rw DSPADDR
+			APU_SLEEP_NOTE_WRITE(IAPU.RAM[Address], byte);
 			IAPU.RAM[Address] = byte;
 			return;
 
 		case 0xf3:	// rw DSPDATA
+			APU_SLEEP_NOTE_CHANGE();
 			S9xSetAPUDSPLater(byte);
 			return;
 
@@ -82,17 +87,20 @@ static INLINE void apu_set_reg (uint8 byte, uint8 Address)
 		case 0xf5:	// -w CPUO1
 		case 0xf6:	// -w CPUO2
 		case 0xf7:	// -w CPUO3
+			APU_SLEEP_NOTE_WRITE(APU.OutPorts[Address - 0xf4], byte);
 			APU.OutPorts[Address - 0xf4] = byte;
 			return;
 
 		case 0xf8:	// rw - Normal RAM
 		case 0xf9:	// rw - Normal RAM
+			APU_SLEEP_NOTE_WRITE(IAPU.RAM[Address], byte);
 			IAPU.RAM[Address] = byte;
 			return;
 
 		case 0xfa:	// -w T0TARGET
 		case 0xfb:	// -w T1TARGET
 		case 0xfc:	// -w T2TARGET
+			APU_SLEEP_NOTE_CHANGE();
 			IAPU.RAM[Address] = byte;
 			if (byte == 0)
 				APU.TimerTarget[Address - 0xfa] = 0x100;
@@ -120,7 +128,10 @@ INLINE void S9xAPUSetByteZ (uint8 byte, uint8 Address)
     if (Address >= 0xf0 && IAPU.DirectPage == IAPU.RAM)
 		apu_set_reg(byte, Address);
     else
+    {
+		APU_SLEEP_NOTE_WRITE(IAPU.DirectPage[Address], byte);
 		IAPU.DirectPage[Address] = byte;
+    }
 }
 
 INLINE uint8 S9xAPUGetByte (uint32 Address)
@@ -139,9 +150,13 @@ INLINE void S9xAPUSetByte (uint8 byte, uint32 Address)
 		apu_set_reg(byte, Address & 0xff);
 	else
 	if (Address < 0xffc0)
+	{
+	    APU_SLEEP_NOTE_WRITE(IAPU.RAM[Address], byte);
 	    IAPU.RAM[Address] = byte;
+	}
 	else
 	{
+	    APU_SLEEP_NOTE_CHANGE();
 	    APU.ExtraRAM[Address - 0xffc0] = byte;
 	    if (!APU.ShowROM)
 		IAPU.RAM[Address] = byte;

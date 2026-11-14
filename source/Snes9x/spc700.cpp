@@ -50,18 +50,64 @@ long Int32 = 0;
 #ifdef SPC700_SHUTDOWN
 // see apu.h: the skip lands one cycle past the run limit so the execute
 // loop's "APU.Cycles > nextEventCycles" breaks out
+//
+// Every taken branch is also a visit of the fixed-point detector
+// (apu_sleep.h). A branch onto a wait mark belongs to the skip above and
+// counts as a change; a dirty visit only clears the flag.
+static void __attribute__((noinline)) apuSleepVisit ()
+{
+	SApuSleepSig sig;
+	sig.pc = IAPU.PC;
+	sig.directPage = IAPU.DirectPage;
+	sig.wait1 = IAPU.WaitAddress1;
+	sig.wait2 = IAPU.WaitAddress2;
+	sig.waitCounter = IAPU.WaitCounter;
+	sig.ya = APURegisters.YA.W;
+	sig.x = APURegisters.X;
+	sig.s = APURegisters.S;
+	sig.p = APURegisters.P & ~(Zero | Negative | Carry | Overflow);   // those four live in IAPU._*
+	sig.carry = IAPU._Carry;
+	sig.zero = IAPU._Zero;
+	sig.overflow = IAPU._Overflow;
+	int32 period = apu_sleep_visit (&g_apuSleep.det, &sig, APU.Cycles);
+#ifdef PROBE_NO_APU_SLEEP
+	period = 0;   // A/B base: detector running, never asleep
+#endif
+	if (period > 0 && !g_apuSleep.inhibit)
+	{
+		// leave the opcode loop the way the skip does; S9xUpdateAPUTimer
+		// puts the real counter back
+		g_apuSleep.period = period;
+		g_apuSleep.cycles = APU.Cycles;
+		g_apuSleep.state = APU_SLEEP_ENTERING;
+		if (APU.Cycles <= g_apuNextEvent) APU.Cycles = g_apuNextEvent + 1;
+		g_apuSleeps++;
+	}
+}
+
 #define APUShutdown() \
-if (Settings.Shutdown && (IAPU.PC == IAPU.WaitAddress1 || IAPU.PC == IAPU.WaitAddress2)) \
+if (Settings.Shutdown) \
 { \
-	if (IAPU.WaitCounter == 0) \
+	if (IAPU.PC == IAPU.WaitAddress1 || IAPU.PC == IAPU.WaitAddress2) \
 	{ \
-		if (APU.Cycles <= g_apuNextEvent) { APU.Cycles = g_apuNextEvent + 1; g_apuSkips++; } \
+		APU_SLEEP_NOTE_CHANGE(); \
+		if (IAPU.WaitCounter == 0) \
+		{ \
+			if (APU.Cycles <= g_apuNextEvent) { APU.Cycles = g_apuNextEvent + 1; g_apuSkips++; } \
+		} \
+		else \
+		if (IAPU.WaitCounter >= 2) \
+			IAPU.WaitCounter = 1; \
+		else \
+			IAPU.WaitCounter--; \
+	} \
+	else if (g_apuSleep.det.dirty) \
+	{ \
+		g_apuSleep.det.dirty = 0; \
+		g_apuSleep.det.have = 0; \
 	} \
 	else \
-	if (IAPU.WaitCounter >= 2) \
-		IAPU.WaitCounter = 1; \
-	else \
-		IAPU.WaitCounter--; \
+		apuSleepVisit (); \
 }
 #else
 #define APUShutdown()
@@ -158,6 +204,7 @@ APUSetZN8 ((uint8) Int16);
     APUSetZN8 (b);
 
 #define Push(b)\
+    APU_SLEEP_NOTE_WRITE(*(IAPU.RAM + 0x100 + APURegisters.S), (b));\
     *(IAPU.RAM + 0x100 + APURegisters.S) = b;\
     APURegisters.S--;
 
@@ -168,9 +215,11 @@ APUSetZN8 ((uint8) Int16);
 #ifdef FAST_LSB_WORD_ACCESS
 #define PushW(w)\
     if(APURegisters.S==0){ \
+        APU_SLEEP_NOTE_CHANGE();\
         *(IAPU.RAM + 0x1ff) = (w);\
         *(IAPU.RAM + 0x100) = ((w) >> 8);\
     } else { \
+        if (*(uint16 *) (IAPU.RAM + 0xff + APURegisters.S) != (uint16) (w)) APU_SLEEP_NOTE_CHANGE();\
         *(uint16 *) (IAPU.RAM + 0xff + APURegisters.S) = (w);\
     } \
     APURegisters.S -= 2;
@@ -183,6 +232,7 @@ APUSetZN8 ((uint8) Int16);
     }
 #else
 #define PushW(w)\
+    APU_SLEEP_NOTE_CHANGE();\
     *(IAPU.RAM + 0x100 + APURegisters.S--) = ((w) >> 8);\
     *(IAPU.RAM + 0x100 + APURegisters.S--) = (w);
 #define PopW(w)\

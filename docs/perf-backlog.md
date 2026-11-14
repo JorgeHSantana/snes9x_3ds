@@ -491,6 +491,35 @@ diferente de zero) e não executar mais nada até um tique de timer ou uma
 escrita da CPU nas portas, que já marcam `IAPU.APUExecuting = TRUE`. Vira
 o item E1a, antes do E1.
 
+### E1a. SPC700 dorme num ponto fixo provado (feito, 2026-11-14)
+
+Implementado em `source/apu_sleep.h` (lógica pura, `tests/test_apu_sleep.cpp`)
+e ligado em `spc700.cpp`, `apumem.h`, `apu.cpp`, `ppu.cpp`, `cpuexec.cpp` e
+`snapshot.cpp`. Todo desvio tomado registra a assinatura completa dos
+registradores e o ciclo; toda mudança (escrita que altera um byte de RAM ou
+uma porta de saída, qualquer outra escrita em registrador, leitura do DSP,
+leitura de timer que devolve não zero, tique de timer, escrita da CPU em
+$2140-$2143, acerto do skip antigo) marca `dirty`. Voltar à mesma assinatura
+sem `dirty` prova o período. Dormindo, `S9xUpdateAPUTimer` só avança os
+timers; um passo que mudaria $FD-$FF ou uma escrita da CPU numa porta acorda
+antes, avançando o contador por períodos inteiros. Fora de `SAPU`/`SIAPU`:
+o formato do save state não muda.
+
+Contagens no Azahar (`-DPROBE_CORE_HIST`), opcodes do SPC700 por frame:
+
+| cena | sem dormir | dormindo | sonos por frame |
+|---|---|---|---|
+| `mmx3zp-dam-light` | 4.441 | 383 | 2 |
+| `mmx3-glow` (fase 1, música) | 4.330 | cerca de 2.280 | 2 |
+| `alttp-transition` (N-SPC, skip antigo) | 3.343 | 3.343 | 0 |
+
+Equivalência: a sonda grava um hash da RAM do SPC700 e das portas de saída a
+cada relatório; contra a base `-DPROBE_NO_APU_SLEEP` o hash é igual em todos
+os relatórios das três cenas, e os opcodes do 65816 também. Não conferido:
+imagem (captura falhou, tela bloqueada), som de ouvido, tempo no console.
+Por que a fase 1 só cai pela metade: com música o driver trabalha a cada
+tique e o sono recomeça depois de cada um; o resto é trabalho de verdade.
+
 ### E1. SPC700 em lotes de N linhas
 
 **Situação.** O SPC700 é chamado 262 vezes por frame para rodar cerca de 20

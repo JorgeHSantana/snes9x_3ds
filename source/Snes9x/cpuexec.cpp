@@ -505,12 +505,17 @@ void S9xDoHBlankProcessing ()
 			if (IAPU.APUExecuting)
 			{
 				APU.Cycles -= Settings.H_Max;
+				// the detector's anchor is a cycle too (unsigned: a stale one may wrap)
+				g_apuSleep.det.anchorCycles = (int32) ((uint32) g_apuSleep.det.anchorCycles - (uint32) Settings.H_Max);
 		#ifdef MK_APU
 				S9xCatchupCount();
 		#endif
 			}
 			else
+			{
 				APU.Cycles = 0;
+				S9xAPUSleepReset ();
+			}
 
 			CPU.NextEvent = -1;
 			ICPU.Scanline++;

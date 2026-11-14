@@ -15,6 +15,32 @@
 extern int32 g_apuNextEvent;   // S9xUpdateAPUTimer's current run limit
 extern uint32 g_apuSkips;      // skips taken, perf line aidle=
 
+// SPC700 sleep on a proven fixed point: see apu_sleep.h for the proof. While
+// asleep APU.Cycles stays at the anchor (it is still rebased every line with
+// the rest) and S9xUpdateAPUTimer only steps the timers; a timer step that
+// would change $FD-$FF, or a CPU write to $2140-$2143, wakes it first.
+// Kept out of SAPU/SIAPU so the snapshot format does not change: a save
+// moves the counter forward (S9xAPUSleepSync), a load starts over.
+#include "apu_sleep.h"
+
+enum { APU_SLEEP_AWAKE = 0, APU_SLEEP_ASLEEP = 1, APU_SLEEP_ENTERING = 2 };
+
+struct SApuSleep
+{
+    SApuSleepDetector det;
+    int32  period;     // cycles of one pass
+    int32  cycles;     // ENTERING: the real APU.Cycles, while the opcode loop is being left
+    uint8  state;
+    uint8  inhibit;    // run to the limit without going back to sleep
+};
+
+extern SApuSleep g_apuSleep;
+extern uint32 g_apuSleeps;     // sleeps entered, perf line asleep=
+
+// a write of `now` over `old`: only a change can make the next pass differ
+#define APU_SLEEP_NOTE_WRITE(old, now) (g_apuSleep.det.dirty |= (uint8) ((old) ^ (now)))
+#define APU_SLEEP_NOTE_CHANGE() (g_apuSleep.det.dirty = 1)
+
 #include "spc700.h"
 
 
@@ -131,6 +157,9 @@ void S9xSetAPUDSPReplay ();
 uint8 S9xGetAPUDSP ();
 void S9xSetAPUTimer (uint16 Address, uint8 byte);
 void S9xUpdateAPUTimer (void);
+void S9xAPUSleepReset (void);       // reset, snapshot load
+void S9xAPUSleepSync (void);        // before a snapshot save: counter up to the CPU's
+void S9xAPUSleepPortWrite (void);   // CPU write to $2140-$2143, after S9xUpdateAPUTimer and before the byte lands
 bool8 S9xInitSound (int quality, bool8 stereo, int buffer_size);
 void S9xOpenCloseSoundTracingFile (bool8);
 void S9xPrintAPUState ();

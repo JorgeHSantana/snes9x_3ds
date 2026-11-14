@@ -96,6 +96,7 @@ void S9xResetAPU ()
     S9xAPUUnpackStatus ();
     APURegisters.PC = 0;
     IAPU.APUExecuting = Settings.APUEnabled;
+    S9xAPUSleepReset ();
 #ifdef SPC700_SHUTDOWN
     IAPU.WaitAddress1 = NULL;
     IAPU.WaitAddress2 = NULL;
@@ -898,6 +899,7 @@ inline void S9xIncrementAPUTimers()
 		if (APU.Timer [2] >= APU.TimerTarget [2])
 		{
 			IAPU.RAM [0xff] = (IAPU.RAM [0xff] + 1) & 0xf;
+			APU_SLEEP_NOTE_CHANGE();
 			APU.Timer [2] = 0;
 		#ifdef SPC700_SHUTDOWN		
 			IAPU.WaitCounter++;
@@ -916,6 +918,7 @@ inline void S9xIncrementAPUTimers()
 			if (APU.Timer [0] >= APU.TimerTarget [0])
 			{
 				IAPU.RAM [0xfd] = (IAPU.RAM [0xfd] + 1) & 0xf;
+				APU_SLEEP_NOTE_CHANGE();
 				APU.Timer [0] = 0;
 			#ifdef SPC700_SHUTDOWN		
 				IAPU.WaitCounter++;
@@ -930,6 +933,7 @@ inline void S9xIncrementAPUTimers()
 			if (APU.Timer [1] >= APU.TimerTarget [1])
 			{
 				IAPU.RAM [0xfe] = (IAPU.RAM [0xfe] + 1) & 0xf;
+				APU_SLEEP_NOTE_CHANGE();
 				APU.Timer [1] = 0;
 			#ifdef SPC700_SHUTDOWN		
 				IAPU.WaitCounter++;
@@ -1017,6 +1021,15 @@ void probeCoreReport(unsigned frames)
 		log3dsWrite("[perf][hist] spc wait marks %04x %04x counter %d", (unsigned)(IAPU.WaitAddress1 ? IAPU.WaitAddress1 - IAPU.RAM : 0),
 			(unsigned)(IAPU.WaitAddress2 ? IAPU.WaitAddress2 - IAPU.RAM : 0), (int)IAPU.WaitCounter);
 	}
+	// what the SPC700 has written so far: equal between two runs of the same
+	// scene means it took the same path (A/B of anything that changes how it
+	// is executed; -DPROBE_NO_APU_SLEEP is the base for the sleep)
+	{
+		u32 h = 2166136261u;
+		for (int i = 0; i < 0x10000; i++) h = (h ^ IAPU.RAM[i]) * 16777619u;
+		for (int i = 0; i < 4; i++) h = (h ^ APU.OutPorts[i]) * 16777619u;
+		log3dsWrite("[perf][hist] spc ram hash %08x, sleeps %u", (unsigned)h, (unsigned)g_apuSleeps);
+	}
 	g_probeCore.ops = g_probeCore.aops = 0;
 #endif
 	g_probeCore.apuTicks = g_probeCore.hbTicks = g_probeCore.hdmaTicks = g_probeCore.dmaTicks = 0;
@@ -1027,10 +1040,78 @@ void probeCoreReport(unsigned frames)
 int32 g_apuNextEvent = 0;
 uint32 g_apuSkips = 0;
 
+SApuSleep g_apuSleep = {};
+uint32 g_apuSleeps = 0;
+
+// the frozen counter falls by H_Max every line; pulled forward by whole
+// periods before the distance to the CPU's gets anywhere near 31 bits
+static const int32 APU_SLEEP_MAX_LAG = 1 << 20;
+
+void S9xAPUSleepReset (void)
+{
+	g_apuSleep.state = APU_SLEEP_AWAKE;
+	g_apuSleep.inhibit = 0;
+	g_apuSleep.det.have = 0;
+	g_apuSleep.det.dirty = 1;
+}
+
+// awake at the last point up to `limit` where straight execution would have
+// been in the anchor state; the opcode loop takes it from there
+static inline void apuSleepWake (int32 limit)
+{
+	APU.Cycles = apu_sleep_forward (APU.Cycles, limit, g_apuSleep.period);
+	g_apuSleep.state = APU_SLEEP_AWAKE;
+	g_apuSleep.det.have = 0;
+	g_apuSleep.det.dirty = 1;
+}
+
+void S9xAPUSleepSync (void)
+{
+	if (g_apuSleep.state == APU_SLEEP_ASLEEP)
+		APU.Cycles = apu_sleep_forward (APU.Cycles, CPU.Cycles, g_apuSleep.period);
+}
+
+// S9xUpdateAPUTimer while asleep: the timers step when the opcode loop would
+// have stepped them (position below the CPU's cycle) and nothing executes.
+// Returns true when a step is about to change a timer output: then it is
+// awake, the step still pending, and the caller runs the opcodes up to it.
+static bool apuSleepIdle (void)
+{
+	while (IAPU.NextAPUTimerPosDiv10000 < CPU.Cycles)
+	{
+		if (apu_sleep_timer_will_tick (IAPU.APUTimerCounter, APU.TimerEnabled, APU.Timer, APU.TimerTarget))
+		{
+			apuSleepWake (IAPU.NextAPUTimerPosDiv10000);
+			return true;
+		}
+		S9xIncrementAPUTimers ();
+	}
+	if (CPU.Cycles - APU.Cycles > APU_SLEEP_MAX_LAG)
+		APU.Cycles = apu_sleep_forward (APU.Cycles, CPU.Cycles, g_apuSleep.period);
+	return false;
+}
+
+// The CPU is about to change a port. The caller has just run
+// S9xUpdateAPUTimer; a sleeper has to be brought to the CPU's cycle and stay
+// awake, because the loop it proved may read the port next.
+void S9xAPUSleepPortWrite (void)
+{
+	if (g_apuSleep.state != APU_SLEEP_AWAKE)
+	{
+		apuSleepWake (CPU.Cycles);
+		g_apuSleep.inhibit = 1;
+		S9xUpdateAPUTimer ();
+		g_apuSleep.inhibit = 0;
+	}
+	APU_SLEEP_NOTE_CHANGE();
+}
+
 void S9xUpdateAPUTimer (void)
 {
 	PROBE_CORE_SCOPE(apuTicks);
 	PROBE_CORE_COUNT(apuCalls);
+	if (g_apuSleep.state != APU_SLEEP_AWAKE && !apuSleepIdle ())
+		return;
 	//int opcodesExecuted = 0;
 	int32 nextEventCycles = IAPU.NextAPUTimerPosDiv10000;
 	if (nextEventCycles >= CPU.Cycles)
@@ -1075,6 +1156,22 @@ void S9xUpdateAPUTimer (void)
 			EXECUTE_ONE_APU_OPCODE
 		} 
 		//printf ("  opcodes executed %d:\n", opcodesExecuted);
+
+		if (g_apuSleep.state != APU_SLEEP_AWAKE)
+		{
+			// a branch in this run proved the fixed point and bumped the
+			// counter to get here: back to the real one, and the rest of
+			// this call is the sleeper's
+			APU.Cycles = g_apuSleep.cycles;
+			g_apuSleep.state = APU_SLEEP_ASLEEP;
+			if (!apuSleepIdle ())
+				return;
+			nextEventCycles = IAPU.NextAPUTimerPosDiv10000;
+			if (nextEventCycles >= CPU.Cycles)
+				nextEventCycles = CPU.Cycles;
+			g_apuNextEvent = nextEventCycles;
+			continue;
+		}
 
 		if (nextEventCycles >= CPU.Cycles)
 			break;

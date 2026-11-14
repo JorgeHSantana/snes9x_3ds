@@ -994,6 +994,7 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 			_SPCInPB (Address & 3, Byte);
 #else	
 			S9xUpdateAPUTimer();
+			S9xAPUSleepPortWrite();
 
 			//	CPU.Flags |= DEBUG_MODE_FLAG;
 			Memory.FillRAM [Address] = Byte;

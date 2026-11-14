@@ -662,6 +662,7 @@ void S9xFreezeToStream (BufferedFileWriter& stream, bool compactSram)
     if (Settings.APUEnabled)
     {
 		// APU
+		S9xAPUSleepSync ();   // a sleeping SPC700's cycle counter is left behind: bring it up before it is saved
 		FreezeStruct (stream, "APU", &APU, SnapAPU, COUNT (SnapAPU));
 		FreezeStruct (stream, "ARE", &APURegisters, SnapAPURegisters,
 			COUNT (SnapAPURegisters));
@@ -851,6 +852,7 @@ int S9xUnfreezeFromStream (SnapIn &stream)
         IAPU.DirectPage = APUCheckDirectPage () ? IAPU.RAM + 0x100 : IAPU.RAM;
         Settings.APUEnabled = TRUE;
         IAPU.APUExecuting = TRUE;
+        S9xAPUSleepReset ();
     }
 
     uint8 hdma_byte = Memory.FillRAM[0x420c];
