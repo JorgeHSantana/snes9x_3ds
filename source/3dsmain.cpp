@@ -4548,6 +4548,21 @@ void emulatorLoop()
             s_frameLoad.record((uint64_t)ticksSoFar);
             if (frameLoadPercent >= 100) s_frameOver++;
             if (skipDrawing) s_frameSkips++;
+            // The average load mixes two kinds of frame: the one that draws
+            // and the one that skipped drawing. Kept apart so the report
+            // can say by how much the drawn frame misses the budget
+            static u64 s_splitLoad[2], s_splitCore[2], s_splitDraw[2], s_splitMax[2], s_prevCore = 0, s_prevDraw = 0;
+            static int s_splitN[2], s_splitOver[2];
+            {
+                const int k = skipDrawing ? 1 : 0;
+                s_splitN[k]++;
+                s_splitLoad[k] += (u64)ticksSoFar;
+                if ((u64)ticksSoFar > s_splitMax[k]) s_splitMax[k] = (u64)ticksSoFar;
+                if (frameLoadPercent >= 100) s_splitOver[k]++;
+                s_splitCore[k] += GPU3DSExt.coreTicks - s_prevCore;
+                s_splitDraw[k] += GPU3DSExt.drawTicks - s_prevDraw;
+                s_prevCore = GPU3DSExt.coreTicks; s_prevDraw = GPU3DSExt.drawTicks;
+            }
             if (++s_frameLoadN >= 300 && log3dsIsReady()) {
                 const int tier = GPU3DSExt.blurAutoOff ? 2 : (GPU3DSExt.blurAutoLight ? 1 : 0);
                 // CPU time per frame by phase (us): the core, the eyes' layer
@@ -4566,6 +4581,17 @@ void emulatorLoop()
                     (unsigned)(GPU3DSExt.coreTicks / N / TPU), (unsigned)(GPU3DSExt.ppuTicks / N / TPU), (unsigned)(GPU3DSExt.drawTicks / N / TPU), (unsigned)(GPU3DSExt.fxTicks / N / TPU),
                     (unsigned)(GPU3DSExt.flushTicks / N / TPU), (unsigned)(GPU3DSExt.gpuWaitTicks / N / TPU), (unsigned)(GPU3DSExt.gpuBusyFrames ? GPU3DSExt.gpuBusyTicks / GPU3DSExt.gpuBusyFrames / TPU : 0), GPU3DSExt.drawCalls / (unsigned)N, GPU3DSExt.drawVerts / (unsigned)N, GPU3DSExt.culledTilesWin / (unsigned)N, (unsigned)(g_idleSkips / (uint32)N), (unsigned)(g_apuSkips / (uint32)N), (unsigned)(g_apuSleeps / (uint32)N),
                     (unsigned)(GPU3DSExt.drawRightTicks / N / TPU), (unsigned)(GPU3DSExt.scratchTicks / N / TPU), (unsigned)(GPU3DSExt.splitTicks / N / TPU), (unsigned)GPU3DSExt.flushCalls);
+                {
+                    const u64 TPF = (u64)settings3DS.TicksPerFrame;
+                    const u64 nd = s_splitN[0] ? (u64)s_splitN[0] : 1, ns = s_splitN[1] ? (u64)s_splitN[1] : 1;
+                    log3dsWrite("[perf][split] drawn %d: load avg=%d%% max=%d%% over-budget=%d core=%u draw=%u | skipped %d: load avg=%d%% max=%d%% over-budget=%d core=%u draw=%u",
+                        s_splitN[0], (int)(s_splitLoad[0] / nd * 100 / TPF), (int)(s_splitMax[0] * 100 / TPF), s_splitOver[0],
+                        (unsigned)(s_splitCore[0] / nd / TPU), (unsigned)(s_splitDraw[0] / nd / TPU),
+                        s_splitN[1], (int)(s_splitLoad[1] / ns * 100 / TPF), (int)(s_splitMax[1] * 100 / TPF), s_splitOver[1],
+                        (unsigned)(s_splitCore[1] / ns / TPU), (unsigned)(s_splitDraw[1] / ns / TPU));
+                    for (int k = 0; k < 2; k++) { s_splitN[k] = s_splitOver[k] = 0; s_splitLoad[k] = s_splitCore[k] = s_splitDraw[k] = s_splitMax[k] = 0; }
+                    s_prevCore = s_prevDraw = 0;
+                }
 #ifdef PROBE_CORE
                 probeCoreReport((unsigned)s_frameLoadN);
 #endif
