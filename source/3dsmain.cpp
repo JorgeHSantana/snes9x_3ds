@@ -4548,6 +4548,9 @@ void emulatorLoop()
             s_frameLoad.record((uint64_t)ticksSoFar);
             if (frameLoadPercent >= 100) s_frameOver++;
             if (skipDrawing) s_frameSkips++;
+#ifdef PROBE_FLUSH_TRACE
+            g_flushTrace = (s_frameLoadN == 150 || s_frameLoadN == 151);
+#endif
             // The average load mixes two kinds of frame: the one that draws
             // and the one that skipped drawing. Kept apart so the report
             // can say by how much the drawn frame misses the budget
@@ -4589,6 +4592,15 @@ void emulatorLoop()
                         (unsigned)(s_splitCore[0] / nd / TPU), (unsigned)(s_splitDraw[0] / nd / TPU),
                         s_splitN[1], (int)(s_splitLoad[1] / ns * 100 / TPF), (int)(s_splitMax[1] * 100 / TPF), s_splitOver[1],
                         (unsigned)(s_splitCore[1] / ns / TPU), (unsigned)(s_splitDraw[1] / ns / TPU));
+                    // where the mid-frame splits' time goes: the cache flush calls
+                    // (count, time, bytes), the tile atlas's dirty range among
+                    // them, and C3D_FrameSplit itself. Per frame of the window
+                    log3dsWrite("[perf][flush] us/frame calls=%u.%u fus=%u fkb=%u | atlas us=%u kb=%u | split=%u splitgx=%u",
+                        (unsigned)(GPU3DSExt.flushCalls / N), (unsigned)(GPU3DSExt.flushCalls * 10 / N % 10),
+                        (unsigned)(GPU3DSExt.flushCallTicks / N / TPU), (unsigned)(GPU3DSExt.flushBytes / N / 1024),
+                        (unsigned)(GPU3DSExt.atlasFlushTicks / N / TPU), (unsigned)(GPU3DSExt.atlasFlushBytes / N / 1024),
+                        (unsigned)(GPU3DSExt.splitTicks / N / TPU), (unsigned)(GPU3DSExt.splitGxTicks / N / TPU));
+                    GPU3DSExt.flushCallTicks = GPU3DSExt.flushBytes = GPU3DSExt.atlasFlushTicks = GPU3DSExt.atlasFlushBytes = GPU3DSExt.splitGxTicks = 0;
                     for (int k = 0; k < 2; k++) { s_splitN[k] = s_splitOver[k] = 0; s_splitLoad[k] = s_splitCore[k] = s_splitDraw[k] = s_splitMax[k] = 0; }
                     s_prevCore = s_prevDraw = 0;
                 }

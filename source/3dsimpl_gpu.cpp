@@ -667,7 +667,10 @@ void gpu3dsFlushFrameWrites()
     if (GPU3DS.tileCacheDirtyLo <= GPU3DS.tileCacheDirtyHi) {
         u8 *atlas = (u8 *)GPU3DS.textures[SNES_TILE_CACHE].tex.data;
         const u32 lo = GPU3DS.tileCacheDirtyLo * 2, hi = (GPU3DS.tileCacheDirtyHi + 64) * 2;   // 64 texels of RGBA5551 per tile
+        const u64 t0 = svcGetSystemTick();
         gpu3dsFlushCache(atlas + lo, hi - lo);
+        GPU3DSExt.atlasFlushTicks += svcGetSystemTick() - t0;
+        GPU3DSExt.atlasFlushBytes += hi - lo;
         GPU3DS.tileCacheDirtyLo = 0xFFFFFFFFu; GPU3DS.tileCacheDirtyHi = 0;
     }
     if (GPU3DS.mode7CacheDirty) {

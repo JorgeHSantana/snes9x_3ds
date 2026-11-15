@@ -255,6 +255,11 @@ typedef struct
     u64             scratchTicks;    // ...of which deciding and building the layer scratch images (scratch=)
     u64             splitTicks;      // ...inside the mid-frame command list splits (split=)
     u32             flushCalls;      // GSP cache flush calls for the frame's buffers, the whole window (fcalls=)
+    u64             flushCallTicks;  // ...the time inside those calls (fus=) and the bytes they covered (fkb=)
+    u64             flushBytes;
+    u64             atlasFlushTicks; // ...of which the tile atlas's dirty range (atlas=us/kb)
+    u64             atlasFlushBytes;
+    u64             splitGxTicks;    // inside C3D_FrameSplit itself, the splits' flushes left out (splitgx=)
     bool            probeDumpDraws;  // GPU Cost Probe: log every gpu3dsDraw of this frame (cleared at FrameEnd)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
@@ -277,10 +282,20 @@ extern SGPU3DSExtended GPU3DSExt;
 
 // the frame's cache flushes go through here: each is a call into the GSP
 // service and the perf line counts them (fcalls=)
+#ifdef PROBE_FLUSH_TRACE
+extern bool g_flushTrace;
+extern void log3dsWrite(const char *fmt, ...);
+#endif
 static inline void gpu3dsFlushCache(const void *data, u32 bytes)
 {
-    GPU3DSExt.flushCalls++;
+#ifdef PROBE_FLUSH_TRACE
+    if (g_flushTrace) log3dsWrite("[probe][flush] %p %u bytes", data, (unsigned)bytes);
+#endif
+    const u64 t0 = svcGetSystemTick();
     GSPGPU_FlushDataCache(data, bytes);
+    GPU3DSExt.flushCalls++;
+    GPU3DSExt.flushCallTicks += svcGetSystemTick() - t0;
+    GPU3DSExt.flushBytes += bytes;
 }
 
 void gpu3dsDeallocLayers();

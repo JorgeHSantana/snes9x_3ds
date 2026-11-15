@@ -363,6 +363,9 @@ void gpu3dsDeallocVertexList(SVertexList *list)
     linearFree(list->data_base);
 }
 
+#ifdef PROBE_FLUSH_TRACE
+bool g_flushTrace = false;
+#endif
 void gpu3dsFlushListWrites(SVertexList *list)
 {
     const u32 written = ((u32)list->from + (u32)list->count) * list->vertexSize;
@@ -699,8 +702,14 @@ void gpu3dsFrameSplit()
     // bytes: last frame's list most of the time, a list that never ends
     // when the frame's shape had just changed (the console froze in the
     // next C3D_FrameBegin, 2026-11-11)
+    const u64 t1 = svcGetSystemTick();
+#ifdef PROBE_FLUSH_TRACE
+    if (g_flushTrace) log3dsWrite("[probe][flush] -- split, %d draws so far", s_frameDraws);
+#endif
     C3D_FrameSplit(GX_CMDLIST_FLUSH);
-    GPU3DSExt.splitTicks += svcGetSystemTick() - t0;
+    const u64 t2 = svcGetSystemTick();
+    GPU3DSExt.splitGxTicks += t2 - t1;
+    GPU3DSExt.splitTicks += t2 - t0;
 }
 
 bool gpu3dsFrameBegin(u8 flags, bool ingame, bool isSecondScreen)
@@ -746,6 +755,14 @@ void gpu3dsFrameEnd(u8 flags)
     // GX_CMDLIST_FLUSH bit keeps citro3d from the whole-heap flush and
     // has the GX flush the command list itself
     gpu3dsFlushDrawnWrites();
+#ifdef PROBE_FLUSH_TRACE
+    if (g_flushTrace) {
+        log3dsWrite("[probe][flush] -- end, %d draws", s_frameDraws);
+        for (int i = 0; i < VBO_COUNT; i++)
+            log3dsWrite("[probe][flush] vbo %d at %p..%p vsize %d", i, GPU3DS.vertices[i].data_base, (u8 *)GPU3DS.vertices[i].data_base + GPU3DS.vertices[i].sizeInBytes, (int)GPU3DS.vertices[i].vertexSize);
+        log3dsWrite("[probe][flush] ibo %p atlas %p", GPU3DSExt.layerList.ibo, GPU3DS.textures[SNES_TILE_CACHE].tex.data);
+    }
+#endif
     C3D_FrameEnd(flags | GX_CMDLIST_FLUSH);
 #endif
     GPU3DSExt.layerList.iboCursor = 0;   // ibo_cursor.h: the frame's index ranges are submitted
