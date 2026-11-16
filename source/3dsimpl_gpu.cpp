@@ -15,6 +15,7 @@ bool S9xLayerUsedLastFrame(int layer, int prio);   // gfxhw.cpp: the rows the la
 #include "gpu_probe.h"
 #include "occlusion_cull.h"
 #include "layer_scratch.h"
+#include "scratch_ring.h"
 
 // the 3D editor's highlighted layer (-1 = none): its spotlight passes dim the
 // other priorities, so the occlusion cull stays off while it is set
@@ -599,10 +600,11 @@ static void scratchListsFlush(SVertexList *rect, SVertexList *quad)
 struct GlowScratch
 {
     SVertexList rect, quad;
-    int rectIdx, quadIdx;
+    ScratchRing rectRing, quadRing;   // scratch_ring.h: an entry already there is reused, unwritten
+    unsigned int frame;               // drawn frames, for the rings' "still in use" rule
     bool ready;
     bool dirty;                   // written since the last flush
-    static const int RING = 64;   // entries of 2 vertices
+    static const int RING = SCRATCH_RING_ENTRIES;   // entries of 2 vertices
     void init()
     {
         if (ready) return;
@@ -613,7 +615,7 @@ struct GlowScratch
         quad.id = (SGPU_VBO_ID)(VBO_COUNT + 2);
         quad.sizeInBytes = RING * 2 * quad.vertexSize;
         scratchListsAlloc(&rect, &quad);   // one block: one flush call for both
-        rectIdx = quadIdx = 0;
+        scratch_ring_reset(&rectRing); scratch_ring_reset(&quadRing);
         ready = rect.data != nullptr && quad.data != nullptr;
     }
     void flush()
@@ -625,23 +627,29 @@ struct GlowScratch
     // a black rect over the whole target; returns the vertex index to draw from
     int addRect(u32 color)
     {
-        SRectVertex *v = &((SRectVertex *)rect.data)[rectIdx * 2];
+        SRectVertex v[2];
+        memset(v, 0, sizeof(v));
         // y stops at 255: the tile shader keeps the depth plane in the bits
         // above the low byte of y, so 256 decodes as y = 0 on plane 1 and
         // the rect collapses to nothing (the glow target was never cleared:
         // trails on the console, overexposure in Azahar's still scenes)
         v[0].Position = (SVector2i){ 0, 0 }; v[1].Position = (SVector2i){ 512, 255 };
         v[0].Color = v[1].Color = __builtin_bswap32(color);
-        dirty = true;
-        const int from = rectIdx * 2; rectIdx = (rectIdx + 1) % RING; return from;
+        bool wrote;
+        const int at = scratch_ring_put(&rectRing, rect.data, sizeof(v), v, frame, &wrote);
+        if (wrote) dirty = true;
+        return at * 2;
     }
     int addQuad(s16 x0, s16 y0, s16 x1, s16 y1, s16 tx0, s16 ty0, s16 tx1, s16 ty1)
     {
-        STileVertex *v = &((STileVertex *)quad.data)[quadIdx * 2];
+        STileVertex v[2];
+        memset(v, 0, sizeof(v));
         v[0].Position = (SVector3i){ x0, y0, 0 }; v[1].Position = (SVector3i){ x1, y1, 0 };
         v[0].TexCoord = (STexCoord2i){ tx0, ty0 }; v[1].TexCoord = (STexCoord2i){ tx1, ty1 };
-        dirty = true;
-        const int from = quadIdx * 2; quadIdx = (quadIdx + 1) % RING; return from;
+        bool wrote;
+        const int at = scratch_ring_put(&quadRing, quad.data, sizeof(v), v, frame, &wrote);
+        if (wrote) dirty = true;
+        return at * 2;
     }
 };
 static GlowScratch s_glowScratch;
@@ -650,8 +658,8 @@ static bool layerScratchTakeMode7Dirty();
 // Partial flush (docs/perf-backlog.md B1), before every submission of a
 // frame that drew: everything the CPU wrote that the draws read, other
 // than the vertex lists (gpu3dsFlushListWrites). Each buffer goes out only
-// when written since its last flush: a flush is a call into the GSP
-// service, about 40 us in Old 3DS mode whatever the size.
+// when written since its last flush: a flush is a kernel call, about 57 us
+// in Old 3DS mode whatever the size (115 us through the GSP service).
 // GPU_FULL_FLUSH restores citro3d's whole-heap flush for diagnosis.
 static void layerScratchFlush();
 void gpu3dsFlushFrameWrites()
@@ -1157,6 +1165,7 @@ void gpu3dsDrawLayers(SLayerList *list) {
     // the layer scratch images (layer_scratch.h): decided and built once a
     // frame, in the left eye's pass; the right eye samples the same images
     if (!GPU3DS.stereoRightPass) {
+        s_glowScratch.frame++;
         const u64 t0 = svcGetSystemTick();
         layerScratchDecideAndBuild(list);
         GPU3DSExt.scratchTicks += svcGetSystemTick() - t0;
