@@ -4595,11 +4595,13 @@ void emulatorLoop()
                     // where the mid-frame splits' time goes: the cache flush calls
                     // (count, time, bytes), the tile atlas's dirty range among
                     // them, and C3D_FrameSplit itself. Per frame of the window
-                    log3dsWrite("[perf][flush] us/frame calls=%u.%u fus=%u fkb=%u | atlas us=%u kb=%u | split=%u splitgx=%u",
+                    log3dsWrite("[perf][flush] us/frame calls=%u.%u fus=%u fkb=%u | atlas us=%u kb=%u | split=%u splitgx=%u svcfail=%u",
                         (unsigned)(GPU3DSExt.flushCalls / N), (unsigned)(GPU3DSExt.flushCalls * 10 / N % 10),
                         (unsigned)(GPU3DSExt.flushCallTicks / N / TPU), (unsigned)(GPU3DSExt.flushBytes / N / 1024),
                         (unsigned)(GPU3DSExt.atlasFlushTicks / N / TPU), (unsigned)(GPU3DSExt.atlasFlushBytes / N / 1024),
-                        (unsigned)(GPU3DSExt.splitTicks / N / TPU), (unsigned)(GPU3DSExt.splitGxTicks / N / TPU));
+                        (unsigned)(GPU3DSExt.splitTicks / N / TPU), (unsigned)(GPU3DSExt.splitGxTicks / N / TPU),
+                        (unsigned)GPU3DSExt.flushSvcFails);
+                    GPU3DSExt.flushSvcFails = 0;
                     GPU3DSExt.flushCallTicks = GPU3DSExt.flushBytes = GPU3DSExt.atlasFlushTicks = GPU3DSExt.atlasFlushBytes = GPU3DSExt.splitGxTicks = 0;
                     for (int k = 0; k < 2; k++) { s_splitN[k] = s_splitOver[k] = 0; s_splitLoad[k] = s_splitCore[k] = s_splitDraw[k] = s_splitMax[k] = 0; }
                     s_prevCore = s_prevDraw = 0;

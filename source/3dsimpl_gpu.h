@@ -260,6 +260,7 @@ typedef struct
     u64             atlasFlushTicks; // ...of which the tile atlas's dirty range (atlas=us/kb)
     u64             atlasFlushBytes;
     u64             splitGxTicks;    // inside C3D_FrameSplit itself, the splits' flushes left out (splitgx=)
+    u32             flushSvcFails;   // direct kernel flushes that failed and went through the GSP service (svcfail=)
     bool            probeDumpDraws;  // GPU Cost Probe: log every gpu3dsDraw of this frame (cleared at FrameEnd)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame
@@ -280,8 +281,13 @@ typedef struct
 
 extern SGPU3DSExtended GPU3DSExt;
 
-// the frame's cache flushes go through here: each is a call into the GSP
-// service and the perf line counts them (fcalls=)
+// the frame's cache flushes go through here and the perf line counts them
+// (fcalls=, [perf][flush]). On the console the kernel call is made directly:
+// GSPGPU_FlushDataCache is a round trip to the GSP service that ends in this
+// same call, and the round trip measured about 115 us each in Old mode
+// whatever the size, 1.5 ms of a drawn frame at 13 calls (console log of
+// 2026-11-15). Emulators keep the service call: Citra has no
+// FlushProcessDataCache and fills its log (same rule as 3dssound.cpp)
 #ifdef PROBE_FLUSH_TRACE
 extern bool g_flushTrace;
 extern void log3dsWrite(const char *fmt, ...);
@@ -292,7 +298,14 @@ static inline void gpu3dsFlushCache(const void *data, u32 bytes)
     if (g_flushTrace) log3dsWrite("[probe][flush] %p %u bytes", data, (unsigned)bytes);
 #endif
     const u64 t0 = svcGetSystemTick();
-    GSPGPU_FlushDataCache(data, bytes);
+    if (!GPU3DS.isReal3DS)
+        GSPGPU_FlushDataCache(data, bytes);
+    else if (R_FAILED(svcFlushProcessDataCache(CUR_PROCESS_HANDLE, (u32)data, bytes))) {
+        // never seen; the service call keeps the frame right and svcfail=
+        // in the perf line tells
+        GSPGPU_FlushDataCache(data, bytes);
+        GPU3DSExt.flushSvcFails++;
+    }
     GPU3DSExt.flushCalls++;
     GPU3DSExt.flushCallTicks += svcGetSystemTick() - t0;
     GPU3DSExt.flushBytes += bytes;
