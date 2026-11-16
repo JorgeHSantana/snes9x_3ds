@@ -359,6 +359,9 @@ void gpu3dsDrawTiledLayerSingleSection(SLayer *layer, SLayerSection *section) {
 // range, so the list written must be the same in every pass (ibo_cursor.h)
 void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to, bool allowCull) {
     SLayerList *list = &GPU3DSExt.layerList;
+    const bool prof = GPU3DSExt.eyeProf.on;   // eye_profile.h: this function's own time, its draw calls left out
+    const u64 profT0 = prof ? svcGetSystemTick() : 0;
+    const unsigned long long profDraw0 = eye_profile_draw_ticks(&GPU3DSExt.eyeProf);
     u16 batchFrom = 0;
     u16 batchCount = 0;
 
@@ -442,6 +445,7 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to, bool al
                 dst[n] = sFrom + i; dst[n + 1] = sFrom + i + 1; n += 2;
             }
             batchCount += (u16)n;
+            if (prof) eye_profile_walked(&GPU3DSExt.eyeProf, sCount / 2, 0);
             if (GPU3DSExt.probeDumpDraws)
                 log3dsWrite("[probe][occl] layer=%d cull: covered=%d windowed=%d winsecs=%d cPlaneMin=%d L=%.1f R=%.1f sv=%.1f/%.1f iod=%.2f w=%d tiles=%d kept=%d first x=%d..%d y=%d plane=%d",
                     (int)layer->id, covered ? 1 : 0, windowed ? 1 : 0, GPU3DSExt.winSecCount, cPlaneMin, coverL, coverR, sv0, sv1, GPU3DS.stereoEyeIOD, GPU3DSExt.renderWidth, sCount / 2, n / 2,
@@ -460,10 +464,12 @@ void gpu3dsDrawTiledLayer(SLayer *layer, u16 *indices, int from, int to, bool al
         }
 
         batchCount += sCount;
+        if (prof) eye_profile_walked(&GPU3DSExt.eyeProf, 0, sCount);
     }
 
     // draw final batch
     if (batchCount > 0) gpu3dsDraw(&GPU3DS.vertices[vboId], (void *)(indices + batchFrom), batchCount);
+    if (prof) eye_profile_index(&GPU3DSExt.eyeProf, profT0, svcGetSystemTick(), profDraw0);
 }
 
 // Atmospheric depth cues (Depth Fade / Depth Haze): texenv stage 2
@@ -1167,8 +1173,11 @@ void gpu3dsDrawLayers(SLayerList *list) {
     if (!GPU3DS.stereoRightPass) {
         s_glowScratch.frame++;
         const u64 t0 = svcGetSystemTick();
+        const unsigned char profPrev = eye_profile_enter(&GPU3DSExt.eyeProf, EYE_PHASE_SCRATCH);
         layerScratchDecideAndBuild(list);
-        GPU3DSExt.scratchTicks += svcGetSystemTick() - t0;
+        const u64 dt = svcGetSystemTick() - t0;
+        GPU3DSExt.scratchTicks += dt;
+        eye_profile_leave(&GPU3DSExt.eyeProf, profPrev, dt);
     }
 
     // 3D: each eye's pass starts from a clean depth floor. The depth
@@ -1239,7 +1248,10 @@ void gpu3dsDrawLayers(SLayerList *list) {
             const bool glowOn = glowAllowed && (GPU3DS.stereoGlowRows != 0 || glowWhole) && !sub;   // never into the sub screen: subtractive colour math would darken it
             if (!shadowsOn && !glowOn) return;
             const u64 fxTick0 = svcGetSystemTick();
-            struct FxTicks { u64 t0; ~FxTicks() { GPU3DSExt.fxTicks += svcGetSystemTick() - t0; } } fxTicks{ fxTick0 };
+            struct FxTicks {
+                u64 t0; unsigned char prev;
+                ~FxTicks() { const u64 dt = svcGetSystemTick() - t0; GPU3DSExt.fxTicks += dt; eye_profile_leave(&GPU3DSExt.eyeProf, prev, dt); }
+            } fxTicks{ fxTick0, eye_profile_enter(&GPU3DSExt.eyeProf, EYE_PHASE_FX) };
             int depthRows[STEREO_SHADOW_ROWS]; unsigned usedRows = 0;
             for (int l = 0; l < 5; l++) {
                 depthRows[stereo_shadow_row(l, 0)] = (int)GPU3DS.stereoLayerDepth[l];

@@ -1203,6 +1203,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			// (2D parity), and the right pass is skipped entirely then.
 			float slider = gpu3dsGetIOD() != 0.0f ? osGet3DSliderState() : 0.0f;
 			GPU3DSExt.stereoOnLastFrame = slider != 0.0f;
+			eye_profile_begin_frame(&GPU3DSExt.eyeProf);
 			const u64 drawTick0 = svcGetSystemTick();
 			// GPU cost probe: fade / haze / depth blur off for this frame's passes
 			const float probeFade = GPU3DS.stereoFade, probeHaze = GPU3DS.stereoHaze, probeBlur = GPU3DS.stereoBlur;
@@ -1211,6 +1212,7 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 			GPU3DS.stereoRightPass = false;
 			GPU3DS.stereoEyeIOD = slider;
     		gpu3dsDrawSnesScreen();
+			eye_profile_pass(&GPU3DSExt.eyeProf, 0, svcGetSystemTick() - drawTick0);
 			// every layer at depth 0 and no shadows (the only per-eye
 			// effect, its light side flips): the right eye would be a
 			// pixel-identical redraw, so the composite reads the left
@@ -1223,13 +1225,17 @@ void impl3dsRunOneFrame(bool firstFrame, bool skipDrawingFrame, bool presentDimm
 				GPU3DS.stereoRightPass = true;
 				GPU3DS.stereoEyeIOD = -slider;
 				GPU3DS.appliedRenderState.target = TARGET_UNSET;
+				GPU3DSExt.eyeProf.eye = 1;
 				const u64 rightTick0 = svcGetSystemTick();
 				gpu3dsDrawSnesScreen();
-				GPU3DSExt.drawRightTicks += svcGetSystemTick() - rightTick0;
+				const u64 rightTicks = svcGetSystemTick() - rightTick0;
+				GPU3DSExt.drawRightTicks += rightTicks;
+				eye_profile_pass(&GPU3DSExt.eyeProf, 1, rightTicks);
 				GPU3DS.stereoRightPass = false;
 			}
 			if (g_gpuProbeMask.noFog || g_gpuProbeMask.noBlur) { GPU3DS.stereoFade = probeFade; GPU3DS.stereoHaze = probeHaze; GPU3DS.stereoBlur = probeBlur; }
 			GPU3DSExt.drawTicks += svcGetSystemTick() - drawTick0;
+			GPU3DSExt.eyeProf.on = false;   // the scene's draws that follow are not an eye's
 			t3dsStopTimer(TIMER_DRAW_SNES_SCREEN);
 		}
 

@@ -6,6 +6,7 @@
 #include "occlusion_cull.h"
 #include "ibo_cursor.h"
 #include "ibo_identity.h"
+#include "eye_profile.h"
 
 #define COMPOSE_HASH(vramAddr, pal)   ((vramAddr) << 4) + ((pal) & 0xf)
 
@@ -261,6 +262,7 @@ typedef struct
     u64             atlasFlushBytes;
     u64             splitGxTicks;    // inside C3D_FrameSplit itself, the splits' flushes left out (splitgx=)
     u32             flushSvcFails;   // direct kernel flushes that failed and went through the GSP service (svcfail=)
+    EyeProfile      eyeProf;         // where an eye's pass spends its time, sampled (perf line [perf][eye])
     bool            probeDumpDraws;  // GPU Cost Probe: log every gpu3dsDraw of this frame (cleared at FrameEnd)
     bool            stereoOnLastFrame; // the 3D slider was up on the last drawn frame
     int             shadowSoftLevel; // Shadow Quality (shadow_auto.h): the Soft Edge level this frame

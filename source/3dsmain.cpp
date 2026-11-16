@@ -4601,6 +4601,23 @@ void emulatorLoop()
                         (unsigned)(GPU3DSExt.atlasFlushTicks / N / TPU), (unsigned)(GPU3DSExt.atlasFlushBytes / N / 1024),
                         (unsigned)(GPU3DSExt.splitTicks / N / TPU), (unsigned)(GPU3DSExt.splitGxTicks / N / TPU),
                         (unsigned)GPU3DSExt.flushSvcFails);
+                    // where an eye's pass goes, from the sampled drawn frames
+                    // (eye_profile.h): per pass, the draw calls by phase with
+                    // the state side and citro3d's apart, the index loops
+                    for (int e = 0; e < 2; e++) {
+                        const EyeProfile *ep = &GPU3DSExt.eyeProf;
+                        const u64 n = ep->samples[e];
+                        if (n == 0) continue;
+                        const EyeProfileCell *c = ep->cell[e];
+                        log3dsWrite("[perf][eye] %c sampled=%u us/pass total=%u index=%u (tiles tested=%u verts copied=%u) | layers draws=%u.%u draw=%u state=%u c3d=%u | fx us=%u draws=%u.%u draw=%u state=%u c3d=%u | scratch us=%u draws=%u.%u draw=%u state=%u c3d=%u",
+                            e ? 'R' : 'L', (unsigned)n, (unsigned)(ep->eyeTicks[e] / n / TPU), (unsigned)(ep->indexTicks[e] / n / TPU), (unsigned)(ep->cullTiles[e] / n), (unsigned)(ep->plainVerts[e] / n),
+                            (unsigned)(c[0].draws / n), (unsigned)(c[0].draws * 10 / n % 10), (unsigned)(c[0].drawTicks / n / TPU), (unsigned)(c[0].stateTicks / n / TPU), (unsigned)(c[0].c3dTicks / n / TPU),
+                            (unsigned)(ep->phaseTicks[e][EYE_PHASE_FX] / n / TPU),
+                            (unsigned)(c[1].draws / n), (unsigned)(c[1].draws * 10 / n % 10), (unsigned)(c[1].drawTicks / n / TPU), (unsigned)(c[1].stateTicks / n / TPU), (unsigned)(c[1].c3dTicks / n / TPU),
+                            (unsigned)(ep->phaseTicks[e][EYE_PHASE_SCRATCH] / n / TPU),
+                            (unsigned)(c[2].draws / n), (unsigned)(c[2].draws * 10 / n % 10), (unsigned)(c[2].drawTicks / n / TPU), (unsigned)(c[2].stateTicks / n / TPU), (unsigned)(c[2].c3dTicks / n / TPU));
+                    }
+                    eye_profile_window_reset(&GPU3DSExt.eyeProf);
                     GPU3DSExt.flushSvcFails = 0;
                     GPU3DSExt.flushCallTicks = GPU3DSExt.flushBytes = GPU3DSExt.atlasFlushTicks = GPU3DSExt.atlasFlushBytes = GPU3DSExt.splitGxTicks = 0;
                     for (int k = 0; k < 2; k++) { s_splitN[k] = s_splitOver[k] = 0; s_splitLoad[k] = s_splitCore[k] = s_splitDraw[k] = s_splitMax[k] = 0; }

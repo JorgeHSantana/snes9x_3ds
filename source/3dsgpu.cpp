@@ -603,6 +603,8 @@ static u32 s_frameDraws, s_frameVerts;
 
 void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
     t3dsStartTimer(TIMER_DRAW);
+    const bool prof = GPU3DSExt.eyeProf.on;   // eye_profile.h: one drawn frame in eight
+    const u64 profT0 = prof ? svcGetSystemTick() : 0;
     s_frameDraws++;
     const u32 n = (u32)(indices != NULL || from >= 0 ? count : list->count);
     s_frameVerts += n;
@@ -624,6 +626,7 @@ void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
     }
     gpu3dsApplyRenderState(&GPU3DS.currentRenderState);
     gpu3dsSetAttributeBuffers(list);
+    const u64 profT1 = prof ? svcGetSystemTick() : 0;
 
     const bool cut = g_gpuProbeMask.noFill && probeTiles;
     if (cut) C3D_SetScissor(GPU_SCISSOR_NORMAL, 0, 0, 1, 1);   // every draw: a target change resets the scissor
@@ -653,6 +656,7 @@ void gpu3dsDraw(SVertexList *list, const void* indices, int count, int from) {
         list->count = 0;
     }
 
+    if (prof) eye_profile_draw(&GPU3DSExt.eyeProf, profT0, profT1, svcGetSystemTick());
     t3dsStopTimer(TIMER_DRAW);
 }
 
